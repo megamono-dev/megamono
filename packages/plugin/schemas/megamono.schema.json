@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megamono.com/schemas/megamono.schema.json",
+  "title": "Megamono workspace configuration",
+  "$defs": {
+    "ruleOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity"],
+      "properties": {
+        "severity": { "enum": ["off", "warning", "error"] },
+        "decision": {
+          "type": "string",
+          "pattern": "^decision-[0-9]{8}-[a-z0-9]+(?:-[a-z0-9]+)*$"
+        }
+      }
+    },
+    "structuralRuleOverride": {
+      "allOf": [
+        { "$ref": "#/$defs/ruleOverride" },
+        {
+          "if": {
+            "properties": { "severity": { "const": "off" } },
+            "required": ["severity"]
+          },
+          "then": { "required": ["decision"] }
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "conventions"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "conventions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nestFeatureLibraries",
+        "docsLocation",
+        "packageManager",
+        "rules"
+      ],
+      "properties": {
+        "nestFeatureLibraries": { "type": "boolean" },
+        "docsLocation": { "const": "centralized" },
+        "packageManager": { "const": "npm" },
+        "rules": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "module-boundaries": { "$ref": "#/$defs/structuralRuleOverride" },
+            "no-deep-relative-imports": { "$ref": "#/$defs/ruleOverride" },
+            "require-tags": { "$ref": "#/$defs/structuralRuleOverride" },
+            "naming-convention": { "$ref": "#/$defs/structuralRuleOverride" },
+            "megamono-dev-only": { "$ref": "#/$defs/structuralRuleOverride" },
+            "playstack-direction": { "$ref": "#/$defs/structuralRuleOverride" },
+            "platform-boundary": { "$ref": "#/$defs/structuralRuleOverride" },
+            "no-bare-jsx-strings": { "$ref": "#/$defs/ruleOverride" }
+          }
+        }
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": ["web", "node", "worker", "apple", "rust", "php", "extension"]
+      }
+    },
+    "topics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "extend": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        }
+      }
+    },
+    "docs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+        },
+        "reportRetentionDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        }
+      }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cadence": { "enum": ["disabled", "weekly", "daily"] },
+        "stalePlanDays": { "type": "integer", "minimum": 7, "maximum": 365 },
+        "checks": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "dependency-alignment",
+              "spec-drift",
+              "stale-plans",
+              "orphaned-libraries",
+              "integration-template-drift"
+            ]
+          },
+          "additionalProperties": { "type": "boolean" }
+        },
+        "suppressions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["check", "fingerprint", "decision"],
+            "properties": {
+              "check": {
+                "enum": [
+                  "dependency-alignment",
+                  "spec-drift",
+                  "stale-plans",
+                  "orphaned-libraries",
+                  "integration-template-drift"
+                ]
+              },
+              "fingerprint": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^*]+$"
+              },
+              "decision": {
+                "type": "string",
+                "pattern": "^decision-[0-9]{8}-[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              "expires_at": { "type": "string", "format": "date" }
+            }
+          }
+        }
+      }
+    },
+    "prisma": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["composition", "projects"],
+      "properties": {
+        "composition": { "const": "native-multi-file" },
+        "projects": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "services": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runner": { "enum": ["none", "springbar"] },
+        "requirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "postgres": { "type": "string", "minLength": 1 },
+            "redis": { "type": "string", "minLength": 1 },
+            "clickhouse": { "type": "string", "minLength": 1 },
+            "typesense": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  }
+}

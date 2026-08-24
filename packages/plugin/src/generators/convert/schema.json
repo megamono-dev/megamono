@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoConvert",
+  "title": "Convert an existing npm repository to Megamono",
+  "description": "Analyze and restructure an existing single-package or plain npm-workspace repository on a conversion branch.",
+  "type": "object",
+  "properties": {
+    "appName": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "What should the existing application be called?"
+    },
+    "source": {
+      "type": "string",
+      "default": ".",
+      "description": "Workspace-relative source package root."
+    },
+    "destination": {
+      "type": "string",
+      "description": "Workspace-relative application destination; defaults to apps/<appName>."
+    },
+    "interactive": {
+      "type": "boolean",
+      "default": true,
+      "description": "Emit interactive-oriented plan guidance; mutation still requires explicit plan acceptance."
+    },
+    "acceptPlan": {
+      "type": "boolean",
+      "default": false,
+      "description": "Explicitly approve the rendered conversion plan for mutation."
+    },
+    "verify": {
+      "type": "string",
+      "enum": ["none", "config", "build"],
+      "default": "config",
+      "description": "Post-flush verification depth."
+    },
+    "extract": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Explicit <source>:<destination> library extraction mappings."
+    },
+    "resolutions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["application", "infrastructure"]
+      },
+      "default": {},
+      "description": "Explicit ownership for otherwise unclassified source-root entries."
+    },
+    "report": {
+      "type": "string",
+      "description": "Optional workspace-relative path for the Markdown analysis report."
+    },
+    "scope": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "default": "shared",
+      "description": "Nx scope tag and extracted-library import scope."
+    },
+    "dryRun": {
+      "type": "boolean",
+      "default": false,
+      "description": "Print the complete plan without changing the virtual tree."
+    }
+  },
+  "required": ["appName"],
+  "additionalProperties": false
+}

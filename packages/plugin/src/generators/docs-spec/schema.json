@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "DocsSpec",
+  "title": "Create a numbered specification record",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "Which project does this spec describe?"
+    },
+    "projects": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Nx projects governed by this specification; defaults to project."
+    },
+    "title": {
+      "type": "string",
+      "$default": { "$source": "argv", "index": 1 },
+      "description": "Spec title; defaults to '<project> specification'."
+    },
+    "topics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["architecture"]
+    },
+    "references": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "externalReferences": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "allowedDependencies": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/architectureDependency" },
+      "description": "Expected directed project-graph edges."
+    },
+    "forbiddenDependencies": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/architectureDependency" },
+      "description": "Directed project-graph edges that must remain absent."
+    },
+    "date": { "type": "string", "format": "date" }
+  },
+  "definitions": {
+    "architectureDependency": {
+      "type": "object",
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" }
+      },
+      "required": ["from", "to"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["project"],
+  "additionalProperties": false
+}

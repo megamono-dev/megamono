@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "DocsPlan",
+  "title": "Create a backlog plan",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "Which project does this plan affect?"
+    },
+    "title": {
+      "type": "string",
+      "$default": { "$source": "argv", "index": 1 },
+      "x-prompt": "What is the plan title?"
+    },
+    "topics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["plans"]
+    },
+    "references": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "externalReferences": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "date": { "type": "string", "format": "date" }
+  },
+  "required": ["project", "title"],
+  "additionalProperties": false
+}

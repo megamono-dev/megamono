@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "DocsDecision",
+  "title": "Create a proposed decision record",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "What decision is being recorded?"
+    },
+    "project": {
+      "type": "string",
+      "x-prompt": "Which project does this decision affect?"
+    },
+    "topics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["architecture"]
+    },
+    "references": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "externalReferences": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "date": { "type": "string", "format": "date" }
+  },
+  "required": ["title", "project"],
+  "additionalProperties": false
+}

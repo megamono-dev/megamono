@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "WorkspaceInit",
+  "title": "Initialize a Megamono workspace",
+  "description": "Add Megamono configuration, documentation projects, and baseline project tags.",
+  "type": "object",
+  "properties": {
+    "docsRoot": {
+      "type": "string",
+      "description": "Repository documentation root.",
+      "default": "docs"
+    },
+    "defaultScope": {
+      "type": "string",
+      "description": "Scope tag value assigned to projects that have no scope tag.",
+      "default": "shared"
+    },
+    "defaultPlatform": {
+      "type": "string",
+      "description": "Platform assigned to untagged existing applications.",
+      "enum": ["web", "node", "worker", "apple", "rust", "php", "extension"],
+      "x-prompt": "Which platform should untagged existing applications use?"
+    }
+  },
+  "additionalProperties": false
+}

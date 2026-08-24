@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "version": 2,
+  "title": "Megamono structural check executor",
+  "description": "Validate project tags, dependency direction, package placement, and rule overrides.",
+  "type": "object",
+  "properties": {
+    "config": {
+      "type": "string",
+      "default": "megamono.json"
+    },
+    "docsRoot": {
+      "type": "string"
+    },
+    "skipDocs": {
+      "type": "boolean",
+      "default": false
+    },
+    "verbose": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "additionalProperties": false
+}

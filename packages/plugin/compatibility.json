@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemaVersion": 1,
+  "toolchains": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12",
+    "nx": ">=23.1 <24",
+    "typescript": ">=6.0 <6.1",
+    "prisma": ">=6.7"
+  },
+  "scaffoldPackages": {
+    "create-nx-workspace": "23.1.1",
+    "@nx/js": "23.1.1",
+    "@nx/vitest": "23.1.1",
+    "@nx/next": "23.1.1",
+    "@nx/nest": "23.1.1",
+    "@nx/expo": "23.1.1",
+    "create-tauri-app": "4.6.2",
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/cli": "2.11.4",
+    "@tauri-apps/plugin-opener": "2.5.4",
+    "vite": "8.1.4",
+    "vitest": "4.1.10",
+    "typescript": "6.0.3",
+    "@megamono/plugin": "0.0.1",
+    "@megamono/nx-apple": "0.0.1",
+    "@megamono/nx-cargo": "0.0.1"
+  },
+  "services": {
+    "postgresql": "17"
+  },
+  "rustCrates": {
+    "tauri": "2.11.5",
+    "tauri-build": "2.6.3",
+    "tauri-plugin-opener": "2.5.4",
+    "serde": "1.0.229",
+    "serde_json": "1.0.151"
+  },
+  "externalTools": {}
+}

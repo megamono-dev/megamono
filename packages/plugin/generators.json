@@ -1,0 +1,49 @@
+{
+  "generators": {
+    "workspace-init": {
+      "factory": "./dist/generators/workspace-init/workspace-init",
+      "schema": "./dist/generators/workspace-init/schema.json",
+      "description": "Initialize Megamono repository configuration and documentation"
+    },
+    "skill-eject": {
+      "factory": "./dist/generators/skill-eject/skill-eject",
+      "schema": "./dist/generators/skill-eject/schema.json",
+      "description": "Make a managed Megamono skill repository-owned"
+    },
+    "convert": {
+      "factory": "./dist/generators/convert/convert",
+      "schema": "./dist/generators/convert/schema.json",
+      "description": "Convert an existing npm repository into a planned Megamono workspace"
+    },
+    "docs-init": {
+      "factory": "./dist/generators/docs-init/docs-init",
+      "schema": "./dist/generators/docs-init/schema.json",
+      "description": "Initialize the Megamono repository documentation convention"
+    },
+    "docs-spec": {
+      "factory": "./dist/generators/docs-spec/docs-spec",
+      "schema": "./dist/generators/docs-spec/schema.json",
+      "description": "Create the next numbered specification record for a project"
+    },
+    "docs-plan": {
+      "factory": "./dist/generators/docs-plan/docs-plan",
+      "schema": "./dist/generators/docs-plan/schema.json",
+      "description": "Create a backlog plan record"
+    },
+    "docs-decision": {
+      "factory": "./dist/generators/docs-decision/docs-decision",
+      "schema": "./dist/generators/docs-decision/schema.json",
+      "description": "Create a proposed decision record"
+    },
+    "docs-research": {
+      "factory": "./dist/generators/docs-research/docs-research",
+      "schema": "./dist/generators/docs-research/schema.json",
+      "description": "Create an active research record"
+    },
+    "docs-audit": {
+      "factory": "./dist/generators/docs-audit/docs-audit",
+      "schema": "./dist/generators/docs-audit/schema.json",
+      "description": "Create an audit skeleton against a named specification"
+    }
+  }
+}

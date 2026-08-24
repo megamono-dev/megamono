@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "DocsAudit",
+  "title": "Create a current audit record",
+  "type": "object",
+  "properties": {
+    "target": {
+      "type": "string",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "What target is being audited?"
+    },
+    "project": {
+      "type": "string",
+      "x-prompt": "Which project owns the audited target?"
+    },
+    "spec": {
+      "type": "string",
+      "x-prompt": "Which spec ID is the audit standard?"
+    },
+    "title": { "type": "string" },
+    "topics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["testing"]
+    },
+    "references": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "externalReferences": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "date": { "type": "string", "format": "date" }
+  },
+  "required": ["target", "project", "spec"],
+  "additionalProperties": false
+}

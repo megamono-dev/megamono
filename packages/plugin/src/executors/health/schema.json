@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoHealth",
+  "title": "Megamono repository health",
+  "description": "Run deterministic repository health checks and write a stable JSON report.",
+  "type": "object",
+  "properties": {
+    "config": {
+      "type": "string",
+      "description": "Workspace-relative Megamono configuration path.",
+      "default": "megamono.json"
+    },
+    "docsRoot": {
+      "type": "string",
+      "description": "Override the configured documentation root."
+    },
+    "checks": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "dependency-alignment",
+          "spec-drift",
+          "stale-plans",
+          "orphaned-libraries",
+          "integration-template-drift"
+        ]
+      }
+    },
+    "output": {
+      "type": "string",
+      "description": "Workspace-relative JSON report path.",
+      "default": ".megamono/health.json"
+    },
+    "failOnFindings": {
+      "type": "boolean",
+      "description": "Return an unsuccessful Nx result when findings exist.",
+      "default": false
+    },
+    "now": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Reference time for deterministic fixtures."
+    }
+  },
+  "additionalProperties": false
+}

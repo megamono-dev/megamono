@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "version": 2,
+  "title": "Prune expired documentation reports",
+  "description": "List expired report records and delete them only when explicitly confirmed.",
+  "type": "object",
+  "properties": {
+    "confirm": {
+      "type": "boolean",
+      "default": false,
+      "description": "Delete listed reports instead of previewing them."
+    },
+    "now": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Clock override for deterministic automation and tests."
+    },
+    "config": {
+      "type": "string",
+      "default": "megamono.json"
+    },
+    "docsRoot": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

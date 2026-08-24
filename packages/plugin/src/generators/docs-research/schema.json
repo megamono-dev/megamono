@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "DocsResearch",
+  "title": "Create an active research record",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "What is being researched?"
+    },
+    "project": {
+      "type": "string",
+      "x-prompt": "Which project does this research affect?"
+    },
+    "topics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["architecture"]
+    },
+    "references": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "externalReferences": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "date": { "type": "string", "format": "date" }
+  },
+  "required": ["title", "project"],
+  "additionalProperties": false
+}

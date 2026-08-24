@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "version": 2,
+  "title": "Archive a repository document",
+  "description": "Apply a valid terminal transition and move a plan, spec, or research record into the mirrored archive.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Stable document ID to archive."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "aborted", "retired", "superseded", "complete"],
+      "description": "Type-valid terminal status."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Required reason when aborting a plan."
+    },
+    "replacementId": {
+      "type": "string",
+      "description": "Replacement spec ID when superseding a spec."
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Completion timestamp override for deterministic automation."
+    },
+    "config": {
+      "type": "string",
+      "default": "megamono.json"
+    },
+    "docsRoot": {
+      "type": "string"
+    },
+    "dryRun": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": ["id"],
+  "additionalProperties": false
+}

@@ -1,0 +1,96 @@
+{
+  "name": "@megamono/plugin",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    "./compatibility.json": "./compatibility.json",
+    "./schemas/megamono.schema.json": "./schemas/megamono.schema.json",
+    "./eslint": {
+      "types": "./dist/eslint/plugin.d.ts",
+      "import": "./dist/eslint.cjs",
+      "default": "./dist/eslint.cjs"
+    },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo",
+    "compatibility.json",
+    "schemas",
+    "executors.json",
+    "generators.json"
+  ],
+  "nx": {
+    "targets": {
+      "build": {
+        "executor": "@nx/js:tsc",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "outputPath": "packages/plugin/dist",
+          "main": "packages/plugin/src/index.ts",
+          "tsConfig": "packages/plugin/tsconfig.lib.json",
+          "rootDir": "packages/plugin/src",
+          "generatePackageJson": false,
+          "assets": [
+            {
+              "input": "./packages/plugin/src",
+              "glob": "**/!(*.ts)",
+              "output": "."
+            },
+            {
+              "input": "./packages/plugin/src",
+              "glob": "**/*.d.ts",
+              "output": "."
+            }
+          ]
+        }
+      },
+      "e2e-convert-local-registry": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/convert-local-registry.e2e.mjs",
+          "cwd": "."
+        }
+      }
+    },
+    "tags": [
+      "platform:node",
+      "scope:shared",
+      "type:util"
+    ]
+  },
+  "dependencies": {
+    "@content-collections/core": "0.15.2",
+    "gray-matter": "^4.0.3",
+    "prettier": "^3.8.1",
+    "zod": "^4.1.12",
+    "tslib": "^2.3.0"
+  },
+  "peerDependencies": {
+    "@nx/devkit": ">=23.1 <24",
+    "eslint": ">=9 <11",
+    "nx": ">=23.1 <24",
+    "typescript": ">=6.0 <6.1"
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "executors": "./executors.json",
+  "generators": "./generators.json"
+}

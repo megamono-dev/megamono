@@ -1,0 +1,39 @@
+{
+  "executors": {
+    "docs-validate": {
+      "implementation": "./dist/executors/docs-validate/docs-validate",
+      "schema": "./dist/executors/docs-validate/schema.json",
+      "description": "Validate Megamono repository documentation"
+    },
+    "docs-index": {
+      "implementation": "./dist/executors/docs-index/docs-index",
+      "schema": "./dist/executors/docs-index/schema.json",
+      "description": "Generate deterministic Megamono documentation indexes"
+    },
+    "docs-archive": {
+      "implementation": "./dist/executors/docs-archive/docs-archive",
+      "schema": "./dist/executors/docs-archive/schema.json",
+      "description": "Apply a terminal lifecycle transition and archive a repository document"
+    },
+    "docs-prune-reports": {
+      "implementation": "./dist/executors/docs-prune-reports/docs-prune-reports",
+      "schema": "./dist/executors/docs-prune-reports/schema.json",
+      "description": "Preview or delete expired repository report records"
+    },
+    "health": {
+      "implementation": "./dist/executors/health/health",
+      "schema": "./dist/executors/health/schema.json",
+      "description": "Run deterministic repository health checks"
+    },
+    "check": {
+      "implementation": "./dist/executors/check/check",
+      "schema": "./dist/executors/check/schema.json",
+      "description": "Validate Megamono repository structure"
+    },
+    "import": {
+      "implementation": "./dist/executors/import/import",
+      "schema": "./dist/executors/import/schema.json",
+      "description": "Analyze and safely import one repository into a Megamono host"
+    }
+  }
+}

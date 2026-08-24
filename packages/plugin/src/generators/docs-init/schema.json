@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "DocsInit",
+  "title": "Initialize Megamono repository documentation",
+  "description": "Alias for workspace-init when adopting the documentation convention in an existing Nx workspace.",
+  "type": "object",
+  "properties": {
+    "docsRoot": { "type": "string", "default": "docs" },
+    "defaultScope": { "type": "string", "default": "shared" },
+    "defaultPlatform": {
+      "type": "string",
+      "enum": ["web", "node", "worker", "apple", "rust", "php", "extension"],
+      "x-prompt": "Which platform should untagged existing applications use?"
+    }
+  },
+  "additionalProperties": false
+}

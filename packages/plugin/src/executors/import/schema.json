@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoImport",
+  "title": "Analyze or execute a repository import",
+  "description": "Inspect an immutable source commit and reconcile it with a Megamono host before any history graft.",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Local Git repository path or credential-free Git URL."
+    },
+    "ref": {
+      "type": "string",
+      "default": "HEAD",
+      "description": "Source branch, tag, or commit to resolve."
+    },
+    "expectedSourceSha": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{40}$",
+      "description": "Full immutable source SHA approved during analysis."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Imported Nx project name."
+    },
+    "destination": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$",
+      "description": "Safe, non-reserved workspace-relative destination; defaults to apps/<name>."
+    },
+    "history": {
+      "type": "string",
+      "enum": ["subtree", "filter-repo", "squash"],
+      "description": "Explicit history strategy required for execution."
+    },
+    "verify": {
+      "type": "string",
+      "enum": ["none", "config", "build"],
+      "default": "config",
+      "description": "Requested post-integration verification depth."
+    },
+    "execute": {
+      "type": "boolean",
+      "default": false,
+      "description": "Request mutation after every execution gate passes."
+    },
+    "allowHistoryLoss": {
+      "type": "boolean",
+      "default": false,
+      "description": "Explicitly acknowledge history loss for squash imports."
+    },
+    "resolutions": {
+      "type": "object",
+      "properties": {
+        "dependencies": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "aliases": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false,
+      "default": {}
+    }
+  },
+  "required": ["source", "name"],
+  "additionalProperties": false
+}

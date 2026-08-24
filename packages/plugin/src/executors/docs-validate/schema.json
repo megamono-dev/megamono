@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "version": 2,
+  "title": "Megamono docs validate executor",
+  "description": "Validate repository documentation metadata, lifecycle, and references.",
+  "type": "object",
+  "properties": {
+    "config": {
+      "type": "string",
+      "description": "Workspace-relative Megamono configuration path.",
+      "default": "megamono.json"
+    },
+    "contentConfig": {
+      "type": "string",
+      "description": "Workspace-relative Content Collections configuration path.",
+      "default": "content-collections.ts"
+    },
+    "docsRoot": {
+      "type": "string",
+      "description": "Override the configured documentation root."
+    },
+    "verbose": {
+      "type": "boolean",
+      "description": "Print a successful document count.",
+      "default": false
+    }
+  },
+  "additionalProperties": false
+}

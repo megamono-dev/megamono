@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "version": 2,
+  "title": "Megamono docs index executor",
+  "description": "Generate deterministic hot and archived documentation indexes.",
+  "type": "object",
+  "properties": {
+    "config": {
+      "type": "string",
+      "default": "megamono.json"
+    },
+    "docsRoot": {
+      "type": "string"
+    },
+    "check": {
+      "type": "boolean",
+      "description": "Fail when index files are stale instead of updating them.",
+      "default": false
+    }
+  },
+  "additionalProperties": false
+}
