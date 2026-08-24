@@ -1,0 +1,32 @@
+name: Megamono repository health
+
+on:
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm exec nx run @megamono/plugin:build
+      - run: npm exec nx run megamono-docs:health
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const { publishHealthIssue } = require('@megamono/plugin');
+            const report = JSON.parse(fs.readFileSync('.megamono/health.json', 'utf8'));
+            await publishHealthIssue({ github, context, core, report });

@@ -2,39 +2,57 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
+  merge_group:
 
 permissions:
   actions: read
   contents: read
+  pull-requests: read
 
 jobs:
-  main:
+  plan:
     runs-on: ubuntu-latest
+    outputs:
+      linux: ${{ steps.affected.outputs.linux }}
+      base: ${{ steps.affected.outputs.base }}
+      head: ${{ steps.affected.outputs.head }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
-          filter: tree:0
           fetch-depth: 0
-
-      # This enables task distribution via Nx Cloud
-      # Run this command as early as possible, before dependencies are installed
-      # Learn more at https://nx.dev/docs/reference/nx-cloud-cli#npx-nxcloud-startcirun
-      - run: npx nx start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="e2e"
-
-      # Cache node_modules
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: 'npm'
-
+          cache: npm
       - run: npm ci
+      - uses: nrwl/nx-set-shas@v5
+      - id: affected
+        shell: bash
+        run: |
+          if [ -n "$(npm exec nx show projects --affected --exclude=tag:platform:apple)" ]; then
+            echo "linux=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "linux=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "base=$NX_BASE" >> "$GITHUB_OUTPUT"
+          echo "head=$NX_HEAD" >> "$GITHUB_OUTPUT"
 
-      # Prepend any command with "nx record --" to record its logs to Nx Cloud
-      - run: npx nx record -- npx nx format:check --base="remotes/origin/main"
-      - run: npx nx run-many -t lint test build typecheck e2e
-      # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/docs/features/ci-features/self-healing-ci
-      - run: npx nx fix-ci
-        if: always()
+  linux:
+    needs: plan
+    if: needs.plan.outputs.linux == 'true'
+    runs-on: ubuntu-latest
+    env:
+      NX_BASE: ${{ needs.plan.outputs.base }}
+      NX_HEAD: ${{ needs.plan.outputs.head }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm exec nx affected -t lint test build --exclude=tag:platform:apple --output-style=static
