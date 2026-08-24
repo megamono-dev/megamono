@@ -14,6 +14,7 @@ import { existsSync, lstatSync, mkdirSync, symlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   DEFAULT_MEGAMONO_CONFIG,
+  assertSupportedMegamonoConfigVersion,
   isSafeWorkspaceRelativePath,
   megamonoConfigSchema,
 } from '../../lib/config';
@@ -319,6 +320,7 @@ export async function workspaceInitGenerator(
         cause: error,
       });
     }
+    assertSupportedMegamonoConfigVersion(currentConfig, 'megamono.json');
     const parsed = megamonoConfigSchema.safeParse(currentConfig);
     if (!parsed.success) {
       throw new Error(

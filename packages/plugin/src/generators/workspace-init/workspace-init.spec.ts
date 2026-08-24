@@ -90,6 +90,13 @@ describe('workspace-init generator', () => {
     );
   });
 
+  it('routes unknown configuration versions to migration guidance', async () => {
+    tree.write('megamono.json', JSON.stringify({ version: 2 }));
+    await expect(workspaceInitGenerator(tree, options)).rejects.toThrow(
+      /Unsupported Megamono configuration version 2.*configuration migration/s,
+    );
+  });
+
   it('adds a separator to an existing flat config without a trailing comma', async () => {
     tree.write(
       'eslint.config.mjs',
@@ -105,7 +112,7 @@ describe('workspace-init generator', () => {
     await workspaceInitGenerator(tree, options);
 
     expect(tree.read('eslint.config.mjs', 'utf8')).toContain(
-      "    rules: {},\n  },\n  // megamono eslint rules",
+      '    rules: {},\n  },\n  // megamono eslint rules',
     );
   });
 

@@ -78,6 +78,21 @@ describe('Megamono configuration', () => {
     }
   });
 
+  it('rejects unknown versions with an actionable migration instruction', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-config-version-'));
+    try {
+      await writeFile(
+        join(root, 'megamono.json'),
+        JSON.stringify({ ...DEFAULT_MEGAMONO_CONFIG, version: 2 }),
+      );
+      await expect(readMegamonoConfig(root)).rejects.toThrow(
+        /Unsupported Megamono configuration version 2.*supports version 1.*documented configuration migration/s,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects documentation roots that escape the workspace', () => {
     expect(
       megamonoConfigSchema.safeParse({

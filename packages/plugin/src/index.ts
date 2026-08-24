@@ -1,6 +1,8 @@
 export {
   BUILT_IN_TOPICS,
   DEFAULT_MEGAMONO_CONFIG,
+  MEGAMONO_CONFIG_VERSION,
+  assertSupportedMegamonoConfigVersion,
   getTopicVocabulary,
   isSafeWorkspaceRelativePath,
   megamonoConfigSchema,

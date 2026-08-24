@@ -54,6 +54,30 @@ const structuralRules = new Set<string>([
   'platform-boundary',
 ]);
 
+export const MEGAMONO_CONFIG_VERSION = 1 as const;
+
+export function assertSupportedMegamonoConfigVersion(
+  value: unknown,
+  configPath: string,
+): void {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !Object.prototype.hasOwnProperty.call(value, 'version')
+  ) {
+    return;
+  }
+  const version = (value as { readonly version?: unknown }).version;
+  if (version === MEGAMONO_CONFIG_VERSION) return;
+
+  const renderedVersion = JSON.stringify(version) ?? String(version);
+  throw new Error(
+    `Unsupported Megamono configuration version ${renderedVersion} at ${configPath}. ` +
+      `This @megamono/plugin release supports version ${MEGAMONO_CONFIG_VERSION}. ` +
+      `Install a plugin release that supports version ${renderedVersion}, run that release's documented configuration migration, then retry.`,
+  );
+}
+
 export function isSafeWorkspaceRelativePath(value: string): boolean {
   return (
     value.length > 0 &&
@@ -100,7 +124,7 @@ const conventionsSchema = z
 export const megamonoConfigSchema = z
   .object({
     $schema: z.string().optional(),
-    version: z.literal(1),
+    version: z.literal(MEGAMONO_CONFIG_VERSION),
     conventions: conventionsSchema,
     platforms: z
       .array(
@@ -266,6 +290,8 @@ export async function readMegamonoConfig(
       { cause: error },
     );
   }
+
+  assertSupportedMegamonoConfigVersion(value, absolutePath);
 
   const result = megamonoConfigSchema.safeParse(value);
   if (!result.success) {
