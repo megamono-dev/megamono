@@ -16,6 +16,20 @@ information architecture, and configures the shared agent-skills directory.
 It also wires `@megamono/plugin/eslint` into the workspace flat config and emits
 the scheduled repository-health issue workflow.
 
+## Generator availability
+
+`@megamono/plugin/availability.json` is the canonical registry for available,
+fixture-gated, and reserved generator names. The published `generators.json`
+and `executors.json` collections are produced with:
+
+```sh
+npm exec nx -- run plugin:sync-collections
+```
+
+Only entries marked `available` are emitted. Programmatic callers can use
+`getGeneratorAvailability` or `assertGeneratorAvailable` to return the stable
+gate diagnostic for a gated or reserved name.
+
 ## Convert an existing application repository
 
 After committing `nx init` on a non-default conversion branch, preview the

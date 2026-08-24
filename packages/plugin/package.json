@@ -8,6 +8,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
+    "./availability.json": "./availability.json",
     "./compatibility.json": "./compatibility.json",
     "./schemas/megamono.schema.json": "./schemas/megamono.schema.json",
     "./eslint": {
@@ -24,6 +25,7 @@
   "files": [
     "dist",
     "!**/*.tsbuildinfo",
+    "availability.json",
     "compatibility.json",
     "schemas",
     "executors.json",
@@ -31,6 +33,18 @@
   ],
   "nx": {
     "targets": {
+      "sync-collections": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "outputs": [
+          "{projectRoot}/generators.json",
+          "{projectRoot}/executors.json"
+        ],
+        "options": {
+          "command": "node packages/plugin/scripts/sync-collections.mjs",
+          "cwd": "."
+        }
+      },
       "build": {
         "executor": "@nx/js:tsc",
         "outputs": [

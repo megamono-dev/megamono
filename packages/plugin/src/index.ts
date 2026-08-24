@@ -1,4 +1,12 @@
 export {
+  GENERATOR_AVAILABILITY,
+  GeneratorAvailabilityError,
+  assertGeneratorAvailable,
+  getGeneratorAvailability,
+  type GeneratorAvailability,
+  type GeneratorAvailabilityStatus,
+} from './lib/availability';
+export {
   BUILT_IN_TOPICS,
   DEFAULT_MEGAMONO_CONFIG,
   MEGAMONO_CONFIG_VERSION,
