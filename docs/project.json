@@ -1,0 +1,48 @@
+{
+  "name": "megamono-docs",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "tags": ["type:util", "scope:shared", "platform:node"],
+  "targets": {
+    "validate": {
+      "executor": "@megamono/plugin:docs-validate",
+      "cache": true,
+      "inputs": [
+        "{workspaceRoot}/megamono.json",
+        "{workspaceRoot}/content-collections.ts",
+        "{workspaceRoot}/docs/**/*.md"
+      ],
+      "outputs": ["{workspaceRoot}/.content-collections"]
+    },
+    "index": {
+      "executor": "@megamono/plugin:docs-index",
+      "cache": false
+    },
+    "archive": {
+      "executor": "@megamono/plugin:docs-archive",
+      "cache": false
+    },
+    "prune-reports": {
+      "executor": "@megamono/plugin:docs-prune-reports",
+      "cache": false
+    },
+    "health": {
+      "executor": "@megamono/plugin:health",
+      "cache": false,
+      "inputs": [
+        "{workspaceRoot}/megamono.json",
+        "{workspaceRoot}/package.json",
+        "{workspaceRoot}/package-lock.json",
+        "{workspaceRoot}/nx.json",
+        "{workspaceRoot}/docs/**/*.md",
+        "{workspaceRoot}/**/package.json",
+        "{workspaceRoot}/**/app.json",
+        "{workspaceRoot}/**/Cargo.toml",
+        "{workspaceRoot}/**/Package.swift",
+        "{workspaceRoot}/**/.megamono-integration.json",
+        "{workspaceRoot}/.agents/skills/**/*"
+      ],
+      "outputs": ["{workspaceRoot}/.megamono/health.json"]
+    }
+  }
+}
