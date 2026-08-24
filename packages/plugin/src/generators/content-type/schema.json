@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "ContentType",
+  "title": "Add a document type to a content collection library",
+  "type": "object",
+  "properties": {
+    "collection": {
+      "type": "string",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "Which content collection should receive the type?"
+    },
+    "name": {
+      "type": "string",
+      "$default": { "$source": "argv", "index": 1 },
+      "x-prompt": "What should the document type be called?"
+    }
+  },
+  "required": ["collection", "name"],
+  "additionalProperties": false
+}

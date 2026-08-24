@@ -30,6 +30,12 @@ Only entries marked `available` are emitted. Programmatic callers can use
 `getGeneratorAvailability` or `assertGeneratorAvailable` to return the stable
 gate diagnostic for a gated or reserved name.
 
+The `content-lib` and `content-type` implementations scaffold an internal
+content-data project, generated-import path, cached build target, Playstack
+transforms, and deterministic schema-backed document types. Their descriptors
+remain fixture-gated until the packed Free-tier `@playstack/content` contract is
+available; implementation presence alone does not publish the generator names.
+
 ## Convert an existing application repository
 
 After committing `nx init` on a non-default conversion branch, preview the

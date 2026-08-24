@@ -57,11 +57,17 @@
     },
     "content-lib": {
       "status": "gated",
-      "gate": "Content Collections library generation fixtures have not passed."
+      "factory": "./dist/generators/content-lib/content-lib",
+      "schema": "./dist/generators/content-lib/schema.json",
+      "description": "Create a content collection library",
+      "gate": "The packed @playstack/content Free-tier fixture contract has not passed."
     },
     "content-type": {
       "status": "gated",
-      "gate": "Content Collections type generation fixtures have not passed."
+      "factory": "./dist/generators/content-type/content-type",
+      "schema": "./dist/generators/content-type/schema.json",
+      "description": "Add a document type to a content collection library",
+      "gate": "The packed @playstack/content Free-tier fixture contract has not passed."
     },
     "playstack-auth": {
       "status": "gated",
