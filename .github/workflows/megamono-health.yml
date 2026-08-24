@@ -21,8 +21,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm exec nx run @megamono/plugin:build
-      - run: npm exec nx run megamono-docs:health
+      - run: npm exec nx -- run @megamono/plugin:build
+      - run: npm exec nx -- run megamono-docs:health
       - uses: actions/github-script@v8
         with:
           script: |

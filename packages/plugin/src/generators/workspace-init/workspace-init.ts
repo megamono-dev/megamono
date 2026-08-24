@@ -149,7 +149,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm exec nx run megamono-docs:health
+      - run: npm exec nx -- run megamono-docs:health
       - uses: actions/github-script@v8
         with:
           script: |
@@ -168,7 +168,7 @@ function renderCiWorkflow(platforms: ReadonlySet<string>): string {
   const planChecks = [
     ...(hasLinux
       ? [
-          `          if [ -n "$(npm exec nx show projects --affected --exclude=tag:platform:apple)" ]; then
+          `          if [ -n "$(npm exec nx -- show projects --affected --exclude=tag:platform:apple)" ]; then
             echo "linux=true" >> "$GITHUB_OUTPUT"
           else
             echo "linux=false" >> "$GITHUB_OUTPUT"
@@ -177,7 +177,7 @@ function renderCiWorkflow(platforms: ReadonlySet<string>): string {
       : []),
     ...(hasApple
       ? [
-          `          if [ -n "$(npm exec nx show projects --affected${hasLinux ? ' --projects=tag:platform:apple' : ''})" ]; then
+          `          if [ -n "$(npm exec nx -- show projects --affected${hasLinux ? ' --projects=tag:platform:apple' : ''})" ]; then
             echo "apple=true" >> "$GITHUB_OUTPUT"
           else
             echo "apple=false" >> "$GITHUB_OUTPUT"
@@ -204,7 +204,7 @@ function renderCiWorkflow(platforms: ReadonlySet<string>): string {
           node-version: 24
           cache: npm
 ${platforms.has('rust') ? '      - uses: dtolnay/rust-toolchain@stable\n' : ''}${platforms.has('php') ? '      - uses: shivammathur/setup-php@v2\n        with:\n          php-version: 8.4\n' : ''}      - run: npm ci
-      - run: npm exec nx affected -t lint test build --exclude=tag:platform:apple --output-style=static`,
+      - run: npm exec nx -- affected -t lint test build --exclude=tag:platform:apple --output-style=static`,
         ]
       : []),
     ...(hasApple
@@ -226,7 +226,7 @@ ${platforms.has('rust') ? '      - uses: dtolnay/rust-toolchain@stable\n' : ''}$
           cache: npm
       - run: npm ci
       - run: xcodebuild -downloadComponent MetalToolchain
-      - run: npm exec nx affected -t lint test build${hasLinux ? " --exclude='*,!tag:platform:apple'" : ''} --output-style=static`,
+      - run: npm exec nx -- affected -t lint test build${hasLinux ? " --exclude='*,!tag:platform:apple'" : ''} --output-style=static`,
         ]
       : []),
   ].join('\n\n');

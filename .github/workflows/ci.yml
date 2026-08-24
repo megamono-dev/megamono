@@ -31,7 +31,7 @@ jobs:
       - id: affected
         shell: bash
         run: |
-          if [ -n "$(npm exec nx show projects --affected --exclude=tag:platform:apple)" ]; then
+          if [ -n "$(npm exec nx -- show projects --affected --exclude=tag:platform:apple)" ]; then
             echo "linux=true" >> "$GITHUB_OUTPUT"
           else
             echo "linux=false" >> "$GITHUB_OUTPUT"
@@ -55,4 +55,4 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm exec nx affected -t lint test build --exclude=tag:platform:apple --output-style=static
+      - run: npm exec nx -- affected -t lint test build --exclude=tag:platform:apple --output-style=static

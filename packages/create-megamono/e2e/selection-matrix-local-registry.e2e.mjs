@@ -216,7 +216,7 @@ async function verifyCase(root, testCase, environment) {
     ciWorkflow.includes('actions/checkout@v7') &&
       ciWorkflow.includes('fetch-depth: 0') &&
       ciWorkflow.includes('nrwl/nx-set-shas@v5') &&
-      ciWorkflow.includes('npm exec nx affected -t lint test build') &&
+      ciWorkflow.includes('npm exec nx -- affected -t lint test build') &&
       !ciWorkflow.includes('contents: write'),
     `${testCase.id}: generated CI workflow does not match the affected contract.`,
   );

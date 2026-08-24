@@ -49,7 +49,7 @@ describe('workspace-init generator', () => {
     expect(ci).toContain('fetch-depth: 0');
     expect(ci).toContain('nrwl/nx-set-shas@v5');
     expect(ci).toContain('merge_group:');
-    expect(ci).toContain('npm exec nx affected -t lint test build');
+    expect(ci).toContain('npm exec nx -- affected -t lint test build');
     expect(ci).not.toContain('contents: write');
     expect(tree.read('AGENTS.md', 'utf8')).toContain('Affected CI');
     expect(tree.exists('megamono.json')).toBe(true);
