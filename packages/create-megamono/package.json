@@ -1,0 +1,91 @@
+{
+  "name": "create-megamono",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": {
+    "create-megamono": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@org/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo",
+    "compatibility.json"
+  ],
+  "nx": {
+    "targets": {
+      "build": {
+        "executor": "@nx/js:tsc",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "outputPath": "packages/create-megamono/dist",
+          "main": "packages/create-megamono/src/index.ts",
+          "tsConfig": "packages/create-megamono/tsconfig.lib.json",
+          "rootDir": "packages/create-megamono/src",
+          "generatePackageJson": false
+        }
+      },
+      "e2e-apple-local-registry": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build",
+          {
+            "projects": [
+              "plugin",
+              "nx-apple"
+            ],
+            "target": "build"
+          }
+        ],
+        "options": {
+          "command": "node packages/create-megamono/e2e/apple-local-registry.e2e.mjs",
+          "cwd": "."
+        }
+      },
+      "e2e-selection-matrix-local-registry": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build",
+          {
+            "projects": [
+              "plugin",
+              "nx-apple",
+              "nx-cargo"
+            ],
+            "target": "build"
+          }
+        ],
+        "options": {
+          "command": "node packages/create-megamono/e2e/selection-matrix-local-registry.e2e.mjs",
+          "cwd": "."
+        }
+      }
+    },
+    "tags": [
+      "platform:node",
+      "scope:shared",
+      "type:util"
+    ]
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  }
+}
