@@ -90,6 +90,25 @@ describe('workspace-init generator', () => {
     );
   });
 
+  it('adds a separator to an existing flat config without a trailing comma', async () => {
+    tree.write(
+      'eslint.config.mjs',
+      `export default [
+  {
+    files: ['**/*.ts'],
+    rules: {},
+  }
+];
+`,
+    );
+
+    await workspaceInitGenerator(tree, options);
+
+    expect(tree.read('eslint.config.mjs', 'utf8')).toContain(
+      "    rules: {},\n  },\n  // megamono eslint rules",
+    );
+  });
+
   it('is a no-op when rerun with the same options', async () => {
     await workspaceInitGenerator(tree, options);
     const changesAfterFirstRun = tree.listChanges();

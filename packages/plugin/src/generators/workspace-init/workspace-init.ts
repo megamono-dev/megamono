@@ -297,9 +297,12 @@ import megamonoPlugin from '@megamono/plugin/eslint';
       'eslint.config.mjs must export a flat config array before workspace-init can wire Megamono rules.',
     );
   }
+  const beforeClosing = current.slice(0, closing).trimEnd();
+  const separator =
+    beforeClosing.endsWith('[') || beforeClosing.endsWith(',') ? '' : ',';
   tree.write(
     path,
-    `${imports}\n${current.slice(0, closing + 1)}${entry}${current.slice(closing + 1)}`,
+    `${imports}\n${beforeClosing}${separator}\n${entry}${current.slice(closing + 1)}`,
   );
 }
 
