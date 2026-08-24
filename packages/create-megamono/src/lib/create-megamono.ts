@@ -980,6 +980,22 @@ async function configurePackageApplication(
   packageJson.nx ??= {};
   packageJson.nx.projectType = 'application';
   await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
+
+  if (app === 'mobile') {
+    const sourcePath = resolve(
+      plan.options.stagingDirectory,
+      'apps/mobile/src/app/App.tsx',
+    );
+    const source = await readFile(sourcePath, 'utf8');
+    await writeFile(
+      sourcePath,
+      source.replace(
+        /^\/\* eslint-disable jsx-a11y\/accessible-emoji \*\/\r?\n/,
+        '',
+      ),
+      'utf8',
+    );
+  }
 }
 
 async function configureWorkspace(plan: CreationPlan): Promise<void> {

@@ -559,6 +559,10 @@ describe('executePlan', () => {
           recursive: true,
         });
       }
+      await mkdir(
+        resolve(plan.options.stagingDirectory, 'apps/mobile/src/app'),
+        { recursive: true },
+      );
       await writeFile(
         resolve(plan.options.stagingDirectory, 'package.json'),
         '{}',
@@ -580,6 +584,13 @@ describe('executePlan', () => {
           }),
         );
       }
+      await writeFile(
+        resolve(
+          plan.options.stagingDirectory,
+          'apps/mobile/src/app/App.tsx',
+        ),
+        '/* eslint-disable jsx-a11y/accessible-emoji */\nexport const App = () => null;\n',
+      );
     };
 
     await executePlan(plan, runner);
@@ -600,6 +611,15 @@ describe('executePlan', () => {
         `normalize apps/${app} as an application project`,
       );
     }
+    expect(
+      await readFile(
+        resolve(
+          plan.options.destination,
+          'apps/mobile/src/app/App.tsx',
+        ),
+        'utf8',
+      ),
+    ).not.toContain('jsx-a11y/accessible-emoji');
   });
 
   it('retains staging with recovery details after a forced failure', async () => {
