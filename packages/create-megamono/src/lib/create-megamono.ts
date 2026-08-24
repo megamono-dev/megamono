@@ -747,6 +747,16 @@ async function configureDesktop(plan: CreationPlan): Promise<void> {
   );
   await writeFile(cargoPath, cargo, 'utf8');
 
+  const mainPath = resolve(desktopRoot, 'src-tauri/src/main.rs');
+  let main = await readFile(mainPath, 'utf8');
+  main = replaceRequired(
+    main,
+    /\b[A-Za-z_][A-Za-z0-9_]*_lib::run\(\)/,
+    `${crateLibName}::run()`,
+    'Cargo binary library entry point',
+  );
+  await writeFile(mainPath, main, 'utf8');
+
   const tauriConfigPath = resolve(desktopRoot, 'src-tauri/tauri.conf.json');
   const tauriConfig = JSON.parse(await readFile(tauriConfigPath, 'utf8')) as {
     productName?: string;

@@ -332,7 +332,7 @@ describe('executePlan', () => {
       if (initialized) return;
       initialized = true;
       await mkdir(
-        resolve(plan.options.stagingDirectory, 'apps/desktop/src-tauri'),
+        resolve(plan.options.stagingDirectory, 'apps/desktop/src-tauri/src'),
         { recursive: true },
       );
       await writeFile(
@@ -373,6 +373,13 @@ describe('executePlan', () => {
           'apps/desktop/src-tauri/Cargo.toml',
         ),
         `[package]\nname = "appsdesktop"\n\n[lib]\nname = "appsdesktop_lib"\n\n[build-dependencies]\ntauri-build = { version = "2", features = [] }\n\n[dependencies]\ntauri = { version = "2", features = [] }\ntauri-plugin-opener = "2"\nserde = { version = "1", features = ["derive"] }\nserde_json = "1"\n`,
+      );
+      await writeFile(
+        resolve(
+          plan.options.stagingDirectory,
+          'apps/desktop/src-tauri/src/main.rs',
+        ),
+        'fn main() {\n    appsdesktop_lib::run()\n}\n',
       );
       await writeFile(
         resolve(
@@ -418,6 +425,15 @@ describe('executePlan', () => {
     expect(cargo).toContain('name = "acme-tools-desktop"');
     expect(cargo).toContain('version = "=2.11.5"');
     expect(cargo).not.toMatch(/version\s*=\s*"2"/);
+    const main = await readFile(
+      resolve(
+        plan.options.destination,
+        'apps/desktop/src-tauri/src/main.rs',
+      ),
+      'utf8',
+    );
+    expect(main).toContain('acme_tools_desktop_lib::run()');
+    expect(main).not.toContain('appsdesktop_lib::run()');
     const nxJson = JSON.parse(
       await readFile(resolve(plan.options.destination, 'nx.json'), 'utf8'),
     );
