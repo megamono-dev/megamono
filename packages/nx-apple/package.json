@@ -1,0 +1,91 @@
+{
+  "name": "@megamono/nx-apple",
+  "version": "0.0.1",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@org/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo",
+    "generators.json"
+  ],
+  "generators": "./generators.json",
+  "nx": {
+    "name": "nx-apple",
+    "targets": {
+      "build": {
+        "executor": "@nx/js:tsc",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "outputPath": "packages/nx-apple/dist",
+          "main": "packages/nx-apple/src/index.ts",
+          "tsConfig": "packages/nx-apple/tsconfig.lib.json",
+          "rootDir": "packages/nx-apple/src",
+          "generatePackageJson": false,
+          "assets": [
+            {
+              "input": "./packages/nx-apple/src",
+              "glob": "**/!(*.ts)",
+              "output": "."
+            },
+            {
+              "input": "./packages/nx-apple/src",
+              "glob": "**/*.d.ts",
+              "output": "."
+            }
+          ]
+        }
+      },
+      "e2e-local-registry": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/nx-apple/e2e/local-registry.e2e.mjs",
+          "cwd": "."
+        }
+      },
+      "e2e-portfolio": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/nx-apple/e2e/portfolio.e2e.mjs",
+          "cwd": "."
+        }
+      }
+    },
+    "tags": [
+      "platform:node",
+      "scope:shared",
+      "type:util"
+    ]
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "peerDependencies": {
+    "@nx/devkit": ">=23.1 <24",
+    "nx": ">=23.1 <24"
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "generators": {
+    "application": {
+      "factory": "./dist/generators/application/application",
+      "schema": "./dist/generators/application/schema.json",
+      "description": "Create a SwiftUI macOS application with an inferred Nx project"
+    }
+  }
+}

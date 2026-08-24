@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "AppleApplication",
+  "title": "Create an Apple application",
+  "description": "Create a SwiftUI macOS application, unit tests, and a shared Xcode scheme for @megamono/nx-apple inference.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nx project, Xcode project, target, and scheme name.",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "What should the Apple project be called?"
+    },
+    "directory": {
+      "type": "string",
+      "description": "Workspace-relative application directory.",
+      "default": "apps/apple"
+    },
+    "displayName": {
+      "type": "string",
+      "description": "User-facing application name."
+    },
+    "bundleIdentifier": {
+      "type": "string",
+      "description": "Reverse-DNS application bundle identifier."
+    },
+    "deploymentTarget": {
+      "type": ["string", "number"],
+      "description": "Minimum macOS deployment version.",
+      "default": "14.0"
+    },
+    "scope": {
+      "type": "string",
+      "description": "Megamono scope tag and nx-apple plugin scope.",
+      "default": "shared"
+    },
+    "tags": {
+      "type": "string",
+      "description": "Comma-separated Nx project tags."
+    },
+    "skipFormat": {
+      "type": "boolean",
+      "description": "Skip formatting generated workspace files.",
+      "default": false
+    }
+  },
+  "required": ["name"],
+  "additionalProperties": false
+}

@@ -1,0 +1,17 @@
+export {
+  collectCargoMetadata,
+  createDependencies,
+  createNodes,
+  dependenciesFromCargoMetadata,
+  getCargoDiagnostics,
+  projectsFromCargoMetadata,
+} from './lib/cargo';
+export type {
+  CargoDiagnostic,
+  CargoMetadata,
+  CargoMetadataDependency,
+  CargoMetadataPackage,
+  CargoMetadataRecord,
+  CargoMetadataRunner,
+  CargoPluginOptions,
+} from './lib/cargo';
