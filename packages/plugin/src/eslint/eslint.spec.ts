@@ -141,5 +141,8 @@ describe('Megamono ESLint flat config', () => {
       'warn',
       expect.objectContaining({ workspaceRoot: expect.any(String) }),
     ]);
+    expect(config.ignores).toContain(
+      '**/eslint.config.{js,cjs,mjs,ts,cts,mts}',
+    );
   });
 });

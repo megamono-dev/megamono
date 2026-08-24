@@ -28,6 +28,7 @@ export const megamonoEslintPlugin = {
     return {
       name: '@megamono/plugin/recommended',
       files: ['**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}'],
+      ignores: ['**/eslint.config.{js,cjs,mjs,ts,cts,mts}'],
       plugins: { megamono: megamonoEslintPlugin },
       rules: {
         '@nx/enforce-module-boundaries': severity(
