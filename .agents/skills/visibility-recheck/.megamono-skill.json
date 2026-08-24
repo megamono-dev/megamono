@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "visibility-recheck",
+  "pluginVersion": "0.0.1",
+  "templateHash": "sha256:34e1003e67ec8f6ebd1ccf98020a604e92874edd4d06e4edd2b264c17f52f7e9",
+  "files": ["SKILL.md", "references/triggers.md"]
+}

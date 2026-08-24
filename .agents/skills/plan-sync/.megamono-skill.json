@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "plan-sync",
+  "pluginVersion": "0.0.1",
+  "templateHash": "sha256:21595031f2a895812160c991e8b629e5ff95d80ae3ebbb1842f4dd03f9b0dfe3",
+  "files": ["SKILL.md", "references/triggers.md"]
+}

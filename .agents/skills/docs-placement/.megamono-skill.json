@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "docs-placement",
+  "pluginVersion": "0.0.1",
+  "templateHash": "sha256:3f2e920a2750b925b279bd5a62d98946098f66249f402f5686f7a67a5578ed81",
+  "files": ["SKILL.md", "references/triggers.md"]
+}

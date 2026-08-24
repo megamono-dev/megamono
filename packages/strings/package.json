@@ -27,7 +27,8 @@
   },
   "nx": {
     "tags": [
-      "scope:strings"
+      "scope:strings",
+      "type:util"
     ],
     "targets": {
       "build-base": {

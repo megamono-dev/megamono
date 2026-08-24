@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "archive-review",
+  "pluginVersion": "0.0.1",
+  "templateHash": "sha256:eceb5dbba25de6b01641490c5fc24db6e2471f61b568dca4b65784678c5e52d8",
+  "files": ["SKILL.md", "references/triggers.md"]
+}

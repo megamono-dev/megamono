@@ -20,7 +20,8 @@
   },
   "nx": {
     "tags": [
-      "scope:shared"
+      "scope:shared",
+      "type:util"
     ]
   }
 }

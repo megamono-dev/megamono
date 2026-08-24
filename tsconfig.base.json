@@ -18,6 +18,10 @@
     "target": "es2022",
     "customConditions": ["@org/source"],
     "noUncheckedSideEffectImports": false,
+    "paths": {
+      "content-collections": ["./.content-collections/index.js"],
+      "content-collections/*": ["./.content-collections/*.js"]
+    },
     "types": ["*"]
   }
 }

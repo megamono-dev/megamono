@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/@megamono/plugin/schemas/megamono.schema.json",
+  "version": 1,
+  "conventions": {
+    "nestFeatureLibraries": true,
+    "docsLocation": "centralized",
+    "packageManager": "npm",
+    "rules": {}
+  },
+  "platforms": ["node"],
+  "topics": {
+    "extend": []
+  },
+  "docs": {
+    "root": "docs",
+    "reportRetentionDays": 84
+  },
+  "health": {
+    "cadence": "weekly",
+    "stalePlanDays": 30,
+    "checks": {
+      "dependency-alignment": true,
+      "spec-drift": true,
+      "stale-plans": true,
+      "orphaned-libraries": true,
+      "integration-template-drift": true
+    },
+    "suppressions": []
+  },
+  "services": {
+    "runner": "none",
+    "requirements": {}
+  }
+}

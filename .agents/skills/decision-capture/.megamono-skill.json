@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "decision-capture",
+  "pluginVersion": "0.0.1",
+  "templateHash": "sha256:3f3dbccb9f6eb8f6027841854ee894c6632d6b2a624442d2df999b530b93fbb8",
+  "files": ["SKILL.md", "references/triggers.md"]
+}

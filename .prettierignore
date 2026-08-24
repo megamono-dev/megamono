@@ -4,3 +4,6 @@
 /.nx/cache
 /.nx/workspace-data
 .nx/self-healing
+.content-collections/
+.megamono/graph.json
+.megamono/health.json

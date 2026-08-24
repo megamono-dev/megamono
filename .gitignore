@@ -50,3 +50,6 @@ vitest.config.*.timestamp*
 .nx/polygraph
 .nx/self-healing
 .nx/migrate-runs
+.content-collections/
+.megamono/graph.json
+.megamono/health.json

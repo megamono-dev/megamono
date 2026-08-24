@@ -1,0 +1,31 @@
+{
+  "name": "megamono",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "tags": [
+    "type:app",
+    "scope:shared",
+    "platform:node",
+    "visibility:internal"
+  ],
+  "targets": {
+    "check": {
+      "executor": "@megamono/plugin:check",
+      "cache": true,
+      "inputs": [
+        "{workspaceRoot}/megamono.json",
+        "{workspaceRoot}/package.json",
+        "{workspaceRoot}/package-lock.json",
+        "{workspaceRoot}/nx.json",
+        "{workspaceRoot}/docs/**/*.md",
+        "{workspaceRoot}/**/package.json",
+        "{workspaceRoot}/.agents/skills/**/*"
+      ]
+    },
+    "import": {
+      "executor": "@megamono/plugin:import",
+      "cache": false,
+      "parallelism": false
+    }
+  }
+}

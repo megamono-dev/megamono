@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "structure-review",
+  "pluginVersion": "0.0.1",
+  "templateHash": "sha256:c5f041b848a25256f07590d061ff5be74dcbbbf9c80ceb50c4efbbfe34b37e85",
+  "files": ["SKILL.md", "references/triggers.md"]
+}

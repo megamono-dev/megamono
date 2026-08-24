@@ -23,7 +23,8 @@
   },
   "nx": {
     "tags": [
-      "scope:async"
+      "scope:async",
+      "type:util"
     ]
   }
 }

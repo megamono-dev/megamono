@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "drift-check",
+  "pluginVersion": "0.0.1",
+  "templateHash": "sha256:05e9c017415d869c2fd745215d7f1abd10b1032e298dce056d2a37204ab07c81",
+  "files": ["SKILL.md", "references/triggers.md"]
+}

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "dependency-review",
+  "pluginVersion": "0.0.1",
+  "templateHash": "sha256:92e572de9b865e80c5ca64b2d8d353ed84bbc45ff5ec156e847a89e9e638cc95",
+  "files": ["SKILL.md", "references/triggers.md"]
+}

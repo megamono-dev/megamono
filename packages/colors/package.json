@@ -23,7 +23,8 @@
   },
   "nx": {
     "tags": [
-      "scope:colors"
+      "scope:colors",
+      "type:util"
     ]
   }
 }
