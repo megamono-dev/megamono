@@ -1,6 +1,7 @@
 {
   "name": "@megamono/nx-apple",
   "version": "0.0.1",
+  "license": "MIT",
   "type": "commonjs",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

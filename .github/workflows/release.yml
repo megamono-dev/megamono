@@ -1,0 +1,82 @@
+name: Release packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      specifier:
+        description: Semver keyword or exact version
+        required: true
+        default: prerelease
+        type: string
+      preid:
+        description: Prerelease identifier (for example, next)
+        required: false
+        default: next
+        type: string
+      dist-tag:
+        description: npm distribution tag
+        required: true
+        default: next
+        type: choice
+        options:
+          - next
+          - latest
+      first-release:
+        description: Resolve versions from the manifests for the first release
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    environment: npm-${{ inputs.dist-tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+      - name: Preview version changes
+        env:
+          FIRST_RELEASE: ${{ inputs.first-release }}
+          PREID: ${{ inputs.preid }}
+          SPECIFIER: ${{ inputs.specifier }}
+        run: |
+          args=(release version "$SPECIFIER" --dry-run)
+          if [ -n "$PREID" ]; then args+=(--preid "$PREID"); fi
+          if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
+          npm exec nx -- "${args[@]}"
+      - run: npm exec nx -- run nx-apple:e2e-local-registry --skip-nx-cache
+      - run: npm exec nx -- run nx-cargo:e2e-local-registry --skip-nx-cache
+      - run: npm exec nx -- run plugin:e2e-convert-local-registry --skip-nx-cache
+      - run: npm exec nx -- run create-megamono:e2e-selection-matrix-local-registry --skip-nx-cache
+      - name: Version packages
+        env:
+          FIRST_RELEASE: ${{ inputs.first-release }}
+          PREID: ${{ inputs.preid }}
+          SPECIFIER: ${{ inputs.specifier }}
+        run: |
+          args=(release version "$SPECIFIER" --git-commit --git-tag)
+          if [ -n "$PREID" ]; then args+=(--preid "$PREID"); fi
+          if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
+          npm exec nx -- "${args[@]}"
+      - name: Publish packages
+        env:
+          DIST_TAG: ${{ inputs.dist-tag }}
+          FIRST_RELEASE: ${{ inputs.first-release }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          args=(release publish --tag "$DIST_TAG" --access public)
+          if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
+          npm exec nx -- "${args[@]}"
+      - run: git push --follow-tags origin HEAD:main
