@@ -80,6 +80,17 @@
           "command": "node packages/plugin/e2e/convert-local-registry.e2e.mjs",
           "cwd": "."
         }
+      },
+      "e2e-collections-local-registry": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/collections-local-registry.e2e.mjs",
+          "cwd": "."
+        }
       }
     },
     "tags": [

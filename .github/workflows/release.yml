@@ -58,6 +58,7 @@ jobs:
           npm exec nx -- "${args[@]}"
       - run: npm exec nx -- run nx-apple:e2e-local-registry --skip-nx-cache
       - run: npm exec nx -- run nx-cargo:e2e-local-registry --skip-nx-cache
+      - run: npm exec nx -- run plugin:e2e-collections-local-registry --skip-nx-cache
       - run: npm exec nx -- run plugin:e2e-convert-local-registry --skip-nx-cache
       - run: npm exec nx -- run create-megamono:e2e-selection-matrix-local-registry --skip-nx-cache
       - name: Version packages
