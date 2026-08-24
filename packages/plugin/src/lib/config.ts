@@ -37,6 +37,7 @@ const topicPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const decisionIdPattern = /^decision-\d{8}-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const CONVENTION_RULES = [
   'module-boundaries',
+  'docs-visibility-boundary',
   'no-deep-relative-imports',
   'require-tags',
   'naming-convention',

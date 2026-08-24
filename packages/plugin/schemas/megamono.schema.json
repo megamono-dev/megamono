@@ -52,6 +52,7 @@
           "additionalProperties": false,
           "properties": {
             "module-boundaries": { "$ref": "#/$defs/structuralRuleOverride" },
+            "docs-visibility-boundary": { "$ref": "#/$defs/ruleOverride" },
             "no-deep-relative-imports": { "$ref": "#/$defs/ruleOverride" },
             "require-tags": { "$ref": "#/$defs/structuralRuleOverride" },
             "naming-convention": { "$ref": "#/$defs/structuralRuleOverride" },

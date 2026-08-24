@@ -1,5 +1,6 @@
 import type { Linter, Rule } from 'eslint';
 import type { MegamonoConfig } from '../lib/config';
+import { docsVisibilityBoundary } from './rules/docs-visibility-boundary';
 import { noBareJsxStrings } from './rules/no-bare-jsx-strings';
 import { noDeepRelativeImports } from './rules/no-deep-relative-imports';
 import { platformBoundary } from './rules/platform-boundary';
@@ -16,6 +17,7 @@ function severity(
 }
 
 const rules = {
+  'docs-visibility-boundary': docsVisibilityBoundary,
   'no-bare-jsx-strings': noBareJsxStrings,
   'no-deep-relative-imports': noDeepRelativeImports,
   'platform-boundary': platformBoundary,
@@ -36,6 +38,13 @@ export const megamonoEslintPlugin = {
           'module-boundaries',
           'error',
         ),
+        'megamono/docs-visibility-boundary':
+          severity(config, 'docs-visibility-boundary', 'error') === 'off'
+            ? 'off'
+            : [
+                severity(config, 'docs-visibility-boundary', 'error'),
+                { workspaceRoot: process.cwd() },
+              ],
         'megamono/no-deep-relative-imports':
           severity(config, 'no-deep-relative-imports', 'error') === 'off'
             ? 'off'

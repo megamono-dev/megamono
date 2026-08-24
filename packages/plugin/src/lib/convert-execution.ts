@@ -16,6 +16,7 @@ import type {
   ConvertPlanOperation,
   ConvertVerifyMode,
 } from './convert';
+import { CONVENTION_RULES } from './config';
 
 interface PackageManifest extends Record<string, unknown> {
   name?: string;
@@ -401,16 +402,10 @@ export function setConvertWarningMode(
     const conventions = value.conventions ?? {};
     const existingRules = conventions.rules ?? {};
     const rules = Object.fromEntries(
-      [
-        'module-boundaries',
-        'no-deep-relative-imports',
-        'require-tags',
-        'naming-convention',
-        'megamono-dev-only',
-        'playstack-direction',
-        'platform-boundary',
-        'no-bare-jsx-strings',
-      ].map((name) => [name, { ...existingRules[name], severity: 'warning' }]),
+      CONVENTION_RULES.map((name) => [
+        name,
+        { ...existingRules[name], severity: 'warning' },
+      ]),
     );
     return {
       ...value,

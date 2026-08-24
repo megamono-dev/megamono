@@ -115,7 +115,10 @@ Findings are written deterministically to `.megamono/health.json`.
 ## ESLint rules
 
 The `@megamono/plugin/eslint` flat-config export provides
-`no-deep-relative-imports`, `platform-boundary`, and `no-bare-jsx-strings`.
+`docs-visibility-boundary`, `no-deep-relative-imports`, `platform-boundary`,
+and `no-bare-jsx-strings`. Public applications may import repository docs only
+from `content-collections/public-repo-docs`; unrestricted entry points remain
+available to internal applications.
 `workspace-init` reads their configured severities from `megamono.json`.
 
 ## Create repository records

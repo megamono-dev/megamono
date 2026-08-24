@@ -8,7 +8,7 @@ import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DEFAULT_MEGAMONO_CONFIG } from './config';
+import { CONVENTION_RULES, DEFAULT_MEGAMONO_CONFIG } from './config';
 import {
   analyzeConversion,
   renderConvertReport,
@@ -205,7 +205,9 @@ describe('conversion execution', () => {
     setConvertWarningMode(tree);
 
     const config = readJson(tree, 'megamono.json');
-    expect(Object.values(config.conventions.rules)).toHaveLength(8);
+    expect(Object.keys(config.conventions.rules).sort()).toEqual(
+      [...CONVENTION_RULES].sort(),
+    );
     expect(Object.values(config.conventions.rules)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ severity: 'warning' }),
