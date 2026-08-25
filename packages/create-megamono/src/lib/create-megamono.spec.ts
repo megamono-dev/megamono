@@ -88,7 +88,6 @@ describe('createPlan', () => {
       'generate-web',
       'configure-web',
       'initialize-megamono',
-      'configure-workspace',
       'format',
       'validate-docs',
       'check-structure',
@@ -100,6 +99,13 @@ describe('createPlan', () => {
     expect(rendered).toContain('@megamono/plugin@0.0.1');
     expect(rendered).toContain('@nx/next@23.1.1');
     expect(rendered).toContain('--appDir=false');
+    expect(rendered).toContain(
+      '--only=docs,agents,ci,lint,skills,health,inference',
+    );
+    expect(rendered).toContain('--yes');
+    expect(rendered).toContain('--platforms=web');
+    expect(rendered).toContain('--serviceRunner=none');
+    expect(rendered).toContain('--serviceRequirements={}');
     expect(rendered).not.toContain('--router=pages');
     expect(rendered).toContain('format:write');
     expect(rendered).not.toContain('@latest');
@@ -132,7 +138,6 @@ describe('createPlan', () => {
       'configure-desktop',
       'install-desktop-dependencies',
       'initialize-megamono',
-      'configure-workspace',
       'commit-workspace',
     ]);
     const rendered = renderPlan(plan);
@@ -154,7 +159,6 @@ describe('createPlan', () => {
       'install-plugins',
       'generate-apple',
       'initialize-megamono',
-      'configure-workspace',
       'format',
       'validate-docs',
       'check-structure',
@@ -185,7 +189,6 @@ describe('createPlan', () => {
       'generate-worker',
       'configure-worker',
       'initialize-megamono',
-      'configure-workspace',
       'format',
       'validate-docs',
       'check-structure',
@@ -223,7 +226,6 @@ describe('createPlan', () => {
       'generate-worker',
       'configure-worker',
       'initialize-megamono',
-      'configure-workspace',
       'commit-workspace',
     ]);
   });
@@ -301,7 +303,11 @@ describe('executePlan', () => {
       );
       await writeFile(
         resolve(plan.options.stagingDirectory, 'megamono.json'),
-        JSON.stringify({ version: 1 }),
+        JSON.stringify({
+          version: 1,
+          platforms: ['node', 'web'],
+          services: { runner: 'none', requirements: { postgres: '17' } },
+        }),
       );
       await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
     };
@@ -328,7 +334,18 @@ describe('executePlan', () => {
       options(cwd, { apps: ['desktop'], verify: 'none' }),
     );
     let initialized = false;
-    const runner: CommandRunner = async () => {
+    const runner: CommandRunner = async ({ args }) => {
+      if (args.includes('@megamono/plugin:workspace-init')) {
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'megamono.json'),
+          JSON.stringify({
+            version: 1,
+            platforms: ['rust'],
+            services: { runner: 'none', requirements: {} },
+          }),
+        );
+        return;
+      }
       if (initialized) return;
       initialized = true;
       await mkdir(
@@ -426,10 +443,7 @@ describe('executePlan', () => {
     expect(cargo).toContain('version = "=2.11.5"');
     expect(cargo).not.toMatch(/version\s*=\s*"2"/);
     const main = await readFile(
-      resolve(
-        plan.options.destination,
-        'apps/desktop/src-tauri/src/main.rs',
-      ),
+      resolve(plan.options.destination, 'apps/desktop/src-tauri/src/main.rs'),
       'utf8',
     );
     expect(main).toContain('acme_tools_desktop_lib::run()');
@@ -574,10 +588,7 @@ describe('executePlan', () => {
       );
       for (const app of apps) {
         await writeFile(
-          resolve(
-            plan.options.stagingDirectory,
-            `apps/${app}/package.json`,
-          ),
+          resolve(plan.options.stagingDirectory, `apps/${app}/package.json`),
           JSON.stringify({
             name: `@acme-tools/${app}`,
             nx: { name: `acme-tools-${app}`, tags: ['platform:web'] },
@@ -585,10 +596,7 @@ describe('executePlan', () => {
         );
       }
       await writeFile(
-        resolve(
-          plan.options.stagingDirectory,
-          'apps/mobile/src/app/App.tsx',
-        ),
+        resolve(plan.options.stagingDirectory, 'apps/mobile/src/app/App.tsx'),
         '/* eslint-disable jsx-a11y/accessible-emoji */\nexport const App = () => null;\n',
       );
     };
@@ -613,10 +621,7 @@ describe('executePlan', () => {
     }
     expect(
       await readFile(
-        resolve(
-          plan.options.destination,
-          'apps/mobile/src/app/App.tsx',
-        ),
+        resolve(plan.options.destination, 'apps/mobile/src/app/App.tsx'),
         'utf8',
       ),
     ).not.toContain('jsx-a11y/accessible-emoji');
@@ -652,7 +657,21 @@ describe('executePlan', () => {
       }),
     );
     let first = true;
-    const runner: CommandRunner = async () => {
+    const runner: CommandRunner = async ({ args }) => {
+      if (args.includes('@megamono/plugin:workspace-init')) {
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'megamono.json'),
+          JSON.stringify({
+            version: 1,
+            platforms: ['node', 'web'],
+            services: {
+              runner: 'springbar',
+              requirements: { postgres: '17' },
+            },
+          }),
+        );
+        return;
+      }
       if (!first) return;
       first = false;
       await mkdir(plan.options.stagingDirectory);
@@ -689,7 +708,18 @@ describe('executePlan', () => {
     let first = true;
     await executePlan(
       plan,
-      async () => {
+      async ({ args }) => {
+        if (args.includes('@megamono/plugin:workspace-init')) {
+          await writeFile(
+            resolve(plan.options.stagingDirectory, 'megamono.json'),
+            JSON.stringify({
+              version: 1,
+              platforms: ['node', 'web'],
+              services: { runner: 'springbar', requirements: {} },
+            }),
+          );
+          return;
+        }
         if (!first) return;
         first = false;
         await mkdir(plan.options.stagingDirectory);

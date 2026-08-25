@@ -354,4 +354,22 @@ describe('workspace-init generator', () => {
     ]);
     expect(JSON.stringify(readJson(tree, 'nx.json'))).not.toContain('go.mod');
   });
+
+  it('records calling-scaffolder platform and service decisions', async () => {
+    await workspaceInitGenerator(tree, {
+      only: 'docs,agents,ci,lint,skills,health,inference',
+      yes: true,
+      platforms: 'web,node',
+      serviceRunner: 'springbar',
+      serviceRequirements: '{"postgres":"17"}',
+    });
+
+    expect(readJson(tree, 'megamono.json')).toMatchObject({
+      platforms: ['node', 'web'],
+      services: {
+        runner: 'springbar',
+        requirements: { postgres: '17' },
+      },
+    });
+  });
 });

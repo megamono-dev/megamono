@@ -70,6 +70,21 @@ const healthTarget = {
 const AGENTS_SECTION_START = '<!-- megamono instructions start -->';
 const AGENTS_SECTION_END = '<!-- megamono instructions end -->';
 const LEGACY_AGENTS_MARKER = '<!-- megamono affected CI -->';
+const SUPPORTED_PLATFORMS = new Set([
+  'web',
+  'node',
+  'worker',
+  'apple',
+  'rust',
+  'php',
+  'extension',
+]);
+const SUPPORTED_SERVICES = new Set([
+  'postgres',
+  'redis',
+  'clickhouse',
+  'typesense',
+]);
 
 interface FileArtifactRegistration {
   readonly id: string;
@@ -520,6 +535,53 @@ function configuredWorkspacePlatforms(
   return platforms;
 }
 
+function parseConfiguredPlatforms(source?: string): readonly string[] {
+  if (!source) return [];
+  const platforms = [...new Set(source.split(',').map((value) => value.trim()))]
+    .filter(Boolean)
+    .sort();
+  const unknown = platforms.filter(
+    (platform) => !SUPPORTED_PLATFORMS.has(platform),
+  );
+  if (unknown.length > 0) {
+    throw new Error(`Unsupported configured platforms: ${unknown.join(', ')}.`);
+  }
+  return platforms;
+}
+
+function parseServiceRequirements(
+  source?: string,
+): Readonly<Record<string, string>> {
+  if (!source) return {};
+  let value: unknown;
+  try {
+    value = JSON.parse(source);
+  } catch (error) {
+    throw new Error('serviceRequirements must be a valid JSON object.', {
+      cause: error,
+    });
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('serviceRequirements must be a JSON object.');
+  }
+  const requirements = value as Record<string, unknown>;
+  const invalid = Object.entries(requirements).filter(
+    ([name, version]) =>
+      !SUPPORTED_SERVICES.has(name) ||
+      typeof version !== 'string' ||
+      version.length === 0,
+  );
+  if (invalid.length > 0) {
+    throw new Error(
+      `Invalid service requirements: ${invalid
+        .map(([name]) => name)
+        .sort()
+        .join(', ')}.`,
+    );
+  }
+  return requirements as Record<string, string>;
+}
+
 function docsProjectConfiguration(docsRoot: string) {
   return {
     root: docsRoot,
@@ -594,6 +656,10 @@ export async function workspaceInitGenerator(
   }
   const modules = new Set(requestedModules);
   const workspaceSurvey = surveyWorkspaceInit(tree);
+  const requestedPlatforms = parseConfiguredPlatforms(options.platforms);
+  const serviceRequirements = parseServiceRequirements(
+    options.serviceRequirements,
+  );
   const docsRoot = existingConfig?.docs.root ?? options.docsRoot ?? 'docs';
   const created = {
     config: !tree.exists('megamono.json'),
@@ -783,6 +849,11 @@ export async function workspaceInitGenerator(
   if (configuredPlatforms.size === 0) {
     configuredPlatforms.add(options.defaultPlatform ?? 'node');
   }
+  if (requestedPlatforms.length > 0) {
+    configuredPlatforms.clear();
+    for (const platform of requestedPlatforms)
+      configuredPlatforms.add(platform);
+  }
 
   const adoptedModules = new Set(existingConfig?.adoption.modules ?? []);
   for (const module of requestedModules) adoptedModules.add(module);
@@ -806,6 +877,14 @@ export async function workspaceInitGenerator(
       inference: modules.has('inference')
         ? inference
         : (existingConfig?.adoption.inference ?? {}),
+    },
+    services: {
+      runner:
+        options.serviceRunner ?? existingConfig?.services.runner ?? 'none',
+      requirements:
+        options.serviceRequirements !== undefined
+          ? serviceRequirements
+          : (existingConfig?.services.requirements ?? {}),
     },
   });
   tree.write('megamono.json', `${JSON.stringify(config, null, 2)}\n`);

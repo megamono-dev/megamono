@@ -90,8 +90,7 @@ export type PlanStep =
         | 'configure-mobile'
         | 'configure-site'
         | 'configure-web'
-        | 'configure-worker'
-        | 'configure-workspace';
+        | 'configure-worker';
     }
   | { kind: 'commit'; id: 'commit-workspace' }
   | { kind: 'springbar'; id: 'configure-springbar' };
@@ -337,6 +336,38 @@ function commandStep(
   return { kind: 'command', id, command, args, cwd };
 }
 
+function requestedPlatforms(options: NormalizedCreateOptions): string[] {
+  return [
+    ...new Set(
+      options.apps.map((app) => {
+        if (app === 'api') return 'node';
+        if (app === 'worker') return 'worker';
+        if (app === 'desktop') return 'rust';
+        if (app === 'apple') return 'apple';
+        return 'web';
+      }),
+    ),
+  ].sort();
+}
+
+function requestedServiceRequirements(
+  options: NormalizedCreateOptions,
+): Record<string, string> {
+  return Object.fromEntries(
+    options.services.map((service) => {
+      const registryName = service === 'postgres' ? 'postgresql' : service;
+      const version = compatibility.services[registryName];
+      if (!version) {
+        throw new CreateMegamonoError(
+          `No tested compatibility pin exists for service ${service}.`,
+          3,
+        );
+      }
+      return [service, version];
+    }),
+  );
+}
+
 export function createPlan(options: NormalizedCreateOptions): CreationPlan {
   const steps: PlanStep[] = [
     commandStep(
@@ -461,10 +492,8 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     );
     if (app === 'mobile')
       steps.push({ kind: 'configure', id: 'configure-mobile' });
-    if (app === 'site')
-      steps.push({ kind: 'configure', id: 'configure-site' });
-    if (app === 'web')
-      steps.push({ kind: 'configure', id: 'configure-web' });
+    if (app === 'site') steps.push({ kind: 'configure', id: 'configure-site' });
+    if (app === 'web') steps.push({ kind: 'configure', id: 'configure-web' });
   }
 
   if (options.apps.includes('worker')) {
@@ -483,12 +512,16 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         '@megamono/plugin:workspace-init',
         `--defaultScope=${options.scope}`,
         ...(options.apps.includes('desktop') ? ['--defaultPlatform=rust'] : []),
+        '--only=docs,agents,ci,lint,skills,health,inference',
+        '--yes',
+        `--platforms=${requestedPlatforms(options).join(',')}`,
+        `--serviceRunner=${options.serviceRunner}`,
+        `--serviceRequirements=${JSON.stringify(requestedServiceRequirements(options))}`,
         '--interactive=false',
       ],
       'staging',
     ),
   );
-  steps.push({ kind: 'configure', id: 'configure-workspace' });
 
   if (options.verify !== 'none') {
     steps.push(
@@ -979,7 +1012,11 @@ async function configurePackageApplication(
   };
   packageJson.nx ??= {};
   packageJson.nx.projectType = 'application';
-  await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
+  await writeFile(
+    packagePath,
+    `${JSON.stringify(packageJson, null, 2)}\n`,
+    'utf8',
+  );
 
   if (app === 'mobile') {
     const sourcePath = resolve(
@@ -996,44 +1033,6 @@ async function configurePackageApplication(
       'utf8',
     );
   }
-}
-
-async function configureWorkspace(plan: CreationPlan): Promise<void> {
-  const configPath = resolve(plan.options.stagingDirectory, 'megamono.json');
-  const config = JSON.parse(await readFile(configPath, 'utf8')) as Record<
-    string,
-    unknown
-  >;
-  const platforms = [
-    ...new Set(
-      plan.options.apps.map((app) => {
-        if (app === 'api') return 'node';
-        if (app === 'worker') return 'worker';
-        if (app === 'desktop') return 'rust';
-        if (app === 'apple') return 'apple';
-        return 'web';
-      }),
-    ),
-  ].sort();
-  const requirements = Object.fromEntries(
-    plan.options.services.map((service) => {
-      const registryName = service === 'postgres' ? 'postgresql' : service;
-      const version = compatibility.services[registryName];
-      if (!version) {
-        throw new CreateMegamonoError(
-          `No tested compatibility pin exists for service ${service}.`,
-          3,
-        );
-      }
-      return [service, version];
-    }),
-  );
-  config.platforms = platforms;
-  config.services = {
-    runner: plan.options.serviceRunner,
-    requirements,
-  };
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }
 
 async function writeRecovery(
@@ -1099,7 +1098,6 @@ export async function executePlan(
         else if (step.id === 'configure-web')
           await configurePackageApplication(plan, 'web');
         else if (step.id === 'configure-worker') await configureWorker(plan);
-        else await configureWorkspace(plan);
       } else if (step.kind === 'springbar') {
         const intent = createSpringbarIntent(
           plan.options,

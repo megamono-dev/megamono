@@ -29,6 +29,19 @@
       "type": "string",
       "description": "Workspace-relative path for the optional completion report."
     },
+    "platforms": {
+      "type": "string",
+      "description": "Comma-separated platform vocabulary determined by a calling scaffolder."
+    },
+    "serviceRunner": {
+      "type": "string",
+      "enum": ["none", "springbar"],
+      "description": "Optional local service runner selected by the workspace scaffolder."
+    },
+    "serviceRequirements": {
+      "type": "string",
+      "description": "JSON object of service names to tested version requirements."
+    },
     "docsRoot": {
       "type": "string",
       "description": "Repository documentation root.",
