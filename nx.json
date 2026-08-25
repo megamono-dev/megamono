@@ -54,7 +54,12 @@
   "release": {
     "groups": {
       "megamono": {
-        "projects": ["@megamono/plugin", "nx-apple", "nx-cargo"],
+        "projects": [
+          "@megamono/plugin",
+          "nx-apple",
+          "nx-cargo",
+          "nx-cloudflare"
+        ],
         "projectsRelationship": "fixed",
         "releaseTag": {
           "pattern": "megamono@{version}"

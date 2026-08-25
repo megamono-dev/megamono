@@ -8,8 +8,14 @@ const privatePackages = new Map([
   ['@megamono/plugin', 'packages/plugin/package.json'],
   ['@megamono/nx-apple', 'packages/nx-apple/package.json'],
   ['@megamono/nx-cargo', 'packages/nx-cargo/package.json'],
+  ['@megamono/nx-cloudflare', 'packages/nx-cloudflare/package.json'],
 ]);
-const expectedProjects = ['@megamono/plugin', 'nx-apple', 'nx-cargo'];
+const expectedProjects = [
+  '@megamono/plugin',
+  'nx-apple',
+  'nx-cargo',
+  'nx-cloudflare',
+];
 const expectedRepository = 'git+https://github.com/megamono-dev/megamono.git';
 const expectedRegistry = 'https://registry.npmjs.org';
 const failures = [];
@@ -72,4 +78,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Private publish policy passed for 3 scoped @megamono packages.');
+console.log('Private publish policy passed for 4 scoped @megamono packages.');
