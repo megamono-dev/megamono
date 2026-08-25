@@ -52,12 +52,22 @@
     }
   ],
   "release": {
-    "projects": [
-      "create-megamono",
-      "@megamono/plugin",
-      "nx-apple",
-      "nx-cargo"
-    ],
+    "groups": {
+      "megamono": {
+        "projects": ["@megamono/plugin", "nx-apple", "nx-cargo"],
+        "projectsRelationship": "fixed",
+        "releaseTag": {
+          "pattern": "megamono@{version}"
+        }
+      },
+      "create-megamono": {
+        "projects": ["create-megamono"],
+        "projectsRelationship": "independent",
+        "releaseTag": {
+          "pattern": "create-megamono@{version}"
+        }
+      }
+    },
     "version": {
       "preVersionCommand": "npm exec nx -- run-many -t build"
     }

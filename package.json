@@ -2,7 +2,9 @@
   "name": "@org/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "release:check-private": "node tools/check-private-publish.mjs"
+  },
   "private": true,
   "devDependencies": {
     "@content-collections/core": "0.15.2",

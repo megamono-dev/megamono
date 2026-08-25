@@ -103,8 +103,8 @@
     "@content-collections/core": "0.15.2",
     "gray-matter": "^4.0.3",
     "prettier": "^3.8.1",
-    "zod": "^4.1.12",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "zod": "^4.1.12"
   },
   "peerDependencies": {
     "@nx/devkit": ">=23.1 <24",
@@ -117,5 +117,13 @@
     "npm": ">=11 <12"
   },
   "executors": "./executors.json",
-  "generators": "./generators.json"
+  "generators": "./generators.json",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/megamono-dev/megamono.git"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "restricted"
+  }
 }

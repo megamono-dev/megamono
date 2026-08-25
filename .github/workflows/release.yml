@@ -1,4 +1,4 @@
-name: Release packages
+name: Release private packages
 
 on:
   workflow_dispatch:
@@ -14,13 +14,12 @@ on:
         default: next
         type: string
       dist-tag:
-        description: npm distribution tag
+        description: Private npm distribution tag
         required: true
         default: next
         type: choice
         options:
           - next
-          - latest
       first-release:
         description: Resolve versions from the manifests for the first release
         required: true
@@ -29,12 +28,11 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   release:
     runs-on: macos-latest
-    environment: npm-${{ inputs.dist-tag }}
+    environment: npm-private-${{ inputs.dist-tag }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -46,13 +44,14 @@ jobs:
           registry-url: https://registry.npmjs.org
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
+      - run: npm run release:check-private
       - name: Preview version changes
         env:
           FIRST_RELEASE: ${{ inputs.first-release }}
           PREID: ${{ inputs.preid }}
           SPECIFIER: ${{ inputs.specifier }}
         run: |
-          args=(release version "$SPECIFIER" --dry-run)
+          args=(release version "$SPECIFIER" --groups megamono --dry-run)
           if [ -n "$PREID" ]; then args+=(--preid "$PREID"); fi
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
           npm exec nx -- "${args[@]}"
@@ -67,7 +66,7 @@ jobs:
           PREID: ${{ inputs.preid }}
           SPECIFIER: ${{ inputs.specifier }}
         run: |
-          args=(release version "$SPECIFIER" --git-commit --git-tag)
+          args=(release version "$SPECIFIER" --groups megamono --git-commit --git-tag)
           if [ -n "$PREID" ]; then args+=(--preid "$PREID"); fi
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
           npm exec nx -- "${args[@]}"
@@ -77,7 +76,7 @@ jobs:
           FIRST_RELEASE: ${{ inputs.first-release }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          args=(release publish --tag "$DIST_TAG" --access public)
+          args=(release publish --groups megamono --tag "$DIST_TAG" --access restricted)
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
           npm exec nx -- "${args[@]}"
       - run: git push --follow-tags origin HEAD:main

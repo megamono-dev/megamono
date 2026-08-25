@@ -44,6 +44,8 @@ The core packages declare these ranges in `engines` and `peerDependencies`. Supp
 | `@megamono/nx-extension` | WXT extension inference and generators; Wave 2                                                      | Dev dependency only                    |
 | `@megamono/nx-laravel`   | Composer/Laravel inference and generators; Wave 2                                                   | Dev dependency only                    |
 
+The initial validation channel publishes `@megamono/plugin`, `@megamono/nx-apple`, and `@megamono/nx-cargo` as restricted packages on npm from `megamono-dev/megamono`. Their canonical names do not change when they graduate to public npm. The unscoped `create-megamono` entry package cannot be private on npm and remains in a separate release group until public promotion.
+
 `docs`, `skills`, `conventions`, `content`, `integrations`, `playstack`, and `generators` are internal modules of `@megamono/plugin`, not separately published packages in v1. This avoids version skew between repo-shaping capabilities that must agree on one `megamono.json` schema.
 
 ## Canonical generator names

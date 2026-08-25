@@ -27,6 +27,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run release:check-private
       - uses: nrwl/nx-set-shas@v5
       - id: affected
         shell: bash

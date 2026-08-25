@@ -1,5 +1,11 @@
 # Nx TypeScript Repository
 
+## Private validation releases
+
+The canonical `@megamono/plugin`, `@megamono/nx-apple`, and `@megamono/nx-cargo` packages initially publish as restricted npm packages from `megamono-dev/megamono` under the `next` dist-tag. Their package names remain unchanged when they graduate to public npm. The unscoped `create-megamono` entry package is versioned separately and held until public promotion because npm does not support restricted unscoped packages.
+
+Run `npm run release:check-private` to verify the registry, access, repository, and Nx release-group policy. The manual workflow reads an npm publish token from `NPM_TOKEN` in the `npm-private-next` GitHub Environment. Private consumers authenticate to the normal npm registry with a token that can read the `@megamono` organization; no alternate scope mapping is required.
+
 <a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
 
 ✨ A repository showcasing key [Nx](https://nx.dev) features for TypeScript monorepos ✨
