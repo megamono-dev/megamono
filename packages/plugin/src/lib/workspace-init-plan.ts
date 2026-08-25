@@ -562,6 +562,48 @@ export function createWorkspaceInitPlan(
       `${docsRoot}/INDEX.md`,
       'Generate the repository documentation index.',
     );
+    operation(
+      operations,
+      'docs',
+      tree.exists(`${docsRoot}/archives/INDEX.md`) ? 'retain' : 'add',
+      `${docsRoot}/archives/INDEX.md`,
+      'Generate the archived-documentation index.',
+    );
+    for (const path of [
+      `${docsRoot}/specs/.gitkeep`,
+      `${docsRoot}/plans/.gitkeep`,
+      `${docsRoot}/decisions/.gitkeep`,
+      `${docsRoot}/audits/.gitkeep`,
+      `${docsRoot}/research/.gitkeep`,
+      `${docsRoot}/reports/.gitkeep`,
+      `${docsRoot}/archives/specs/.gitkeep`,
+      `${docsRoot}/archives/plans/.gitkeep`,
+      `${docsRoot}/archives/research/.gitkeep`,
+    ]) {
+      operation(
+        operations,
+        'docs',
+        tree.exists(path) ? 'retain' : 'add',
+        path,
+        'Keep the canonical documentation directory in the repository.',
+      );
+    }
+    for (const key of ['content-collections', 'content-collections/*']) {
+      operation(
+        operations,
+        'docs',
+        'modify',
+        `tsconfig.base.json#compilerOptions.paths.${key}`,
+        'Map generated Content Collections modules for TypeScript.',
+      );
+    }
+    operation(
+      operations,
+      'docs',
+      'modify',
+      'package.json#devDependencies',
+      'Add @content-collections/core and zod at their compatibility-pinned ranges.',
+    );
     if (
       survey.existing.contentCollections.includes('content-collections.ts') &&
       !owned('docs.loader', 'content-collections.ts') &&
@@ -586,6 +628,13 @@ export function createWorkspaceInitPlan(
       tree.exists('CLAUDE.md') ? 'retain' : 'add',
       'CLAUDE.md',
       'Create the supported AGENTS.md pointer when the path is free.',
+    );
+    operation(
+      operations,
+      'agents',
+      tree.exists(`${docsRoot}/DESIGN.md`) ? 'retain' : 'add',
+      `${docsRoot}/DESIGN.md`,
+      'Seed repository-owned design direction for agents and maintainers.',
     );
   }
   if (modules.includes('ci')) {
@@ -623,6 +672,34 @@ export function createWorkspaceInitPlan(
     if (untaggedApplications.length > 0 && !options.defaultPlatform) {
       decisions.push(
         `defaultPlatform is required for: ${untaggedApplications.map(({ name }) => name).join(', ')}.`,
+      );
+    }
+    for (const project of survey.projects) {
+      if (project.name === 'megamono' || project.name === 'megamono-docs')
+        continue;
+      const additions = [
+        ...(project.tags.some((tag) => tag.startsWith('type:'))
+          ? []
+          : [`type:${project.type === 'application' ? 'app' : 'util'}`]),
+        ...(project.tags.some((tag) => tag.startsWith('scope:'))
+          ? []
+          : [`scope:${options.defaultScope ?? 'shared'}`]),
+        ...(project.type === 'application' &&
+        !project.tags.some((tag) => tag.startsWith('platform:'))
+          ? [`platform:${options.defaultPlatform ?? '<required>'}`]
+          : []),
+        ...(project.type === 'application' &&
+        !project.tags.some((tag) => tag.startsWith('visibility:'))
+          ? ['visibility:internal']
+          : []),
+      ];
+      if (additions.length === 0) continue;
+      operation(
+        operations,
+        'lint',
+        'modify',
+        `nx-project:${project.name}#tags`,
+        `Add missing tags without changing existing vocabulary: ${additions.join(', ')}.`,
       );
     }
   }
@@ -697,6 +774,23 @@ export function createWorkspaceInitPlan(
           ? `Register the supported ${platform} inference plugin for ${manifests.join(', ')}.`
           : `No ${platform} manifests were detected.`,
       );
+      if (manifests.length > 0) {
+        const plugin = platform === 'apple' ? '@megamono/nx-apple' : '@megamono/nx-cargo';
+        operation(
+          operations,
+          'inference',
+          'modify',
+          'nx.json#plugins',
+          `Register ${plugin} for detected ${platform} manifests.`,
+        );
+        operation(
+          operations,
+          'inference',
+          'modify',
+          'package.json#devDependencies',
+          `Add ${plugin} at the installed Megamono plugin version.`,
+        );
+      }
     }
   }
   operation(

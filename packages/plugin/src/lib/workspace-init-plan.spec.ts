@@ -141,6 +141,38 @@ describe('workspace init survey and plan', () => {
     ).toThrow(/defaultPlatform is required/);
   });
 
+  it('previews every config-key and docs-structure mutation', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write('apps/apple/Package.swift', '// swift-tools-version: 6.0');
+    addProjectConfiguration(tree, 'web', {
+      root: 'apps/web',
+      projectType: 'application',
+      targets: {},
+    });
+
+    const plan = createWorkspaceInitPlan(tree, {
+      only: 'docs,agents,lint,inference',
+      defaultPlatform: 'web',
+    });
+    const targets = plan.operations.map(({ target }) => target);
+
+    expect(targets).toEqual(
+      expect.arrayContaining([
+        'docs/archives/INDEX.md',
+        'docs/archives/research/.gitkeep',
+        'docs/DESIGN.md',
+        'tsconfig.base.json#compilerOptions.paths.content-collections',
+        'package.json#devDependencies',
+        'nx-project:web#tags',
+        'nx.json#plugins',
+      ]),
+    );
+    expect(
+      plan.operations.find(({ target }) => target === 'nx-project:web#tags')
+        ?.detail,
+    ).toContain('platform:web');
+  });
+
   it('classifies invalid module options separately from unresolved input', () => {
     expect(() => parseWorkspaceInitModules('docs,unknown')).toThrowError(
       expect.objectContaining<Partial<WorkspaceInitError>>({
