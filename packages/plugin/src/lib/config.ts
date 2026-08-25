@@ -167,6 +167,13 @@ const adoptionSchema = z
           })
           .strict()
           .optional(),
+        cloudflare: z
+          .object({
+            plugin: z.literal('@megamono/nx-cloudflare'),
+            manifests: z.array(z.string().refine(isSafeWorkspaceRelativePath)),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .default({}),

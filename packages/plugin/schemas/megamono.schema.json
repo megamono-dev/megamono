@@ -142,6 +142,21 @@
                   }
                 }
               }
+            },
+            "cloudflare": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["plugin", "manifests"],
+              "properties": {
+                "plugin": { "const": "@megamono/nx-cloudflare" },
+                "manifests": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+                  }
+                }
+              }
             }
           }
         },

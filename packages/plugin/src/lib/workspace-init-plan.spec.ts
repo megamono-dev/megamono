@@ -24,6 +24,7 @@ describe('workspace init survey and plan', () => {
     tree.write('package-lock.json', '{}');
     tree.write('apps/apple/Package.swift', '// swift-tools-version: 6.0');
     tree.write('crates/tool/Cargo.toml', '[package]');
+    tree.write('apps/worker/wrangler.jsonc', '{"name":"worker"}');
     tree.write('docs/legacy.md', '# Legacy');
     tree.write(
       'architecture/decisions/decision.md',
@@ -47,6 +48,7 @@ describe('workspace init survey and plan', () => {
       manifests: {
         apple: ['apps/apple/Package.swift'],
         cargo: ['crates/tool/Cargo.toml'],
+        cloudflare: ['apps/worker/wrangler.jsonc'],
       },
       projects: [{ name: 'web', targets: ['build'] }],
       documentation: {

@@ -73,6 +73,9 @@ const healthTarget = {
     '{workspaceRoot}/**/app.json',
     '{workspaceRoot}/**/Cargo.toml',
     '{workspaceRoot}/**/Package.swift',
+    '{workspaceRoot}/**/wrangler.jsonc',
+    '{workspaceRoot}/**/wrangler.json',
+    '{workspaceRoot}/**/wrangler.toml',
     '{workspaceRoot}/**/.megamono-integration.json',
     '{workspaceRoot}/.agents/skills/**/*',
   ],
@@ -1192,6 +1195,14 @@ export async function workspaceInitGenerator(
           },
         }
       : {}),
+    ...(workspaceSurvey.manifests.cloudflare.length > 0
+      ? {
+          cloudflare: {
+            plugin: '@megamono/nx-cloudflare' as const,
+            manifests: workspaceSurvey.manifests.cloudflare,
+          },
+        }
+      : {}),
   };
   if (modules.has('inference') && Object.keys(inference).length > 0) {
     updateJson(tree, 'nx.json', (value) => {
@@ -1214,6 +1225,7 @@ export async function workspaceInitGenerator(
     });
     if ('apple' in inference) configuredPlatforms.add('apple');
     if ('cargo' in inference) configuredPlatforms.add('rust');
+    if ('cloudflare' in inference) configuredPlatforms.add('worker');
   }
   if (configuredPlatforms.size === 0) {
     configuredPlatforms.add(defaultPlatform ?? 'node');
@@ -1468,6 +1480,9 @@ export async function workspaceInitGenerator(
       : {}),
     ...(modules.has('inference') && 'cargo' in inference
       ? { '@megamono/nx-cargo': pluginVersion }
+      : {}),
+    ...(modules.has('inference') && 'cloudflare' in inference
+      ? { '@megamono/nx-cloudflare': pluginVersion }
       : {}),
   };
   const hasDependencies = Object.keys(developmentDependencies).length > 0;

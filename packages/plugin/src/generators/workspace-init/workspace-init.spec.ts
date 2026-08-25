@@ -218,15 +218,12 @@ describe('workspace-init generator', () => {
 
     await workspaceInitGenerator(tree, { only: 'lint', yes: true });
 
-    expect(tree.read('eslint.config.mjs', 'utf8')).toBe(
-      formattedCustomization,
-    );
+    expect(tree.read('eslint.config.mjs', 'utf8')).toBe(formattedCustomization);
   });
 
   it('updates pristine managed ESLint wiring from its installed hash', async () => {
     await workspaceInitGenerator(tree, { only: 'lint', yes: true });
-    const oldBody =
-      '\n  megamonoPlugin.createConfig({ ...megamonoConfig }),\n';
+    const oldBody = '\n  megamonoPlugin.createConfig({ ...megamonoConfig }),\n';
     const oldHash = hashArtifactBytes(oldBody);
     const source = tree.read('eslint.config.mjs', 'utf8') ?? '';
     tree.write(
@@ -274,9 +271,7 @@ describe('workspace-init generator', () => {
 
     await workspaceInitGenerator(tree, { only: 'lint', yes: true });
 
-    expect(tree.read('eslint.config.mjs', 'utf8')).toBe(
-      formattedCustomization,
-    );
+    expect(tree.read('eslint.config.mjs', 'utf8')).toBe(formattedCustomization);
     expect(
       readJson(tree, '.megamono/artifacts.json').artifacts.find(
         ({ id }: { id: string }) => id === 'lint.eslint-rules',
@@ -325,9 +320,7 @@ export default [
     const source = tree.read('eslint.config.mjs', 'utf8') ?? '';
     expect(source).toContain('// megamono eslint imports start');
     expect(source).toContain('// megamono eslint rules end');
-    expect(
-      readJson(tree, '.megamono/artifacts.json').artifacts,
-    ).toEqual(
+    expect(readJson(tree, '.megamono/artifacts.json').artifacts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'lint.eslint-imports' }),
         expect.objectContaining({ id: 'lint.eslint-rules' }),
@@ -766,6 +759,7 @@ export default [
   it('registers only detected supported inference plugins and manifests', async () => {
     tree.write('apps/apple/Package.swift', '// swift-tools-version: 6.2\n');
     tree.write('crates/tool/Cargo.toml', '[package]\nname = "tool"\n');
+    tree.write('apps/worker/wrangler.jsonc', '{"name":"worker"}\n');
     tree.write('services/go/go.mod', 'module example.com/service\n');
 
     await workspaceInitGenerator(tree, { only: 'inference', yes: true });
@@ -773,10 +767,12 @@ export default [
     expect(readJson(tree, 'nx.json').plugins).toEqual([
       '@megamono/nx-apple',
       '@megamono/nx-cargo',
+      '@megamono/nx-cloudflare',
     ]);
     expect(readJson(tree, 'package.json').devDependencies).toMatchObject({
       '@megamono/nx-apple': '0.0.1',
       '@megamono/nx-cargo': '0.0.1',
+      '@megamono/nx-cloudflare': '0.0.1',
     });
     expect(readJson(tree, 'megamono.json').adoption.inference).toEqual({
       apple: {
@@ -787,10 +783,15 @@ export default [
         plugin: '@megamono/nx-cargo',
         manifests: ['crates/tool/Cargo.toml'],
       },
+      cloudflare: {
+        plugin: '@megamono/nx-cloudflare',
+        manifests: ['apps/worker/wrangler.jsonc'],
+      },
     });
     expect(readJson(tree, 'megamono.json').platforms).toEqual([
       'apple',
       'rust',
+      'worker',
     ]);
     expect(JSON.stringify(readJson(tree, 'nx.json'))).not.toContain('go.mod');
   });

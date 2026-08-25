@@ -986,6 +986,11 @@ async function graphConfidence(
     return 'reduced';
   if (config.platforms.includes('rust') && !plugins.has('@megamono/nx-cargo'))
     return 'reduced';
+  if (
+    config.adoption.inference.cloudflare &&
+    !plugins.has('@megamono/nx-cloudflare')
+  )
+    return 'reduced';
   return 'complete';
 }
 

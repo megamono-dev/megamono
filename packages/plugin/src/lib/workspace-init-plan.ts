@@ -69,7 +69,8 @@ export interface WorkspaceInitDocumentationClassification {
   readonly path: string;
   readonly type: 'spec' | 'plan' | 'decision' | 'audit' | 'research' | 'report';
   readonly proposedId: string | null;
-  readonly basis: 'lifecycle-metadata' | 'decision-directory' | 'research-directory';
+  readonly basis:
+    'lifecycle-metadata' | 'decision-directory' | 'research-directory';
 }
 
 export interface WorkspaceInitSurvey {
@@ -85,6 +86,7 @@ export interface WorkspaceInitSurvey {
   readonly manifests: {
     readonly apple: readonly string[];
     readonly cargo: readonly string[];
+    readonly cloudflare: readonly string[];
     readonly unsupported: readonly string[];
   };
   readonly documentation: {
@@ -223,12 +225,14 @@ const RESEARCH_DIRECTORIES = new Set(['rfc', 'rfcs', 'research']);
 
 function frontmatterField(source: string, field: string): string | undefined {
   const newline = source.indexOf('\n');
-  if (newline < 0 || source.slice(0, newline).trim() !== '---') return undefined;
+  if (newline < 0 || source.slice(0, newline).trim() !== '---')
+    return undefined;
   const end = source.indexOf('\n---', newline + 1);
   if (end < 0) return undefined;
-  const match = new RegExp(`^${field}:\\s*["']?([^\\n"']+)["']?\\s*$`, 'm').exec(
-    source.slice(newline + 1, end),
-  );
+  const match = new RegExp(
+    `^${field}:\\s*["']?([^\\n"']+)["']?\\s*$`,
+    'm',
+  ).exec(source.slice(newline + 1, end));
   return match?.[1].trim();
 }
 
@@ -398,6 +402,9 @@ export function surveyWorkspaceInit(tree: Tree): WorkspaceInitSurvey {
     manifests: {
       apple: files.filter((path) => path.endsWith('Package.swift')),
       cargo: files.filter((path) => path.endsWith('Cargo.toml')),
+      cloudflare: files.filter((path) =>
+        /(?:^|\/)wrangler\.(?:jsonc?|toml)$/.test(path),
+      ),
       unsupported: files.filter((path) =>
         /(?:^|\/)(?:build\.gradle(?:\.kts)?|go\.mod|pom\.xml)$/.test(path),
       ),
@@ -770,6 +777,7 @@ export function createWorkspaceInitPlan(
     for (const [platform, manifests] of [
       ['apple', survey.manifests.apple],
       ['cargo', survey.manifests.cargo],
+      ['cloudflare', survey.manifests.cloudflare],
     ] as const) {
       operation(
         operations,
@@ -781,7 +789,12 @@ export function createWorkspaceInitPlan(
           : `No ${platform} manifests were detected.`,
       );
       if (manifests.length > 0) {
-        const plugin = platform === 'apple' ? '@megamono/nx-apple' : '@megamono/nx-cargo';
+        const plugin =
+          platform === 'apple'
+            ? '@megamono/nx-apple'
+            : platform === 'cargo'
+              ? '@megamono/nx-cargo'
+              : '@megamono/nx-cloudflare';
         operation(
           operations,
           'inference',
@@ -846,7 +859,7 @@ export function renderWorkspaceInitSurvey(
 
 ${values(survey.projects.map((project) => `${project.name} — ${project.type} at ${project.root}; targets: ${project.targets.join(', ') || 'none'}; tags: ${project.tags.join(', ') || 'none'}`))}
 
-## Non-JavaScript manifests
+## Inference manifests
 
 ### Apple
 
@@ -855,6 +868,10 @@ ${values(survey.manifests.apple)}
 ### Cargo
 
 ${values(survey.manifests.cargo)}
+
+### Cloudflare
+
+${values(survey.manifests.cloudflare)}
 
 ### Unsupported
 

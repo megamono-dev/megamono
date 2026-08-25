@@ -39,6 +39,10 @@ describe('Megamono configuration', () => {
             plugin: '@megamono/nx-apple',
             manifests: ['apps/apple/Package.swift'],
           },
+          cloudflare: {
+            plugin: '@megamono/nx-cloudflare',
+            manifests: ['apps/worker/wrangler.jsonc'],
+          },
         },
         ratchets: [
           {
@@ -53,6 +57,9 @@ describe('Megamono configuration', () => {
     expect(config.adoption.modules).toEqual(['docs', 'health', 'inference']);
     expect(config.adoption.inference.apple?.manifests).toEqual([
       'apps/apple/Package.swift',
+    ]);
+    expect(config.adoption.inference.cloudflare?.manifests).toEqual([
+      'apps/worker/wrangler.jsonc',
     ]);
   });
 
