@@ -1,8 +1,9 @@
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import type { ProjectConfiguration } from '@nx/devkit';
+import { DependencyType, type ProjectConfiguration } from '@nx/devkit';
 import {
+  dependenciesFromWranglerConfigs,
   projectsFromWranglerConfigs,
   type CloudflareProjectMetadata,
 } from './cloudflare';
@@ -246,5 +247,126 @@ describe('projectsFromWranglerConfigs', () => {
     )?.metadata?.['megamono:cloudflare'] as CloudflareProjectMetadata;
     expect(callerMetadata.resolvedWorkers).toEqual([]);
     expect(callerMetadata.unresolvedWorkers).toHaveLength(1);
+  });
+});
+
+describe('dependenciesFromWranglerConfigs', () => {
+  function projects(records: WranglerConfigRecord[]) {
+    return Object.fromEntries(
+      records.map((item) => [
+        item.root.replace('apps/', ''),
+        { name: item.root.replace('apps/', ''), root: item.root },
+      ]),
+    ) as Record<string, ProjectConfiguration>;
+  }
+
+  it('emits every direct Worker edge and excludes local references without script_name', () => {
+    const records = [
+      record('apps/api', { name: 'api' }),
+      record('apps/state', { name: 'state' }),
+      record('apps/workflows', { name: 'workflows' }),
+      record('apps/tail', { name: 'tail' }),
+      record('apps/caller', {
+        name: 'caller',
+        services: [{ binding: 'API', service: 'api' }],
+        durable_objects: {
+          bindings: [
+            { name: 'STATE', class_name: 'State', script_name: 'state' },
+            { name: 'LOCAL', class_name: 'LocalState' },
+          ],
+        },
+        workflows: [
+          {
+            binding: 'FLOW',
+            name: 'flow',
+            class_name: 'Flow',
+            script_name: 'workflows',
+          },
+          { binding: 'LOCAL_FLOW', name: 'local', class_name: 'LocalFlow' },
+        ],
+        tail_consumers: [{ service: 'tail' }],
+      }),
+    ];
+    expect(dependenciesFromWranglerConfigs(records, projects(records))).toEqual(
+      [
+        {
+          source: 'caller',
+          target: 'api',
+          sourceFile: 'apps/caller/wrangler.jsonc',
+          type: DependencyType.static,
+        },
+        {
+          source: 'caller',
+          target: 'state',
+          sourceFile: 'apps/caller/wrangler.jsonc',
+          type: DependencyType.static,
+        },
+        {
+          source: 'caller',
+          target: 'tail',
+          sourceFile: 'apps/caller/wrangler.jsonc',
+          type: DependencyType.static,
+        },
+        {
+          source: 'caller',
+          target: 'workflows',
+          sourceFile: 'apps/caller/wrangler.jsonc',
+          type: DependencyType.static,
+        },
+      ],
+    );
+  });
+
+  it('fans each queue consumer into every local producer', () => {
+    const records = [
+      record('apps/producer-a', {
+        name: 'producer-a',
+        queues: { producers: [{ binding: 'EVENTS', queue: 'events' }] },
+      }),
+      record('apps/producer-b', {
+        name: 'producer-b',
+        queues: { producers: [{ binding: 'EVENTS', queue: 'events' }] },
+      }),
+      record('apps/consumer', {
+        name: 'consumer',
+        queues: { consumers: [{ queue: 'events' }] },
+      }),
+    ];
+    expect(dependenciesFromWranglerConfigs(records, projects(records))).toEqual(
+      [
+        expect.objectContaining({ source: 'consumer', target: 'producer-a' }),
+        expect.objectContaining({ source: 'consumer', target: 'producer-b' }),
+      ],
+    );
+  });
+
+  it('omits self, external, resource, environment-only, ambiguous, and invalid edges', () => {
+    const duplicateA = record('apps/duplicate-a', { name: 'duplicate' });
+    const duplicateB = record('apps/duplicate-b', { name: 'duplicate' });
+    const invalid = record('apps/pages', { name: 'pages' }, false);
+    const records = [
+      record('apps/caller', {
+        name: 'caller',
+        services: [
+          { binding: 'SELF', service: 'caller' },
+          { binding: 'EXTERNAL', service: 'hosted' },
+          { binding: 'DUPLICATE', service: 'duplicate' },
+          { binding: 'PAGES', service: 'pages' },
+        ],
+        d1_databases: [{ binding: 'DB', database_id: 'cloudflare-id' }],
+        env: {
+          production: {
+            services: [{ binding: 'ONLY_PROD', service: 'dependency' }],
+          },
+        },
+      }),
+      record('apps/dependency', { name: 'dependency' }),
+      duplicateA,
+      duplicateB,
+      invalid,
+    ];
+    expect(dependenciesFromWranglerConfigs(records, projects(records))).toEqual(
+      [],
+    );
   });
 });

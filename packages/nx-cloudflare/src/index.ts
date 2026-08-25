@@ -16,7 +16,9 @@ export type {
   WranglerConfigSelection,
 } from './lib/wrangler-config';
 export {
+  createDependencies,
   createNodes,
+  dependenciesFromWranglerConfigs,
   getCloudflareDiagnostics,
   getLastCloudflareRecords,
   projectsFromWranglerConfigs,

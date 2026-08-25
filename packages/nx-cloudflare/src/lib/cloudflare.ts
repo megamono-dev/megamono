@@ -1,7 +1,11 @@
 import {
+  DependencyType,
   normalizePath,
+  validateDependency,
+  type CreateDependencies,
   type CreateNodes,
   type ProjectConfiguration,
+  type RawProjectGraphDependency,
 } from '@nx/devkit';
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
@@ -488,6 +492,7 @@ export function projectsFromWranglerConfigs(
   }));
   const workers = new Map<string, PreparedRecord[]>();
   for (const item of prepared) {
+    if (!item.record.executable) continue;
     const name = stringValue(item.record.config?.name);
     if (name) workers.set(name, [...(workers.get(name) ?? []), item]);
   }
@@ -561,6 +566,88 @@ export const createNodes: CreateNodes<CloudflarePluginOptions> = [
     return results;
   },
 ];
+
+function projectForRecord(
+  record: WranglerConfigRecord,
+  projects: Record<string, ProjectConfiguration>,
+): string | undefined {
+  return Object.entries(projects).find(
+    ([, project]) => normalizePath(project.root) === normalizePath(record.root),
+  )?.[0];
+}
+
+export function dependenciesFromWranglerConfigs(
+  records: readonly WranglerConfigRecord[],
+  projects: Record<string, ProjectConfiguration>,
+): RawProjectGraphDependency[] {
+  const executable = records.filter(
+    (record): record is WranglerConfigRecord & { config: WranglerConfig } =>
+      record.executable && record.config !== undefined,
+  );
+  const workers = new Map<string, WranglerConfigRecord[]>();
+  const queueProducers = new Map<string, WranglerConfigRecord[]>();
+  for (const record of executable) {
+    const name = stringValue(record.config.name);
+    if (name) workers.set(name, [...(workers.get(name) ?? []), record]);
+    for (const queue of queueNames(record.config).producers) {
+      queueProducers.set(queue, [...(queueProducers.get(queue) ?? []), record]);
+    }
+  }
+
+  const dependencies: RawProjectGraphDependency[] = [];
+  const seen = new Set<string>();
+  const add = (
+    sourceRecord: WranglerConfigRecord,
+    targetRecord: WranglerConfigRecord,
+  ) => {
+    const source = projectForRecord(sourceRecord, projects);
+    const target = projectForRecord(targetRecord, projects);
+    if (!source || !target || source === target) return;
+    const key = `${source}\0${target}\0${sourceRecord.configPath}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    dependencies.push({
+      source,
+      target,
+      sourceFile: sourceRecord.configPath,
+      type: DependencyType.static,
+    });
+  };
+
+  for (const record of executable) {
+    for (const reference of workerReferences(record.config)) {
+      const candidates = workers.get(reference.worker) ?? [];
+      if (candidates.length === 1) add(record, candidates[0]);
+    }
+    for (const queue of queueNames(record.config).consumers) {
+      for (const producer of queueProducers.get(queue) ?? []) {
+        add(record, producer);
+      }
+    }
+  }
+  return dependencies.sort(
+    (left, right) =>
+      left.source.localeCompare(right.source) ||
+      left.target.localeCompare(right.target) ||
+      ('sourceFile' in left ? (left.sourceFile ?? '') : '').localeCompare(
+        'sourceFile' in right ? (right.sourceFile ?? '') : '',
+      ),
+  );
+}
+
+export const createDependencies: CreateDependencies<
+  CloudflarePluginOptions
+> = async (_options, context) => {
+  if (!lastRecords || lastRecords.workspaceRoot !== context.workspaceRoot)
+    return [];
+  const dependencies = dependenciesFromWranglerConfigs(
+    lastRecords.records,
+    context.projects,
+  );
+  for (const dependency of dependencies)
+    validateDependency(dependency, context);
+  return dependencies;
+};
 
 export function getLastCloudflareRecords():
   | {
