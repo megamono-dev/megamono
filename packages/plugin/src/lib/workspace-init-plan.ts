@@ -362,7 +362,13 @@ export function surveyWorkspaceInit(tree: Tree): WorkspaceInitSurvey {
       tags: [...(project.tags ?? [])].sort(compare),
     }))
     .sort((left, right) => compare(left.name, right.name));
-  const markdown = files.filter((path) => path.endsWith('.md'));
+  const markdown = files.filter(
+    (path) =>
+      path.endsWith('.md') &&
+      !['AGENTS.md', 'CLAUDE.md'].includes(path) &&
+      !path.startsWith('.agents/skills/') &&
+      !path.startsWith('.claude/skills/'),
+  );
   const documentation = classifyDocumentation(tree, markdown);
   const roots = new Set(
     markdown

@@ -30,6 +30,8 @@ describe('workspace init survey and plan', () => {
       '---\nid: decision-platform-20260825-runtime\ntype: decision\n---\n',
     );
     tree.write('rfcs/cache.md', '# Cache RFC');
+    tree.write('.agents/skills/review/SKILL.md', '# Agent skill');
+    tree.write('AGENTS.md', '# Agent instructions');
     addProjectConfiguration(tree, 'web', {
       root: 'apps/web',
       projectType: 'application',
@@ -66,6 +68,10 @@ describe('workspace init survey and plan', () => {
         unclassified: ['docs/legacy.md'],
       },
     });
+    expect(JSON.parse(first).documentation.markdown).not.toContain(
+      '.agents/skills/review/SKILL.md',
+    );
+    expect(JSON.parse(first).documentation.markdown).not.toContain('AGENTS.md');
     expect(renderWorkspaceInitSurvey(surveyWorkspaceInit(tree))).toContain(
       'stable ID: requires reviewed migration',
     );
