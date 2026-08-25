@@ -1,0 +1,19 @@
+{
+  "generators": {
+    "worker": {
+      "factory": "./dist/generators/worker/worker",
+      "schema": "./dist/generators/worker/schema.json",
+      "description": "Create a convention-aligned Cloudflare Worker"
+    },
+    "binding": {
+      "factory": "./dist/generators/binding/binding",
+      "schema": "./dist/generators/binding/schema.json",
+      "description": "Add a supported binding to an existing Cloudflare Worker"
+    },
+    "durable-object": {
+      "factory": "./dist/generators/durable-object/durable-object",
+      "schema": "./dist/generators/durable-object/schema.json",
+      "description": "Add a Durable Object class, binding, and migration"
+    }
+  }
+}

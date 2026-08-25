@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoCloudflareWorker",
+  "title": "Create a convention-aligned Cloudflare Worker",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "$default": { "$source": "argv", "index": 0 },
+      "description": "Nx project name."
+    },
+    "directory": {
+      "type": "string",
+      "description": "Workspace-relative application directory."
+    },
+    "workerName": {
+      "type": "string",
+      "description": "Cloudflare Worker binding identity; defaults to the project name."
+    },
+    "scope": {
+      "type": "string",
+      "default": "shared",
+      "description": "Megamono scope tag."
+    },
+    "tags": {
+      "type": "string",
+      "description": "Additional comma-separated Nx tags."
+    },
+    "pages": {
+      "type": "boolean",
+      "default": false,
+      "description": "Reserved Pages selection; rejected by the v1 Worker generator."
+    },
+    "dryRun": {
+      "type": "boolean",
+      "default": false,
+      "description": "Print the deterministic plan without mutation."
+    }
+  },
+  "required": ["name"],
+  "additionalProperties": false
+}

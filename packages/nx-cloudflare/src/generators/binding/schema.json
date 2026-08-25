@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoCloudflareBinding",
+  "title": "Add a binding to an existing Cloudflare Worker",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "description": "Existing Nx Worker project name."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "service",
+        "kv",
+        "r2",
+        "d1",
+        "hyperdrive",
+        "queue-producer",
+        "queue-consumer",
+        "vectorize",
+        "ai",
+        "ai-search",
+        "workflow",
+        "analytics-engine",
+        "browser",
+        "images",
+        "mtls",
+        "dispatch-namespace",
+        "assets"
+      ]
+    },
+    "binding": {
+      "type": "string",
+      "description": "Worker-visible binding name."
+    },
+    "resource": {
+      "type": "string",
+      "description": "Cloudflare resource or Worker identity referenced by the binding."
+    },
+    "scriptName": {
+      "type": "string",
+      "description": "Optional defining Worker for a Workflow binding."
+    },
+    "remote": {
+      "type": "boolean",
+      "description": "Use the remote Cloudflare resource during local development."
+    },
+    "experimental": {
+      "type": "boolean",
+      "description": "Record an experimental binding declaration."
+    },
+    "configPath": {
+      "type": "string",
+      "description": "Explicit Wrangler config when the project contains more than one."
+    },
+    "dryRun": {
+      "type": "boolean",
+      "default": false,
+      "description": "Print the deterministic plan without mutation."
+    }
+  },
+  "required": ["project", "type", "binding"],
+  "additionalProperties": false
+}
