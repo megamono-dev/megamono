@@ -57,6 +57,13 @@ export interface ManagedArtifactInspection {
   readonly reason: string;
 }
 
+export interface ManagedArtifactEjectionPlan {
+  readonly artifact: ManagedArtifactEntry;
+  readonly state: 'eject' | 'already-ejected';
+  readonly targetAction: 'preserve' | 'remove-delimiters' | 'none';
+  readonly registryAction: 'mark-ejected' | 'none';
+}
+
 export class ArtifactRegistryError extends Error {
   readonly code = 'megamono-artifact-registry-invalid';
 
@@ -347,6 +354,104 @@ export function upsertArtifactEntry(
       ].sort((left, right) => left.id.localeCompare(right.id)),
     }),
   );
+}
+
+export function planManagedArtifactEjection(
+  tree: Tree,
+  artifactId: string,
+): ManagedArtifactEjectionPlan {
+  const registry = readArtifactRegistry(tree);
+  const artifact = registry.artifacts.find(({ id }) => id === artifactId);
+  if (!artifact) {
+    throw new ArtifactRegistryError(`Unknown managed artifact ${artifactId}.`);
+  }
+  if (!artifact.ejectable) {
+    throw new ArtifactRegistryError(
+      `Managed artifact ${artifactId} is not ejectable.`,
+    );
+  }
+  if (artifact.state === 'ejected') {
+    return {
+      artifact,
+      state: 'already-ejected',
+      targetAction: 'none',
+      registryAction: 'none',
+    };
+  }
+  if (artifact.mode === 'managed-section') {
+    const source = tree.read(artifact.target, 'utf8');
+    if (
+      source === null ||
+      !artifact.startDelimiter ||
+      !artifact.endDelimiter ||
+      extractManagedSection(
+        source,
+        artifact.startDelimiter,
+        artifact.endDelimiter,
+      ) === undefined
+    ) {
+      throw new ArtifactRegistryError(
+        `Managed section ${artifactId} does not contain its exact delimiters.`,
+      );
+    }
+  }
+  return {
+    artifact,
+    state: 'eject',
+    targetAction:
+      artifact.mode === 'managed-section' ? 'remove-delimiters' : 'preserve',
+    registryAction: 'mark-ejected',
+  };
+}
+
+export function applyManagedArtifactEjection(
+  tree: Tree,
+  plan: ManagedArtifactEjectionPlan,
+): void {
+  if (plan.state === 'already-ejected') return;
+  const { artifact } = plan;
+  if (plan.targetAction === 'remove-delimiters') {
+    const source = tree.read(artifact.target, 'utf8');
+    if (source === null || !artifact.startDelimiter || !artifact.endDelimiter) {
+      throw new ArtifactRegistryError(
+        `Managed section ${artifact.id} changed after its ejection plan was created.`,
+      );
+    }
+    const start = source.indexOf(artifact.startDelimiter);
+    const end = source.indexOf(
+      artifact.endDelimiter,
+      start + artifact.startDelimiter.length,
+    );
+    if (start < 0 || end < 0) {
+      throw new ArtifactRegistryError(
+        `Managed section ${artifact.id} changed after its ejection plan was created.`,
+      );
+    }
+    tree.write(
+      artifact.target,
+      `${source.slice(0, start)}${source.slice(
+        start + artifact.startDelimiter.length,
+        end,
+      )}${source.slice(end + artifact.endDelimiter.length)}`,
+    );
+  }
+  const registry = readArtifactRegistry(tree);
+  const current = registry.artifacts.find(({ id }) => id === artifact.id);
+  if (!current || current.state === 'ejected') return;
+  writeArtifactRegistry(
+    tree,
+    upsertArtifactEntry(registry, { ...current, state: 'ejected' }),
+  );
+}
+
+export function ejectManagedArtifact(
+  tree: Tree,
+  artifactId: string,
+  options: { readonly dryRun?: boolean } = {},
+): ManagedArtifactEjectionPlan {
+  const plan = planManagedArtifactEjection(tree, artifactId);
+  if (!options.dryRun) applyManagedArtifactEjection(tree, plan);
+  return plan;
 }
 
 export function extractManagedSection(

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "WorkspaceEject",
+  "title": "Eject a managed Megamono workspace artifact",
+  "description": "Make one Megamono artifact repository-owned while preserving its content.",
+  "type": "object",
+  "properties": {
+    "artifact": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z0-9-]+)*$",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "Which managed artifact should become repository-owned?"
+    },
+    "dryRun": {
+      "type": "boolean",
+      "default": false,
+      "description": "Print the ejection plan without changing content or ownership state."
+    }
+  },
+  "required": ["artifact"],
+  "additionalProperties": false
+}

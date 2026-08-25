@@ -7,6 +7,12 @@
       "schema": "./dist/generators/workspace-init/schema.json",
       "description": "Initialize Megamono repository configuration and documentation"
     },
+    "workspace-eject": {
+      "status": "available",
+      "factory": "./dist/generators/workspace-eject/workspace-eject",
+      "schema": "./dist/generators/workspace-eject/schema.json",
+      "description": "Make a managed Megamono workspace artifact repository-owned"
+    },
     "skill-eject": {
       "status": "available",
       "factory": "./dist/generators/skill-eject/skill-eject",
