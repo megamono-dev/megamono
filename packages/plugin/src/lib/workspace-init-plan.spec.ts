@@ -25,6 +25,11 @@ describe('workspace init survey and plan', () => {
     tree.write('apps/apple/Package.swift', '// swift-tools-version: 6.0');
     tree.write('crates/tool/Cargo.toml', '[package]');
     tree.write('docs/legacy.md', '# Legacy');
+    tree.write(
+      'architecture/decisions/decision.md',
+      '---\nid: decision-platform-20260825-runtime\ntype: decision\n---\n',
+    );
+    tree.write('rfcs/cache.md', '# Cache RFC');
     addProjectConfiguration(tree, 'web', {
       root: 'apps/web',
       projectType: 'application',
@@ -42,7 +47,28 @@ describe('workspace init survey and plan', () => {
         cargo: ['crates/tool/Cargo.toml'],
       },
       projects: [{ name: 'web', targets: ['build'] }],
+      documentation: {
+        corpusDirectories: ['architecture/decisions', 'rfcs'],
+        classifications: [
+          {
+            path: 'architecture/decisions/decision.md',
+            type: 'decision',
+            proposedId: 'decision-platform-20260825-runtime',
+            basis: 'lifecycle-metadata',
+          },
+          {
+            path: 'rfcs/cache.md',
+            type: 'research',
+            proposedId: null,
+            basis: 'research-directory',
+          },
+        ],
+        unclassified: ['docs/legacy.md'],
+      },
     });
+    expect(renderWorkspaceInitSurvey(surveyWorkspaceInit(tree))).toContain(
+      'stable ID: requires reviewed migration',
+    );
     expect(tree.listChanges()).toEqual(changes);
   });
 

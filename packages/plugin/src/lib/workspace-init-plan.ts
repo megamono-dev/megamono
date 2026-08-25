@@ -65,6 +65,13 @@ export interface WorkspaceInitSurveyProject {
   readonly tags: readonly string[];
 }
 
+export interface WorkspaceInitDocumentationClassification {
+  readonly path: string;
+  readonly type: 'spec' | 'plan' | 'decision' | 'audit' | 'research' | 'report';
+  readonly proposedId: string | null;
+  readonly basis: 'lifecycle-metadata' | 'decision-directory' | 'research-directory';
+}
+
 export interface WorkspaceInitSurvey {
   readonly schemaVersion: 1;
   readonly baseline: {
@@ -82,7 +89,10 @@ export interface WorkspaceInitSurvey {
   };
   readonly documentation: {
     readonly roots: readonly string[];
+    readonly corpusDirectories: readonly string[];
     readonly markdown: readonly string[];
+    readonly classifications: readonly WorkspaceInitDocumentationClassification[];
+    readonly unclassified: readonly string[];
   };
   readonly agents: {
     readonly files: readonly string[];
@@ -192,6 +202,93 @@ function projectType(
   return project.projectType === 'library' ? 'library' : 'application';
 }
 
+const DOCUMENT_TYPES = new Set([
+  'spec',
+  'plan',
+  'decision',
+  'audit',
+  'research',
+  'report',
+]);
+const DECISION_DIRECTORIES = new Set(['adr', 'adrs', 'decision', 'decisions']);
+const RESEARCH_DIRECTORIES = new Set(['rfc', 'rfcs', 'research']);
+
+function frontmatterField(source: string, field: string): string | undefined {
+  const newline = source.indexOf('\n');
+  if (newline < 0 || source.slice(0, newline).trim() !== '---') return undefined;
+  const end = source.indexOf('\n---', newline + 1);
+  if (end < 0) return undefined;
+  const match = new RegExp(`^${field}:\\s*["']?([^\\n"']+)["']?\\s*$`, 'm').exec(
+    source.slice(newline + 1, end),
+  );
+  return match?.[1].trim();
+}
+
+function classifyDocumentation(
+  tree: Tree,
+  markdown: readonly string[],
+): {
+  readonly corpusDirectories: readonly string[];
+  readonly classifications: readonly WorkspaceInitDocumentationClassification[];
+  readonly unclassified: readonly string[];
+} {
+  const corpusDirectories = new Set<string>();
+  const classifications: WorkspaceInitDocumentationClassification[] = [];
+  const classified = new Set<string>();
+  for (const path of markdown) {
+    const segments = path.split('/');
+    const directories = segments.slice(0, -1);
+    const source = tree.read(path, 'utf8') ?? '';
+    const metadataType = frontmatterField(source, 'type');
+    const metadataId = frontmatterField(source, 'id');
+    let type: WorkspaceInitDocumentationClassification['type'] | undefined;
+    let basis: WorkspaceInitDocumentationClassification['basis'] | undefined;
+    if (metadataType && DOCUMENT_TYPES.has(metadataType)) {
+      type = metadataType as WorkspaceInitDocumentationClassification['type'];
+      basis = 'lifecycle-metadata';
+    } else if (
+      directories.some((directory) =>
+        DECISION_DIRECTORIES.has(directory.toLowerCase()),
+      )
+    ) {
+      type = 'decision';
+      basis = 'decision-directory';
+    } else if (
+      directories.some((directory) =>
+        RESEARCH_DIRECTORIES.has(directory.toLowerCase()),
+      )
+    ) {
+      type = 'research';
+      basis = 'research-directory';
+    }
+    for (let index = 0; index < directories.length; index += 1) {
+      const directory = directories[index].toLowerCase();
+      if (
+        DECISION_DIRECTORIES.has(directory) ||
+        RESEARCH_DIRECTORIES.has(directory) ||
+        DOCUMENT_TYPES.has(directory)
+      ) {
+        corpusDirectories.add(directories.slice(0, index + 1).join('/'));
+      }
+    }
+    if (!type || !basis) continue;
+    classifications.push({
+      path,
+      type,
+      proposedId: metadataId ?? null,
+      basis,
+    });
+    classified.add(path);
+  }
+  return {
+    corpusDirectories: [...corpusDirectories].sort(compare),
+    classifications: classifications.sort((left, right) =>
+      compare(left.path, right.path),
+    ),
+    unclassified: markdown.filter((path) => !classified.has(path)),
+  };
+}
+
 export function parseWorkspaceInitModules(
   only?: string | readonly WorkspaceInitModule[],
 ): readonly WorkspaceInitModule[] {
@@ -247,6 +344,7 @@ export function surveyWorkspaceInit(tree: Tree): WorkspaceInitSurvey {
     }))
     .sort((left, right) => compare(left.name, right.name));
   const markdown = files.filter((path) => path.endsWith('.md'));
+  const documentation = classifyDocumentation(tree, markdown);
   const roots = new Set(
     markdown
       .map((path) => path.split('/')[0])
@@ -274,7 +372,11 @@ export function surveyWorkspaceInit(tree: Tree): WorkspaceInitSurvey {
         /(?:^|\/)(?:build\.gradle(?:\.kts)?|go\.mod|pom\.xml)$/.test(path),
       ),
     },
-    documentation: { roots: [...roots].sort(compare), markdown },
+    documentation: {
+      roots: [...roots].sort(compare),
+      markdown,
+      ...documentation,
+    },
     agents: {
       files: ['AGENTS.md', 'CLAUDE.md', '.cursorrules'].filter((path) =>
         files.includes(path),
@@ -625,7 +727,21 @@ ${values(survey.manifests.unsupported)}
 ## Documentation
 
 - Roots: ${survey.documentation.roots.join(', ') || 'none'}
+- Corpus-like directories: ${survey.documentation.corpusDirectories.join(', ') || 'none'}
 - Markdown files: ${survey.documentation.markdown.length}
+
+### High-confidence classification proposals
+
+${values(
+  survey.documentation.classifications.map(
+    ({ path, type, proposedId, basis }) =>
+      `${path} — ${type}; stable ID: ${proposedId ?? 'requires reviewed migration'}; basis: ${basis}`,
+  ),
+)}
+
+### Unclassified Markdown
+
+${values(survey.documentation.unclassified)}
 
 ## Agent surfaces
 
