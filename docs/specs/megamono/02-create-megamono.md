@@ -15,6 +15,7 @@ references:
     spec-megamono-0005,
     spec-megamono-0006,
     spec-megamono-0012,
+    spec-megamono-0014,
   ]
 external_references: []
 ---
@@ -175,6 +176,8 @@ The binary never initializes or modifies an existing workspace. Existing Nx work
 ```text
 npm exec nx g @megamono/plugin:workspace-init
 ```
+
+Its survey, modular adoption, conflict, and recovery contract is normative in `spec-megamono-0014`.
 
 That generator refuses a workspace already carrying `megamono.json` unless it is performing a schema migration.
 

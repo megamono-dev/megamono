@@ -17,6 +17,7 @@ references:
     spec-megamono-0006,
     spec-megamono-0008,
     spec-megamono-0010,
+    spec-megamono-0014,
   ]
 external_references: []
 ---
@@ -61,6 +62,8 @@ Two operations, deliberately separate.
 | Difficulty                | Moderate, mostly mechanical          | High                              |
 
 Convert-then-import is the natural sequence: make the repo a valid host, then absorb into it. Import assumes convert has already happened.
+
+An established Nx workspace whose structure should remain in place uses `workspace-init` (`spec-megamono-0014`) instead. Convert is for a single npm package or plain npm workspaces that run `nx init` only as the prerequisite to structural conversion; it is not the adoption path for a working Nx monorepo.
 
 ## What convert does
 

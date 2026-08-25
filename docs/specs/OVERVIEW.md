@@ -9,7 +9,7 @@ Megamono is an MIT-licensed set of Nx development tools for creating, maintainin
 - Node.js 24, npm 11 workspaces, Nx 23.1, and TypeScript 6.0.
 - macOS and Linux. Windows and non-npm package managers fail preflight in v1.
 - One core `@megamono/plugin`, plus Wave 1 Apple/Cargo and Wave 2 extension/Laravel plugins.
-- `create-megamono` is the only bootstrap binary. Existing Nx workspaces use generators and executors.
+- `create-megamono` is the only bootstrap binary. Established Nx workspaces use the additive, modular `workspace-init` generator; plain npm repositories run `nx init` only as the prerequisite to structural conversion.
 - Nx plugins export `createNodes` and `createDependencies`; the deprecated `createNodesV2` alias is not used.
 - Generators plan before writing, support dry-run and non-interactive execution, are idempotent, never persist secrets, and never commit, push, deploy, or run database migrations.
 
@@ -40,6 +40,6 @@ Megamono can emit a Playstack runtime import, but no `@megamono/*` package has a
 
 ## Implementation order
 
-Build the core configuration/docs/checking foundation first; then bootstrap and Wave 1 language graph plugins; then explicit skills and deterministic health; then convert/import with real Git histories. Conditional runtime-wiring generators come last, after their external gates pass.
+Build the core configuration/docs/checking foundation first; then bootstrap and Wave 1 language graph plugins; then explicit skills and deterministic health; then workspace-init adoption fixtures and convert/import with real Git histories. Conditional runtime-wiring generators come last, after their external gates pass.
 
 The normative source is [00 — Megamono v1 Implementation Contract](megamono/00-implementation-contract.md); the full suite index is [README.md](README.md).

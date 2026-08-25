@@ -15,6 +15,7 @@ references:
     spec-megamono-0004,
     spec-megamono-0007,
     spec-megamono-0011,
+    spec-megamono-0014,
   ]
 external_references: [playstack:39-i18n, playstack:43-events]
 ---
@@ -197,12 +198,15 @@ This is what makes adaptive prompting possible (`spec-megamono-0002`): a generat
 
 Structural rules default to errors and stylistic rules to warnings. Every rule is individually configurable. Disabling a structural rule requires `{ "severity": "off", "decision": "decision-..." }`; validation fails if that decision ID does not resolve. Warning rules may be disabled without a decision.
 
+Freshly created workspaces use those defaults immediately. Convert and workspace-init may introduce a structural rule as a temporary warning when an existing workspace already violates it, but the adoption decision must record the rule, initial finding count, and ratchet plan. Repository health keeps that override visible until it becomes an error or a later accepted decision explicitly retains it.
+
 ## Acceptance criteria
 
 - A fixture for every allowed and forbidden dependency in the type/scope/platform matrix produces the expected diagnostic.
 - Graph-only Apple, Cargo, and PHP edges are checked even when ESLint sees no TypeScript import.
 - A Playstack package depending on any Megamono package fails `megamono:check`.
 - A structural rule cannot be disabled without a valid decision ID.
+- Existing-workspace warning overrides require an adoption decision and remain visible in repository health until resolved.
 - Generated CI uses full history and `nx-set-shas@v5`, separates deploy from CI, and emits only jobs required by configured platforms.
 - `megamono.json` validates before any generator reads it; unknown `version` values fail with a migration instruction.
 - Release dry runs and local-registry e2e tests complete before the workflow can publish a `latest` tag.

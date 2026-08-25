@@ -22,6 +22,7 @@ The suite is centralized under `docs/specs/megamono/`. Cross-document links insi
 | `spec-megamono-0011` | [Docs tooling](megamono/11-docs-tooling.md)                               | Typed graph, indexes, generators, archive, and retention                      |
 | `spec-megamono-0012` | [Integration generators](megamono/12-integration-generators.md)           | Wave 1 Sentry generator and template-drift checks                             |
 | `spec-megamono-0013` | [Email generator](megamono/13-emails.md)                                  | Gated typed email library and local preview                                   |
+| `spec-megamono-0014` | [Workspace init](megamono/14-init.md)                                     | Additive, modular adoption in an existing Nx workspace                        |
 
 ## Normative boundary
 
@@ -34,7 +35,7 @@ Playstack records referenced as `playstack:<id>` are owned by `org-playstack/pla
 1. Build the `@megamono/plugin` configuration, docs, structural-check, and executor foundation from specs 0000, 0004, 0006, and 0011.
 2. Build `create-megamono` and the Wave 1 language plugins from specs 0002 and 0003.
 3. Build explicit skills and deterministic health checks from specs 0005 and 0008.
-4. Build convert and import from specs 0009 and 0010, using real-history fixtures before release.
+4. Build workspace init, convert, and import from specs 0014, 0009, and 0010, using adoption and real-history fixtures before release.
 5. Publish integration, Playstack-wiring, and email generators only as their external contract gates pass.
 
 The portable high-level summary is [OVERVIEW.md](OVERVIEW.md). The generated hot-corpus index is [docs/INDEX.md](../INDEX.md).

@@ -8,7 +8,7 @@ topics: [architecture, generators, nx, release]
 summary: Canonical package map, compatibility baseline, command contract, and definition of done for Megamono v1.
 date: 2026-08-23
 supersedes: null
-references: [spec-megamono-0010]
+references: [spec-megamono-0010, spec-megamono-0014]
 external_references: [playstack:08-data-and-prisma]
 ---
 
