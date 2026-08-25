@@ -16,7 +16,7 @@ references:
     spec-megamono-0005,
     spec-megamono-0012,
   ]
-external_references: []
+external_references: [playstack:45-cli]
 ---
 
 # 08 — Scheduled Workflows: Repo Health
@@ -124,6 +124,14 @@ Mechanics:
 
 Fixes remain a separate, explicit, human-initiated action.
 
+### Deterministic package updates are a separate contract
+
+The no-PR rule applies to Megamono health findings. It does not prohibit an explicitly enabled, package-owned updater from opening review pull requests for mutations that package can plan deterministically. `playstack:45-cli`, for example, may run `playstack update --pr` to update Playstack package versions and synchronize their owned artifacts in one branch so the consuming repository's CI can test the combined result.
+
+That workflow does not turn a Megamono finding into a patch. Playstack owns the update plan, artifact hashes, merge behavior, branch, and pull request; Megamono health neither invokes it nor gains `contents: write` or pull-request permissions. If the Playstack workflow is selected, its own initialization may separately offer to exclude `@playstack/*` from Renovate or Dependabot so one updater owns both package versions and emissions. Megamono leaves those tools unchanged.
+
+The stable distinction is: **Megamono reports graph-wide findings that require judgment; a package-owned updater may propose its own deterministic change for review and CI.**
+
 `npm exec nx run megamono-docs:health` emits a deterministic JSON result and exits `0` whether findings are present or absent; findings are product output, not execution failure. Invalid configuration exits `2`, incomplete graph construction exits `3`, and an unexpected execution error exits `1`. `--fail-on-findings` is available for teams that deliberately want findings to fail CI.
 
 The generated scheduled workflow declares only `contents: read` and `issues: write`, uses the repository-scoped `GITHUB_TOKEN`, and never runs on untrusted pull-request code. The command itself has no network requirement; a separate workflow step converts its JSON into the issue body.
@@ -183,5 +191,6 @@ The required decision topic is fixed per check: `dependencies` for dependency al
 - Running health twice against unchanged input produces byte-identical JSON.
 - The issue publisher updates one issue, closes it on an empty run, and recreates at most one replacement after deletion.
 - The generated workflow has no model-provider secret, no contents write permission, and no pull-request trigger.
+- Health never creates a branch or pull request, invokes a package updater, or converts a finding into a mutation plan.
 - Valid suppressions hide the primary finding but remain auditable; invalid, expired, wildcard, and superseded-decision suppressions fail configuration validation.
 - A missing ecosystem plugin lowers confidence and cannot produce an automatic deletion or dependency-upgrade recommendation.

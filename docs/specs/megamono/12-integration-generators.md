@@ -22,6 +22,7 @@ external_references:
     playstack:05-provider-abstractions,
     playstack:06-webhooks,
     playstack:12-observability,
+    playstack:45-cli,
   ]
 ---
 
@@ -77,9 +78,11 @@ Sentry's Next.js integration has changed shape more than once — config files t
 
 **2. A health check flags drift.** Added to `spec-megamono-0008`: if the installed SDK major has moved past what the template targets, report it. Weekly, to the health issue, alongside dependency alignment — which is the same class of problem and should not be a second channel.
 
-**3. The wizard remains the reference.** Not invoked, but periodically run in a scratch single-project repo and diffed against the templates. This is a maintainer task, not automation, and should be documented as such rather than pretended away.
+**3. Template ownership stays with Megamono.** The package-owned update workflow in `playstack:45-cli` synchronizes Playstack emissions; it does not update Megamono-owned third-party integration templates. A template change is implemented and fixture-tested in this repository, then distributed in a new `@megamono/plugin` release. Health diagnoses consumer drift but never mutates the installed integration.
 
-**4. Generated files carry a provenance comment** — template version and the SDK range it targeted. Otherwise there is no way to tell a hand-modified file from a stale generated one.
+**4. The wizard remains the reference.** Not invoked, but periodically run in a scratch single-project repo and diffed against the templates. This is a maintainer task, not automation, and should be documented as such rather than pretended away.
+
+**5. Generated files carry a provenance comment** — template version and the SDK range it targeted. Otherwise there is no way to tell a hand-modified file from a stale generated one.
 
 ## What the generator does beyond setup
 
@@ -133,6 +136,7 @@ Generators emit secret **names**, never values:
 - Wave 1 implements `integration-sentry` for Next.js Pages Router, Nest, Expo, and Cloudflare Worker projects. A surface combination without a maintained fixture is refused rather than partially configured.
 - Fathom, Postmark, and Stripe names and option contracts are reserved for later waves. They do not appear in the published generator collection until their templates and referenced Playstack fixtures pass the same acceptance suite.
 - Templates version with `@megamono/plugin`; every template also declares an independent template revision and compatible SDK range. A template change requires a plugin release, avoiding a second distribution channel.
+- Playstack's package-owned update workflow never rewrites Megamono integration templates. Template drift remains diagnosis-only until a maintainer releases and explicitly runs an updated Megamono generator.
 - On-demand diagnosis uses `npm exec nx run megamono-docs:health -- --checks=integration-template-drift --no-issue`. It shares the scheduled health implementation and never mutates integrations.
 
 ## Acceptance criteria
@@ -143,3 +147,4 @@ Generators emit secret **names**, never values:
 - Ambiguous surfaces and missing external Playstack fixtures fail before mutation in non-interactive mode.
 - No secret value is accepted as an option, written to disk, included in a process argument, or captured in a snapshot.
 - The health check identifies fixtures whose installed SDK falls outside the template range and stays silent within the range.
+- Playstack artifact updates leave Megamono-owned integration files unchanged; only an explicit generator update can apply a newer template.
