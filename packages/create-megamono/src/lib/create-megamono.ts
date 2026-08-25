@@ -89,8 +89,7 @@ export type PlanStep =
         | 'configure-desktop'
         | 'configure-mobile'
         | 'configure-site'
-        | 'configure-web'
-        | 'configure-worker';
+        | 'configure-web';
     }
   | { kind: 'commit'; id: 'commit-workspace' }
   | { kind: 'springbar'; id: 'configure-springbar' };
@@ -147,7 +146,7 @@ const VERIFY_SET = new Set<string>(VERIFY_MODES);
 const appPlugin: Partial<Record<AppId, string>> = {
   web: '@nx/next',
   api: '@nx/nest',
-  worker: '@nx/js',
+  worker: '@megamono/nx-cloudflare',
   mobile: '@nx/expo',
   site: '@nx/next',
 };
@@ -167,16 +166,9 @@ const appGenerator: Record<
     extra: ['--directory=apps/api', '--e2eTestRunner=none'],
   },
   worker: {
-    plugin: '@nx/js',
-    generator: 'library',
-    extra: [
-      '--directory=apps/worker',
-      '--bundler=esbuild',
-      '--linter=eslint',
-      '--unitTestRunner=none',
-      '--minimal',
-      '--useProjectJson',
-    ],
+    plugin: '@megamono/nx-cloudflare',
+    generator: 'worker',
+    extra: ['--directory=apps/worker'],
   },
   mobile: {
     plugin: '@nx/expo',
@@ -396,9 +388,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     const plugin = appPlugin[app];
     if (plugin) plugins.add(plugin);
     if (app === 'worker') {
-      plugins.add('@nx/vitest');
-      plugins.add('vite');
-      plugins.add('vitest');
+      plugins.add('wrangler');
     }
     if (app === 'desktop') plugins.add('@megamono/nx-cargo');
     if (app === 'apple') plugins.add('@megamono/nx-apple');
@@ -470,6 +460,10 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
             `--scope=${options.scope}`,
           ]
         : [];
+    const appExtra =
+      app === 'worker'
+        ? [...definition.extra, `--scope=${options.scope}`]
+        : definition.extra;
     steps.push(
       commandStep(
         `generate-${app}`,
@@ -481,7 +475,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
           'generate',
           `${definition.plugin}:${definition.generator}`,
           `--name=${options.scope}-${app}`,
-          ...definition.extra,
+          ...appExtra,
           ...appleOptions,
           `--tags=platform:${platform},scope:${options.scope},type:app,visibility:internal`,
           '--interactive=false',
@@ -494,10 +488,6 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       steps.push({ kind: 'configure', id: 'configure-mobile' });
     if (app === 'site') steps.push({ kind: 'configure', id: 'configure-site' });
     if (app === 'web') steps.push({ kind: 'configure', id: 'configure-web' });
-  }
-
-  if (options.apps.includes('worker')) {
-    steps.push({ kind: 'configure', id: 'configure-worker' });
   }
 
   steps.push(
@@ -653,8 +643,6 @@ export function renderPlan(plan: CreationPlan): string {
           const app = step.id.replace('configure-', '');
           return `${index + 1}. [staging] normalize apps/${app} as an application project`;
         }
-        if (step.id === 'configure-worker')
-          return `${index + 1}. [staging] normalize apps/worker as a Cloudflare Worker application`;
         return `${index + 1}. [staging] configure megamono.json`;
       }
       if (step.kind === 'springbar') {
@@ -862,144 +850,6 @@ async function configureDesktop(plan: CreationPlan): Promise<void> {
   await writeFile(nxPath, `${JSON.stringify(nxJson, null, 2)}\n`, 'utf8');
 }
 
-async function configureWorker(plan: CreationPlan): Promise<void> {
-  const workerRoot = resolve(plan.options.stagingDirectory, 'apps/worker');
-  const projectName = `${plan.options.scope}-worker`;
-  const projectPath = resolve(workerRoot, 'project.json');
-  const project = JSON.parse(await readFile(projectPath, 'utf8')) as {
-    name?: string;
-    projectType?: string;
-    targets?: Record<
-      string,
-      { executor?: string; options?: Record<string, unknown> }
-    >;
-  };
-  const build = project.targets?.build;
-  if (!build || build.executor !== '@nx/esbuild:esbuild') {
-    throw new CreateMegamonoError(
-      'The generated Worker scaffold is missing its expected @nx/esbuild build target.',
-      3,
-    );
-  }
-  project.name = projectName;
-  project.projectType = 'application';
-  project.targets ??= {};
-  build.options = {
-    ...build.options,
-    format: ['esm'],
-    platform: 'neutral',
-    generatePackageJson: false,
-  };
-  await writeFile(projectPath, `${JSON.stringify(project, null, 2)}\n`, 'utf8');
-
-  const nxPath = resolve(plan.options.stagingDirectory, 'nx.json');
-  const nxJson = JSON.parse(await readFile(nxPath, 'utf8')) as {
-    plugins?: Array<string | { plugin: string; [key: string]: unknown }>;
-  };
-  nxJson.plugins ??= [];
-  const hasVitestPlugin = nxJson.plugins.some((entry) =>
-    typeof entry === 'string'
-      ? entry === '@nx/vitest'
-      : entry.plugin === '@nx/vitest',
-  );
-  if (!hasVitestPlugin) {
-    nxJson.plugins.push({
-      plugin: '@nx/vitest',
-      options: { testTargetName: 'test' },
-      include: ['apps/worker/**/*'],
-    });
-  }
-  await writeFile(nxPath, `${JSON.stringify(nxJson, null, 2)}\n`, 'utf8');
-
-  await rm(resolve(workerRoot, 'src/lib'), { recursive: true, force: true });
-  await writeFile(
-    resolve(workerRoot, 'src/index.ts'),
-    `export function handleRequest(request: Request): Response {
-  const url = new URL(request.url);
-  return Response.json({ ok: true, path: url.pathname });
-}
-
-export default { fetch: handleRequest };
-`,
-    'utf8',
-  );
-  await mkdir(resolve(workerRoot, 'tests'), { recursive: true });
-  await writeFile(
-    resolve(workerRoot, 'tests/index.spec.ts'),
-    `import { describe, expect, it } from 'vitest';
-import { handleRequest } from '../src/index.js';
-
-describe('worker', () => {
-  it('responds with the requested path', async () => {
-    const response = handleRequest(new Request('https://example.test/health'));
-    await expect(response.json()).resolves.toEqual({ ok: true, path: '/health' });
-  });
-});
-`,
-    'utf8',
-  );
-  await writeFile(
-    resolve(workerRoot, 'vitest.config.ts'),
-    `import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: {
-    environment: 'node',
-    include: ['{src,tests}/**/*.spec.ts'],
-  },
-});
-`,
-    'utf8',
-  );
-  await writeFile(
-    resolve(workerRoot, 'eslint.config.mjs'),
-    `import baseConfig from '../../eslint.config.mjs';
-
-export default [
-  ...baseConfig,
-  {
-    files: ['**/*.json'],
-    rules: {
-      '@nx/dependency-checks': [
-        'error',
-        {
-          ignoredFiles: [
-            '{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}',
-            '{projectRoot}/esbuild.config.{js,ts,mjs,mts}',
-            '{projectRoot}/vitest.config.{js,ts,mjs,mts}',
-            '{projectRoot}/**/*.{spec,test}.{js,jsx,ts,tsx}',
-          ],
-        },
-      ],
-    },
-    languageOptions: {
-      parser: await import('jsonc-eslint-parser'),
-    },
-  },
-  {
-    ignores: ['**/out-tsc'],
-  },
-];
-`,
-    'utf8',
-  );
-  await writeFile(
-    resolve(workerRoot, 'wrangler.jsonc'),
-    `${JSON.stringify(
-      {
-        $schema:
-          'https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json',
-        name: projectName,
-        main: 'src/index.ts',
-        compatibility_date: '2026-08-23',
-      },
-      null,
-      2,
-    )}\n`,
-    'utf8',
-  );
-}
-
 async function configurePackageApplication(
   plan: CreationPlan,
   app: 'mobile' | 'site' | 'web',
@@ -1098,7 +948,6 @@ export async function executePlan(
           await configurePackageApplication(plan, 'site');
         else if (step.id === 'configure-web')
           await configurePackageApplication(plan, 'web');
-        else if (step.id === 'configure-worker') await configureWorker(plan);
       } else if (step.kind === 'springbar') {
         const intent = createSpringbarIntent(
           plan.options,

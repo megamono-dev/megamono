@@ -298,6 +298,22 @@ async function verifyCase(root, testCase, environment) {
         `${testCase.id}: ${projectName} unexpectedly emitted App Router files.`,
       );
     }
+    if (app === 'worker') {
+      for (const target of ['dev', 'deploy', 'typegen', 'tail']) {
+        assert(
+          project.targets?.[target],
+          `${testCase.id}: ${projectName} is missing inferred ${target}.`,
+        );
+      }
+      assert(
+        !project.targets?.build,
+        `${testCase.id}: ${projectName} unexpectedly inferred build.`,
+      );
+      assert(
+        project.metadata?.['megamono:cloudflare']?.schemaVersion === 1,
+        `${testCase.id}: ${projectName} is missing normalized Cloudflare metadata.`,
+      );
+    }
   }
 
   const agents = await readFile(resolve(destination, 'AGENTS.md'), 'utf8');
@@ -401,6 +417,7 @@ try {
     './packages/plugin',
     './packages/nx-apple',
     './packages/nx-cargo',
+    './packages/nx-cloudflare',
     './packages/create-megamono',
   ]) {
     await run(

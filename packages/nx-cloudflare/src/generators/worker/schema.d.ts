@@ -5,5 +5,6 @@ export interface WorkerGeneratorSchema {
   readonly scope?: string;
   readonly tags?: string;
   readonly pages?: boolean;
+  readonly skipFormat?: boolean;
   readonly dryRun?: boolean;
 }

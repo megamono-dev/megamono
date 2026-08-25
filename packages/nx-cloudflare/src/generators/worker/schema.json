@@ -31,6 +31,11 @@
       "default": false,
       "description": "Reserved Pages selection; rejected by the v1 Worker generator."
     },
+    "skipFormat": {
+      "type": "boolean",
+      "default": false,
+      "description": "Compatibility option for composing the generator inside a larger formatter transaction."
+    },
     "dryRun": {
       "type": "boolean",
       "default": false,

@@ -180,7 +180,7 @@ describe('createPlan', () => {
     expect(rendered).toContain('--projects=acme-tools-apple');
   });
 
-  it('plans the supported Nx library scaffold plus Worker normalization', () => {
+  it('plans the pinned nx-cloudflare Worker generator', () => {
     const plan = createPlan(
       options('/workspace', { apps: ['worker'], verify: 'build' }),
     );
@@ -188,7 +188,6 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'install-plugins',
       'generate-worker',
-      'configure-worker',
       'initialize-megamono',
       'format',
       'validate-docs',
@@ -198,15 +197,13 @@ describe('createPlan', () => {
       'commit-workspace',
     ]);
     const rendered = renderPlan(plan);
-    expect(rendered).toContain('@nx/js:library');
-    expect(rendered).toContain('@nx/vitest@23.1.1');
-    expect(rendered).toContain('vite@8.1.4');
-    expect(rendered).toContain('vitest@4.1.10');
-    expect(rendered).toContain('--bundler=esbuild');
-    expect(rendered).toContain('--unitTestRunner=none');
-    expect(rendered).toContain(
-      'normalize apps/worker as a Cloudflare Worker application',
-    );
+    expect(rendered).toContain('@megamono/nx-cloudflare@0.0.1');
+    expect(rendered).toContain('wrangler@4.125.0');
+    expect(rendered).toContain('@megamono/nx-cloudflare:worker');
+    expect(rendered).toContain('--directory=apps/worker');
+    expect(rendered).toContain('--scope=acme-tools');
+    expect(rendered).not.toContain('@nx/js:library');
+    expect(rendered).not.toContain('@nx/vitest');
   });
 
   it('installs the normalized Desktop workspace before later Nx generators', () => {
@@ -225,7 +222,6 @@ describe('createPlan', () => {
       'generate-mobile',
       'configure-mobile',
       'generate-worker',
-      'configure-worker',
       'initialize-megamono',
       'commit-workspace',
     ]);
@@ -468,46 +464,82 @@ describe('executePlan', () => {
     expect(megamono.platforms).toEqual(['rust']);
   });
 
-  it('normalizes the Nx JS scaffold into a Cloudflare Worker application', async () => {
+  it('preserves the nx-cloudflare Worker generator output through commit', async () => {
     const cwd = await fixture();
     const plan = createPlan(options(cwd, { apps: ['worker'], verify: 'none' }));
     let initialized = false;
-    const runner: CommandRunner = async () => {
-      if (initialized) return;
-      initialized = true;
-      await mkdir(
-        resolve(plan.options.stagingDirectory, 'apps/worker/src/lib'),
-        { recursive: true },
-      );
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'package.json'),
-        '{}',
-      );
-      await writeFile(resolve(plan.options.stagingDirectory, 'nx.json'), '{}');
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'megamono.json'),
-        JSON.stringify({ version: 1 }),
-      );
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'apps/worker/project.json'),
-        JSON.stringify({
-          name: 'acme-tools-worker',
-          projectType: 'library',
-          targets: {
-            build: {
-              executor: '@nx/esbuild:esbuild',
-              options: { format: ['cjs'], platform: 'node' },
+    const runner: CommandRunner = async ({ args }) => {
+      if (!initialized) {
+        initialized = true;
+        await mkdir(plan.options.stagingDirectory, { recursive: true });
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'package.json'),
+          JSON.stringify({
+            devDependencies: {
+              '@megamono/nx-cloudflare': '0.0.1',
+              wrangler: '4.125.0',
             },
-          },
-        }),
-      );
-      await writeFile(
-        resolve(
+          }),
+        );
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'nx.json'),
+          JSON.stringify({ plugins: [] }),
+        );
+      }
+      if (args.includes('@megamono/nx-cloudflare:worker')) {
+        const workerRoot = resolve(
           plan.options.stagingDirectory,
-          'apps/worker/src/lib/generated.ts',
-        ),
-        'export const generated = true;\n',
-      );
+          'apps/worker',
+        );
+        await mkdir(resolve(workerRoot, 'src'), { recursive: true });
+        await writeFile(
+          resolve(workerRoot, 'project.json'),
+          JSON.stringify({
+            name: 'acme-tools-worker',
+            projectType: 'application',
+            sourceRoot: 'apps/worker/src',
+            tags: [
+              'platform:worker',
+              'scope:acme-tools',
+              'type:app',
+              'visibility:internal',
+            ],
+          }),
+        );
+        await writeFile(
+          resolve(workerRoot, 'src/index.ts'),
+          "export default { fetch: () => new Response('ok') };\n",
+        );
+        await writeFile(
+          resolve(workerRoot, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: { types: ['./worker-configuration.d.ts'] },
+          }),
+        );
+        await writeFile(
+          resolve(workerRoot, 'worker-configuration.d.ts'),
+          'interface Env {}\n',
+        );
+        await writeFile(
+          resolve(workerRoot, 'wrangler.jsonc'),
+          JSON.stringify({
+            $schema: '../../node_modules/wrangler/config-schema.json',
+            name: 'acme-tools-worker',
+            main: 'src/index.ts',
+            compatibility_date: '2026-08-23',
+          }),
+        );
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'nx.json'),
+          JSON.stringify({ plugins: ['@megamono/nx-cloudflare'] }),
+        );
+      }
+      if (args.includes('@megamono/plugin:workspace-init')) {
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'megamono.json'),
+          JSON.stringify({ version: 1, platforms: ['worker'] }),
+        );
+      }
     };
     await executePlan(plan, runner);
 
@@ -518,46 +550,25 @@ describe('executePlan', () => {
     expect(project).toMatchObject({
       name: 'acme-tools-worker',
       projectType: 'application',
-      targets: {
-        build: {
-          executor: '@nx/esbuild:esbuild',
-          options: {
-            format: ['esm'],
-            platform: 'neutral',
-            generatePackageJson: false,
-          },
-        },
-      },
+      tags: expect.arrayContaining(['platform:worker', 'scope:acme-tools']),
     });
     expect(
       await readFile(resolve(workerRoot, 'src/index.ts'), 'utf8'),
-    ).toContain('export default { fetch: handleRequest }');
-    expect(
-      await readFile(resolve(workerRoot, 'vitest.config.ts'), 'utf8'),
-    ).toContain("include: ['{src,tests}/**/*.spec.ts']");
-    expect(
-      await readFile(resolve(workerRoot, 'tests/index.spec.ts'), 'utf8'),
-    ).toContain("from '../src/index.js'");
-    expect(
-      await readFile(resolve(workerRoot, 'eslint.config.mjs'), 'utf8'),
-    ).toContain("'{projectRoot}/**/*.{spec,test}.{js,jsx,ts,tsx}'");
+    ).toContain('export default');
     const nxJson = JSON.parse(
       await readFile(resolve(plan.options.destination, 'nx.json'), 'utf8'),
     );
-    expect(nxJson.plugins).toContainEqual({
-      plugin: '@nx/vitest',
-      options: { testTargetName: 'test' },
-      include: ['apps/worker/**/*'],
-    });
-    await expect(
-      readFile(resolve(workerRoot, 'src/lib/generated.ts'), 'utf8'),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(nxJson.plugins).toContain('@megamono/nx-cloudflare');
+    expect(
+      await readFile(resolve(workerRoot, 'worker-configuration.d.ts'), 'utf8'),
+    ).toContain('interface Env');
     expect(
       JSON.parse(await readFile(resolve(workerRoot, 'wrangler.jsonc'), 'utf8')),
     ).toMatchObject({
       name: 'acme-tools-worker',
       main: 'src/index.ts',
       compatibility_date: '2026-08-23',
+      $schema: '../../node_modules/wrangler/config-schema.json',
     });
   });
 

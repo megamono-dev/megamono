@@ -65,7 +65,8 @@
             "projects": [
               "plugin",
               "nx-apple",
-              "nx-cargo"
+              "nx-cargo",
+              "nx-cloudflare"
             ],
             "target": "build"
           }
