@@ -93,6 +93,32 @@ describe('workspace init survey and plan', () => {
     expect(renderWorkspaceInitPlan(plan)).toContain('health.spec-drift');
   });
 
+  it('recommends retaining equivalent repository-owned affected CI', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      '.github/workflows/repository-ci.yml',
+      `jobs:\n  verify:\n    steps:\n      - uses: nrwl/nx-set-shas@v5\n      - run: npm exec nx -- affected -t lint test build\n`,
+    );
+
+    const survey = surveyWorkspaceInit(tree);
+
+    expect(survey.recommendations).toEqual([
+      {
+        module: 'ci',
+        action: 'skip',
+        paths: ['.github/workflows/repository-ci.yml'],
+        reason:
+          'Existing workflows establish an affected base/head and run lint, test, and build through Nx affected.',
+      },
+    ]);
+    expect(renderWorkspaceInitSurvey(survey)).toContain(
+      'ci: skip; retain .github/workflows/repository-ci.yml',
+    );
+
+    tree.write('.github/workflows/plain.yml', 'jobs: {}\n');
+    expect(surveyWorkspaceInit(tree).recommendations).toHaveLength(1);
+  });
+
   it('uses the stable decision-required classification for missing input', () => {
     const tree = createTreeWithEmptyWorkspace();
     addProjectConfiguration(tree, 'app', {

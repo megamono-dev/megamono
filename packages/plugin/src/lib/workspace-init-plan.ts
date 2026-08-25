@@ -105,6 +105,14 @@ export interface WorkspaceInitSurvey {
     readonly contentCollections: readonly string[];
     readonly megamono: readonly string[];
   };
+  readonly recommendations: readonly WorkspaceInitSurveyRecommendation[];
+}
+
+export interface WorkspaceInitSurveyRecommendation {
+  readonly module: WorkspaceInitModule;
+  readonly action: 'skip';
+  readonly paths: readonly string[];
+  readonly reason: string;
 }
 
 export interface WorkspaceInitReduction {
@@ -289,6 +297,17 @@ function classifyDocumentation(
   };
 }
 
+function detectsAffectedCi(source: string): boolean {
+  const invokesAffected = /\bnx\s+(?:--\s+)?affected\b/.test(source);
+  const establishesBase =
+    /\bnx-set-shas(?:@|\b)/.test(source) ||
+    (/\bNX_BASE\b/.test(source) && /\bNX_HEAD\b/.test(source));
+  const checksLifecycleTargets = ['lint', 'test', 'build'].every((target) =>
+    new RegExp(`\\b${target}\\b`).test(source),
+  );
+  return invokesAffected && establishesBase && checksLifecycleTargets;
+}
+
 export function parseWorkspaceInitModules(
   only?: string | readonly WorkspaceInitModule[],
 ): readonly WorkspaceInitModule[] {
@@ -353,6 +372,11 @@ export function surveyWorkspaceInit(tree: Tree): WorkspaceInitSurvey {
   const workflows = files.filter((path) =>
     /^\.github\/workflows\/[^/]+\.ya?ml$/.test(path),
   );
+  const equivalentAffectedCi = workflows.filter(
+    (path) =>
+      path !== '.github/workflows/megamono-ci.yml' &&
+      detectsAffectedCi(tree.read(path, 'utf8') ?? ''),
+  );
   return {
     schemaVersion: 1,
     baseline: {
@@ -401,6 +425,18 @@ export function surveyWorkspaceInit(tree: Tree): WorkspaceInitSurvey {
         files.includes(path),
       ),
     },
+    recommendations:
+      equivalentAffectedCi.length > 0
+        ? [
+            {
+              module: 'ci',
+              action: 'skip',
+              paths: equivalentAffectedCi,
+              reason:
+                'Existing workflows establish an affected base/head and run lint, test, and build through Nx affected.',
+            },
+          ]
+        : [],
   };
 }
 
@@ -754,6 +790,15 @@ ${values([...survey.agents.files, ...survey.agents.skillRoots])}
 - ESLint: ${survey.existing.eslint.join(', ') || 'none'}
 - Content Collections: ${survey.existing.contentCollections.join(', ') || 'none'}
 - Megamono: ${survey.existing.megamono.join(', ') || 'none'}
+
+## Adoption recommendations
+
+${values(
+  survey.recommendations.map(
+    ({ module, action, paths, reason }) =>
+      `${module}: ${action}; retain ${paths.join(', ')} — ${reason}`,
+  ),
+)}
 `;
 }
 
