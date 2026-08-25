@@ -9,6 +9,7 @@ import {
   type MegamonoConfig,
 } from './config';
 import type { Diagnostic } from './diagnostics';
+import { refreshDerivedArtifactHashes } from './managed-artifacts';
 
 const DOCUMENT_DIRECTORIES = new Set([
   'specs',
@@ -645,6 +646,12 @@ export async function generateDocsIndexes(
   }
   if (await writeIfChanged(archivePath, archiveContent, write)) {
     changed.push(normalizePath(relative(workspaceRoot, archivePath)));
+  }
+  if (write) {
+    refreshDerivedArtifactHashes(workspaceRoot, [
+      'docs.index',
+      'docs.archive-index',
+    ]);
   }
   return changed;
 }

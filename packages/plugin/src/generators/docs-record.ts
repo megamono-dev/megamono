@@ -6,7 +6,6 @@ import {
   readMegamonoConfig,
 } from '../lib/config';
 import { generateDocsIndexes, validateRepositoryDocs } from '../lib/docs';
-import { refreshDerivedArtifactHashes } from '../lib/managed-artifacts';
 
 export interface CommonRecordOptions {
   readonly project: string;
@@ -204,9 +203,5 @@ export function docsIndexCallback(
       throw new Error('Generated document failed repository validation.');
     }
     await generateDocsIndexes(tree.root, config, result.documents, docsRoot);
-    refreshDerivedArtifactHashes(tree.root, [
-      'docs.index',
-      'docs.archive-index',
-    ]);
   };
 }
