@@ -18,6 +18,7 @@ references:
     spec-megamono-0006,
     spec-megamono-0008,
     spec-megamono-0009,
+    spec-megamono-0011,
   ]
 external_references: []
 ---

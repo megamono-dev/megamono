@@ -12,6 +12,7 @@ references:
   [
     spec-megamono-0000,
     spec-megamono-0001,
+    spec-megamono-0002,
     spec-megamono-0003,
     spec-megamono-0011,
     spec-megamono-0012,
@@ -31,6 +32,7 @@ external_references:
     playstack:26-extension,
     playstack:27-validation,
     playstack:39-i18n,
+    playstack:45-cli,
   ]
 ---
 
@@ -58,8 +60,8 @@ When code runs is incidental. Build-time schema fragments and transforms are Pla
 | Where the theme lives + who consumes it    | Megamono  | Structure                                      |
 | Prisma schema fragments                    | Playstack | Define product data behavior                   |
 | Prisma library layout + client namespacing | Megamono  | Structure                                      |
-| `springbar.toml` emission                  | Megamono  | Declares services                              |
-| Actually running services                  | Springbar | Separate product                               |
+| Requested services and app candidates      | Megamono  | Declares the generated workspace's needs       |
+| Springbar config and running services      | Springbar | Owns its format and product behavior           |
 
 ### The auth case, spelled out
 
@@ -91,9 +93,18 @@ That distinction is what keeps the direction rule true in practice rather than o
 | `@playstack/notifications` | `@megamono/plugin:emails`               | Typed delivery request and recipient locale | Free          | Gated on external fixture contract                   |
 | `@playstack/validation`    | `@megamono/plugin:emails`               | Runtime props validation                    | Free          | Gated on external fixture contract                   |
 | `@playstack/i18n`          | `@megamono/plugin:emails`               | Recipient-locale catalog rendering          | Free          | Gated on external fixture contract                   |
+| `@playstack/cli`           | Playstack-wiring generators             | Package-owned artifact sync and merge       | Free          | Gated on external CLI fixture contract               |
 | `@playstack/admin`         | Reserved `playstack-admin` generator    | Headless admin runtime                      | Free          | Not published in v1                                  |
 | `@playstack/admin-ui`      | `playstack-admin --ui=chakra`           | Optional compositions                       | Pro allowed   | Not published in v1                                  |
 | `@playstack/queues`        | Reserved `playstack-queues` generator   | Queue runtime                               | Free          | No accepted external package contract; not published |
+
+### Delegating package-owned mutations
+
+`@playstack/cli` is the universal path for artifacts that a Playstack package owns, including Prisma fragments, email templates, content configuration, and locale catalogs. A Megamono generator installs or invokes that CLI in the generated workspace rather than copying its merge, drift, ejection, or update logic.
+
+Megamono adds only the information the package CLI cannot know: it resolves the target project and conventional path from the Nx graph, records the explicit target in `playstack.json`, and wires Nx targets around the package operation. The CLI accepts those paths without reading Nx, `megamono.json`, or Megamono package state. This keeps the same package usable in a non-Nx application.
+
+A generator that requires a package-owned artifact remains outside the published collection until `playstack:45-cli` supplies the installable package, compatible command contract, stable exit classifications, and fixture used by the Megamono acceptance suite. Gated generators must not carry a private copy of the missing mutation logic.
 
 ### The tier constraint
 
@@ -143,7 +154,7 @@ Each generator, typically:
 1. Installs the package
 2. Generates the Nest feature library (`@[repo]/nest-[feature]`)
 3. Wires the module into the API app
-4. Writes the package-owned fragment as `prisma/models/<package>.prisma` in the chosen Prisma project
+4. Calls `@playstack/cli` to synchronize the package-owned fragment into `prisma/models/<package>.prisma` in the chosen Prisma project
 5. Validates the combined schema with the repository's configured Prisma command
 6. Prints the exact migration command but never applies or creates a database migration automatically
 7. Creates a proposed decision record noting what will be installed and why; the user accepts it explicitly
@@ -164,7 +175,11 @@ V1 requires Prisma `>=6.7` native multi-file support. Repositories configured fo
 
 > **Megamono declares what services a project needs. Springbar runs them.**
 
-Megamono emits a populated `springbar.toml`. It must not grow orchestration, health checks, tunnels, or process management — all of that is Springbar's product surface, and duplicating it would be competing with itself.
+Megamono records requested services and generated app candidates in `megamono.json`. When Springbar is selected during `create-megamono`, the post-bootstrap handoff calls Springbar's MCP `inspect_candidates` and then `setup_workspace` with the selected candidates, explicit service versions, and dependents. Springbar owns, validates, and atomically materializes its configuration; Megamono does not serialize `springbar.toml` or define a second canonical Springbar schema.
+
+The handoff is optional and belongs only to new-workspace creation. `workspace-init` never contacts Springbar, and choosing no runner leaves the service declaration in `megamono.json`. An unavailable or read-only MCP, daemon failure, or ambiguous candidate match leaves the created workspace intact and returns the retry payload defined by `spec-megamono-0002`.
+
+Megamono must not grow orchestration, health checks, tunnels, or process management — all of that is Springbar's product surface.
 
 ## The Relaypath boundary (adjacent, in Playstack's docs)
 
@@ -176,11 +191,11 @@ Detailed in `playstack:06-webhooks`.
 
 Three boundaries, one shape:
 
-| Declares / receives | Runs / delivers |
-| ------------------- | --------------- |
-| Megamono            | Springbar       |
-| Playstack           | Relaypath       |
-| Megamono            | Playstack       |
+| Declares / receives           | Runs / delivers               |
+| ----------------------------- | ----------------------------- |
+| Megamono service requirements | Springbar config and services |
+| Playstack                     | Relaypath                     |
+| Megamono repository wiring    | Playstack product behavior    |
 
 In each case the left side is thinner than it wants to be, and holding that line is what keeps the products from eating each other.
 
@@ -189,6 +204,8 @@ In each case the left side is thinner than it wants to be, and holding that line
 - The emitted-package registry contains every `@playstack/*` import or install produced by a template; a fixture scans generated output and fails on an unregistered package.
 - A generator with a default dependency above the Free tier is excluded from the published collection.
 - Every published Playstack generator passes against the package's external fixture contract and supported version range.
+- Package-owned artifacts are produced through `@playstack/cli`; Megamono adds graph-aware target selection and Nx wiring without duplicating package merge or update logic.
 - No published `@playstack/*` package manifest or graph node depends on `@megamono/*`.
 - Prisma generators are idempotent, select or require a target deterministically, validate the combined schema, and never connect to a database.
+- Springbar selection performs the MCP handoff after successful workspace creation, while Megamono never writes Springbar configuration directly; handoff failure is non-fatal and retryable.
 - The reserved queues and admin generators are absent from the v1 generator collection.
