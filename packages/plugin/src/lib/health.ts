@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -91,6 +92,42 @@ interface IntegrationProvenance {
   readonly sdkRange: string;
   readonly templateRevision: number;
 }
+
+interface CloudflareWorkerReferenceMetadata {
+  readonly kind: string;
+  readonly worker: string;
+  readonly binding?: string;
+}
+
+interface CloudflareEnvironmentHealthMetadata {
+  readonly name: string;
+  readonly bindingFamilies: readonly string[];
+}
+
+interface CloudflareHealthMetadata {
+  readonly schemaVersion: 1;
+  readonly inferenceStatus: 'ready' | 'blocked';
+  readonly configPath: string;
+  readonly workerName?: string;
+  readonly compatibilityDate?: string;
+  readonly compatibilityFlags: readonly string[];
+  readonly unresolvedWorkers: readonly CloudflareWorkerReferenceMetadata[];
+  readonly topLevelBindingFamilies: readonly string[];
+  readonly unknownBindingFamilies: readonly string[];
+  readonly environments: readonly CloudflareEnvironmentHealthMetadata[];
+}
+
+interface CloudflareCompatibilityRegistry {
+  readonly wrangler: string;
+  readonly compatibilityDate: string;
+  readonly nodeCompatibilityDefaultDate: string;
+}
+
+const cloudflareCompatibility = (
+  JSON.parse(
+    readFileSync(join(__dirname, '../../compatibility.json'), 'utf8'),
+  ) as { cloudflare: CloudflareCompatibilityRegistry }
+).cloudflare;
 
 const executeFile = promisify(execFile);
 
@@ -274,6 +311,241 @@ function satisfies(version: string, range: string): boolean {
 
 function enabled(config: MegamonoConfig, check: HealthCheck): boolean {
   return config.health.checks[check] !== false;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isCloudflareMetadata(
+  value: unknown,
+): value is CloudflareHealthMetadata {
+  if (!isRecord(value)) return false;
+  return (
+    value.schemaVersion === 1 &&
+    (value.inferenceStatus === 'ready' ||
+      value.inferenceStatus === 'blocked') &&
+    typeof value.configPath === 'string' &&
+    Array.isArray(value.compatibilityFlags) &&
+    Array.isArray(value.unresolvedWorkers) &&
+    Array.isArray(value.topLevelBindingFamilies) &&
+    Array.isArray(value.unknownBindingFamilies) &&
+    Array.isArray(value.environments)
+  );
+}
+
+function validCompatibilityDate(value: string | undefined): value is string {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+}
+
+function effectiveNodeCompatibility(
+  metadata: CloudflareHealthMetadata,
+): boolean {
+  const flags = new Set(metadata.compatibilityFlags);
+  if (flags.has('no_nodejs_compat')) return false;
+  if (flags.has('nodejs_compat')) return true;
+  return Boolean(
+    validCompatibilityDate(metadata.compatibilityDate) &&
+    metadata.compatibilityDate >=
+      cloudflareCompatibility.nodeCompatibilityDefaultDate,
+  );
+}
+
+async function projectUsesCloudflareVitest(
+  workspaceRoot: string,
+  projectRoot: string,
+): Promise<boolean> {
+  const manifest = await readJson<PackageManifest>(
+    join(workspaceRoot, projectRoot, 'package.json'),
+  );
+  const dependencies = {
+    ...manifest?.dependencies,
+    ...manifest?.devDependencies,
+  };
+  return Boolean(
+    dependencies['@cloudflare/vitest-plugin'] ??
+    dependencies['@cloudflare/vitest-pool-workers'],
+  );
+}
+
+async function cloudflareHealthFindings(
+  workspaceRoot: string,
+  graph: ProjectGraph,
+): Promise<{
+  dependencyAlignment: HealthFinding[];
+  specDrift: HealthFinding[];
+}> {
+  const projects = Object.entries(graph.nodes)
+    .flatMap(([project, node]) => {
+      const metadata = node.data.metadata?.['megamono:cloudflare'];
+      return isCloudflareMetadata(metadata) &&
+        metadata.inferenceStatus === 'ready'
+        ? [{ project, root: node.data.root, metadata }]
+        : [];
+    })
+    .sort((left, right) => left.project.localeCompare(right.project));
+  const dependencyAlignment: HealthFinding[] = [];
+  const specDrift: HealthFinding[] = [];
+  if (projects.length === 0) return { dependencyAlignment, specDrift };
+
+  const wranglerInstalls = new Map<string, string>();
+  for (const root of [
+    '.',
+    ...new Set(projects.map((project) => project.root)),
+  ]) {
+    const manifest = await readJson<{ version?: string }>(
+      join(workspaceRoot, root, 'node_modules/wrangler/package.json'),
+    );
+    if (manifest?.version) wranglerInstalls.set(root, manifest.version);
+  }
+  for (const [root, version] of [...wranglerInstalls].sort()) {
+    if (satisfies(version, cloudflareCompatibility.wrangler)) continue;
+    dependencyAlignment.push({
+      check: 'dependency-alignment',
+      fingerprint: `cloudflare:wrangler-range:${root}:${version}`,
+      state: 'constrained',
+      confidence: 'complete',
+      summary: `Wrangler ${version} is outside @megamono/nx-cloudflare's tested range.`,
+      evidence: [
+        `${root}/node_modules/wrangler/package.json`,
+        `tested range: ${cloudflareCompatibility.wrangler}`,
+      ],
+      recommendation:
+        'Install a tested Wrangler version or update the compatibility registry and fixtures.',
+    });
+  }
+
+  const identities = new Map<string, string[]>();
+  for (const { project, metadata } of projects) {
+    if (!metadata.workerName) continue;
+    identities.set(metadata.workerName, [
+      ...(identities.get(metadata.workerName) ?? []),
+      project,
+    ]);
+  }
+  for (const [worker, owners] of [...identities].sort()) {
+    if (owners.length < 2) continue;
+    specDrift.push({
+      check: 'spec-drift',
+      fingerprint: `cloudflare:duplicate-worker:${worker}`,
+      state: 'alignable',
+      confidence: 'complete',
+      summary: `Worker binding identity ${worker} is declared by multiple projects.`,
+      evidence: owners.sort(),
+      recommendation: 'Assign a unique top-level Wrangler name to each Worker.',
+    });
+  }
+
+  const newestDate = projects
+    .map(({ metadata }) => metadata.compatibilityDate)
+    .filter(validCompatibilityDate)
+    .sort()
+    .at(-1);
+  const targetDate = [
+    cloudflareCompatibility.compatibilityDate,
+    ...(newestDate ? [newestDate] : []),
+  ]
+    .sort()
+    .at(-1) as string;
+
+  for (const { project, root, metadata } of projects) {
+    for (const reference of metadata.unresolvedWorkers) {
+      specDrift.push({
+        check: 'spec-drift',
+        fingerprint: `cloudflare:unresolved-worker:${project}:${reference.kind}:${reference.worker}`,
+        state: 'constrained',
+        confidence: 'complete',
+        summary: `${project} has an unresolved ${reference.kind} reference to ${reference.worker}.`,
+        evidence: [
+          metadata.configPath,
+          ...(reference.binding ? [`binding: ${reference.binding}`] : []),
+        ],
+        recommendation:
+          'Correct the Worker name or declare it in the nx-cloudflare externalWorkers allowlist.',
+      });
+    }
+
+    if (
+      !validCompatibilityDate(metadata.compatibilityDate) ||
+      metadata.compatibilityDate < targetDate
+    ) {
+      specDrift.push({
+        check: 'spec-drift',
+        fingerprint: `cloudflare:compatibility-date:${project}`,
+        state: 'alignable',
+        confidence: 'complete',
+        summary: `${project} is behind the repository's Cloudflare compatibility date.`,
+        evidence: [
+          metadata.configPath,
+          `project date: ${metadata.compatibilityDate ?? 'missing'}`,
+          `repository date: ${targetDate}`,
+        ],
+        recommendation: `Review runtime changes, then align compatibility_date to ${targetDate}.`,
+      });
+    }
+
+    const flags = new Set(metadata.compatibilityFlags);
+    if (flags.has('nodejs_compat') && flags.has('no_nodejs_compat')) {
+      specDrift.push({
+        check: 'spec-drift',
+        fingerprint: `cloudflare:node-compat-flags:${project}`,
+        state: 'alignable',
+        confidence: 'complete',
+        summary: `${project} declares conflicting Node compatibility flags.`,
+        evidence: [metadata.configPath, 'nodejs_compat', 'no_nodejs_compat'],
+        recommendation: 'Retain only the intended Node compatibility flag.',
+      });
+    }
+    if (
+      (await projectUsesCloudflareVitest(workspaceRoot, root)) &&
+      !effectiveNodeCompatibility(metadata)
+    ) {
+      specDrift.push({
+        check: 'spec-drift',
+        fingerprint: `cloudflare:node-compat:${project}`,
+        state: 'alignable',
+        confidence: 'complete',
+        summary: `${project}'s Cloudflare Vitest runtime enables Node compatibility that production disables.`,
+        evidence: [
+          metadata.configPath,
+          `compatibility date: ${metadata.compatibilityDate ?? 'missing'}`,
+          `flags: ${metadata.compatibilityFlags.join(', ') || 'none'}`,
+        ],
+        recommendation:
+          'Align the production compatibility date or flags with the test runtime.',
+      });
+    }
+
+    const topLevelFamilies = new Set(metadata.topLevelBindingFamilies);
+    for (const environment of metadata.environments) {
+      for (const family of environment.bindingFamilies) {
+        if (topLevelFamilies.has(family)) continue;
+        specDrift.push({
+          check: 'spec-drift',
+          fingerprint: `cloudflare:environment-binding:${project}:${environment.name}:${family}`,
+          state: 'constrained',
+          confidence: 'complete',
+          summary: `${project} declares ${family} only in Wrangler environment ${environment.name}.`,
+          evidence: [metadata.configPath],
+          recommendation:
+            'Review whether the binding belongs at the top level; environment-only bindings do not contribute Nx graph edges.',
+        });
+      }
+    }
+    for (const family of metadata.unknownBindingFamilies) {
+      specDrift.push({
+        check: 'spec-drift',
+        fingerprint: `cloudflare:binding-shape:${project}:${family}`,
+        state: 'constrained',
+        confidence: 'reduced',
+        summary: `${project} uses unrecognized Wrangler binding family ${family}.`,
+        evidence: [metadata.configPath],
+        recommendation:
+          'Update the compatibility registry, normalized metadata contract, and fixtures before inferring this binding family.',
+      });
+    }
+  }
+  return { dependencyAlignment, specDrift };
 }
 
 function findingSort(left: HealthFinding, right: HealthFinding): number {
@@ -874,18 +1146,31 @@ export async function runRepositoryHealth(options: {
     ? (options.gitState ??
       (await collectHealthGitState(options.workspaceRoot, options.documents)))
     : { available: false, branches: {}, lastChanged: {} };
+  const cloudflare =
+    shouldRun('dependency-alignment') || shouldRun('spec-drift')
+      ? await cloudflareHealthFindings(options.workspaceRoot, options.graph)
+      : { dependencyAlignment: [], specDrift: [] };
   const findings = (
     await Promise.all([
       shouldRun('dependency-alignment')
-        ? dependencyAlignmentFindings(options.workspaceRoot, options.graph)
+        ? [
+            ...(await dependencyAlignmentFindings(
+              options.workspaceRoot,
+              options.graph,
+            )),
+            ...cloudflare.dependencyAlignment,
+          ]
         : [],
       shouldRun('spec-drift')
-        ? specDriftFindings(
-            options.workspaceRoot,
-            options.graph,
-            options.documents,
-            options.config,
-          )
+        ? [
+            ...specDriftFindings(
+              options.workspaceRoot,
+              options.graph,
+              options.documents,
+              options.config,
+            ),
+            ...cloudflare.specDrift,
+          ]
         : [],
       shouldRun('stale-plans')
         ? stalePlanFindings(

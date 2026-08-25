@@ -79,6 +79,7 @@ describe('projectsFromWranglerConfigs', () => {
     ] as CloudflareProjectMetadata;
     expect(metadata).toMatchObject({
       schemaVersion: 1,
+      inferenceStatus: 'ready',
       configPath: 'apps/api/wrangler.jsonc',
       workerName: 'production-api',
       main: 'src/index.ts',
@@ -87,6 +88,8 @@ describe('projectsFromWranglerConfigs', () => {
       resources: {
         d1_databases: [{ binding: 'DB', resource: 'acme', remote: true }],
       },
+      topLevelBindingFamilies: ['d1_databases'],
+      unknownBindingFamilies: [],
       routes: ['api.example.com/*'],
       workersDev: false,
       devPort: 8788,

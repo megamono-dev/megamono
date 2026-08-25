@@ -744,4 +744,104 @@ describe('repository health', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('reports deterministic Cloudflare compatibility and graph drift', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-health-cloudflare-'));
+    try {
+      await Promise.all([
+        mkdir(join(root, 'apps/old'), { recursive: true }),
+        mkdir(join(root, 'apps/new'), { recursive: true }),
+        mkdir(join(root, 'node_modules/wrangler'), { recursive: true }),
+      ]);
+      await Promise.all([
+        writeFile(
+          join(root, 'apps/old/package.json'),
+          JSON.stringify({
+            devDependencies: { '@cloudflare/vitest-plugin': '1.0.0' },
+          }),
+        ),
+        writeFile(join(root, 'apps/new/package.json'), '{}'),
+        writeFile(
+          join(root, 'node_modules/wrangler/package.json'),
+          JSON.stringify({ version: '5.0.0' }),
+        ),
+      ]);
+      const metadata = (configPath: string, compatibilityDate: string) => ({
+        schemaVersion: 1 as const,
+        inferenceStatus: 'ready' as const,
+        configPath,
+        workerName: 'duplicate-worker',
+        compatibilityDate,
+        compatibilityFlags: [],
+        unresolvedWorkers: [],
+        topLevelBindingFamilies: [],
+        unknownBindingFamilies: [],
+        environments: [],
+      });
+      const oldMetadata = {
+        ...metadata('apps/old/wrangler.jsonc', '2026-08-01'),
+        unresolvedWorkers: [
+          { kind: 'service', worker: 'missing-api', binding: 'API' },
+        ],
+        unknownBindingFamilies: ['future_resources'],
+        environments: [{ name: 'production', bindingFamilies: ['services'] }],
+      };
+      const graph: ProjectGraph = {
+        nodes: {
+          old: {
+            name: 'old',
+            type: 'app',
+            data: {
+              root: 'apps/old',
+              metadata: { 'megamono:cloudflare': oldMetadata },
+            },
+          },
+          new: {
+            name: 'new',
+            type: 'app',
+            data: {
+              root: 'apps/new',
+              metadata: {
+                'megamono:cloudflare': metadata(
+                  'apps/new/wrangler.jsonc',
+                  '2026-08-24',
+                ),
+              },
+            },
+          },
+        },
+        dependencies: { old: [], new: [] },
+      };
+
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph,
+        config: DEFAULT_MEGAMONO_CONFIG,
+        documents: [],
+        checks: ['dependency-alignment', 'spec-drift'],
+      });
+      const fingerprints = report.findings.map(
+        ({ fingerprint }) => fingerprint,
+      );
+      expect(fingerprints).toEqual(
+        expect.arrayContaining([
+          'cloudflare:wrangler-range:.:5.0.0',
+          'cloudflare:duplicate-worker:duplicate-worker',
+          'cloudflare:unresolved-worker:old:service:missing-api',
+          'cloudflare:compatibility-date:old',
+          'cloudflare:node-compat:old',
+          'cloudflare:environment-binding:old:production:services',
+          'cloudflare:binding-shape:old:future_resources',
+        ]),
+      );
+      expect(
+        report.findings.find(
+          ({ fingerprint }) =>
+            fingerprint === 'cloudflare:binding-shape:old:future_resources',
+        ),
+      ).toMatchObject({ confidence: 'reduced', state: 'constrained' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

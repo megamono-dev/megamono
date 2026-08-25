@@ -82,6 +82,7 @@ export interface CloudflareEnvironmentMetadata {
 
 export interface CloudflareProjectMetadata {
   schemaVersion: 1;
+  inferenceStatus: 'ready' | 'blocked';
   configPath: string;
   workerName?: string;
   main?: string;
@@ -92,6 +93,8 @@ export interface CloudflareProjectMetadata {
   unresolvedWorkers: CloudflareWorkerReference[];
   externalWorkers: CloudflareWorkerReference[];
   resources: Record<string, CloudflareResourceBinding[]>;
+  topLevelBindingFamilies: string[];
+  unknownBindingFamilies: string[];
   queues: { producers: string[]; consumers: string[] };
   environments: CloudflareEnvironmentMetadata[];
   routes: unknown[];
@@ -249,6 +252,63 @@ function resourceBindings(
   return resources;
 }
 
+function topLevelBindingFamilies(config: WranglerConfig): string[] {
+  return BINDING_FAMILIES.filter((family) => config[family] !== undefined);
+}
+
+function unknownBindingFamilies(config: WranglerConfig): string[] {
+  const known = new Set<string>([
+    ...BINDING_FAMILIES,
+    '$schema',
+    'name',
+    'main',
+    'compatibility_date',
+    'compatibility_flags',
+    'env',
+    'vars',
+    'routes',
+    'route',
+    'workers_dev',
+    'dev',
+    'migrations',
+    'observability',
+    'placement',
+    'limits',
+    'triggers',
+    'rules',
+    'no_bundle',
+    'minify',
+    'upload_source_maps',
+    'keep_names',
+    'find_additional_modules',
+    'base_dir',
+    'tsconfig',
+    'jsx_factory',
+    'jsx_fragment',
+    'define',
+    'alias',
+    'wasm_modules',
+    'text_blobs',
+    'data_blobs',
+    'unsafe',
+    'logpush',
+    'send_metrics',
+    'legacy_env',
+  ]);
+  return Object.entries(config)
+    .filter(([family, value]) => {
+      if (known.has(family)) return false;
+      const entries = Array.isArray(value)
+        ? recordArray(value)
+        : isRecord(value)
+          ? [value]
+          : [];
+      return entries.some((entry) => stringValue(entry.binding));
+    })
+    .map(([family]) => family)
+    .sort();
+}
+
 function queueNames(config: WranglerConfig): {
   producers: string[];
   consumers: string[];
@@ -368,6 +428,7 @@ function metadataForProject(
   const dev = isRecord(config.dev) ? config.dev : undefined;
   return {
     schemaVersion: 1,
+    inferenceStatus: prepared.record.executable ? 'ready' : 'blocked',
     configPath: prepared.record.configPath,
     ...(stringValue(config.name) ? { workerName: config.name as string } : {}),
     ...(stringValue(config.main) ? { main: config.main as string } : {}),
@@ -384,6 +445,8 @@ function metadataForProject(
     unresolvedWorkers,
     externalWorkers,
     resources: resourceBindings(config),
+    topLevelBindingFamilies: topLevelBindingFamilies(config),
+    unknownBindingFamilies: unknownBindingFamilies(config),
     queues: queueNames(config),
     environments: environmentMetadata(config),
     routes: routes(config),
