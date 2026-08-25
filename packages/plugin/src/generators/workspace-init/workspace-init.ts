@@ -84,6 +84,19 @@ const AGENTS_SECTION_END = '<!-- megamono instructions end -->';
 const LEGACY_AGENTS_MARKER = '<!-- megamono affected CI -->';
 const IGNORE_SECTION_START = '# megamono ignore entries start';
 const IGNORE_SECTION_END = '# megamono ignore entries end';
+const ESLINT_IMPORTS_START = '// megamono eslint imports start';
+const ESLINT_IMPORTS_END = '// megamono eslint imports end';
+const ESLINT_RULES_START = '  // megamono eslint rules start';
+const ESLINT_RULES_END = '  // megamono eslint rules end';
+const LEGACY_ESLINT_IMPORTS_MARKER = '// megamono eslint imports';
+const LEGACY_ESLINT_RULES_MARKER = '// megamono eslint rules';
+const ESLINT_IMPORTS_BODY = `
+import megamonoConfig from './megamono.json' with { type: 'json' };
+import megamonoPlugin from '@megamono/plugin/eslint';
+`;
+const ESLINT_RULES_BODY = `
+  megamonoPlugin.createConfig(megamonoConfig),
+`;
 const SUPPORTED_PLATFORMS = new Set([
   'web',
   'node',
@@ -577,57 +590,153 @@ ${jobs}
 `;
 }
 
-function wireEslintConfig(tree: Tree): void {
+interface EslintWiringResult {
+  readonly imports: boolean;
+  readonly rules: boolean;
+}
+
+function wireEslintConfig(tree: Tree): EslintWiringResult {
   const path = 'eslint.config.mjs';
-  const importMarker = '// megamono eslint imports';
-  const configMarker = '// megamono eslint rules';
-  const imports = `${importMarker}
-import megamonoConfig from './megamono.json' with { type: 'json' };
-import megamonoPlugin from '@megamono/plugin/eslint';
-`;
-  const entry = `  ${configMarker}
-  megamonoPlugin.createConfig(megamonoConfig),
-`;
-  const current = tree.read(path, 'utf8');
-  if (!current) {
-    tree.write(path, `${imports}\nexport default [\n${entry}];\n`);
-    return;
+  let current = tree.read(path, 'utf8') ?? 'export default [\n];\n';
+  if (!tree.exists(path)) tree.write(path, current);
+  let migratedImports = false;
+  let migratedRules = false;
+  const legacyImports = `${LEGACY_ESLINT_IMPORTS_MARKER}${ESLINT_IMPORTS_BODY}`;
+  const legacyRules = `  ${LEGACY_ESLINT_RULES_MARKER}${ESLINT_RULES_BODY}`;
+  if (current.includes(legacyImports) && current.includes(legacyRules)) {
+    current = current
+      .replace(
+        legacyImports,
+        `${ESLINT_IMPORTS_START}${ESLINT_IMPORTS_BODY}${ESLINT_IMPORTS_END}\n`,
+      )
+      .replace(
+        legacyRules,
+        `${ESLINT_RULES_START}${ESLINT_RULES_BODY}${ESLINT_RULES_END}\n`,
+      );
+    tree.write(path, current);
+    migratedImports = true;
+    migratedRules = true;
   }
-  if (current.includes(importMarker) || current.includes(configMarker)) {
-    throw new Error(
-      'eslint.config.mjs contains a partial Megamono ESLint configuration.',
+  const ensureImports = (): boolean => {
+    if (artifactIsEjected(tree, 'lint.eslint-imports')) return false;
+    const registered = artifactEntry(tree, 'lint.eslint-imports');
+    const source = tree.read(path, 'utf8') ?? '';
+    if (source.includes(ESLINT_IMPORTS_START)) {
+      if (!registered) return migratedImports;
+      return applyManagedSectionTemplate(
+        tree,
+        'lint.eslint-imports',
+        path,
+        ESLINT_IMPORTS_BODY,
+        ESLINT_IMPORTS_START,
+        ESLINT_IMPORTS_END,
+      );
+    }
+    if (!registered && source.includes(ESLINT_IMPORTS_BODY.trim())) {
+      return false;
+    }
+    tree.write(
+      path,
+      `${ESLINT_IMPORTS_START}${ESLINT_IMPORTS_BODY}${ESLINT_IMPORTS_END}\n\n${source}`,
     );
-  }
-  const closing = current.lastIndexOf('\n];');
-  if (!current.includes('export default [') || closing < 0) {
-    throw new Error(
-      'eslint.config.mjs must export a flat config array before workspace-init can wire Megamono rules.',
+    return true;
+  };
+  const ensureRules = (): boolean => {
+    if (artifactIsEjected(tree, 'lint.eslint-rules')) return false;
+    const registered = artifactEntry(tree, 'lint.eslint-rules');
+    const source = tree.read(path, 'utf8') ?? '';
+    if (source.includes(ESLINT_RULES_START)) {
+      if (!registered) return migratedRules;
+      return applyManagedSectionTemplate(
+        tree,
+        'lint.eslint-rules',
+        path,
+        ESLINT_RULES_BODY,
+        ESLINT_RULES_START,
+        ESLINT_RULES_END,
+      );
+    }
+    if (!registered && source.includes(ESLINT_RULES_BODY.trim())) return false;
+    const closing = source.lastIndexOf('];');
+    if (!source.includes('export default [') || closing < 0) {
+      throw new WorkspaceInitError(
+        'conflict',
+        'eslint.config.mjs must export a flat config array before workspace-init can wire Megamono rules.',
+      );
+    }
+    const beforeClosing = source.slice(0, closing).trimEnd();
+    const separator =
+      beforeClosing.endsWith('[') || beforeClosing.endsWith(',') ? '' : ',';
+    tree.write(
+      path,
+      `${beforeClosing}${separator}\n${ESLINT_RULES_START}${ESLINT_RULES_BODY}${ESLINT_RULES_END}\n${source.slice(closing)}`,
     );
-  }
-  const beforeClosing = current.slice(0, closing).trimEnd();
-  const separator =
-    beforeClosing.endsWith('[') || beforeClosing.endsWith(',') ? '' : ',';
-  tree.write(
-    path,
-    `${imports}\n${beforeClosing}${separator}\n${entry}${current.slice(closing + 1)}`,
-  );
+    return true;
+  };
+  const imports = ensureImports();
+  const rules = ensureRules();
+  return { imports, rules };
+}
+
+function delimiterCount(source: string, delimiter: string): number {
+  return source.split(delimiter).length - 1;
 }
 
 function preflightEslintConfig(tree: Tree): void {
   const current = tree.read('eslint.config.mjs', 'utf8');
   if (!current) return;
-  const hasImports = current.includes('// megamono eslint imports');
-  const hasRules = current.includes('// megamono eslint rules');
-  if (hasImports !== hasRules) {
-    throw new Error(
-      'eslint.config.mjs contains a partial Megamono ESLint configuration.',
+  for (const [id, start, end] of [
+    ['lint.eslint-imports', ESLINT_IMPORTS_START, ESLINT_IMPORTS_END],
+    ['lint.eslint-rules', ESLINT_RULES_START, ESLINT_RULES_END],
+  ] as const) {
+    if (artifactIsEjected(tree, id)) continue;
+    const starts = delimiterCount(current, start);
+    const ends = delimiterCount(current, end);
+    if (starts !== ends || starts > 1) {
+      throw new WorkspaceInitError(
+        'conflict',
+        `eslint.config.mjs contains malformed ownership delimiters for ${id}.`,
+      );
+    }
+    if (starts === 1 && !artifactEntry(tree, id)) {
+      throw new WorkspaceInitError(
+        'conflict',
+        `eslint.config.mjs contains unregistered ownership delimiters for ${id}.`,
+      );
+    }
+  }
+  const lines = current.split('\n').map((line) => line.trim());
+  const legacyImports = lines.includes(LEGACY_ESLINT_IMPORTS_MARKER);
+  const legacyRules = lines.includes(LEGACY_ESLINT_RULES_MARKER);
+  if (legacyImports !== legacyRules) {
+    throw new WorkspaceInitError(
+      'conflict',
+      'eslint.config.mjs contains a partial legacy Megamono ESLint configuration.',
+    );
+  }
+  const repositoryImports = current.includes(ESLINT_IMPORTS_BODY.trim());
+  const repositoryRules = current.includes(ESLINT_RULES_BODY.trim());
+  const hasRegisteredWiring = Boolean(
+    artifactEntry(tree, 'lint.eslint-imports') ||
+    artifactEntry(tree, 'lint.eslint-rules'),
+  );
+  if (
+    repositoryImports !== repositoryRules &&
+    !legacyImports &&
+    !hasRegisteredWiring
+  ) {
+    throw new WorkspaceInitError(
+      'conflict',
+      'eslint.config.mjs contains partial repository-owned Megamono ESLint wiring.',
     );
   }
   if (
-    !hasImports &&
-    (!current.includes('export default [') || current.lastIndexOf('\n];') < 0)
+    !legacyImports &&
+    !repositoryRules &&
+    (!current.includes('export default [') || current.lastIndexOf('];') < 0)
   ) {
-    throw new Error(
+    throw new WorkspaceInitError(
+      'conflict',
       'eslint.config.mjs must export a flat config array before workspace-init can wire Megamono rules.',
     );
   }
@@ -820,6 +929,7 @@ export async function workspaceInitGenerator(
   if (adoptionPlan.conflicts.length > 0) {
     throw new WorkspaceInitError('conflict', adoptionPlan.conflicts.join(' '));
   }
+  if (requestedModules.includes('lint')) preflightEslintConfig(tree);
   logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
   if (!options.yes) {
     if (!canPrompt(options)) {
@@ -865,6 +975,7 @@ export async function workspaceInitGenerator(
     docsIndex: !tree.exists(`${docsRoot}/INDEX.md`),
     docsArchiveIndex: !tree.exists(`${docsRoot}/archives/INDEX.md`),
     design: !tree.exists(`${docsRoot}/DESIGN.md`),
+    eslint: !tree.exists('eslint.config.mjs'),
     agents: !tree.exists('AGENTS.md'),
     claude: !tree.exists('CLAUDE.md'),
     ci: !tree.exists('.github/workflows/megamono-ci.yml'),
@@ -897,8 +1008,6 @@ export async function workspaceInitGenerator(
       );
     }
   }
-  if (modules.has('lint')) preflightEslintConfig(tree);
-
   const defaultScope = options.defaultScope ?? 'shared';
   const projects = getProjects(tree);
   const lintAdoptionRatchets: Array<{
@@ -1166,10 +1275,9 @@ export async function workspaceInitGenerator(
     },
   });
   tree.write('megamono.json', `${JSON.stringify(config, null, 2)}\n`);
-  if (modules.has('lint')) {
-    const eslint = tree.read('eslint.config.mjs', 'utf8');
-    if (!eslint?.includes('// megamono eslint imports')) wireEslintConfig(tree);
-  }
+  const eslintWiring = modules.has('lint')
+    ? wireEslintConfig(tree)
+    : { imports: false, rules: false };
   const docsLoaderTemplate = renderContentCollectionsConfig(docsRoot);
   const docsLoaderCanUpdate = modules.has('docs')
     ? applyManagedFileTemplate(
@@ -1406,6 +1514,53 @@ export async function workspaceInitGenerator(
       },
       pluginVersion,
     );
+  }
+  if (modules.has('lint')) {
+    for (const [id, startDelimiter, endDelimiter, updated] of [
+      [
+        'lint.eslint-imports',
+        ESLINT_IMPORTS_START,
+        ESLINT_IMPORTS_END,
+        eslintWiring.imports,
+      ],
+      [
+        'lint.eslint-rules',
+        ESLINT_RULES_START,
+        ESLINT_RULES_END,
+        eslintWiring.rules,
+      ],
+    ] as const) {
+      if (!updated && !artifactEntry(tree, id)) continue;
+      registerFileArtifact(
+        tree,
+        {
+          id,
+          module: 'lint',
+          mode: 'managed-section',
+          target: 'eslint.config.mjs',
+          ejectable: true,
+          startDelimiter,
+          endDelimiter,
+          claimExisting: updated,
+          allowManagedUpdate: updated,
+        },
+        pluginVersion,
+      );
+    }
+    if (created.eslint) {
+      registerFileArtifact(
+        tree,
+        {
+          id: 'lint.eslint-config-file',
+          module: 'lint',
+          mode: 'seeded',
+          target: 'eslint.config.mjs',
+          ejectable: false,
+          claimExisting: true,
+        },
+        pluginVersion,
+      );
+    }
   }
   if (modules.has('docs')) {
     registerFileArtifact(

@@ -13,6 +13,7 @@ import { hashArtifactBytes } from '../../lib/managed-artifacts';
 
 import { workspaceInitGenerator } from './workspace-init';
 import { WorkspaceInitGeneratorSchema } from './schema';
+import { workspaceEjectGenerator } from '../workspace-eject/workspace-eject';
 
 vi.mock('enquirer', () => ({ prompt: vi.fn() }));
 
@@ -95,6 +96,14 @@ describe('workspace-init generator', () => {
           mode: 'derived',
         }),
         expect.objectContaining({ id: 'health.workflow', mode: 'managed' }),
+        expect.objectContaining({
+          id: 'lint.eslint-imports',
+          mode: 'managed-section',
+        }),
+        expect.objectContaining({
+          id: 'lint.eslint-rules',
+          mode: 'managed-section',
+        }),
         expect.objectContaining({
           id: 'skill.structure-review',
           mode: 'managed',
@@ -191,6 +200,135 @@ describe('workspace-init generator', () => {
 
     expect(tree.read('eslint.config.mjs', 'utf8')).toContain(
       '    rules: {},\n  },\n  // megamono eslint rules',
+    );
+  });
+
+  it('preserves modified managed ESLint wiring', async () => {
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+    const customized = (tree.read('eslint.config.mjs', 'utf8') ?? '').replace(
+      'megamonoPlugin.createConfig(megamonoConfig)',
+      'megamonoPlugin.createConfig({ ...megamonoConfig })',
+    );
+    tree.write('eslint.config.mjs', customized);
+    await formatFiles(tree);
+    const formattedCustomization = tree.read('eslint.config.mjs', 'utf8');
+
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+
+    expect(tree.read('eslint.config.mjs', 'utf8')).toBe(
+      formattedCustomization,
+    );
+  });
+
+  it('updates pristine managed ESLint wiring from its installed hash', async () => {
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+    const oldBody =
+      '\n  megamonoPlugin.createConfig({ ...megamonoConfig }),\n';
+    const oldHash = hashArtifactBytes(oldBody);
+    const source = tree.read('eslint.config.mjs', 'utf8') ?? '';
+    tree.write(
+      'eslint.config.mjs',
+      source.replace(
+        /(?<=\/\/ megamono eslint rules start)[\s\S]*?(?= {2}\/\/ megamono eslint rules end)/,
+        oldBody,
+      ),
+    );
+    const registry = readJson(tree, '.megamono/artifacts.json');
+    registry.artifacts = registry.artifacts.map((artifact: { id: string }) =>
+      artifact.id === 'lint.eslint-rules'
+        ? {
+            ...artifact,
+            sourceVersion: '0.0.0-old',
+            templateHash: oldHash,
+            installedHash: oldHash,
+          }
+        : artifact,
+    );
+    tree.write('.megamono/artifacts.json', JSON.stringify(registry));
+
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+
+    expect(tree.read('eslint.config.mjs', 'utf8')).toContain(
+      'megamonoPlugin.createConfig(megamonoConfig)',
+    );
+    const updated = readJson(tree, '.megamono/artifacts.json').artifacts.find(
+      ({ id }: { id: string }) => id === 'lint.eslint-rules',
+    );
+    expect(updated.installedHash).not.toBe(oldHash);
+    expect(updated.installedHash).toBe(updated.templateHash);
+  });
+
+  it('does not reclaim ejected ESLint wiring', async () => {
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+    await workspaceEjectGenerator(tree, { artifact: 'lint.eslint-rules' });
+    const customized = (tree.read('eslint.config.mjs', 'utf8') ?? '').replace(
+      'megamonoPlugin.createConfig(megamonoConfig)',
+      'megamonoPlugin.createConfig({ ...megamonoConfig })',
+    );
+    tree.write('eslint.config.mjs', customized);
+    await formatFiles(tree);
+    const formattedCustomization = tree.read('eslint.config.mjs', 'utf8');
+
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+
+    expect(tree.read('eslint.config.mjs', 'utf8')).toBe(
+      formattedCustomization,
+    );
+    expect(
+      readJson(tree, '.megamono/artifacts.json').artifacts.find(
+        ({ id }: { id: string }) => id === 'lint.eslint-rules',
+      ).state,
+    ).toBe('ejected');
+  });
+
+  it('refuses unregistered ESLint ownership delimiters before mutation', async () => {
+    tree.write(
+      'eslint.config.mjs',
+      `// megamono eslint imports start
+import megamonoConfig from './megamono.json' with { type: 'json' };
+import megamonoPlugin from '@megamono/plugin/eslint';
+// megamono eslint imports end
+
+export default [];
+`,
+    );
+    const changes = tree.listChanges();
+
+    await expect(
+      workspaceInitGenerator(tree, { only: 'lint', yes: true }),
+    ).rejects.toMatchObject({
+      diagnosticCode: 'workspace-init-conflict',
+      exitCode: 3,
+    });
+    expect(tree.listChanges()).toEqual(changes);
+  });
+
+  it('migrates legacy ESLint markers into registered managed sections', async () => {
+    tree.write(
+      'eslint.config.mjs',
+      `// megamono eslint imports
+import megamonoConfig from './megamono.json' with { type: 'json' };
+import megamonoPlugin from '@megamono/plugin/eslint';
+
+export default [
+  // megamono eslint rules
+  megamonoPlugin.createConfig(megamonoConfig),
+];
+`,
+    );
+
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+
+    const source = tree.read('eslint.config.mjs', 'utf8') ?? '';
+    expect(source).toContain('// megamono eslint imports start');
+    expect(source).toContain('// megamono eslint rules end');
+    expect(
+      readJson(tree, '.megamono/artifacts.json').artifacts,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'lint.eslint-imports' }),
+        expect.objectContaining({ id: 'lint.eslint-rules' }),
+      ]),
     );
   });
 
