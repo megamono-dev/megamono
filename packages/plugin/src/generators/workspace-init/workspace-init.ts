@@ -10,6 +10,7 @@ import {
   type GeneratorCallback,
   type Tree,
 } from '@nx/devkit';
+import { prompt } from 'enquirer';
 import {
   DEFAULT_MEGAMONO_CONFIG,
   assertSupportedMegamonoConfigVersion,
@@ -32,6 +33,7 @@ import {
 } from '../../lib/managed-artifacts';
 import type { WorkspaceInitGeneratorSchema } from './schema';
 import {
+  WORKSPACE_INIT_MODULES,
   WorkspaceInitError,
   createWorkspaceInitPlan,
   parseWorkspaceInitModules,
@@ -90,6 +92,55 @@ const SUPPORTED_SERVICES = new Set([
   'clickhouse',
   'typesense',
 ]);
+
+function canPrompt(options: WorkspaceInitGeneratorSchema): boolean {
+  return (
+    options.interactive !== false &&
+    process.stdin.isTTY === true &&
+    process.stdout.isTTY === true
+  );
+}
+
+async function promptForModules(): Promise<string> {
+  const response = await prompt<{ modules: string[] }>({
+    type: 'multiselect',
+    name: 'modules',
+    message: 'Which Megamono modules should this workspace adopt?',
+    choices: WORKSPACE_INIT_MODULES.map((module) => ({
+      name: module,
+      message: module,
+    })),
+    validate: (value) =>
+      Array.isArray(value) && value.length > 0
+        ? true
+        : 'Select at least one module.',
+  });
+  return response.modules.join(',');
+}
+
+async function promptForDefaultPlatform(): Promise<
+  NonNullable<WorkspaceInitGeneratorSchema['defaultPlatform']>
+> {
+  const response = await prompt<{
+    platform: NonNullable<WorkspaceInitGeneratorSchema['defaultPlatform']>;
+  }>({
+    type: 'select',
+    name: 'platform',
+    message: 'Which platform should untagged existing applications use?',
+    choices: [...SUPPORTED_PLATFORMS].sort(),
+  });
+  return response.platform;
+}
+
+async function promptForConfirmation(): Promise<boolean> {
+  const response = await prompt<{ confirmed: boolean }>({
+    type: 'confirm',
+    name: 'confirmed',
+    message: 'Apply this workspace initialization plan?',
+    initial: false,
+  });
+  return response.confirmed;
+}
 
 interface FileArtifactRegistration {
   readonly id: string;
@@ -677,23 +728,55 @@ export async function workspaceInitGenerator(
     }
     existingConfig = parsed.data;
   }
-  const requestedModules = options.only
-    ? parseWorkspaceInitModules(options.only)
-    : existingConfig?.adoption.modules.length
-      ? existingConfig.adoption.modules
-      : parseWorkspaceInitModules();
-  const adoptionPlan = createWorkspaceInitPlan(tree, {
+  const workspaceSurvey = surveyWorkspaceInit(tree);
+  logger.info(renderWorkspaceInitSurvey(workspaceSurvey, outputFormat));
+  let only = options.only;
+  if (!only) {
+    if (options.yes || !canPrompt(options)) {
+      throw new WorkspaceInitError(
+        'decision-required',
+        'Provide --only with the modules to adopt in non-interactive mode.',
+      );
+    }
+    only = await promptForModules();
+  }
+  const requestedModules = parseWorkspaceInitModules(only);
+  let defaultPlatform = options.defaultPlatform;
+  let adoptionPlan = createWorkspaceInitPlan(tree, {
     ...options,
+    yes: false,
     only: requestedModules,
+    defaultPlatform,
   });
+  if (adoptionPlan.decisions.length > 0 && !defaultPlatform) {
+    if (!canPrompt(options)) {
+      throw new WorkspaceInitError(
+        'decision-required',
+        adoptionPlan.decisions.join(' '),
+      );
+    }
+    defaultPlatform = await promptForDefaultPlatform();
+    adoptionPlan = createWorkspaceInitPlan(tree, {
+      ...options,
+      yes: false,
+      only: requestedModules,
+      defaultPlatform,
+    });
+  }
   if (adoptionPlan.conflicts.length > 0) {
     throw new WorkspaceInitError('conflict', adoptionPlan.conflicts.join(' '));
   }
-  if (options.only || options.yes) {
-    logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
+  logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
+  if (!options.yes) {
+    if (!canPrompt(options)) {
+      throw new WorkspaceInitError(
+        'decision-required',
+        'Preview confirmation is required; rerun interactively or pass --yes.',
+      );
+    }
+    if (!(await promptForConfirmation())) return () => undefined;
   }
   const modules = new Set(requestedModules);
-  const workspaceSurvey = surveyWorkspaceInit(tree);
   const requestedPlatforms = parseConfiguredPlatforms(options.platforms);
   const serviceRequirements = parseServiceRequirements(
     options.serviceRequirements,
@@ -755,7 +838,7 @@ export async function workspaceInitGenerator(
   if (
     modules.has('lint') &&
     projectsNeedingPlatform.length > 0 &&
-    !options.defaultPlatform
+    !defaultPlatform
   ) {
     throw new Error(
       `Existing applications require --defaultPlatform before initialization: ${projectsNeedingPlatform
@@ -782,7 +865,7 @@ export async function workspaceInitGenerator(
     }
     if (modules.has('lint') && isApplication(project)) {
       if (![...tags].some((tag) => tag.startsWith('platform:'))) {
-        tags.add(`platform:${options.defaultPlatform}`);
+        tags.add(`platform:${defaultPlatform}`);
       }
       if (![...tags].some((tag) => tag.startsWith('visibility:'))) {
         tags.add('visibility:internal');
@@ -895,7 +978,7 @@ export async function workspaceInitGenerator(
     if ('cargo' in inference) configuredPlatforms.add('rust');
   }
   if (configuredPlatforms.size === 0) {
-    configuredPlatforms.add(options.defaultPlatform ?? 'node');
+    configuredPlatforms.add(defaultPlatform ?? 'node');
   }
   if (requestedPlatforms.length > 0) {
     configuredPlatforms.clear();
@@ -1023,7 +1106,7 @@ export async function workspaceInitGenerator(
         )
       : false;
   const ciWorkflow = renderCiWorkflow(
-    configuredWorkspacePlatforms(tree, options.defaultPlatform),
+    configuredWorkspacePlatforms(tree, defaultPlatform),
   );
   const ciCanUpdate = modules.has('ci')
     ? applyManagedFileTemplate(

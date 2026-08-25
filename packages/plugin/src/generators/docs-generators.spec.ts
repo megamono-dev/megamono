@@ -14,7 +14,10 @@ describe('documentation generators', () => {
 
   beforeEach(async () => {
     tree = createTreeWithEmptyWorkspace();
-    await workspaceInitGenerator(tree, {});
+    await workspaceInitGenerator(tree, {
+      only: 'docs,agents,ci,lint,skills,health,inference',
+      yes: true,
+    });
   });
 
   function expectValid(path: string): void {

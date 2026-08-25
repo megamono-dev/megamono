@@ -20,6 +20,11 @@
       "type": "string",
       "description": "Comma-separated modules to adopt: docs, agents, ci, lint, skills, health, inference."
     },
+    "interactive": {
+      "type": "boolean",
+      "default": true,
+      "description": "Allow guided module, ambiguity, and confirmation prompts when attached to a terminal."
+    },
     "yes": {
       "type": "boolean",
       "default": false,

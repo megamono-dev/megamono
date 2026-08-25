@@ -102,6 +102,7 @@
   },
   "dependencies": {
     "@content-collections/core": "0.15.2",
+    "enquirer": "2.3.6",
     "gray-matter": "^4.0.3",
     "prettier": "^3.8.1",
     "tslib": "^2.3.0",

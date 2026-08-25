@@ -93,6 +93,8 @@ export async function convertGenerator(
     ),
   );
   const initializeWorkspace = await workspaceInitGenerator(tree, {
+    only: 'docs,agents,ci,lint,skills,health,inference',
+    yes: true,
     defaultPlatform: convertDefaultPlatform(analysis),
     defaultScope: scope,
   });

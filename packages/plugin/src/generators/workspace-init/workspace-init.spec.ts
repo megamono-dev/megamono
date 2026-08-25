@@ -13,7 +13,10 @@ import { WorkspaceInitGeneratorSchema } from './schema';
 
 describe('workspace-init generator', () => {
   let tree: Tree;
-  const options: WorkspaceInitGeneratorSchema = {};
+  const options: WorkspaceInitGeneratorSchema = {
+    only: 'docs,agents,ci,lint,skills,health,inference',
+    yes: true,
+  };
 
   beforeEach(() => {
     tree = createTreeWithEmptyWorkspace();
@@ -102,6 +105,19 @@ describe('workspace-init generator', () => {
     });
   });
 
+  it('requires explicit module input without an interactive terminal', async () => {
+    const changes = tree.listChanges();
+
+    await expect(
+      workspaceInitGenerator(tree, { interactive: false }),
+    ).rejects.toMatchObject({
+      diagnosticCode: 'workspace-init-decision-required',
+      exitCode: 4,
+      message: expect.stringContaining('--only'),
+    });
+    expect(tree.listChanges()).toEqual(changes);
+  });
+
   it('refuses a malformed partial initialization', async () => {
     tree.write('megamono.json', '{}');
     await expect(workspaceInitGenerator(tree, options)).rejects.toThrow(
@@ -175,7 +191,10 @@ describe('workspace-init generator', () => {
       root: '.',
       targets: {},
     });
-    await workspaceInitGenerator(tree, { defaultPlatform: 'node' });
+    await workspaceInitGenerator(tree, {
+      ...options,
+      defaultPlatform: 'node',
+    });
     expect(readProjectConfiguration(tree, 'root-app').tags).toEqual([
       'platform:node',
       'scope:shared',
@@ -208,7 +227,7 @@ describe('workspace-init generator', () => {
       targets: {},
     });
 
-    await workspaceInitGenerator(tree, {});
+    await workspaceInitGenerator(tree, options);
 
     const ci = tree.read('.github/workflows/megamono-ci.yml', 'utf8');
     expect(ci).toContain('runs-on: ubuntu-latest');
