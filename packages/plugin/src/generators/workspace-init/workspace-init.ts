@@ -117,6 +117,40 @@ function artifactIsEjected(tree: Tree, id: string): boolean {
   return artifactEntry(tree, id)?.state === 'ejected';
 }
 
+function managedArtifactCanUpdate(
+  tree: Tree,
+  id: string,
+  target: string,
+  allowMissing = false,
+): boolean {
+  const current = artifactEntry(tree, id);
+  if (!current) return !tree.exists(target);
+  if (current.state === 'ejected' || current.mode !== 'managed') return false;
+  const source = tree.read(target);
+  if (source === null) return allowMissing;
+  return hashArtifactBytes(source) === current.installedHash;
+}
+
+function applyManagedFileTemplate(
+  tree: Tree,
+  id: string,
+  target: string,
+  template: string,
+  allowMissing = false,
+): boolean {
+  if (!managedArtifactCanUpdate(tree, id, target, allowMissing)) {
+    const current = artifactEntry(tree, id);
+    if (current?.state !== 'ejected') {
+      logger.warn(
+        `Megamono artifact ${id} is modified or repository-owned; left ${target} unchanged. Run workspace-eject before taking repository ownership.`,
+      );
+    }
+    return false;
+  }
+  if (tree.read(target, 'utf8') !== template) tree.write(target, template);
+  return true;
+}
+
 function registerFileArtifact(
   tree: Tree,
   registration: FileArtifactRegistration,
@@ -146,16 +180,11 @@ function registerFileArtifact(
     !registration.allowManagedUpdate
   ) {
     logger.warn(
-      `Megamono artifact ${registration.id} is modified; left ${registration.target} unchanged. Run workspace-eject to make it repository-owned.`,
+      `Megamono artifact ${registration.id} is modified; left ${registration.target} unchanged. ${registration.ejectable ? 'Run workspace-eject to make it repository-owned.' : 'Restore the managed artifact before retrying.'}`,
     );
     return;
   }
-  if (
-    !current &&
-    !registration.claimExisting &&
-    registration.templateContent !== undefined &&
-    templateHash !== installedHash
-  ) {
+  if (!current && !registration.claimExisting) {
     logger.warn(
       `${registration.target} is repository-owned and was not added to the Megamono artifact registry.`,
     );
@@ -771,6 +800,12 @@ export async function workspaceInitGenerator(
       }
     }
   }
+  const coreProjectCanUpdate = managedArtifactCanUpdate(
+    tree,
+    'core.project',
+    '.megamono/project.json',
+    Boolean(options.yes),
+  );
   if (!projects.has('megamono')) {
     addProjectConfiguration(tree, 'megamono', {
       root: '.megamono',
@@ -800,9 +835,13 @@ export async function workspaceInitGenerator(
         ...(modules.has('health') ? { health: healthTarget } : {}),
       },
     });
-  } else {
+  } else if (coreProjectCanUpdate) {
     ensureImportTarget(tree);
     if (modules.has('health')) ensureHealthTarget(tree);
+  } else {
+    logger.warn(
+      'Megamono artifact core.project is modified; left .megamono/project.json unchanged. Restore the managed project configuration before retrying.',
+    );
   }
   if (!tree.exists('.megamono/artifacts.json')) {
     writeArtifactRegistry(tree, readArtifactRegistry(tree));
@@ -901,16 +940,16 @@ export async function workspaceInitGenerator(
     const eslint = tree.read('eslint.config.mjs', 'utf8');
     if (!eslint?.includes('// megamono eslint imports')) wireEslintConfig(tree);
   }
-  if (
-    modules.has('docs') &&
-    !artifactIsEjected(tree, 'docs.loader') &&
-    !tree.exists('content-collections.ts')
-  ) {
-    tree.write(
-      'content-collections.ts',
-      renderContentCollectionsConfig(docsRoot),
-    );
-  }
+  const docsLoaderTemplate = renderContentCollectionsConfig(docsRoot);
+  const docsLoaderCanUpdate = modules.has('docs')
+    ? applyManagedFileTemplate(
+        tree,
+        'docs.loader',
+        'content-collections.ts',
+        docsLoaderTemplate,
+        Boolean(options.yes),
+      )
+    : false;
   const ignored = [
     ...(modules.has('docs') ? ['.content-collections/'] : []),
     '.megamono/graph.json',
@@ -973,40 +1012,28 @@ export async function workspaceInitGenerator(
   const healthWorkflow = renderHealthWorkflow(
     config.health.cadence === 'disabled' ? 'weekly' : config.health.cadence,
   );
-  if (
-    modules.has('health') &&
-    config.health.cadence !== 'disabled' &&
-    !artifactIsEjected(tree, 'health.workflow')
-  ) {
-    const workflowPath = '.github/workflows/megamono-health.yml';
-    if (
-      tree.exists(workflowPath) &&
-      tree.read(workflowPath, 'utf8') !== healthWorkflow
-    ) {
-      logger.warn(
-        `${workflowPath} differs from the managed template; left it unchanged. Run workspace-eject before taking repository ownership.`,
-      );
-    }
-    if (!tree.exists(workflowPath)) tree.write(workflowPath, healthWorkflow);
-  }
+  const healthCanUpdate =
+    modules.has('health') && config.health.cadence !== 'disabled'
+      ? applyManagedFileTemplate(
+          tree,
+          'health.workflow',
+          '.github/workflows/megamono-health.yml',
+          healthWorkflow,
+          Boolean(options.yes),
+        )
+      : false;
   const ciWorkflow = renderCiWorkflow(
     configuredWorkspacePlatforms(tree, options.defaultPlatform),
   );
-  if (modules.has('ci')) {
-    const ciPath = '.github/workflows/megamono-ci.yml';
-    if (
-      !artifactIsEjected(tree, 'ci.affected') &&
-      tree.exists(ciPath) &&
-      tree.read(ciPath, 'utf8') !== ciWorkflow
-    ) {
-      logger.warn(
-        `${ciPath} differs from the managed template; left it unchanged. Run workspace-eject before taking repository ownership.`,
-      );
-    }
-    if (!artifactIsEjected(tree, 'ci.affected') && !tree.exists(ciPath)) {
-      tree.write(ciPath, ciWorkflow);
-    }
-  }
+  const ciCanUpdate = modules.has('ci')
+    ? applyManagedFileTemplate(
+        tree,
+        'ci.affected',
+        '.github/workflows/megamono-ci.yml',
+        ciWorkflow,
+        Boolean(options.yes),
+      )
+    : false;
   if (
     modules.has('agents') &&
     !artifactIsEjected(tree, 'agents.instructions') &&
@@ -1021,9 +1048,11 @@ export async function workspaceInitGenerator(
   const agents = tree.read(agentsPath, 'utf8') ?? '';
   const agentsBody =
     '\n## Affected CI\n\nCI checks out full history and runs `nrwl/nx-set-shas@v5` before `nx affected`. Preserve that base/head convention when changing workflows so pull requests, merge queues, and default-branch runs compute the correct project set.\n';
+  let agentsSectionCanUpdate = false;
   if (
     modules.has('agents') &&
     !artifactIsEjected(tree, 'agents.instructions') &&
+    !artifactEntry(tree, 'agents.instructions') &&
     !agents.includes(AGENTS_SECTION_START)
   ) {
     if (agents.includes(LEGACY_AGENTS_MARKER)) {
@@ -1036,6 +1065,33 @@ export async function workspaceInitGenerator(
         agentsPath,
         `${agents}${agents.endsWith('\n') || agents.length === 0 ? '' : '\n'}\n${AGENTS_SECTION_START}${agentsBody}${AGENTS_SECTION_END}\n`,
       );
+    }
+    agentsSectionCanUpdate = true;
+  } else if (
+    modules.has('agents') &&
+    !artifactIsEjected(tree, 'agents.instructions')
+  ) {
+    const current = artifactEntry(tree, 'agents.instructions');
+    const section = extractManagedSection(
+      agents,
+      AGENTS_SECTION_START,
+      AGENTS_SECTION_END,
+    );
+    if (current && section !== undefined) {
+      if (hashArtifactBytes(section) === current.installedHash) {
+        const start = agents.indexOf(AGENTS_SECTION_START);
+        const bodyStart = start + AGENTS_SECTION_START.length;
+        const end = agents.indexOf(AGENTS_SECTION_END, bodyStart);
+        tree.write(
+          agentsPath,
+          `${agents.slice(0, bodyStart)}${agentsBody}${agents.slice(end)}`,
+        );
+        agentsSectionCanUpdate = true;
+      } else {
+        logger.warn(
+          'Megamono artifact agents.instructions is modified; left its AGENTS.md section unchanged. Run workspace-eject to make it repository-owned.',
+        );
+      }
     }
   }
   if (
@@ -1093,7 +1149,7 @@ export async function workspaceInitGenerator(
       target: '.megamono/project.json',
       ejectable: false,
       claimExisting: created.project || Boolean(existingConfig),
-      allowManagedUpdate: true,
+      allowManagedUpdate: coreProjectCanUpdate,
     },
     pluginVersion,
   );
@@ -1106,8 +1162,9 @@ export async function workspaceInitGenerator(
         mode: 'managed',
         target: 'content-collections.ts',
         ejectable: true,
-        templateContent: renderContentCollectionsConfig(docsRoot),
+        templateContent: docsLoaderTemplate,
         claimExisting: created.docsLoader,
+        allowManagedUpdate: docsLoaderCanUpdate,
       },
       pluginVersion,
     );
@@ -1145,7 +1202,8 @@ export async function workspaceInitGenerator(
         startDelimiter: AGENTS_SECTION_START,
         endDelimiter: AGENTS_SECTION_END,
         templateContent: agentsBody,
-        claimExisting: true,
+        claimExisting: agentsSectionCanUpdate,
+        allowManagedUpdate: agentsSectionCanUpdate,
       },
       pluginVersion,
     );
@@ -1204,6 +1262,7 @@ export async function workspaceInitGenerator(
         ejectable: true,
         templateContent: ciWorkflow,
         claimExisting: created.ci,
+        allowManagedUpdate: ciCanUpdate,
       },
       pluginVersion,
     );
@@ -1219,6 +1278,7 @@ export async function workspaceInitGenerator(
         ejectable: true,
         templateContent: healthWorkflow,
         claimExisting: created.health,
+        allowManagedUpdate: healthCanUpdate,
       },
       pluginVersion,
     );

@@ -6,6 +6,7 @@ import {
   updateProjectConfiguration,
   type Tree,
 } from '@nx/devkit';
+import { hashArtifactBytes } from '../../lib/managed-artifacts';
 
 import { workspaceInitGenerator } from './workspace-init';
 import { WorkspaceInitGeneratorSchema } from './schema';
@@ -141,7 +142,7 @@ describe('workspace-init generator', () => {
     expect(tree.listChanges()).toEqual(changesAfterFirstRun);
   });
 
-  it('upgrades an initialized workspace with the import target', async () => {
+  it('preserves a modified managed project configuration', async () => {
     await workspaceInitGenerator(tree, options);
     const project = readProjectConfiguration(tree, 'megamono');
     const targets = Object.fromEntries(
@@ -153,11 +154,9 @@ describe('workspace-init generator', () => {
 
     await workspaceInitGenerator(tree, options);
 
-    expect(readProjectConfiguration(tree, 'megamono').targets?.import).toEqual({
-      executor: '@megamono/plugin:import',
-      cache: false,
-      parallelism: false,
-    });
+    expect(readProjectConfiguration(tree, 'megamono').targets?.import).toBe(
+      undefined,
+    );
   });
 
   it('preserves an edited managed skill on rerun', async () => {
@@ -334,6 +333,95 @@ describe('workspace-init generator', () => {
         ({ id }: { id: string }) => id === 'ci.affected',
       ).state,
     ).toBe('ejected');
+  });
+
+  it('updates a pristine managed workflow from its recorded installed hash', async () => {
+    await workspaceInitGenerator(tree, { only: 'ci', yes: true });
+    const oldTemplate = 'name: Old Megamono CI\n';
+    const oldHash = hashArtifactBytes(oldTemplate);
+    const registry = readJson(tree, '.megamono/artifacts.json');
+    registry.artifacts = registry.artifacts.map((artifact: { id: string }) =>
+      artifact.id === 'ci.affected'
+        ? {
+            ...artifact,
+            templateHash: oldHash,
+            installedHash: oldHash,
+            sourceVersion: '0.0.0-old',
+          }
+        : artifact,
+    );
+    tree.write('.megamono/artifacts.json', JSON.stringify(registry));
+    tree.write('.github/workflows/megamono-ci.yml', oldTemplate);
+
+    await workspaceInitGenerator(tree, { only: 'ci', yes: true });
+
+    expect(tree.read('.github/workflows/megamono-ci.yml', 'utf8')).toContain(
+      'nrwl/nx-set-shas@v5',
+    );
+    const updated = readJson(tree, '.megamono/artifacts.json').artifacts.find(
+      ({ id }: { id: string }) => id === 'ci.affected',
+    );
+    expect(updated.installedHash).not.toBe(oldHash);
+    expect(updated.installedHash).toBe(updated.templateHash);
+  });
+
+  it('preserves a modified managed workflow during an upgrade', async () => {
+    await workspaceInitGenerator(tree, { only: 'ci', yes: true });
+    const customized = `${tree.read('.github/workflows/megamono-ci.yml', 'utf8')}# repository customization\n`;
+    tree.write('.github/workflows/megamono-ci.yml', customized);
+
+    await workspaceInitGenerator(tree, { only: 'ci', yes: true });
+
+    expect(tree.read('.github/workflows/megamono-ci.yml', 'utf8')).toBe(
+      customized,
+    );
+  });
+
+  it('updates only a pristine managed AGENTS section', async () => {
+    tree.write('AGENTS.md', '# Repository-owned instructions\n');
+    await workspaceInitGenerator(tree, { only: 'agents', yes: true });
+    const oldBody = '\n## Old managed instructions\n';
+    const oldHash = hashArtifactBytes(oldBody);
+    const agents = tree.read('AGENTS.md', 'utf8') ?? '';
+    tree.write(
+      'AGENTS.md',
+      agents.replace(
+        /<!-- megamono instructions start -->[\s\S]*<!-- megamono instructions end -->/,
+        `<!-- megamono instructions start -->${oldBody}<!-- megamono instructions end -->`,
+      ),
+    );
+    const registry = readJson(tree, '.megamono/artifacts.json');
+    registry.artifacts = registry.artifacts.map((artifact: { id: string }) =>
+      artifact.id === 'agents.instructions'
+        ? {
+            ...artifact,
+            templateHash: oldHash,
+            installedHash: oldHash,
+            sourceVersion: '0.0.0-old',
+          }
+        : artifact,
+    );
+    tree.write('.megamono/artifacts.json', JSON.stringify(registry));
+
+    await workspaceInitGenerator(tree, { only: 'agents', yes: true });
+
+    const updated = tree.read('AGENTS.md', 'utf8') ?? '';
+    expect(updated).toContain('# Repository-owned instructions');
+    expect(updated).toContain('## Affected CI');
+    expect(updated).not.toContain('## Old managed instructions');
+  });
+
+  it('preserves a modified managed AGENTS section', async () => {
+    await workspaceInitGenerator(tree, { only: 'agents', yes: true });
+    const customized = (tree.read('AGENTS.md', 'utf8') ?? '').replace(
+      '## Affected CI',
+      '## Repository-customized CI',
+    );
+    tree.write('AGENTS.md', customized);
+
+    await workspaceInitGenerator(tree, { only: 'agents', yes: true });
+
+    expect(tree.read('AGENTS.md', 'utf8')).toBe(customized);
   });
 
   it('registers only detected supported inference plugins and manifests', async () => {
