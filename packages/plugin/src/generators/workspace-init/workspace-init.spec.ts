@@ -281,6 +281,19 @@ describe('workspace-init generator', () => {
     );
   });
 
+  it('refuses an occupied managed path before mutating the tree', async () => {
+    tree.write('.github/workflows/megamono-ci.yml', 'repository workflow\n');
+    const changes = tree.listChanges();
+
+    await expect(
+      workspaceInitGenerator(tree, { only: 'ci', yes: true }),
+    ).rejects.toMatchObject({
+      diagnosticCode: 'workspace-init-conflict',
+      exitCode: 3,
+    });
+    expect(tree.listChanges()).toEqual(changes);
+  });
+
   it('adds modules on a later run without requiring prior unselected modules', async () => {
     await workspaceInitGenerator(tree, { only: 'agents', yes: true });
     await workspaceInitGenerator(tree, { only: 'docs', yes: true });

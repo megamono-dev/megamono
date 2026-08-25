@@ -108,4 +108,45 @@ describe('workspace init survey and plan', () => {
       '.github/workflows/megamono-ci.yml is occupied without Megamono ownership metadata.',
     ]);
   });
+
+  it('does not report current or ejected registered artifacts as conflicts', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const hash = `sha256:${'0'.repeat(64)}`;
+    tree.write('content-collections.ts', 'managed');
+    tree.write('.github/workflows/megamono-ci.yml', 'repository-owned');
+    tree.write(
+      '.megamono/artifacts.json',
+      JSON.stringify({
+        schemaVersion: 1,
+        artifacts: [
+          {
+            id: 'ci.affected',
+            module: 'ci',
+            mode: 'managed',
+            target: '.github/workflows/megamono-ci.yml',
+            sourceVersion: '1.0.0',
+            templateHash: hash,
+            installedHash: hash,
+            state: 'ejected',
+            ejectable: true,
+          },
+          {
+            id: 'docs.loader',
+            module: 'docs',
+            mode: 'managed',
+            target: 'content-collections.ts',
+            sourceVersion: '1.0.0',
+            templateHash: hash,
+            installedHash: hash,
+            state: 'managed',
+            ejectable: true,
+          },
+        ],
+      }),
+    );
+
+    expect(
+      createWorkspaceInitPlan(tree, { only: 'ci,docs' }).conflicts,
+    ).toEqual([]);
+  });
 });

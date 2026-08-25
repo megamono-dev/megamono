@@ -1,4 +1,6 @@
 import { getProjects, type ProjectConfiguration, type Tree } from '@nx/devkit';
+import { readArtifactRegistry } from './managed-artifacts';
+import { MANAGED_SKILL_NAMES } from './managed-skills';
 
 export const WORKSPACE_INIT_MODULES = [
   'docs',
@@ -327,6 +329,37 @@ export function createWorkspaceInitPlan(
   const reductions: WorkspaceInitReduction[] = [];
   const conflicts: string[] = [];
   const decisions: string[] = [];
+  let ownedArtifacts = new Map<
+    string,
+    { readonly target: string; readonly state: string }
+  >();
+  if (tree.exists('.megamono/artifacts.json')) {
+    try {
+      ownedArtifacts = new Map(
+        readArtifactRegistry(tree).artifacts.map((artifact) => [
+          artifact.id,
+          { target: artifact.target, state: artifact.state },
+        ]),
+      );
+    } catch (error) {
+      conflicts.push(
+        `.megamono/artifacts.json is invalid: ${(error as Error).message}`,
+      );
+    }
+  }
+  const owned = (id: string, target: string) => {
+    const artifact = ownedArtifacts.get(id);
+    return artifact?.target === target && artifact.state !== 'ejected';
+  };
+  const ejected = (id: string, target: string) => {
+    const artifact = ownedArtifacts.get(id);
+    return artifact?.target === target && artifact.state === 'ejected';
+  };
+  const managedAction = (
+    id: string,
+    target: string,
+  ): WorkspaceInitPlanOperation['action'] =>
+    tree.exists(target) || ejected(id, target) ? 'retain' : 'add';
   operation(
     operations,
     'baseline',
@@ -337,10 +370,19 @@ export function createWorkspaceInitPlan(
   operation(
     operations,
     'baseline',
-    tree.exists('.megamono/project.json') ? 'retain' : 'add',
+    managedAction('core.project', '.megamono/project.json'),
     '.megamono/project.json',
     'Configure the megamono check and import targets.',
   );
+  if (
+    tree.exists('.megamono/project.json') &&
+    !owned('core.project', '.megamono/project.json') &&
+    !ejected('core.project', '.megamono/project.json')
+  ) {
+    conflicts.push(
+      '.megamono/project.json is occupied without Megamono ownership metadata.',
+    );
+  }
   operation(
     operations,
     'baseline',
@@ -352,7 +394,7 @@ export function createWorkspaceInitPlan(
     operation(
       operations,
       'docs',
-      'add',
+      managedAction('docs.loader', 'content-collections.ts'),
       'content-collections.ts',
       'Configure the repository docs loader.',
     );
@@ -370,7 +412,11 @@ export function createWorkspaceInitPlan(
       `${docsRoot}/INDEX.md`,
       'Generate the repository documentation index.',
     );
-    if (survey.existing.contentCollections.includes('content-collections.ts')) {
+    if (
+      survey.existing.contentCollections.includes('content-collections.ts') &&
+      !owned('docs.loader', 'content-collections.ts') &&
+      !ejected('docs.loader', 'content-collections.ts')
+    ) {
       conflicts.push(
         'content-collections.ts is occupied by a repository-owned configuration.',
       );
@@ -397,11 +443,15 @@ export function createWorkspaceInitPlan(
     operation(
       operations,
       'ci',
-      tree.exists(target) ? 'retain' : 'add',
+      managedAction('ci.affected', target),
       target,
       'Add dedicated affected CI.',
     );
-    if (tree.exists(target) && !tree.exists('.megamono/artifacts.json')) {
+    if (
+      tree.exists(target) &&
+      !owned('ci.affected', target) &&
+      !ejected('ci.affected', target)
+    ) {
       conflicts.push(
         `${target} is occupied without Megamono ownership metadata.`,
       );
@@ -441,15 +491,38 @@ export function createWorkspaceInitPlan(
       '.claude/skills',
       'Create the portable skill projection after tree flush.',
     );
+    for (const name of MANAGED_SKILL_NAMES) {
+      const target = `.agents/skills/${name}`;
+      const occupied = tree.children(target).length > 0 || tree.exists(target);
+      if (
+        occupied &&
+        !owned(`skill.${name}`, target) &&
+        !ejected(`skill.${name}`, target)
+      ) {
+        conflicts.push(
+          `${target} is occupied without Megamono ownership metadata.`,
+        );
+      }
+    }
   }
   if (modules.includes('health')) {
+    const healthTarget = '.github/workflows/megamono-health.yml';
     operation(
       operations,
       'health',
-      'add',
-      '.github/workflows/megamono-health.yml',
+      managedAction('health.workflow', healthTarget),
+      healthTarget,
       'Add deterministic scheduled health reporting.',
     );
+    if (
+      tree.exists(healthTarget) &&
+      !owned('health.workflow', healthTarget) &&
+      !ejected('health.workflow', healthTarget)
+    ) {
+      conflicts.push(
+        `${healthTarget} is occupied without Megamono ownership metadata.`,
+      );
+    }
     if (!modules.includes('docs')) {
       for (const capability of ['spec-drift', 'stale-plans']) {
         reductions.push({

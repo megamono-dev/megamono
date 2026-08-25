@@ -32,6 +32,7 @@ import {
 } from '../../lib/managed-artifacts';
 import type { WorkspaceInitGeneratorSchema } from './schema';
 import {
+  WorkspaceInitError,
   createWorkspaceInitPlan,
   parseWorkspaceInitModules,
   renderWorkspaceInitPlan,
@@ -656,6 +657,9 @@ export async function workspaceInitGenerator(
     ...options,
     only: requestedModules,
   });
+  if (adoptionPlan.conflicts.length > 0) {
+    throw new WorkspaceInitError('conflict', adoptionPlan.conflicts.join(' '));
+  }
   if (options.only || options.yes) {
     logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
   }
@@ -897,7 +901,11 @@ export async function workspaceInitGenerator(
     const eslint = tree.read('eslint.config.mjs', 'utf8');
     if (!eslint?.includes('// megamono eslint imports')) wireEslintConfig(tree);
   }
-  if (modules.has('docs') && !tree.exists('content-collections.ts')) {
+  if (
+    modules.has('docs') &&
+    !artifactIsEjected(tree, 'docs.loader') &&
+    !tree.exists('content-collections.ts')
+  ) {
     tree.write(
       'content-collections.ts',
       renderContentCollectionsConfig(docsRoot),
