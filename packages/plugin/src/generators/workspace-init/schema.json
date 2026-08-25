@@ -5,6 +5,30 @@
   "description": "Add Megamono configuration, documentation projects, and baseline project tags.",
   "type": "object",
   "properties": {
+    "survey": {
+      "type": "boolean",
+      "default": false,
+      "description": "Print the deterministic workspace survey and exit without mutation."
+    },
+    "format": {
+      "type": "string",
+      "enum": ["markdown", "json"],
+      "default": "markdown",
+      "description": "Output format used by survey and plan reports."
+    },
+    "only": {
+      "type": "string",
+      "description": "Comma-separated modules to adopt: docs, agents, ci, lint, skills, health, inference."
+    },
+    "yes": {
+      "type": "boolean",
+      "default": false,
+      "description": "Apply an explicit, fully resolved non-interactive plan."
+    },
+    "report": {
+      "type": "string",
+      "description": "Workspace-relative path for the optional completion report."
+    },
     "docsRoot": {
       "type": "string",
       "description": "Repository documentation root.",

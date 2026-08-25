@@ -23,6 +23,12 @@ import {
   type ManagedSkillInstallResult,
 } from '../../lib/managed-skills';
 import type { WorkspaceInitGeneratorSchema } from './schema';
+import {
+  createWorkspaceInitPlan,
+  renderWorkspaceInitPlan,
+  renderWorkspaceInitSurvey,
+  surveyWorkspaceInit,
+} from '../../lib/workspace-init-plan';
 
 const importTarget = {
   executor: '@megamono/plugin:import',
@@ -311,6 +317,17 @@ export async function workspaceInitGenerator(
   tree: Tree,
   options: WorkspaceInitGeneratorSchema,
 ): Promise<GeneratorCallback> {
+  const outputFormat = options.format ?? 'markdown';
+  if (options.survey) {
+    logger.info(
+      renderWorkspaceInitSurvey(surveyWorkspaceInit(tree), outputFormat),
+    );
+    return () => undefined;
+  }
+  const adoptionPlan = createWorkspaceInitPlan(tree, options);
+  if (options.only || options.yes) {
+    logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
+  }
   if (tree.exists('megamono.json')) {
     let currentConfig: unknown;
     try {

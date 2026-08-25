@@ -31,6 +31,24 @@ export {
   type ManagedArtifactRegistry,
 } from './lib/managed-artifacts';
 export {
+  WORKSPACE_INIT_MODULES,
+  WorkspaceInitError,
+  createWorkspaceInitPlan,
+  parseWorkspaceInitModules,
+  renderWorkspaceInitPlan,
+  renderWorkspaceInitSurvey,
+  surveyWorkspaceInit,
+  type WorkspaceInitErrorKind,
+  type WorkspaceInitModule,
+  type WorkspaceInitOutputFormat,
+  type WorkspaceInitPlan,
+  type WorkspaceInitPlanOperation,
+  type WorkspaceInitPlanOptions,
+  type WorkspaceInitReduction,
+  type WorkspaceInitSurvey,
+  type WorkspaceInitSurveyProject,
+} from './lib/workspace-init-plan';
+export {
   GENERATOR_AVAILABILITY,
   GeneratorAvailabilityError,
   assertGeneratorAvailable,
