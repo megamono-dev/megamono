@@ -401,14 +401,14 @@ export function createWorkspaceInitPlan(
     operation(
       operations,
       'docs',
-      'add',
+      tree.exists(`${docsRoot}/project.json`) ? 'retain' : 'add',
       `${docsRoot}/project.json`,
       'Add documentation lifecycle targets.',
     );
     operation(
       operations,
       'docs',
-      'add',
+      tree.exists(`${docsRoot}/INDEX.md`) ? 'retain' : 'add',
       `${docsRoot}/INDEX.md`,
       'Generate the repository documentation index.',
     );
@@ -480,7 +480,7 @@ export function createWorkspaceInitPlan(
     operation(
       operations,
       'skills',
-      'add',
+      survey.agents.skillRoots.includes('.agents/skills') ? 'retain' : 'add',
       '.agents/skills',
       'Install managed portable skill file sets.',
     );
@@ -670,5 +670,62 @@ ${conflicts.join('\n')}
 ## Decisions required
 
 ${decisions.join('\n')}
+`;
+}
+
+export function renderWorkspaceInitCompletion(plan: WorkspaceInitPlan): string {
+  const skippedModules = WORKSPACE_INIT_MODULES.filter(
+    (module) => !plan.modules.includes(module),
+  );
+  const changed = plan.operations.filter(({ action }) =>
+    ['add', 'modify'].includes(action),
+  );
+  const retained = plan.operations.filter(({ action }) => action === 'retain');
+  const confidenceGaps = [
+    ...plan.reductions.map(
+      ({ module, capability, reason }) => `${module}.${capability}: ${reason}`,
+    ),
+    ...plan.operations
+      .filter(({ action }) => action === 'skip')
+      .map(({ module, target, detail }) => `${module}.${target}: ${detail}`),
+  ];
+  const followUps = [
+    'npm exec nx run megamono:check',
+    ...(plan.modules.includes('docs')
+      ? ['npm exec nx run megamono-docs:validate']
+      : []),
+    ...(plan.modules.includes('health')
+      ? ['npm exec nx run megamono:health']
+      : []),
+  ];
+  const lines = (values: readonly string[]) =>
+    values.length > 0
+      ? values.map((value) => `- ${value}`).join('\n')
+      : '- None';
+  return `# Megamono workspace initialization complete
+
+## Modules adopted
+
+${lines(plan.modules)}
+
+## Modules skipped
+
+${lines(skippedModules)}
+
+## Paths added or modified
+
+${lines(changed.map(({ action, target }) => `${action}: ${target}`))}
+
+## Conventions retained
+
+${lines(retained.map(({ target }) => target))}
+
+## Confidence gaps and capability reductions
+
+${lines(confidenceGaps)}
+
+## Follow-up commands
+
+${lines(followUps.map((command) => `\`${command}\``))}
 `;
 }

@@ -5,6 +5,7 @@ import {
   createWorkspaceInitPlan,
   parseWorkspaceInitModules,
   renderWorkspaceInitPlan,
+  renderWorkspaceInitCompletion,
   renderWorkspaceInitSurvey,
   surveyWorkspaceInit,
 } from './workspace-init-plan';
@@ -148,5 +149,18 @@ describe('workspace init survey and plan', () => {
     expect(
       createWorkspaceInitPlan(tree, { only: 'ci,docs' }).conflicts,
     ).toEqual([]);
+  });
+
+  it('renders a stable completion summary with capability gaps and follow-ups', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const plan = createWorkspaceInitPlan(tree, { only: 'health' });
+    const summary = renderWorkspaceInitCompletion(plan);
+
+    expect(summary).toContain('## Modules adopted\n\n- health');
+    expect(summary).toContain('- docs');
+    expect(summary).toContain('health.spec-drift');
+    expect(summary).toContain('`npm exec nx run megamono:check`');
+    expect(summary).toContain('`npm exec nx run megamono:health`');
+    expect(summary).not.toContain('megamono-docs:validate');
   });
 });

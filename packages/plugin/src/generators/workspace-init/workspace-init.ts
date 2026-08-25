@@ -37,6 +37,7 @@ import {
   WorkspaceInitError,
   createWorkspaceInitPlan,
   parseWorkspaceInitModules,
+  renderWorkspaceInitCompletion,
   renderWorkspaceInitPlan,
   renderWorkspaceInitSurvey,
   surveyWorkspaceInit,
@@ -782,6 +783,12 @@ export async function workspaceInitGenerator(
     options.serviceRequirements,
   );
   const docsRoot = existingConfig?.docs.root ?? options.docsRoot ?? 'docs';
+  if (options.report && !isSafeWorkspaceRelativePath(options.report)) {
+    throw new WorkspaceInitError(
+      'options',
+      'report must be a safe workspace-relative path.',
+    );
+  }
   const created = {
     config: !tree.exists('megamono.json'),
     project: !tree.exists('.megamono/project.json'),
@@ -1184,12 +1191,6 @@ export async function workspaceInitGenerator(
   ) {
     tree.write('CLAUDE.md', '@AGENTS.md\n');
   }
-  if (options.report) {
-    if (!isSafeWorkspaceRelativePath(options.report)) {
-      throw new Error('report must be a safe workspace-relative path.');
-    }
-    tree.write(options.report, renderWorkspaceInitPlan(adoptionPlan));
-  }
   const pluginVersion = readPluginVersion();
   const developmentDependencies = {
     ...(modules.has('docs')
@@ -1366,6 +1367,10 @@ export async function workspaceInitGenerator(
       pluginVersion,
     );
   }
+
+  const completion = renderWorkspaceInitCompletion(adoptionPlan);
+  logger.info(completion);
+  if (options.report) tree.write(options.report, completion);
 
   const postFlushTasks = [
     ...(hasDependencies

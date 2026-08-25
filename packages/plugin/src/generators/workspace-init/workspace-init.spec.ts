@@ -118,6 +118,32 @@ describe('workspace-init generator', () => {
     expect(tree.listChanges()).toEqual(changes);
   });
 
+  it('writes the same completion summary only when a safe report is requested', async () => {
+    await workspaceInitGenerator(tree, {
+      only: 'health',
+      yes: true,
+      report: '.megamono/init-report.md',
+    });
+
+    const report = tree.read('.megamono/init-report.md', 'utf8') ?? '';
+    expect(report).toContain('# Megamono workspace initialization complete');
+    expect(report).toContain('`npm exec nx run megamono:health`');
+
+    const invalidTree = createTreeWithEmptyWorkspace();
+    const changes = invalidTree.listChanges();
+    await expect(
+      workspaceInitGenerator(invalidTree, {
+        only: 'health',
+        yes: true,
+        report: '../outside.md',
+      }),
+    ).rejects.toMatchObject({
+      diagnosticCode: 'workspace-init-options',
+      exitCode: 2,
+    });
+    expect(invalidTree.listChanges()).toEqual(changes);
+  });
+
   it('refuses a malformed partial initialization', async () => {
     tree.write('megamono.json', '{}');
     await expect(workspaceInitGenerator(tree, options)).rejects.toThrow(

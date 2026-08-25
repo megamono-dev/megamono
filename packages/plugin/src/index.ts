@@ -46,6 +46,7 @@ export {
   createWorkspaceInitPlan,
   parseWorkspaceInitModules,
   renderWorkspaceInitPlan,
+  renderWorkspaceInitCompletion,
   renderWorkspaceInitSurvey,
   surveyWorkspaceInit,
   type WorkspaceInitErrorKind,
