@@ -9,7 +9,6 @@ Megamono is an Nx-based toolkit for creating, adopting, and governing polyglot m
 - `@megamono/nx-apple` — Apple and SwiftPM project inference and generators
 - `@megamono/nx-cargo` — Cargo and Rust project inference
 - `@megamono/nx-cloudflare` — Cloudflare Worker project inference and generators
-- `@org/utils` — internal workspace utilities
 
 ## Development
 

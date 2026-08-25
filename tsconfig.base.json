@@ -16,7 +16,7 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "es2022",
-    "customConditions": ["@org/source"],
+    "customConditions": ["@megamono/source"],
     "noUncheckedSideEffectImports": false,
     "paths": {
       "content-collections": ["./.content-collections/index.js"],
