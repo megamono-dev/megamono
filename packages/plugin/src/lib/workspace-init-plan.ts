@@ -968,7 +968,11 @@ export function renderWorkspaceInitCompletion(plan: WorkspaceInitPlan): string {
       ? ['npm exec nx run megamono-docs:validate']
       : []),
     ...(plan.modules.includes('health')
-      ? ['npm exec nx run megamono:health']
+      ? [
+          plan.modules.includes('docs')
+            ? 'npm exec nx run megamono-docs:health'
+            : 'npm exec nx run megamono:health',
+        ]
       : []),
   ];
   const lines = (values: readonly string[]) =>

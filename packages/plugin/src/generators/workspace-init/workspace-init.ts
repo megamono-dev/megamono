@@ -444,7 +444,10 @@ export default defineConfig({ content: [repoDocs, archivedDocs] });
 `;
 }
 
-function renderHealthWorkflow(cadence: 'weekly' | 'daily'): string {
+function renderHealthWorkflow(
+  cadence: 'weekly' | 'daily',
+  target: 'megamono:health' | 'megamono-docs:health',
+): string {
   const cron = cadence === 'daily' ? '17 9 * * *' : '17 9 * * 1';
   return `name: Megamono repository health
 
@@ -469,7 +472,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm exec nx -- run megamono:health
+      - run: npm exec nx -- run ${target}
       - uses: actions/github-script@v8
         with:
           script: |
@@ -805,7 +808,7 @@ function parseServiceRequirements(
   return requirements as Record<string, string>;
 }
 
-function docsProjectConfiguration(docsRoot: string) {
+function docsProjectConfiguration(docsRoot: string, includeHealth: boolean) {
   return {
     root: docsRoot,
     projectType: 'library' as const,
@@ -827,6 +830,7 @@ function docsProjectConfiguration(docsRoot: string) {
         executor: '@megamono/plugin:docs-prune-reports',
         cache: false,
       },
+      ...(includeHealth ? { health: healthTarget } : {}),
     },
   };
 }
@@ -1127,12 +1131,14 @@ export async function workspaceInitGenerator(
           ],
         },
         import: importTarget,
-        ...(modules.has('health') ? { health: healthTarget } : {}),
+        ...(modules.has('health') && !modules.has('docs')
+          ? { health: healthTarget }
+          : {}),
       },
     });
   } else if (coreProjectCanUpdate) {
     ensureImportTarget(tree);
-    if (modules.has('health')) ensureHealthTarget(tree);
+    if (modules.has('health') && !modules.has('docs')) ensureHealthTarget(tree);
   } else {
     logger.warn(
       'Megamono artifact core.project is modified; left .megamono/project.json unchanged. Restore the managed project configuration before retrying.',
@@ -1154,13 +1160,13 @@ export async function workspaceInitGenerator(
       updateProjectConfiguration(
         tree,
         'megamono-docs',
-        docsProjectConfiguration(docsRoot),
+        docsProjectConfiguration(docsRoot, modules.has('health')),
       );
     } else {
       addProjectConfiguration(
         tree,
         'megamono-docs',
-        docsProjectConfiguration(docsRoot),
+        docsProjectConfiguration(docsRoot, modules.has('health')),
       );
     }
   } else if (modules.has('docs') && artifactEntry(tree, 'docs.project')) {
@@ -1358,6 +1364,7 @@ export async function workspaceInitGenerator(
   if (modules.has('skills')) logManagedSkills(applyManagedSkillTemplates(tree));
   const healthWorkflow = renderHealthWorkflow(
     config.health.cadence === 'disabled' ? 'weekly' : config.health.cadence,
+    modules.has('docs') ? 'megamono-docs:health' : 'megamono:health',
   );
   const healthCanUpdate =
     modules.has('health') && config.health.cadence !== 'disabled'

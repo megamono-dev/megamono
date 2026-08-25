@@ -41,13 +41,16 @@ describe('workspace-init generator', () => {
     expect(docs.targets?.validate?.executor).toBe(
       '@megamono/plugin:docs-validate',
     );
-    expect(config.targets?.health?.executor).toBe('@megamono/plugin:health');
+    expect(docs.targets?.health?.executor).toBe('@megamono/plugin:health');
     expect(
       tree.read('.github/workflows/megamono-health.yml', 'utf8'),
     ).toContain("cron: '17 9 * * 1'");
     expect(
       tree.read('.github/workflows/megamono-health.yml', 'utf8'),
     ).toContain('issues: write');
+    expect(
+      tree.read('.github/workflows/megamono-health.yml', 'utf8'),
+    ).toContain('npm exec nx -- run megamono-docs:health');
     expect(
       tree.read('.github/workflows/megamono-health.yml', 'utf8'),
     ).toContain("require('@megamono/plugin')");
