@@ -8,7 +8,7 @@ topics: [architecture, generators, nx, release]
 summary: Canonical package map, compatibility baseline, command contract, and definition of done for Megamono v1.
 date: 2026-08-23
 supersedes: null
-references: [spec-megamono-0010, spec-megamono-0014]
+references: [spec-megamono-0010, spec-megamono-0014, spec-megamono-0015]
 external_references: [playstack:08-data-and-prisma]
 ---
 
@@ -35,16 +35,19 @@ The core packages declare these ranges in `engines` and `peerDependencies`. Supp
 
 ## Published package map
 
-| Package                  | Responsibility                                                                                      | Runtime dependency?                    |
-| ------------------------ | --------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `create-megamono`        | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `npm create` / `npx` |
-| `@megamono/plugin`       | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                    |
-| `@megamono/nx-apple`     | Apple project inference, targets, and graph edges                                                   | Dev dependency only                    |
-| `@megamono/nx-cargo`     | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                    |
-| `@megamono/nx-extension` | WXT extension inference and generators; Wave 2                                                      | Dev dependency only                    |
-| `@megamono/nx-laravel`   | Composer/Laravel inference and generators; Wave 2                                                   | Dev dependency only                    |
+| Package                   | Responsibility                                                                                      | Runtime dependency?                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `create-megamono`         | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `npm create` / `npx` |
+| `@megamono/plugin`        | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                    |
+| `@megamono/nx-apple`      | Apple project inference, targets, and graph edges                                                   | Dev dependency only                    |
+| `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                    |
+| `@megamono/nx-extension`  | WXT extension inference and generators; Wave 2                                                      | Dev dependency only                    |
+| `@megamono/nx-laravel`    | Composer/Laravel inference and generators; Wave 2                                                   | Dev dependency only                    |
+| `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators; Wave 3                            | Dev dependency only                    |
 
 The initial validation channel publishes `@megamono/plugin`, `@megamono/nx-apple`, and `@megamono/nx-cargo` as restricted packages on npm from `megamono-dev/megamono`. Their canonical names do not change when they graduate to public npm. The unscoped `create-megamono` entry package cannot be private on npm and remains in a separate release group until public promotion.
+
+Later scoped packages, including `@megamono/nx-cloudflare`, enter the same restricted validation channel before public promotion. Adding a package to this map does not add it to the current release group until its accepted spec and packed-package fixture are complete.
 
 `docs`, `skills`, `conventions`, `content`, `integrations`, `playstack`, and `generators` are internal modules of `@megamono/plugin`, not separately published packages in v1. This avoids version skew between repo-shaping capabilities that must agree on one `megamono.json` schema.
 

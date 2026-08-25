@@ -5,10 +5,16 @@ status: accepted
 visibility: internal
 projects: [megamono]
 topics: [generators, nx, apple, cargo, graph]
-summary: Defines the language-plugin target contract, graph-edge requirements, sequencing, and Wave 1 acceptance surface.
+summary: Defines the language-plugin target contract, graph-edge requirements, wave sequencing, and acceptance surfaces.
 date: 2026-08-23
 supersedes: null
-references: [spec-megamono-0000, spec-megamono-0006, spec-megamono-0007]
+references:
+  [
+    spec-megamono-0000,
+    spec-megamono-0006,
+    spec-megamono-0007,
+    spec-megamono-0015,
+  ]
 external_references: [playstack:26-extension]
 ---
 
@@ -142,18 +148,23 @@ OpenGraphs (shipping, 200+ users), Timespans, and Basemarks. Horizens is not a c
 
 **Wave 2.** Real demand, but it does not block anything the way the Apple and Cargo plugins do.
 
+## Wave 3 — `@megamono/nx-cloudflare`
+
+Cloudflare Workers remain JavaScript projects, but their service, Durable Object, Workflow, Tail Worker, and Queue relationships live in Wrangler configuration rather than imports. That makes them a graph-repair problem, not merely another JavaScript scaffolder.
+
+`spec-megamono-0015` promotes this package out of the demand-driven list and defines its `createNodes`/`createDependencies` contract, inferred targets, normalized binding metadata, health integration, and deliberately thin generators. It follows Wave 1 because the Apple and Cargo packages establish the packed inference and affected-propagation pattern it must reuse.
+
 ## Documented, demand-driven
 
 Spec the pattern; the manifest parser generalizes. Each should be a weekend, not a project, once Wave 1 lands.
 
-| Ecosystem              | Manifest / edge source                   | Note                                                                                                                                                                                                                                                           |
-| ---------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Go**                 | `go.mod` `replace` directives, `go.work` | Multi-module data sits right there. But Go's own tooling is already fast and cache-friendly, so the pain Nx solves is less acute.                                                                                                                              |
-| **Rails / Ruby**       | `Gemfile` path gems                      | Parsing is easy and Bundler conventions are stable. Headwind: Rails culture is majestic-monolith-minded, so multi-app-in-one-repo is less of a felt need. No personal distribution in Ruby.                                                                    |
-| **Python**             | `pyproject.toml`                         | Fragmented — supporting uv, Poetry, and pip well is a real tax. Want evidence of demand first.                                                                                                                                                                 |
-| **Electron**           | `package.json`                           | **Lower priority than it appears.** It's Node all the way down; the graph already works. A generator is scaffolding convenience, not graph repair, and community plugins mostly cover it. Not the house stack (Tauri-first). Ship for completeness eventually. |
-| **Cloudflare Workers** | `wrangler.toml`                          | Technically JS, but enough config and deploy convention that a generator saves real setup.                                                                                                                                                                     |
-| **Infrastructure**     | Terraform, Pulumi, Docker Compose        | Underrated. Lives in nearly every large monorepo, currently invisible to the graph, and inferring targets from a Terraform directory is far less work than the Swift plugin.                                                                                   |
+| Ecosystem          | Manifest / edge source                   | Note                                                                                                                                                                                                                                                           |
+| ------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Go**             | `go.mod` `replace` directives, `go.work` | Multi-module data sits right there. But Go's own tooling is already fast and cache-friendly, so the pain Nx solves is less acute.                                                                                                                              |
+| **Rails / Ruby**   | `Gemfile` path gems                      | Parsing is easy and Bundler conventions are stable. Headwind: Rails culture is majestic-monolith-minded, so multi-app-in-one-repo is less of a felt need. No personal distribution in Ruby.                                                                    |
+| **Python**         | `pyproject.toml`                         | Fragmented — supporting uv, Poetry, and pip well is a real tax. Want evidence of demand first.                                                                                                                                                                 |
+| **Electron**       | `package.json`                           | **Lower priority than it appears.** It's Node all the way down; the graph already works. A generator is scaffolding convenience, not graph repair, and community plugins mostly cover it. Not the house stack (Tauri-first). Ship for completeness eventually. |
+| **Infrastructure** | Terraform, Pulumi, Docker Compose        | Underrated. Lives in nearly every large monorepo, currently invisible to the graph, and inferring targets from a Terraform directory is far less work than the Swift plugin.                                                                                   |
 
 ## Explicitly out of scope
 
