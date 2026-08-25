@@ -1,0 +1,82 @@
+{
+  "name": "@megamono/nx-cloudflare",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@org/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo"
+  ],
+  "nx": {
+    "name": "nx-cloudflare",
+    "targets": {
+      "build": {
+        "executor": "@nx/js:tsc",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "outputPath": "packages/nx-cloudflare/dist",
+          "main": "packages/nx-cloudflare/src/index.ts",
+          "tsConfig": "packages/nx-cloudflare/tsconfig.lib.json",
+          "rootDir": "packages/nx-cloudflare/src",
+          "generatePackageJson": false,
+          "assets": [
+            {
+              "input": "./packages/nx-cloudflare/src",
+              "glob": "**/!(*.ts)",
+              "output": "."
+            },
+            {
+              "input": "./packages/nx-cloudflare/src",
+              "glob": "**/*.d.ts",
+              "output": "."
+            }
+          ]
+        }
+      }
+    },
+    "tags": [
+      "platform:node",
+      "scope:shared",
+      "type:util"
+    ]
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "peerDependencies": {
+    "@nx/devkit": ">=23.1 <24",
+    "nx": ">=23.1 <24",
+    "wrangler": ">=4.125 <5"
+  },
+  "peerDependenciesMeta": {
+    "wrangler": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/megamono-dev/megamono.git"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "restricted"
+  }
+}

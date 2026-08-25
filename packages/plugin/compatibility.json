@@ -21,10 +21,19 @@
     "@tauri-apps/plugin-opener": "2.5.4",
     "vite": "8.1.4",
     "vitest": "4.1.10",
+    "create-cloudflare": "2.72.2",
+    "wrangler": "4.125.0",
+    "@cloudflare/vitest-plugin": "1.0.0",
     "typescript": "6.0.3",
     "@megamono/plugin": "0.0.1",
     "@megamono/nx-apple": "0.0.1",
-    "@megamono/nx-cargo": "0.0.1"
+    "@megamono/nx-cargo": "0.0.1",
+    "@megamono/nx-cloudflare": "0.0.1"
+  },
+  "cloudflare": {
+    "wrangler": ">=4.125 <5",
+    "compatibilityDate": "2026-08-23",
+    "nodeCompatibilityDefaultDate": "2026-08-04"
   },
   "services": {
     "postgresql": "17"
