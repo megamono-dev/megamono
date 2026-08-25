@@ -29,7 +29,7 @@
       "status": "available",
       "factory": "./dist/generators/docs-init/docs-init",
       "schema": "./dist/generators/docs-init/schema.json",
-      "description": "Initialize the Megamono repository documentation convention"
+      "description": "Adopt the Megamono docs, agents, and skills modules"
     },
     "docs-spec": {
       "status": "available",

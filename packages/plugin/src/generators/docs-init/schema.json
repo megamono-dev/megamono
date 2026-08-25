@@ -2,15 +2,29 @@
   "$schema": "https://json-schema.org/schema",
   "$id": "DocsInit",
   "title": "Initialize Megamono repository documentation",
-  "description": "Alias for workspace-init when adopting the documentation convention in an existing Nx workspace.",
+  "description": "Adopt the shared docs, agents, and skills module primitives in an existing Nx workspace.",
   "type": "object",
   "properties": {
     "docsRoot": { "type": "string", "default": "docs" },
     "defaultScope": { "type": "string", "default": "shared" },
-    "defaultPlatform": {
+    "survey": {
+      "type": "boolean",
+      "default": false,
+      "description": "Print the deterministic workspace survey and exit without mutation."
+    },
+    "format": {
       "type": "string",
-      "enum": ["web", "node", "worker", "apple", "rust", "php", "extension"],
-      "x-prompt": "Which platform should untagged existing applications use?"
+      "enum": ["markdown", "json"],
+      "default": "markdown"
+    },
+    "yes": {
+      "type": "boolean",
+      "default": false,
+      "description": "Apply the focused non-interactive plan."
+    },
+    "report": {
+      "type": "string",
+      "description": "Workspace-relative path for the optional completion report."
     }
   },
   "additionalProperties": false
