@@ -593,6 +593,7 @@ export async function workspaceInitGenerator(
     logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
   }
   const modules = new Set(requestedModules);
+  const workspaceSurvey = surveyWorkspaceInit(tree);
   const docsRoot = existingConfig?.docs.root ?? options.docsRoot ?? 'docs';
   const created = {
     config: !tree.exists('megamono.json'),
@@ -695,10 +696,6 @@ export async function workspaceInitGenerator(
       }
     }
   }
-  if (configuredPlatforms.size === 0) {
-    configuredPlatforms.add(options.defaultPlatform ?? 'node');
-  }
-
   if (!projects.has('megamono')) {
     addProjectConfiguration(tree, 'megamono', {
       root: '.megamono',
@@ -743,6 +740,50 @@ export async function workspaceInitGenerator(
     );
   }
 
+  const inference = {
+    ...(workspaceSurvey.manifests.apple.length > 0
+      ? {
+          apple: {
+            plugin: '@megamono/nx-apple' as const,
+            manifests: workspaceSurvey.manifests.apple,
+          },
+        }
+      : {}),
+    ...(workspaceSurvey.manifests.cargo.length > 0
+      ? {
+          cargo: {
+            plugin: '@megamono/nx-cargo' as const,
+            manifests: workspaceSurvey.manifests.cargo,
+          },
+        }
+      : {}),
+  };
+  if (modules.has('inference') && Object.keys(inference).length > 0) {
+    updateJson(tree, 'nx.json', (value) => {
+      const plugins: unknown[] = Array.isArray(value.plugins)
+        ? value.plugins
+        : [];
+      const pluginNames = new Set(
+        plugins.flatMap((plugin) =>
+          typeof plugin === 'string'
+            ? [plugin]
+            : plugin && typeof plugin === 'object' && 'plugin' in plugin
+              ? [String(plugin.plugin)]
+              : [],
+        ),
+      );
+      const additions = Object.values(inference)
+        .map(({ plugin }) => plugin)
+        .filter((plugin) => !pluginNames.has(plugin));
+      return { ...value, plugins: [...plugins, ...additions] };
+    });
+    if ('apple' in inference) configuredPlatforms.add('apple');
+    if ('cargo' in inference) configuredPlatforms.add('rust');
+  }
+  if (configuredPlatforms.size === 0) {
+    configuredPlatforms.add(options.defaultPlatform ?? 'node');
+  }
+
   const adoptedModules = new Set(existingConfig?.adoption.modules ?? []);
   for (const module of requestedModules) adoptedModules.add(module);
   const reductions = [
@@ -762,6 +803,9 @@ export async function workspaceInitGenerator(
       ...(existingConfig?.adoption ?? DEFAULT_MEGAMONO_CONFIG.adoption),
       modules: parseWorkspaceInitModules([...adoptedModules]),
       reductions,
+      inference: modules.has('inference')
+        ? inference
+        : (existingConfig?.adoption.inference ?? {}),
     },
   });
   tree.write('megamono.json', `${JSON.stringify(config, null, 2)}\n`);
@@ -915,19 +959,27 @@ export async function workspaceInitGenerator(
     }
     tree.write(options.report, renderWorkspaceInitPlan(adoptionPlan));
   }
-  const installTask = modules.has('docs')
-    ? addDependenciesToPackageJson(
-        tree,
-        {},
-        {
+  const pluginVersion = readPluginVersion();
+  const developmentDependencies = {
+    ...(modules.has('docs')
+      ? {
           '@content-collections/core': '0.15.2',
           zod: '>=4.1 <5',
-        },
-      )
-    : () => undefined;
+        }
+      : {}),
+    ...(modules.has('inference') && 'apple' in inference
+      ? { '@megamono/nx-apple': pluginVersion }
+      : {}),
+    ...(modules.has('inference') && 'cargo' in inference
+      ? { '@megamono/nx-cargo': pluginVersion }
+      : {}),
+  };
+  const installTask =
+    Object.keys(developmentDependencies).length > 0
+      ? addDependenciesToPackageJson(tree, {}, developmentDependencies)
+      : () => undefined;
   await formatFiles(tree);
 
-  const pluginVersion = readPluginVersion();
   registerFileArtifact(
     tree,
     {

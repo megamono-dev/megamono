@@ -322,4 +322,36 @@ describe('workspace-init generator', () => {
       ).state,
     ).toBe('ejected');
   });
+
+  it('registers only detected supported inference plugins and manifests', async () => {
+    tree.write('apps/apple/Package.swift', '// swift-tools-version: 6.2\n');
+    tree.write('crates/tool/Cargo.toml', '[package]\nname = "tool"\n');
+    tree.write('services/go/go.mod', 'module example.com/service\n');
+
+    await workspaceInitGenerator(tree, { only: 'inference', yes: true });
+
+    expect(readJson(tree, 'nx.json').plugins).toEqual([
+      '@megamono/nx-apple',
+      '@megamono/nx-cargo',
+    ]);
+    expect(readJson(tree, 'package.json').devDependencies).toMatchObject({
+      '@megamono/nx-apple': '0.0.1',
+      '@megamono/nx-cargo': '0.0.1',
+    });
+    expect(readJson(tree, 'megamono.json').adoption.inference).toEqual({
+      apple: {
+        plugin: '@megamono/nx-apple',
+        manifests: ['apps/apple/Package.swift'],
+      },
+      cargo: {
+        plugin: '@megamono/nx-cargo',
+        manifests: ['crates/tool/Cargo.toml'],
+      },
+    });
+    expect(readJson(tree, 'megamono.json').platforms).toEqual([
+      'apple',
+      'rust',
+    ]);
+    expect(JSON.stringify(readJson(tree, 'nx.json'))).not.toContain('go.mod');
+  });
 });
