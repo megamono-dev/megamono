@@ -240,6 +240,35 @@ describe('workspace-init generator', () => {
       'type:app',
       'visibility:internal',
     ]);
+    expect(readJson(tree, 'megamono.json').conventions.rules).toEqual(
+      expect.objectContaining({
+        'module-boundaries': { severity: 'warning' },
+        'require-tags': { severity: 'warning' },
+      }),
+    );
+    expect(readJson(tree, 'megamono.json').adoption.ratchets).toContainEqual({
+      rule: 'require-tags',
+      initialCount: 4,
+      targetSeverity: 'error',
+    });
+  });
+
+  it('keeps fresh bootstrap structural rules at their default severity', async () => {
+    addProjectConfiguration(tree, 'web', {
+      root: 'apps/web',
+      projectType: 'application',
+      targets: {},
+    });
+
+    await workspaceInitGenerator(tree, {
+      only: 'lint',
+      yes: true,
+      bootstrap: true,
+      defaultPlatform: 'web',
+    });
+
+    expect(readJson(tree, 'megamono.json').conventions.rules).toEqual({});
+    expect(readJson(tree, 'megamono.json').adoption.ratchets).toEqual([]);
   });
 
   it('emits only the configured platform jobs and toolchains', async () => {

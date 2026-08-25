@@ -46,14 +46,15 @@ export const CONVENTION_RULES = [
   'platform-boundary',
   'no-bare-jsx-strings',
 ] as const;
-const structuralRules = new Set<string>([
+export const ADOPTION_STRUCTURAL_RULES = [
   'module-boundaries',
   'require-tags',
   'naming-convention',
   'megamono-dev-only',
   'playstack-direction',
   'platform-boundary',
-]);
+] as const;
+const structuralRules = new Set<string>(ADOPTION_STRUCTURAL_RULES);
 export const ADOPTION_MODULES = [
   'docs',
   'agents',

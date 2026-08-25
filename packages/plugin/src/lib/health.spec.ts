@@ -189,6 +189,65 @@ describe('repository health', () => {
     }
   });
 
+  it('keeps temporary structural adoption ratchets visible in spec drift', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-health-ratchet-'));
+    try {
+      const config: MegamonoConfig = {
+        ...DEFAULT_MEGAMONO_CONFIG,
+        conventions: {
+          ...DEFAULT_MEGAMONO_CONFIG.conventions,
+          rules: { 'module-boundaries': { severity: 'warning' } },
+        },
+        adoption: {
+          ...DEFAULT_MEGAMONO_CONFIG.adoption,
+          ratchets: [
+            {
+              rule: 'module-boundaries',
+              initialCount: 12,
+              targetSeverity: 'error',
+            },
+          ],
+        },
+      };
+
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph: projectGraph(),
+        config,
+        documents: [],
+        checks: ['spec-drift'],
+      });
+
+      expect(report.findings).toContainEqual(
+        expect.objectContaining({
+          fingerprint: 'adoption-ratchet:module-boundaries',
+          state: 'adoption-ratchet',
+          evidence: expect.arrayContaining(['initial violations: 12']),
+        }),
+      );
+      const promoted = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph: projectGraph(),
+        config: {
+          ...config,
+          conventions: {
+            ...config.conventions,
+            rules: { 'module-boundaries': { severity: 'error' } },
+          },
+        },
+        documents: [],
+        checks: ['spec-drift'],
+      });
+      expect(
+        promoted.findings.some(({ fingerprint }) =>
+          fingerprint.startsWith('adoption-ratchet:'),
+        ),
+      ).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('recognizes overlap between comparator and exact npm ranges', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-health-'));
     try {

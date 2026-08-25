@@ -436,6 +436,7 @@ function specDriftFindings(
   workspaceRoot: string,
   graph: ProjectGraph,
   documents: readonly RepositoryDocument[],
+  config: MegamonoConfig,
 ): HealthFinding[] {
   const specs = documents.filter(
     (document) => document.data.type === 'spec' && !document.archived,
@@ -443,6 +444,28 @@ function specDriftFindings(
   const documented = new Set(specs.flatMap(({ data }) => data.projects));
   const projectNames = new Set(Object.keys(graph.nodes));
   const findings: HealthFinding[] = [];
+  for (const ratchet of config.adoption.ratchets) {
+    const override = config.conventions.rules[ratchet.rule];
+    if (
+      override?.severity === ratchet.targetSeverity ||
+      (override?.severity === 'off' && override.decision)
+    ) {
+      continue;
+    }
+    findings.push({
+      check: 'spec-drift',
+      fingerprint: `adoption-ratchet:${ratchet.rule}`,
+      state: 'adoption-ratchet',
+      confidence: 'complete',
+      summary: `Structural rule ${ratchet.rule} remains in temporary adoption warning mode.`,
+      evidence: [
+        'megamono.json',
+        `initial violations: ${ratchet.initialCount}`,
+        `target severity: ${ratchet.targetSeverity}`,
+      ],
+      recommendation: `Resolve the remaining ${ratchet.rule} violations and promote the rule to ${ratchet.targetSeverity}, or record an accepted decision.`,
+    });
+  }
   for (const project of [...documented].sort()) {
     if (projectNames.has(project)) continue;
     findings.push({
@@ -861,6 +884,7 @@ export async function runRepositoryHealth(options: {
             options.workspaceRoot,
             options.graph,
             options.documents,
+            options.config,
           )
         : [],
       shouldRun('stale-plans')

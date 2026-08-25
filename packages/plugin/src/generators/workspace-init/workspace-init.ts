@@ -1,6 +1,7 @@
 import {
   addDependenciesToPackageJson,
   addProjectConfiguration,
+  createProjectGraphAsync,
   formatFiles,
   getProjects,
   logger,
@@ -8,15 +9,18 @@ import {
   updateProjectConfiguration,
   updateJson,
   type GeneratorCallback,
+  type ProjectGraph,
   type Tree,
 } from '@nx/devkit';
 import { prompt } from 'enquirer';
 import {
+  ADOPTION_STRUCTURAL_RULES,
   DEFAULT_MEGAMONO_CONFIG,
   assertSupportedMegamonoConfigVersion,
   isSafeWorkspaceRelativePath,
   megamonoConfigSchema,
 } from '../../lib/config';
+import { checkWorkspaceStructure } from '../../lib/structural-check';
 import {
   applyManagedSkillTemplates,
   readPluginVersion,
@@ -718,6 +722,25 @@ function docsProjectConfiguration(docsRoot: string) {
   };
 }
 
+function projectGraphFromTree(tree: Tree): ProjectGraph {
+  const projects = getProjects(tree);
+  return {
+    nodes: Object.fromEntries(
+      [...projects.entries()].map(([name, project]) => [
+        name,
+        {
+          name,
+          type: project.projectType === 'library' ? 'lib' : 'app',
+          data: project,
+        },
+      ]),
+    ),
+    dependencies: Object.fromEntries(
+      [...projects.keys()].map((name) => [name, []]),
+    ),
+  };
+}
+
 export async function workspaceInitGenerator(
   tree: Tree,
   options: WorkspaceInitGeneratorSchema,
@@ -877,6 +900,33 @@ export async function workspaceInitGenerator(
 
   const defaultScope = options.defaultScope ?? 'shared';
   const projects = getProjects(tree);
+  const lintAdoptionRatchets: Array<{
+    readonly rule: (typeof ADOPTION_STRUCTURAL_RULES)[number];
+    readonly initialCount: number;
+    readonly targetSeverity: 'error';
+  }> = [];
+  if (
+    modules.has('lint') &&
+    !options.bootstrap &&
+    !existingConfig?.adoption.modules.includes('lint')
+  ) {
+    const graph =
+      tree.root === '/virtual'
+        ? projectGraphFromTree(tree)
+        : await createProjectGraphAsync({ exitOnError: false });
+    const diagnostics = await checkWorkspaceStructure(
+      tree.root,
+      graph,
+      existingConfig ?? DEFAULT_MEGAMONO_CONFIG,
+    );
+    for (const rule of ADOPTION_STRUCTURAL_RULES) {
+      lintAdoptionRatchets.push({
+        rule,
+        initialCount: diagnostics.filter(({ code }) => code === rule).length,
+        targetSeverity: 'error',
+      });
+    }
+  }
   const configuredPlatforms = new Set<string>();
   const isApplication = (project: { projectType?: string }) =>
     project.projectType !== 'library';
@@ -1066,8 +1116,28 @@ export async function workspaceInitGenerator(
     ),
     ...adoptionPlan.reductions,
   ];
+  const ratchets = new Map(
+    (existingConfig?.adoption.ratchets ?? []).map((ratchet) => [
+      ratchet.rule,
+      ratchet,
+    ]),
+  );
+  for (const ratchet of lintAdoptionRatchets) {
+    if (!ratchets.has(ratchet.rule)) ratchets.set(ratchet.rule, ratchet);
+  }
+  const lintWarningRules = Object.fromEntries(
+    lintAdoptionRatchets.map(({ rule }) => [rule, { severity: 'warning' }]),
+  );
   const config = megamonoConfigSchema.parse({
     ...(existingConfig ?? DEFAULT_MEGAMONO_CONFIG),
+    conventions: {
+      ...(existingConfig?.conventions ?? DEFAULT_MEGAMONO_CONFIG.conventions),
+      rules: {
+        ...(existingConfig?.conventions.rules ??
+          DEFAULT_MEGAMONO_CONFIG.conventions.rules),
+        ...lintWarningRules,
+      },
+    },
     platforms: [...configuredPlatforms].sort(),
     docs: {
       ...(existingConfig?.docs ?? DEFAULT_MEGAMONO_CONFIG.docs),
@@ -1077,6 +1147,10 @@ export async function workspaceInitGenerator(
       ...(existingConfig?.adoption ?? DEFAULT_MEGAMONO_CONFIG.adoption),
       modules: parseWorkspaceInitModules([...adoptedModules]),
       reductions,
+      ratchets: ADOPTION_STRUCTURAL_RULES.flatMap((rule) => {
+        const ratchet = ratchets.get(rule);
+        return ratchet ? [ratchet] : [];
+      }),
       inference: modules.has('inference')
         ? inference
         : (existingConfig?.adoption.inference ?? {}),
