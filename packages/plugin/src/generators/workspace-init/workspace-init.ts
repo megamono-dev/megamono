@@ -44,6 +44,7 @@ import {
   assertWorkspaceInitPreflight,
   collectWorkspaceInitHostState,
 } from '../../lib/workspace-init-preflight';
+import { createWorkspaceInitPostFlushCallback } from '../../lib/workspace-init-execution';
 
 const importTarget = {
   executor: '@megamono/plugin:import',
@@ -1064,10 +1065,10 @@ export async function workspaceInitGenerator(
       ? { '@megamono/nx-cargo': pluginVersion }
       : {}),
   };
-  const installTask =
-    Object.keys(developmentDependencies).length > 0
-      ? addDependenciesToPackageJson(tree, {}, developmentDependencies)
-      : () => undefined;
+  const hasDependencies = Object.keys(developmentDependencies).length > 0;
+  const installTask = hasDependencies
+    ? addDependenciesToPackageJson(tree, {}, developmentDependencies)
+    : () => undefined;
   await formatFiles(tree);
 
   registerFileArtifact(
@@ -1222,9 +1223,24 @@ export async function workspaceInitGenerator(
     );
   }
 
+  const postFlushTasks = [
+    ...(hasDependencies
+      ? [
+          {
+            id: 'install-dependencies',
+            retry: 'npm install',
+            run: installTask,
+          },
+        ]
+      : []),
+  ];
+  const externalCommands = createWorkspaceInitPostFlushCallback(
+    tree.root,
+    postFlushTasks,
+  );
   return modules.has('skills')
-    ? runTasksInSerial(installTask, linkSkillsCallback(tree.root))
-    : installTask;
+    ? runTasksInSerial(externalCommands, linkSkillsCallback(tree.root))
+    : externalCommands;
 }
 
 export default workspaceInitGenerator;

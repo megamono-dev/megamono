@@ -55,6 +55,12 @@ export {
   type WorkspaceInitHostState,
 } from './lib/workspace-init-preflight';
 export {
+  WORKSPACE_INIT_RECOVERY_PATH,
+  createWorkspaceInitPostFlushCallback,
+  renderWorkspaceInitRecovery,
+  type WorkspaceInitPostFlushTask,
+} from './lib/workspace-init-execution';
+export {
   GENERATOR_AVAILABILITY,
   GeneratorAvailabilityError,
   assertGeneratorAvailable,

@@ -45,9 +45,10 @@ export class WorkspaceInitError extends Error {
   constructor(
     readonly kind: WorkspaceInitErrorKind,
     message: string,
+    options?: ErrorOptions,
   ) {
     const details = ERROR_DETAILS[kind];
-    super(`${details.code}: ${message}`);
+    super(`${details.code}: ${message}`, options);
     this.name = 'WorkspaceInitError';
     this.exitCode = details.exitCode;
     this.diagnosticCode = details.code;
