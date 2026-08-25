@@ -37,11 +37,13 @@ export const SERVICE_IDS = [
 ] as const;
 export const VERIFY_MODES = ['none', 'config', 'build'] as const;
 export const SERVICE_RUNNERS = ['none', 'springbar'] as const;
+export const LOCAL_PACKAGE_SOURCES = ['registry', 'yalc'] as const;
 
 export type AppId = (typeof APP_IDS)[number];
 export type ServiceId = (typeof SERVICE_IDS)[number];
 export type VerifyMode = (typeof VERIFY_MODES)[number];
 export type ServiceRunner = (typeof SERVICE_RUNNERS)[number];
+export type LocalPackageSource = (typeof LOCAL_PACKAGE_SOURCES)[number];
 
 export interface CreateMegamonoInput {
   name?: string;
@@ -55,6 +57,7 @@ export interface CreateMegamonoInput {
   verify?: string;
   cleanupOnFailure?: boolean;
   dryRun?: boolean;
+  localPackages?: string;
   cwd?: string;
   platform?: NodeJS.Platform;
 }
@@ -72,6 +75,7 @@ export interface NormalizedCreateOptions {
   verify: VerifyMode;
   cleanupOnFailure: boolean;
   dryRun: boolean;
+  localPackages: LocalPackageSource;
   platform: NodeJS.Platform;
 }
 
@@ -107,6 +111,7 @@ export interface CommandInvocation {
 }
 
 export type CommandRunner = (invocation: CommandInvocation) => Promise<void>;
+export type YalcStoreResolver = () => Promise<string>;
 
 export class CreateMegamonoError extends Error {
   constructor(
@@ -142,6 +147,7 @@ const APP_SET = new Set<string>(APP_IDS);
 const SERVICE_SET = new Set<string>(SERVICE_IDS);
 const RUNNER_SET = new Set<string>(SERVICE_RUNNERS);
 const VERIFY_SET = new Set<string>(VERIFY_MODES);
+const LOCAL_PACKAGE_SOURCE_SET = new Set<string>(LOCAL_PACKAGE_SOURCES);
 
 const appPlugin: Partial<Record<AppId, string>> = {
   web: '@nx/next',
@@ -315,8 +321,24 @@ export function normalizeCreateOptions(
     ),
     cleanupOnFailure: input.cleanupOnFailure ?? false,
     dryRun: input.dryRun ?? false,
+    localPackages: requireEnum<LocalPackageSource>(
+      'local package source',
+      input.localPackages ?? 'registry',
+      LOCAL_PACKAGE_SOURCE_SET,
+    ),
     platform,
   };
+}
+
+export function requiredMegamonoPackages(
+  options: Pick<NormalizedCreateOptions, 'apps'>,
+): string[] {
+  return [
+    '@megamono/plugin',
+    ...(options.apps.includes('apple') ? ['@megamono/nx-apple'] : []),
+    ...(options.apps.includes('desktop') ? ['@megamono/nx-cargo'] : []),
+    ...(options.apps.includes('worker') ? ['@megamono/nx-cloudflare'] : []),
+  ].sort();
 }
 
 function commandStep(
@@ -394,15 +416,37 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     if (app === 'apple') plugins.add('@megamono/nx-apple');
   }
   if (options.install) {
-    const packages = [...plugins].sort().map(packagePin);
+    const localPackages = new Set(
+      options.localPackages === 'yalc' ? requiredMegamonoPackages(options) : [],
+    );
+    const packages = [...plugins]
+      .filter((name) => !localPackages.has(name))
+      .sort()
+      .map(packagePin);
     steps.push(
       commandStep(
         'install-plugins',
         'npm',
-        ['install', '--save-dev', ...packages],
+        ['install', '--save-dev', '--save-exact', ...packages],
         'staging',
       ),
     );
+    if (localPackages.size > 0) {
+      steps.push(
+        commandStep(
+          'install-local-packages',
+          'yalc',
+          [
+            'add',
+            ...[...localPackages].sort().map(packagePin),
+            '--dev',
+            '--no-pure',
+          ],
+          'staging',
+        ),
+        commandStep('hydrate-local-packages', 'npm', ['install'], 'staging'),
+      );
+    }
   }
 
   for (const app of options.apps) {
@@ -575,7 +619,98 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-export async function preflightPlan(plan: CreationPlan): Promise<void> {
+export const resolveYalcStore: YalcStoreResolver = () =>
+  new Promise((resolvePromise, reject) => {
+    const child = spawn('yalc', ['dir'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+    child.once('error', (error) => {
+      reject(
+        new CreateMegamonoError(
+          `Cannot locate yalc. Install yalc and publish the required Megamono packages before using --local-packages=yalc: ${error.message}`,
+          3,
+        ),
+      );
+    });
+    child.once('exit', (code, signal) => {
+      const store = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .at(-1);
+      if (code === 0 && store) {
+        resolvePromise(resolve(store));
+        return;
+      }
+      reject(
+        new CreateMegamonoError(
+          `Cannot resolve the yalc store${stderr.trim() ? `: ${stderr.trim()}` : `; yalc exited ${code === null ? `after signal ${signal ?? 'unknown'}` : `with code ${code}`}`}.`,
+          3,
+        ),
+      );
+    });
+  });
+
+async function preflightYalcPackages(
+  plan: CreationPlan,
+  resolveStore: YalcStoreResolver,
+): Promise<void> {
+  if (plan.options.localPackages !== 'yalc') return;
+  const store = await resolveStore();
+  const missing: string[] = [];
+  const invalid: string[] = [];
+  for (const name of requiredMegamonoPackages(plan.options)) {
+    const version = requiredScaffoldVersion(name);
+    const manifestPath = resolve(
+      store,
+      'packages',
+      ...name.split('/'),
+      version,
+      'package.json',
+    );
+    try {
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+        name?: unknown;
+        version?: unknown;
+      };
+      if (manifest.name !== name || manifest.version !== version)
+        invalid.push(`${name}@${version}`);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ENOENT'
+      ) {
+        missing.push(`${name}@${version}`);
+      } else {
+        invalid.push(`${name}@${version}`);
+      }
+    }
+  }
+  if (missing.length === 0 && invalid.length === 0) return;
+  const details = [
+    ...(missing.length > 0 ? [`missing: ${missing.join(', ')}`] : []),
+    ...(invalid.length > 0 ? [`invalid: ${invalid.join(', ')}`] : []),
+  ].join('; ');
+  throw new CreateMegamonoError(
+    `The yalc store is not ready (${details}). Build and run yalc publish from each required package before retrying.`,
+    3,
+  );
+}
+
+export async function preflightPlan(
+  plan: CreationPlan,
+  yalcStoreResolver: YalcStoreResolver = resolveYalcStore,
+): Promise<void> {
   const { destination, stagingDirectory } = plan.options;
   if (await pathExists(stagingDirectory)) {
     throw new CreateMegamonoError(
@@ -599,6 +734,7 @@ export async function preflightPlan(plan: CreationPlan): Promise<void> {
       );
     }
   }
+  await preflightYalcPackages(plan, yalcStoreResolver);
 }
 
 export const runCommand: CommandRunner = ({ command, args, cwd }) =>
@@ -933,8 +1069,9 @@ export async function executePlan(
   plan: CreationPlan,
   runner: CommandRunner = runCommand,
   springbarConfigurator: SpringbarConfigurator = configureSpringbarWithMcp,
+  yalcStoreResolver: YalcStoreResolver = resolveYalcStore,
 ): Promise<void> {
-  await preflightPlan(plan);
+  await preflightPlan(plan, yalcStoreResolver);
   if (plan.options.dryRun) return;
   const completed: string[] = [];
   try {
@@ -994,8 +1131,9 @@ export async function createMegamono(
   input: CreateMegamonoInput,
   runner: CommandRunner = runCommand,
   springbarConfigurator: SpringbarConfigurator = configureSpringbarWithMcp,
+  yalcStoreResolver: YalcStoreResolver = resolveYalcStore,
 ): Promise<CreationPlan> {
   const plan = createPlan(normalizeCreateOptions(input));
-  await executePlan(plan, runner, springbarConfigurator);
+  await executePlan(plan, runner, springbarConfigurator, yalcStoreResolver);
   return plan;
 }

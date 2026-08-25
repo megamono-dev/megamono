@@ -32,9 +32,12 @@ describe('workerGenerator', () => {
       main: 'src/index.ts',
       compatibility_date: '2026-08-23',
     });
-    expect(JSON.parse(tree.read('nx.json', 'utf8') ?? '{}').plugins).toContain(
-      '@megamono/nx-cloudflare',
-    );
+    expect(
+      JSON.parse(tree.read('nx.json', 'utf8') ?? '{}').plugins,
+    ).toContainEqual({
+      plugin: '@megamono/nx-cloudflare',
+      options: { scope: 'platform' },
+    });
     expect(
       JSON.parse(tree.read('package.json', 'utf8') ?? '{}').devDependencies,
     ).toMatchObject({
@@ -67,5 +70,47 @@ describe('workerGenerator', () => {
     await expect(
       workerGenerator(tree, { name: 'site', pages: true }),
     ).rejects.toBeInstanceOf(CloudflareGeneratorError);
+  });
+
+  it('retains an exact plugin copied from the yalc store', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const packageJson = JSON.parse(tree.read('package.json', 'utf8') ?? '{}');
+    packageJson.devDependencies = {
+      '@megamono/nx-cloudflare': 'file:.yalc/@megamono/nx-cloudflare',
+      wrangler: '4.125.0',
+    };
+    tree.write('package.json', JSON.stringify(packageJson));
+    tree.write(
+      '.yalc/@megamono/nx-cloudflare/package.json',
+      JSON.stringify({
+        name: '@megamono/nx-cloudflare',
+        version: '0.0.1',
+      }),
+    );
+
+    await workerGenerator(tree, { name: 'events' });
+
+    expect(
+      JSON.parse(tree.read('package.json', 'utf8') ?? '{}').devDependencies,
+    ).toMatchObject({
+      '@megamono/nx-cloudflare': 'file:.yalc/@megamono/nx-cloudflare',
+      wrangler: '4.125.0',
+    });
+  });
+
+  it('upgrades a shorthand plugin registration with the selected scope', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const nxJson = JSON.parse(tree.read('nx.json', 'utf8') ?? '{}');
+    nxJson.plugins = [...(nxJson.plugins ?? []), '@megamono/nx-cloudflare'];
+    tree.write('nx.json', JSON.stringify(nxJson));
+
+    await workerGenerator(tree, { name: 'events', scope: 'product' });
+
+    expect(
+      JSON.parse(tree.read('nx.json', 'utf8') ?? '{}').plugins,
+    ).toContainEqual({
+      plugin: '@megamono/nx-cloudflare',
+      options: { scope: 'product' },
+    });
   });
 });

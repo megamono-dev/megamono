@@ -139,7 +139,15 @@ function renderedFiles(
   };
 }
 
-function configuredPlugins(tree: Tree): string[] {
+interface ConfiguredPlugin {
+  plugin: string;
+  options?: Record<string, unknown>;
+}
+
+function cloudflarePluginRegistration(
+  tree: Tree,
+  scope: string,
+): { configured: boolean } {
   const nx = readTreeText(tree, 'nx.json');
   if (!nx)
     throw new CloudflareGeneratorError(
@@ -148,17 +156,45 @@ function configuredPlugins(tree: Tree): string[] {
     );
   try {
     const value = JSON.parse(nx) as {
-      plugins?: Array<string | { plugin?: string }>;
+      plugins?: Array<string | ConfiguredPlugin>;
     };
-    return (value.plugins ?? []).flatMap((entry) =>
+    const matches = (value.plugins ?? []).filter((entry) =>
       typeof entry === 'string'
-        ? [entry]
-        : typeof entry.plugin === 'string'
-          ? [entry.plugin]
-          : [],
+        ? entry === PLUGIN_NAME
+        : entry.plugin === PLUGIN_NAME,
     );
-  } catch {
+    if (matches.length > 1)
+      throw new CloudflareGeneratorError(
+        'conflict',
+        `${PLUGIN_NAME} is registered more than once in nx.json.`,
+      );
+    const entry = matches[0];
+    return {
+      configured: typeof entry === 'object' && entry.options?.scope === scope,
+    };
+  } catch (error) {
+    if (error instanceof CloudflareGeneratorError) throw error;
     throw new CloudflareGeneratorError('preflight', 'nx.json is malformed.');
+  }
+}
+
+function isExactYalcPackage(
+  tree: Tree,
+  name: string,
+  version: string,
+  declaration: string,
+): boolean {
+  if (declaration !== `file:.yalc/${name}`) return false;
+  const source = readTreeText(tree, `.yalc/${name}/package.json`);
+  if (!source) return false;
+  try {
+    const manifest = JSON.parse(source) as {
+      name?: unknown;
+      version?: unknown;
+    };
+    return manifest.name === name && manifest.version === version;
+  } catch {
+    return false;
   }
 }
 
@@ -185,7 +221,11 @@ function missingDependencies(tree: Tree): Record<string, string> {
   const missing: Record<string, string> = {};
   for (const [name, version] of Object.entries(expected)) {
     const installed = manifest.devDependencies?.[name];
-    if (installed && installed !== version)
+    const exactYalcPackage =
+      name === PLUGIN_NAME &&
+      installed !== undefined &&
+      isExactYalcPackage(tree, name, version, installed);
+    if (installed && installed !== version && !exactYalcPackage)
       throw new CloudflareGeneratorError(
         'conflict',
         `${name} is already declared as ${installed}; expected ${version}.`,
@@ -215,14 +255,14 @@ export async function workerGenerator(
     });
     if (action === 'add') changed = true;
   }
-  const plugins = configuredPlugins(tree);
-  const addPlugin = !plugins.includes(PLUGIN_NAME);
+  const pluginRegistration = cloudflarePluginRegistration(tree, options.scope);
+  const configurePlugin = !pluginRegistration.configured;
   operations.push({
-    action: addPlugin ? 'modify' : 'retain',
+    action: configurePlugin ? 'modify' : 'retain',
     target: 'nx.json#plugins',
-    detail: `${addPlugin ? 'Register' : 'Retain'} ${PLUGIN_NAME}.`,
+    detail: `${configurePlugin ? 'Register' : 'Retain'} ${PLUGIN_NAME} with scope ${options.scope}.`,
   });
-  changed ||= addPlugin;
+  changed ||= configurePlugin;
   const dependencies = missingDependencies(tree);
   if (Object.keys(dependencies).length > 0) {
     operations.push({
@@ -251,14 +291,34 @@ export async function workerGenerator(
   for (const [path, content] of Object.entries(files)) {
     if (!tree.exists(path)) tree.write(path, content);
   }
-  if (addPlugin) {
-    updateJson(tree, 'nx.json', (value) => ({
-      ...value,
-      plugins: [
-        ...(Array.isArray(value.plugins) ? value.plugins : []),
-        PLUGIN_NAME,
-      ],
-    }));
+  if (configurePlugin) {
+    updateJson(tree, 'nx.json', (value) => {
+      const plugins = (
+        Array.isArray(value.plugins) ? value.plugins : []
+      ) as Array<string | ConfiguredPlugin>;
+      let replaced = false;
+      const configured = plugins.map((entry) => {
+        const name = typeof entry === 'string' ? entry : entry?.plugin;
+        if (name !== PLUGIN_NAME) return entry;
+        replaced = true;
+        return {
+          ...(typeof entry === 'object' ? entry : {}),
+          plugin: PLUGIN_NAME,
+          options: {
+            ...(typeof entry === 'object' && entry.options
+              ? entry.options
+              : {}),
+            scope: options.scope,
+          },
+        };
+      });
+      if (!replaced)
+        configured.push({
+          plugin: PLUGIN_NAME,
+          options: { scope: options.scope },
+        });
+      return { ...value, plugins: configured };
+    });
   }
   const tasks = [];
   if (Object.keys(dependencies).length > 0) {

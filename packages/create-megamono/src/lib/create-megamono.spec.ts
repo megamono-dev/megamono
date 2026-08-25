@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import {
+  compatibility,
   CreateMegamonoError,
   createPlan,
   executePlan,
@@ -9,6 +10,7 @@ import {
   preflightPlan,
   readRecovery,
   renderPlan,
+  requiredMegamonoPackages,
   type CommandRunner,
 } from './create-megamono.js';
 
@@ -38,6 +40,21 @@ async function writeInferredAppPackage(
   );
 }
 
+async function writeYalcStore(
+  root: string,
+  packages: readonly string[],
+): Promise<void> {
+  for (const name of packages) {
+    const version = compatibility.scaffoldPackages[name];
+    const packageRoot = resolve(root, 'packages', ...name.split('/'), version);
+    await mkdir(packageRoot, { recursive: true });
+    await writeFile(
+      resolve(packageRoot, 'package.json'),
+      JSON.stringify({ name, version }),
+    );
+  }
+}
+
 describe('normalizeCreateOptions', () => {
   it('normalizes the scope and applies stable defaults', () => {
     const normalized = options('/workspace');
@@ -48,6 +65,7 @@ describe('normalizeCreateOptions', () => {
       serviceRunner: 'none',
       install: true,
       verify: 'config',
+      localPackages: 'registry',
     });
     expect(normalized.destination).toBe('/workspace/acme-tools');
     expect(normalized.stagingDirectory).toBe(
@@ -63,6 +81,7 @@ describe('normalizeCreateOptions', () => {
     [{ integrations: ['sentry'] }, 3, 'fixture gate'],
     [{ apps: ['apple'], platform: 'linux' }, 3, 'requires macOS'],
     [{ install: false }, 3, 'no-install generation path'],
+    [{ localPackages: 'unknown' }, 2, 'local package source'],
     [{ platform: 'win32' }, 3, 'supports macOS and Linux'],
   ])('returns a stable diagnostic for %j', (overrides, exitCode, message) => {
     expect(() => options('/workspace', overrides)).toThrowError(
@@ -233,6 +252,62 @@ describe('createPlan', () => {
     expect(dryRun.steps).toEqual(execute.steps);
   });
 
+  it('installs only Megamono packages from exact yalc store versions', () => {
+    const plan = createPlan(
+      options('/workspace', {
+        apps: ['desktop', 'worker'],
+        localPackages: 'yalc',
+        verify: 'none',
+      }),
+    );
+    expect(requiredMegamonoPackages(plan.options)).toEqual([
+      '@megamono/nx-cargo',
+      '@megamono/nx-cloudflare',
+      '@megamono/plugin',
+    ]);
+    expect(plan.steps.slice(0, 4).map((step) => step.id)).toEqual([
+      'create-nx-workspace',
+      'install-plugins',
+      'install-local-packages',
+      'hydrate-local-packages',
+    ]);
+    const registryInstall = plan.steps[1];
+    const yalcInstall = plan.steps[2];
+    expect(registryInstall).toMatchObject({
+      kind: 'command',
+      command: 'npm',
+      args: expect.arrayContaining([
+        'install',
+        '--save-dev',
+        '--save-exact',
+        'typescript@6.0.3',
+        'wrangler@4.125.0',
+      ]),
+    });
+    expect(registryInstall).not.toEqual(
+      expect.objectContaining({
+        args: expect.arrayContaining(['@megamono/plugin@0.0.1']),
+      }),
+    );
+    expect(yalcInstall).toEqual({
+      kind: 'command',
+      id: 'install-local-packages',
+      command: 'yalc',
+      args: [
+        'add',
+        '@megamono/nx-cargo@0.0.1',
+        '@megamono/nx-cloudflare@0.0.1',
+        '@megamono/plugin@0.0.1',
+        '--dev',
+        '--no-pure',
+      ],
+      cwd: 'staging',
+    });
+    expect(renderPlan(plan)).toContain(
+      '"@megamono/plugin@0.0.1" "--dev" "--no-pure"',
+    );
+  });
+
   it('places the optional Springbar MCP handoff after the atomic commit', () => {
     const plan = createPlan(
       options('/workspace', { serviceRunner: 'springbar', verify: 'none' }),
@@ -281,6 +356,68 @@ describe('executePlan', () => {
     await writeFile(plan.options.destination, 'keep');
     await expect(preflightPlan(plan)).rejects.toMatchObject({ exitCode: 3 });
     expect(await readFile(plan.options.destination, 'utf8')).toBe('keep');
+  });
+
+  it('refuses a missing exact yalc package before creating staging', async () => {
+    const cwd = await fixture();
+    const store = await fixture();
+    const plan = createPlan(
+      options(cwd, {
+        apps: ['worker'],
+        localPackages: 'yalc',
+        verify: 'none',
+      }),
+    );
+    await writeYalcStore(store, ['@megamono/plugin']);
+    await expect(preflightPlan(plan, async () => store)).rejects.toMatchObject({
+      exitCode: 3,
+      message: expect.stringContaining(
+        'missing: @megamono/nx-cloudflare@0.0.1',
+      ),
+    });
+    await expect(readFile(plan.options.stagingDirectory)).rejects.toMatchObject(
+      { code: 'ENOENT' },
+    );
+  });
+
+  it('executes the yalc add and hydration phases before generators', async () => {
+    const cwd = await fixture();
+    const store = await fixture();
+    const plan = createPlan(
+      options(cwd, {
+        apps: ['api'],
+        localPackages: 'yalc',
+        verify: 'none',
+      }),
+    );
+    await writeYalcStore(store, requiredMegamonoPackages(plan.options));
+    const invocations: string[] = [];
+    let initialized = false;
+    const runner: CommandRunner = async ({ command, args }) => {
+      invocations.push([command, ...args].join(' '));
+      if (initialized) return;
+      initialized = true;
+      await mkdir(plan.options.stagingDirectory, { recursive: true });
+      await writeFile(
+        resolve(plan.options.stagingDirectory, 'package.json'),
+        '{}',
+      );
+    };
+    await executePlan(plan, runner, undefined, async () => store);
+
+    expect(invocations.slice(0, 4)).toEqual([
+      expect.stringContaining('create-nx-workspace@23.1.1'),
+      expect.stringContaining(
+        'npm install --save-dev --save-exact @nx/nest@23.1.1',
+      ),
+      'yalc add @megamono/plugin@0.0.1 --dev --no-pure',
+      'npm install',
+    ]);
+    expect(invocations[4]).toContain('@nx/nest:application');
+    expect(invocations[5]).toContain('@megamono/plugin:workspace-init');
+    expect(
+      await readFile(resolve(plan.options.destination, 'package.json'), 'utf8'),
+    ).toBe('{}');
   });
 
   it('commits a staged workspace over an empty destination', async () => {
@@ -531,7 +668,14 @@ describe('executePlan', () => {
         );
         await writeFile(
           resolve(plan.options.stagingDirectory, 'nx.json'),
-          JSON.stringify({ plugins: ['@megamono/nx-cloudflare'] }),
+          JSON.stringify({
+            plugins: [
+              {
+                plugin: '@megamono/nx-cloudflare',
+                options: { scope: 'acme-tools' },
+              },
+            ],
+          }),
         );
       }
       if (args.includes('@megamono/plugin:workspace-init')) {
@@ -558,7 +702,10 @@ describe('executePlan', () => {
     const nxJson = JSON.parse(
       await readFile(resolve(plan.options.destination, 'nx.json'), 'utf8'),
     );
-    expect(nxJson.plugins).toContain('@megamono/nx-cloudflare');
+    expect(nxJson.plugins).toContainEqual({
+      plugin: '@megamono/nx-cloudflare',
+      options: { scope: 'acme-tools' },
+    });
     expect(
       await readFile(resolve(workerRoot, 'worker-configuration.d.ts'), 'utf8'),
     ).toContain('interface Env');

@@ -105,12 +105,15 @@ npx create-megamono <name>
   --integrations sentry
   --interactive true|false
   --install true|false
+  --local-packages registry|yalc
   --verify none|config|build
   --cleanup-on-failure
   --dry-run
 ```
 
-Defaults are `--service-runner=none`, no integrations, `--install=true`, and `--verify=config`. Non-interactive mode requires `name` and `apps`; all other omitted values use those defaults. `--verify=config` runs formatting, docs validation, `megamono:check`, and graph creation. `--verify=build` additionally runs affected build/test/lint targets for generated projects.
+Defaults are `--service-runner=none`, no integrations, `--install=true`, `--local-packages=registry`, and `--verify=config`. Non-interactive mode requires `name` and `apps`; all other omitted values use those defaults. `--verify=config` runs formatting, docs validation, `megamono:check`, and graph creation. `--verify=build` additionally runs affected build/test/lint targets for generated projects.
+
+`--local-packages=yalc` is a development-only override for exercising unpublished Megamono packages in integration repositories. Third-party scaffold dependencies still come from their exact compatibility pins. Before staging, the binary resolves `yalc dir` and requires the exact compatible versions of `@megamono/plugin` plus each selected platform plugin. It then adds those packages as local dev dependencies and hydrates their transitive registry dependencies before invoking any generator. A missing executable, package, or exact version exits `3` without creating the staging directory. The default registry flow never reads the yalc store.
 
 The integration prompt and flag enumerate only generators currently present in the published collection. Reserved names such as Fathom, Postmark, and Stripe are not accepted as bootstrap options until their availability gate in `spec-megamono-0000` passes.
 

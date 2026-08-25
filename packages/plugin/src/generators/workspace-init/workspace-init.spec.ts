@@ -796,6 +796,29 @@ export default [
     expect(JSON.stringify(readJson(tree, 'nx.json'))).not.toContain('go.mod');
   });
 
+  it('preserves an exact yalc-backed inference dependency', async () => {
+    tree.write('apps/worker/wrangler.jsonc', '{"name":"worker"}\n');
+    const packageJson = readJson(tree, 'package.json');
+    packageJson.devDependencies = {
+      ...packageJson.devDependencies,
+      '@megamono/nx-cloudflare': 'file:.yalc/@megamono/nx-cloudflare',
+    };
+    tree.write('package.json', JSON.stringify(packageJson));
+    tree.write(
+      '.yalc/@megamono/nx-cloudflare/package.json',
+      JSON.stringify({
+        name: '@megamono/nx-cloudflare',
+        version: '0.0.1',
+      }),
+    );
+
+    await workspaceInitGenerator(tree, { only: 'inference', yes: true });
+
+    expect(readJson(tree, 'package.json').devDependencies).toMatchObject({
+      '@megamono/nx-cloudflare': 'file:.yalc/@megamono/nx-cloudflare',
+    });
+  });
+
   it('records calling-scaffolder platform and service decisions', async () => {
     await workspaceInitGenerator(tree, {
       only: 'docs,agents,ci,lint,skills,health,inference',

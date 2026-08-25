@@ -68,6 +68,7 @@ export async function main(
         interactive: { type: 'string' },
         install: { type: 'string' },
         verify: { type: 'string' },
+        'local-packages': { type: 'string' },
         'cleanup-on-failure': { type: 'boolean', default: false },
         'dry-run': { type: 'boolean', default: false },
       },
@@ -90,6 +91,7 @@ export async function main(
       interactive,
       install: booleanValue('--install', parsed.values.install, true),
       verify: parsed.values.verify,
+      localPackages: parsed.values['local-packages'],
       cleanupOnFailure: parsed.values['cleanup-on-failure'],
       dryRun: parsed.values['dry-run'],
     });

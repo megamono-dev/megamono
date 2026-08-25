@@ -116,6 +116,30 @@ const SUPPORTED_SERVICES = new Set([
   'typesense',
 ]);
 
+function inferenceDependencyVersion(
+  tree: Tree,
+  name: string,
+  version: string,
+): string {
+  const localAddress = `file:.yalc/${name}`;
+  try {
+    const rootManifest = JSON.parse(
+      tree.read('package.json', 'utf8') ?? '{}',
+    ) as {
+      devDependencies?: Record<string, unknown>;
+    };
+    if (rootManifest.devDependencies?.[name] !== localAddress) return version;
+    const localManifest = JSON.parse(
+      tree.read(`.yalc/${name}/package.json`, 'utf8') ?? '{}',
+    ) as { name?: unknown; version?: unknown };
+    return localManifest.name === name && localManifest.version === version
+      ? localAddress
+      : version;
+  } catch {
+    return version;
+  }
+}
+
 function canPrompt(options: WorkspaceInitGeneratorSchema): boolean {
   return (
     options.interactive !== false &&
@@ -1476,13 +1500,31 @@ export async function workspaceInitGenerator(
         }
       : {}),
     ...(modules.has('inference') && 'apple' in inference
-      ? { '@megamono/nx-apple': pluginVersion }
+      ? {
+          '@megamono/nx-apple': inferenceDependencyVersion(
+            tree,
+            '@megamono/nx-apple',
+            pluginVersion,
+          ),
+        }
       : {}),
     ...(modules.has('inference') && 'cargo' in inference
-      ? { '@megamono/nx-cargo': pluginVersion }
+      ? {
+          '@megamono/nx-cargo': inferenceDependencyVersion(
+            tree,
+            '@megamono/nx-cargo',
+            pluginVersion,
+          ),
+        }
       : {}),
     ...(modules.has('inference') && 'cloudflare' in inference
-      ? { '@megamono/nx-cloudflare': pluginVersion }
+      ? {
+          '@megamono/nx-cloudflare': inferenceDependencyVersion(
+            tree,
+            '@megamono/nx-cloudflare',
+            pluginVersion,
+          ),
+        }
       : {}),
   };
   const hasDependencies = Object.keys(developmentDependencies).length > 0;
