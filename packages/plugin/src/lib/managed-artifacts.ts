@@ -372,6 +372,44 @@ export function writeArtifactRegistryToDisk(
   );
 }
 
+export function refreshDerivedArtifactHashes(
+  workspaceRoot: string,
+  artifactIds: readonly string[],
+): void {
+  const requested = new Set(artifactIds);
+  const registry = readArtifactRegistryFromDisk(workspaceRoot);
+  let changed = false;
+  const artifacts = registry.artifacts.map((artifact) => {
+    if (
+      !requested.has(artifact.id) ||
+      artifact.mode !== 'derived' ||
+      artifact.state !== 'derived'
+    ) {
+      return artifact;
+    }
+    const hash = computeDiskArtifactHash(workspaceRoot, artifact);
+    if (!hash) {
+      throw new ArtifactRegistryError(
+        `Unable to refresh derived artifact ${artifact.id}; ${artifact.target} is missing.`,
+      );
+    }
+    if (
+      artifact.templateHash === hash &&
+      artifact.installedHash === hash
+    ) {
+      return artifact;
+    }
+    changed = true;
+    return { ...artifact, templateHash: hash, installedHash: hash };
+  });
+  if (changed) {
+    writeArtifactRegistryToDisk(workspaceRoot, {
+      schemaVersion: ARTIFACT_REGISTRY_SCHEMA_VERSION,
+      artifacts,
+    });
+  }
+}
+
 export function upsertArtifactEntry(
   registry: ManagedArtifactRegistry,
   artifact: ManagedArtifactEntry,

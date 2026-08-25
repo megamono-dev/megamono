@@ -13,10 +13,13 @@ import {
   inspectManagedArtifacts,
   parseArtifactRegistry,
   readArtifactRegistry,
+  readArtifactRegistryFromDisk,
+  refreshDerivedArtifactHashes,
   renderArtifactRegistry,
   upsertArtifactEntry,
   validateManagedArtifactRegistry,
   writeArtifactRegistry,
+  writeArtifactRegistryToDisk,
   type ManagedArtifactEntry,
 } from './managed-artifacts';
 
@@ -210,6 +213,77 @@ describe('managed artifacts', () => {
           artifacts: [entries[2]],
         })[0].state,
       ).toBe('modified');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refreshes hashes after regenerating active derived artifacts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-derived-artifacts-'));
+    try {
+      await mkdir(join(root, '.megamono'), { recursive: true });
+      await mkdir(join(root, 'docs', 'archives'), { recursive: true });
+      await writeFile(join(root, 'docs', 'INDEX.md'), 'old index\n');
+      await writeFile(
+        join(root, 'docs', 'archives', 'INDEX.md'),
+        'old archive index\n',
+      );
+      const oldHash = hashArtifactBytes('old index\n');
+      writeArtifactRegistryToDisk(root, {
+        schemaVersion: 1,
+        artifacts: [
+          artifact({
+            id: 'docs.archive-index',
+            module: 'docs',
+            mode: 'derived',
+            state: 'derived',
+            target: 'docs/archives/INDEX.md',
+            templateHash: hashArtifactBytes('old archive index\n'),
+            installedHash: hashArtifactBytes('old archive index\n'),
+            ejectable: false,
+          }),
+          artifact({
+            id: 'docs.index',
+            module: 'docs',
+            mode: 'derived',
+            state: 'derived',
+            target: 'docs/INDEX.md',
+            templateHash: oldHash,
+            installedHash: oldHash,
+            ejectable: false,
+          }),
+        ],
+      });
+      await writeFile(join(root, 'docs', 'INDEX.md'), 'new index\n');
+      await writeFile(
+        join(root, 'docs', 'archives', 'INDEX.md'),
+        'new archive index\n',
+      );
+
+      refreshDerivedArtifactHashes(root, [
+        'docs.index',
+        'docs.archive-index',
+      ]);
+
+      const registry = readArtifactRegistryFromDisk(root);
+      expect(
+        registry.artifacts.map(({ templateHash, installedHash }) => ({
+          templateHash,
+          installedHash,
+        })),
+      ).toEqual([
+        {
+          templateHash: hashArtifactBytes('new archive index\n'),
+          installedHash: hashArtifactBytes('new archive index\n'),
+        },
+        {
+          templateHash: hashArtifactBytes('new index\n'),
+          installedHash: hashArtifactBytes('new index\n'),
+        },
+      ]);
+      expect(
+        inspectManagedArtifacts(root, registry).map(({ state }) => state),
+      ).toEqual(['current', 'current']);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
