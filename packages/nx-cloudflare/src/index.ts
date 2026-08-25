@@ -15,3 +15,17 @@ export type {
   WranglerConfigRecord,
   WranglerConfigSelection,
 } from './lib/wrangler-config';
+export {
+  createNodes,
+  getCloudflareDiagnostics,
+  getLastCloudflareRecords,
+  projectsFromWranglerConfigs,
+} from './lib/cloudflare';
+export type {
+  CloudflareEnvironmentMetadata,
+  CloudflarePluginOptions,
+  CloudflareProjectMetadata,
+  CloudflareResourceBinding,
+  CloudflareWorkerReference,
+  ResolvedCloudflareWorkerReference,
+} from './lib/cloudflare';
