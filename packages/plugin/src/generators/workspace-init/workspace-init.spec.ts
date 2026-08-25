@@ -31,7 +31,7 @@ describe('workspace-init generator', () => {
     expect(docs.targets?.validate?.executor).toBe(
       '@megamono/plugin:docs-validate',
     );
-    expect(docs.targets?.health?.executor).toBe('@megamono/plugin:health');
+    expect(config.targets?.health?.executor).toBe('@megamono/plugin:health');
     expect(
       tree.read('.github/workflows/megamono-health.yml', 'utf8'),
     ).toContain("cron: '17 9 * * 1'");
@@ -44,7 +44,7 @@ describe('workspace-init generator', () => {
     expect(
       tree.read('.github/workflows/megamono-health.yml', 'utf8'),
     ).not.toMatch(/^\s{2}pull_request:/m);
-    const ci = tree.read('.github/workflows/ci.yml', 'utf8');
+    const ci = tree.read('.github/workflows/megamono-ci.yml', 'utf8');
     expect(ci).toContain('actions/checkout@v7');
     expect(ci).toContain('fetch-depth: 0');
     expect(ci).toContain('nrwl/nx-set-shas@v5');
@@ -53,6 +53,7 @@ describe('workspace-init generator', () => {
     expect(ci).not.toContain('contents: write');
     expect(tree.read('AGENTS.md', 'utf8')).toContain('Affected CI');
     expect(tree.exists('megamono.json')).toBe(true);
+    expect(tree.exists('.megamono/artifacts.json')).toBe(true);
     expect(tree.read('eslint.config.mjs', 'utf8')).toContain(
       "from '@megamono/plugin/eslint'",
     );
@@ -199,12 +200,85 @@ describe('workspace-init generator', () => {
 
     await workspaceInitGenerator(tree, {});
 
-    const ci = tree.read('.github/workflows/ci.yml', 'utf8');
+    const ci = tree.read('.github/workflows/megamono-ci.yml', 'utf8');
     expect(ci).toContain('runs-on: ubuntu-latest');
     expect(ci).toContain('uses: dtolnay/rust-toolchain@stable');
     expect(ci).toContain('runs-on: macos-latest');
     expect(ci).toContain('xcodebuild -downloadComponent MetalToolchain');
     expect(ci).toContain("--exclude='*,!tag:platform:apple'");
     expect(ci).not.toContain('shivammathur/setup-php');
+  });
+
+  it('adopts independent module subsets without emitting unselected surfaces', async () => {
+    await workspaceInitGenerator(tree, {
+      only: 'agents,skills',
+      yes: true,
+    });
+
+    expect(tree.exists('megamono.json')).toBe(true);
+    expect(
+      readProjectConfiguration(tree, 'megamono').targets?.check,
+    ).toBeDefined();
+    expect(tree.exists('AGENTS.md')).toBe(true);
+    expect(tree.exists('CLAUDE.md')).toBe(true);
+    expect(tree.exists('docs/DESIGN.md')).toBe(true);
+    expect(tree.exists('.agents/skills/structure-review/SKILL.md')).toBe(true);
+    expect(tree.exists('content-collections.ts')).toBe(false);
+    expect(tree.exists('docs/project.json')).toBe(false);
+    expect(tree.exists('eslint.config.mjs')).toBe(false);
+    expect(tree.exists('.github/workflows/megamono-ci.yml')).toBe(false);
+    expect(tree.exists('.github/workflows/megamono-health.yml')).toBe(false);
+    expect(readJson(tree, 'megamono.json').adoption.modules).toEqual([
+      'agents',
+      'skills',
+    ]);
+  });
+
+  it('keeps health useful without docs and records its reductions', async () => {
+    await workspaceInitGenerator(tree, { only: 'health', yes: true });
+
+    expect(
+      readProjectConfiguration(tree, 'megamono').targets?.health?.executor,
+    ).toBe('@megamono/plugin:health');
+    expect(
+      tree.read('.github/workflows/megamono-health.yml', 'utf8'),
+    ).toContain('npm exec nx -- run megamono:health');
+    expect(tree.exists('content-collections.ts')).toBe(false);
+    expect(readJson(tree, 'megamono.json').adoption.reductions).toEqual([
+      {
+        module: 'health',
+        capability: 'spec-drift',
+        reason: 'The docs module is not selected.',
+      },
+      {
+        module: 'health',
+        capability: 'stale-plans',
+        reason: 'The docs module is not selected.',
+      },
+    ]);
+  });
+
+  it('always preserves an existing general-purpose CI workflow', async () => {
+    const repositoryCi = 'name: Repository CI\njobs: {}\n';
+    tree.write('.github/workflows/ci.yml', repositoryCi);
+
+    await workspaceInitGenerator(tree, { only: 'ci', yes: true });
+
+    expect(tree.read('.github/workflows/ci.yml', 'utf8')).toBe(repositoryCi);
+    expect(tree.read('.github/workflows/megamono-ci.yml', 'utf8')).toContain(
+      'nrwl/nx-set-shas@v5',
+    );
+  });
+
+  it('adds modules on a later run without requiring prior unselected modules', async () => {
+    await workspaceInitGenerator(tree, { only: 'agents', yes: true });
+    await workspaceInitGenerator(tree, { only: 'docs', yes: true });
+
+    expect(tree.exists('AGENTS.md')).toBe(true);
+    expect(tree.exists('content-collections.ts')).toBe(true);
+    expect(readJson(tree, 'megamono.json').adoption.modules).toEqual([
+      'docs',
+      'agents',
+    ]);
   });
 });

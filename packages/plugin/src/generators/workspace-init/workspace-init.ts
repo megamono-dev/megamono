@@ -22,9 +22,14 @@ import {
   applyManagedSkillTemplates,
   type ManagedSkillInstallResult,
 } from '../../lib/managed-skills';
+import {
+  readArtifactRegistry,
+  writeArtifactRegistry,
+} from '../../lib/managed-artifacts';
 import type { WorkspaceInitGeneratorSchema } from './schema';
 import {
   createWorkspaceInitPlan,
+  parseWorkspaceInitModules,
   renderWorkspaceInitPlan,
   renderWorkspaceInitSurvey,
   surveyWorkspaceInit,
@@ -34,6 +39,26 @@ const importTarget = {
   executor: '@megamono/plugin:import',
   cache: false,
   parallelism: false,
+};
+
+const healthTarget = {
+  executor: '@megamono/plugin:health',
+  cache: false,
+  inputs: [
+    '{workspaceRoot}/megamono.json',
+    '{workspaceRoot}/.megamono/artifacts.json',
+    '{workspaceRoot}/package.json',
+    '{workspaceRoot}/package-lock.json',
+    '{workspaceRoot}/nx.json',
+    '{workspaceRoot}/docs/**/*.md',
+    '{workspaceRoot}/**/package.json',
+    '{workspaceRoot}/**/app.json',
+    '{workspaceRoot}/**/Cargo.toml',
+    '{workspaceRoot}/**/Package.swift',
+    '{workspaceRoot}/**/.megamono-integration.json',
+    '{workspaceRoot}/.agents/skills/**/*',
+  ],
+  outputs: ['{workspaceRoot}/.megamono/health.json'],
 };
 
 function ensureImportTarget(tree: Tree): boolean {
@@ -55,6 +80,29 @@ function ensureImportTarget(tree: Tree): boolean {
   updateProjectConfiguration(tree, 'megamono', {
     ...project,
     targets: { ...project.targets, import: importTarget },
+  });
+  return true;
+}
+
+function ensureHealthTarget(tree: Tree): boolean {
+  const project = getProjects(tree).get('megamono');
+  if (!project) {
+    throw new Error(
+      'Workspace initialization is incomplete; missing the megamono project.',
+    );
+  }
+  const current = project.targets?.health;
+  if (current) {
+    if (JSON.stringify(current) !== JSON.stringify(healthTarget)) {
+      throw new Error(
+        'megamono:health already exists with a different configuration.',
+      );
+    }
+    return false;
+  }
+  updateProjectConfiguration(tree, 'megamono', {
+    ...project,
+    targets: { ...project.targets, health: healthTarget },
   });
   return true;
 }
@@ -156,7 +204,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm exec nx -- run megamono-docs:health
+      - run: npm exec nx -- run megamono:health
       - uses: actions/github-script@v8
         with:
           script: |
@@ -313,6 +361,83 @@ import megamonoPlugin from '@megamono/plugin/eslint';
   );
 }
 
+function preflightEslintConfig(tree: Tree): void {
+  const current = tree.read('eslint.config.mjs', 'utf8');
+  if (!current) return;
+  const hasImports = current.includes('// megamono eslint imports');
+  const hasRules = current.includes('// megamono eslint rules');
+  if (hasImports !== hasRules) {
+    throw new Error(
+      'eslint.config.mjs contains a partial Megamono ESLint configuration.',
+    );
+  }
+  if (
+    !hasImports &&
+    (!current.includes('export default [') || current.lastIndexOf('\n];') < 0)
+  ) {
+    throw new Error(
+      'eslint.config.mjs must export a flat config array before workspace-init can wire Megamono rules.',
+    );
+  }
+}
+
+function addIgnoreEntries(
+  tree: Tree,
+  path: string,
+  entries: readonly string[],
+): void {
+  let source = tree.read(path, 'utf8') ?? '';
+  const existing = new Set(source.split(/\r?\n/));
+  for (const entry of entries) {
+    if (existing.has(entry)) continue;
+    source = `${source}${source.endsWith('\n') || source.length === 0 ? '' : '\n'}${entry}\n`;
+    existing.add(entry);
+  }
+  tree.write(path, source);
+}
+
+function configuredWorkspacePlatforms(
+  tree: Tree,
+  fallback?: string,
+): ReadonlySet<string> {
+  const platforms = new Set<string>();
+  for (const project of getProjects(tree).values()) {
+    for (const tag of project.tags ?? []) {
+      if (tag.startsWith('platform:')) {
+        platforms.add(tag.slice('platform:'.length));
+      }
+    }
+  }
+  if (platforms.size === 0) platforms.add(fallback ?? 'node');
+  return platforms;
+}
+
+function docsProjectConfiguration(docsRoot: string) {
+  return {
+    root: docsRoot,
+    projectType: 'library' as const,
+    tags: ['type:util', 'scope:shared', 'platform:node'],
+    targets: {
+      validate: {
+        executor: '@megamono/plugin:docs-validate',
+        cache: true,
+        inputs: [
+          '{workspaceRoot}/megamono.json',
+          '{workspaceRoot}/content-collections.ts',
+          `{workspaceRoot}/${docsRoot}/**/*.md`,
+        ],
+        outputs: ['{workspaceRoot}/.content-collections'],
+      },
+      index: { executor: '@megamono/plugin:docs-index', cache: false },
+      archive: { executor: '@megamono/plugin:docs-archive', cache: false },
+      'prune-reports': {
+        executor: '@megamono/plugin:docs-prune-reports',
+        cache: false,
+      },
+    },
+  };
+}
+
 export async function workspaceInitGenerator(
   tree: Tree,
   options: WorkspaceInitGeneratorSchema,
@@ -324,10 +449,7 @@ export async function workspaceInitGenerator(
     );
     return () => undefined;
   }
-  const adoptionPlan = createWorkspaceInitPlan(tree, options);
-  if (options.only || options.yes) {
-    logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
-  }
+  let existingConfig: ReturnType<typeof megamonoConfigSchema.parse> | undefined;
   if (tree.exists('megamono.json')) {
     let currentConfig: unknown;
     try {
@@ -348,60 +470,51 @@ export async function workspaceInitGenerator(
           .join('\n')}`,
       );
     }
-    if (options.docsRoot && options.docsRoot !== parsed.data.docs.root) {
-      throw new Error(
-        `workspace-init already uses docsRoot=${parsed.data.docs.root}; received ${options.docsRoot}.`,
-      );
-    }
-    if (
-      options.defaultPlatform &&
-      !parsed.data.platforms.includes(options.defaultPlatform)
-    ) {
-      throw new Error(
-        `workspace-init is already configured without platform ${options.defaultPlatform}.`,
-      );
-    }
-    const requiredFiles = [
-      'content-collections.ts',
-      '.megamono/project.json',
-      `${parsed.data.docs.root}/project.json`,
-    ];
-    const missingFiles = requiredFiles.filter((path) => !tree.exists(path));
-    if (missingFiles.length > 0) {
-      throw new Error(
-        `Workspace initialization is incomplete; missing ${missingFiles.join(', ')}. Repair the partial initialization before retrying.`,
-      );
-    }
-    const importTargetInstalled = ensureImportTarget(tree);
-    const skillResults = applyManagedSkillTemplates(tree);
-    logManagedSkills(skillResults);
-    if (
-      !importTargetInstalled &&
-      skillResults.every(
-        ({ state }) =>
-          state === 'current' ||
-          state === 'ejected' ||
-          state === 'modified' ||
-          state === 'unmanaged' ||
-          state === 'invalid-provenance',
-      )
-    ) {
-      logger.info(
-        'Megamono workspace is already initialized; no changes made.',
-      );
-    }
-    return linkSkillsCallback(tree.root);
+    existingConfig = parsed.data;
   }
-  if (tree.exists('content-collections.ts')) {
+  const requestedModules = options.only
+    ? parseWorkspaceInitModules(options.only)
+    : existingConfig?.adoption.modules.length
+      ? existingConfig.adoption.modules
+      : parseWorkspaceInitModules();
+  const adoptionPlan = createWorkspaceInitPlan(tree, {
+    ...options,
+    only: requestedModules,
+  });
+  if (options.only || options.yes) {
+    logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
+  }
+  const modules = new Set(requestedModules);
+  const docsRoot = existingConfig?.docs.root ?? options.docsRoot ?? 'docs';
+  if (!isSafeWorkspaceRelativePath(docsRoot)) {
+    throw new Error('docsRoot must be a safe workspace-relative path.');
+  }
+  if (existingConfig && options.docsRoot && options.docsRoot !== docsRoot) {
+    throw new Error(
+      `workspace-init already uses docsRoot=${docsRoot}; received ${options.docsRoot}.`,
+    );
+  }
+  if (
+    !existingConfig &&
+    modules.has('docs') &&
+    tree.exists('content-collections.ts')
+  ) {
     throw new Error(
       'content-collections.ts already exists. Merge the repository-document collections before running workspace-init.',
     );
   }
-
-  const docsRoot = options.docsRoot ?? 'docs';
-  if (!isSafeWorkspaceRelativePath(docsRoot)) {
-    throw new Error('docsRoot must be a safe workspace-relative path.');
+  for (const [module, path] of [
+    ['ci', '.github/workflows/megamono-ci.yml'],
+    ['health', '.github/workflows/megamono-health.yml'],
+  ] as const) {
+    if (!existingConfig && modules.has(module) && tree.exists(path)) {
+      throw new Error(
+        `${path} already exists without Megamono ownership metadata.`,
+      );
+    }
   }
+  if (modules.has('lint')) preflightEslintConfig(tree);
+
   const defaultScope = options.defaultScope ?? 'shared';
   const projects = getProjects(tree);
   const configuredPlatforms = new Set<string>();
@@ -414,7 +527,11 @@ export async function workspaceInitGenerator(
       isApplication(project) &&
       !(project.tags ?? []).some((tag) => tag.startsWith('platform:')),
   );
-  if (projectsNeedingPlatform.length > 0 && !options.defaultPlatform) {
+  if (
+    modules.has('lint') &&
+    projectsNeedingPlatform.length > 0 &&
+    !options.defaultPlatform
+  ) {
     throw new Error(
       `Existing applications require --defaultPlatform before initialization: ${projectsNeedingPlatform
         .map(([name]) => name)
@@ -426,13 +543,19 @@ export async function workspaceInitGenerator(
   for (const [name, project] of projects) {
     if (name === 'megamono' || name === 'megamono-docs') continue;
     const tags = new Set(project.tags ?? []);
-    if (![...tags].some((tag) => tag.startsWith('type:'))) {
+    if (
+      modules.has('lint') &&
+      ![...tags].some((tag) => tag.startsWith('type:'))
+    ) {
       tags.add(isApplication(project) ? 'type:app' : 'type:util');
     }
-    if (![...tags].some((tag) => tag.startsWith('scope:'))) {
+    if (
+      modules.has('lint') &&
+      ![...tags].some((tag) => tag.startsWith('scope:'))
+    ) {
       tags.add(`scope:${defaultScope}`);
     }
-    if (isApplication(project)) {
+    if (modules.has('lint') && isApplication(project)) {
       if (![...tags].some((tag) => tag.startsWith('platform:'))) {
         tags.add(`platform:${options.defaultPlatform}`);
       }
@@ -440,10 +563,12 @@ export async function workspaceInitGenerator(
         tags.add('visibility:internal');
       }
     }
-    updateProjectConfiguration(tree, name, {
-      ...project,
-      tags: [...tags].sort(),
-    });
+    if (modules.has('lint')) {
+      updateProjectConfiguration(tree, name, {
+        ...project,
+        tags: [...tags].sort(),
+      });
+    }
     for (const tag of tags) {
       if (tag.startsWith('platform:')) {
         configuredPlatforms.add(tag.slice('platform:'.length));
@@ -454,173 +579,165 @@ export async function workspaceInitGenerator(
     configuredPlatforms.add(options.defaultPlatform ?? 'node');
   }
 
-  addProjectConfiguration(tree, 'megamono', {
-    root: '.megamono',
-    projectType: 'application',
-    tags: ['type:app', 'scope:shared', 'platform:node', 'visibility:internal'],
-    targets: {
-      check: {
-        executor: '@megamono/plugin:check',
-        cache: true,
-        inputs: [
-          '{workspaceRoot}/megamono.json',
-          '{workspaceRoot}/package.json',
-          '{workspaceRoot}/package-lock.json',
-          '{workspaceRoot}/nx.json',
-          '{workspaceRoot}/docs/**/*.md',
-          '{workspaceRoot}/**/package.json',
-          '{workspaceRoot}/.agents/skills/**/*',
-        ],
+  if (!projects.has('megamono')) {
+    addProjectConfiguration(tree, 'megamono', {
+      root: '.megamono',
+      projectType: 'application',
+      tags: [
+        'type:app',
+        'scope:shared',
+        'platform:node',
+        'visibility:internal',
+      ],
+      targets: {
+        check: {
+          executor: '@megamono/plugin:check',
+          cache: true,
+          inputs: [
+            '{workspaceRoot}/megamono.json',
+            '{workspaceRoot}/.megamono/artifacts.json',
+            '{workspaceRoot}/package.json',
+            '{workspaceRoot}/package-lock.json',
+            '{workspaceRoot}/nx.json',
+            '{workspaceRoot}/docs/**/*.md',
+            '{workspaceRoot}/**/package.json',
+            '{workspaceRoot}/.agents/skills/**/*',
+          ],
+        },
+        import: importTarget,
+        ...(modules.has('health') ? { health: healthTarget } : {}),
       },
-      import: importTarget,
-    },
-  });
-  addProjectConfiguration(tree, 'megamono-docs', {
-    root: docsRoot,
-    projectType: 'library',
-    tags: ['type:util', 'scope:shared', 'platform:node'],
-    targets: {
-      validate: {
-        executor: '@megamono/plugin:docs-validate',
-        cache: true,
-        inputs: [
-          '{workspaceRoot}/megamono.json',
-          '{workspaceRoot}/content-collections.ts',
-          `{workspaceRoot}/${docsRoot}/**/*.md`,
-        ],
-        outputs: ['{workspaceRoot}/.content-collections'],
-      },
-      index: {
-        executor: '@megamono/plugin:docs-index',
-        cache: false,
-      },
-      archive: {
-        executor: '@megamono/plugin:docs-archive',
-        cache: false,
-      },
-      'prune-reports': {
-        executor: '@megamono/plugin:docs-prune-reports',
-        cache: false,
-      },
-      health: {
-        executor: '@megamono/plugin:health',
-        cache: false,
-        inputs: [
-          '{workspaceRoot}/megamono.json',
-          '{workspaceRoot}/package.json',
-          '{workspaceRoot}/package-lock.json',
-          '{workspaceRoot}/nx.json',
-          `{workspaceRoot}/${docsRoot}/**/*.md`,
-          '{workspaceRoot}/**/package.json',
-          '{workspaceRoot}/**/app.json',
-          '{workspaceRoot}/**/Cargo.toml',
-          '{workspaceRoot}/**/Package.swift',
-          '{workspaceRoot}/**/.megamono-integration.json',
-          '{workspaceRoot}/.agents/skills/**/*',
-        ],
-        outputs: ['{workspaceRoot}/.megamono/health.json'],
-      },
-    },
-  });
+    });
+  } else {
+    ensureImportTarget(tree);
+    if (modules.has('health')) ensureHealthTarget(tree);
+  }
+  if (!tree.exists('.megamono/artifacts.json')) {
+    writeArtifactRegistry(tree, readArtifactRegistry(tree));
+  }
+  if (modules.has('docs') && !getProjects(tree).has('megamono-docs')) {
+    addProjectConfiguration(
+      tree,
+      'megamono-docs',
+      docsProjectConfiguration(docsRoot),
+    );
+  }
 
-  const config = {
-    ...DEFAULT_MEGAMONO_CONFIG,
-    platforms: options.defaultPlatform ? [options.defaultPlatform] : [],
-    docs: { ...DEFAULT_MEGAMONO_CONFIG.docs, root: docsRoot },
-  };
-  tree.write('megamono.json', `${JSON.stringify(config, null, 2)}\n`);
-  wireEslintConfig(tree);
-  tree.write(
-    'content-collections.ts',
-    renderContentCollectionsConfig(docsRoot),
-  );
-  const appendIgnoreEntries = (path: string, entries: readonly string[]) => {
-    let source = tree.read(path, 'utf8') ?? '';
-    const existing = new Set(source.split(/\r?\n/));
-    for (const entry of entries) {
-      if (existing.has(entry)) continue;
-      source = `${source}${source.endsWith('\n') || source.length === 0 ? '' : '\n'}${entry}\n`;
-      existing.add(entry);
-    }
-    tree.write(path, source);
-  };
-  appendIgnoreEntries('.gitignore', [
-    '.content-collections/',
-    '.megamono/graph.json',
-    '.megamono/health.json',
-  ]);
-  appendIgnoreEntries('.prettierignore', [
-    '.content-collections/',
-    '.megamono/graph.json',
-    '.megamono/health.json',
-  ]);
-  updateJson(tree, 'tsconfig.base.json', (value) => {
-    const compilerOptions = value.compilerOptions ?? {};
-    const paths = compilerOptions.paths ?? {};
-    const generatedPaths = {
-      'content-collections': ['./.content-collections/index.js'],
-      'content-collections/*': ['./.content-collections/*.js'],
-    };
-    for (const [name, mapping] of Object.entries(generatedPaths)) {
-      const current = paths[name];
-      if (current && JSON.stringify(current) !== JSON.stringify(mapping)) {
-        throw new Error(
-          `tsconfig.base.json already defines ${name}; merge the Content Collections path before running workspace-init.`,
-        );
-      }
-    }
-    return {
-      ...value,
-      compilerOptions: {
-        ...compilerOptions,
-        paths: { ...paths, ...generatedPaths },
-      },
-    };
+  const adoptedModules = new Set(existingConfig?.adoption.modules ?? []);
+  for (const module of requestedModules) adoptedModules.add(module);
+  const reductions = [
+    ...(existingConfig?.adoption.reductions ?? []).filter(
+      ({ module }) => !requestedModules.includes(module),
+    ),
+    ...adoptionPlan.reductions,
+  ];
+  const config = megamonoConfigSchema.parse({
+    ...(existingConfig ?? DEFAULT_MEGAMONO_CONFIG),
+    platforms: [...configuredPlatforms].sort(),
+    docs: {
+      ...(existingConfig?.docs ?? DEFAULT_MEGAMONO_CONFIG.docs),
+      root: docsRoot,
+    },
+    adoption: {
+      ...(existingConfig?.adoption ?? DEFAULT_MEGAMONO_CONFIG.adoption),
+      modules: parseWorkspaceInitModules([...adoptedModules]),
+      reductions,
+    },
   });
+  tree.write('megamono.json', `${JSON.stringify(config, null, 2)}\n`);
+  if (modules.has('lint')) {
+    const eslint = tree.read('eslint.config.mjs', 'utf8');
+    if (!eslint?.includes('// megamono eslint imports')) wireEslintConfig(tree);
+  }
+  if (modules.has('docs') && !tree.exists('content-collections.ts')) {
+    tree.write(
+      'content-collections.ts',
+      renderContentCollectionsConfig(docsRoot),
+    );
+  }
+  const ignored = [
+    ...(modules.has('docs') ? ['.content-collections/'] : []),
+    '.megamono/graph.json',
+    ...(modules.has('health') ? ['.megamono/health.json'] : []),
+  ];
+  addIgnoreEntries(tree, '.gitignore', ignored);
+  addIgnoreEntries(tree, '.prettierignore', ignored);
+  if (modules.has('docs'))
+    updateJson(tree, 'tsconfig.base.json', (value) => {
+      const compilerOptions = value.compilerOptions ?? {};
+      const paths = compilerOptions.paths ?? {};
+      const generatedPaths = {
+        'content-collections': ['./.content-collections/index.js'],
+        'content-collections/*': ['./.content-collections/*.js'],
+      };
+      for (const [name, mapping] of Object.entries(generatedPaths)) {
+        const current = paths[name];
+        if (current && JSON.stringify(current) !== JSON.stringify(mapping)) {
+          throw new Error(
+            `tsconfig.base.json already defines ${name}; merge the Content Collections path before running workspace-init.`,
+          );
+        }
+      }
+      return {
+        ...value,
+        compilerOptions: {
+          ...compilerOptions,
+          paths: { ...paths, ...generatedPaths },
+        },
+      };
+    });
   const files: Readonly<Record<string, string>> = {
-    [`${docsRoot}/INDEX.md`]: '# Repository documentation index\n',
-    [`${docsRoot}/archives/INDEX.md`]: '# Archived documentation index\n',
-    [`${docsRoot}/DESIGN.md`]:
-      '# Design\n\n## Direction\n\n## Influences\n\n## Not this\n\n## System\n',
-    [`${docsRoot}/specs/.gitkeep`]: '',
-    [`${docsRoot}/plans/.gitkeep`]: '',
-    [`${docsRoot}/decisions/.gitkeep`]: '',
-    [`${docsRoot}/audits/.gitkeep`]: '',
-    [`${docsRoot}/research/.gitkeep`]: '',
-    [`${docsRoot}/reports/.gitkeep`]: '',
-    [`${docsRoot}/archives/specs/.gitkeep`]: '',
-    [`${docsRoot}/archives/plans/.gitkeep`]: '',
-    [`${docsRoot}/archives/research/.gitkeep`]: '',
-    '.agents/skills/.gitkeep': '',
+    ...(modules.has('docs')
+      ? {
+          [`${docsRoot}/INDEX.md`]: '# Repository documentation index\n',
+          [`${docsRoot}/archives/INDEX.md`]: '# Archived documentation index\n',
+          [`${docsRoot}/specs/.gitkeep`]: '',
+          [`${docsRoot}/plans/.gitkeep`]: '',
+          [`${docsRoot}/decisions/.gitkeep`]: '',
+          [`${docsRoot}/audits/.gitkeep`]: '',
+          [`${docsRoot}/research/.gitkeep`]: '',
+          [`${docsRoot}/reports/.gitkeep`]: '',
+          [`${docsRoot}/archives/specs/.gitkeep`]: '',
+          [`${docsRoot}/archives/plans/.gitkeep`]: '',
+          [`${docsRoot}/archives/research/.gitkeep`]: '',
+        }
+      : {}),
+    ...(modules.has('agents')
+      ? {
+          [`${docsRoot}/DESIGN.md`]:
+            '# Design\n\n## Direction\n\n## Influences\n\n## Not this\n\n## System\n',
+        }
+      : {}),
+    ...(modules.has('skills') ? { '.agents/skills/.gitkeep': '' } : {}),
   };
   for (const [path, content] of Object.entries(files)) {
     if (!tree.exists(path)) tree.write(path, content);
   }
-  logManagedSkills(applyManagedSkillTemplates(tree));
-  if (config.health.cadence !== 'disabled') {
+  if (modules.has('skills')) logManagedSkills(applyManagedSkillTemplates(tree));
+  if (modules.has('health') && config.health.cadence !== 'disabled') {
     const workflowPath = '.github/workflows/megamono-health.yml';
-    if (tree.exists(workflowPath)) {
+    const workflow = renderHealthWorkflow(config.health.cadence);
+    if (
+      tree.exists(workflowPath) &&
+      tree.read(workflowPath, 'utf8') !== workflow
+    ) {
       throw new Error(
         `${workflowPath} already exists. Merge or remove it before running workspace-init.`,
       );
     }
-    tree.write(workflowPath, renderHealthWorkflow(config.health.cadence));
+    if (!tree.exists(workflowPath)) tree.write(workflowPath, workflow);
   }
-  const nxCiPath = '.github/workflows/ci.yml';
-  const nxCi = tree.read(nxCiPath, 'utf8');
-  const ciPath =
-    !nxCi ||
-    nxCi.includes('npx nx start-ci-run') ||
-    nxCi.includes('npx nx fix-ci')
-      ? nxCiPath
-      : '.github/workflows/megamono-ci.yml';
-  if (ciPath !== nxCiPath && tree.exists(ciPath)) {
-    throw new Error(
-      `${ciPath} already exists. Merge or remove it before running workspace-init.`,
+  if (modules.has('ci')) {
+    const ciPath = '.github/workflows/megamono-ci.yml';
+    const workflow = renderCiWorkflow(
+      configuredWorkspacePlatforms(tree, options.defaultPlatform),
     );
+    if (tree.exists(ciPath) && tree.read(ciPath, 'utf8') !== workflow) {
+      throw new Error(`${ciPath} differs from the managed Megamono template.`);
+    }
+    if (!tree.exists(ciPath)) tree.write(ciPath, workflow);
   }
-  tree.write(ciPath, renderCiWorkflow(configuredPlatforms));
-  if (!tree.exists('AGENTS.md')) {
+  if (modules.has('agents') && !tree.exists('AGENTS.md')) {
     tree.write(
       'AGENTS.md',
       `# Repository instructions\n\nRead ${docsRoot}/INDEX.md, accepted specs, decisions, and in-progress plans before changing the repository. Use Megamono generators instead of hand-rolling repository structure.\n`,
@@ -629,24 +746,36 @@ export async function workspaceInitGenerator(
   const agentsPath = 'AGENTS.md';
   const agentsMarker = '<!-- megamono affected CI -->';
   const agents = tree.read(agentsPath, 'utf8') ?? '';
-  if (!agents.includes(agentsMarker)) {
+  if (modules.has('agents') && !agents.includes(agentsMarker)) {
     tree.write(
       agentsPath,
       `${agents}${agents.endsWith('\n') || agents.length === 0 ? '' : '\n'}\n${agentsMarker}\n## Affected CI\n\nCI checks out full history and runs \`nrwl/nx-set-shas@v5\` before \`nx affected\`. Preserve that base/head convention when changing workflows so pull requests, merge queues, and default-branch runs compute the correct project set.\n`,
     );
   }
-  if (!tree.exists('CLAUDE.md')) tree.write('CLAUDE.md', '@AGENTS.md\n');
-  const installTask = addDependenciesToPackageJson(
-    tree,
-    {},
-    {
-      '@content-collections/core': '0.15.2',
-      zod: '>=4.1 <5',
-    },
-  );
+  if (modules.has('agents') && !tree.exists('CLAUDE.md')) {
+    tree.write('CLAUDE.md', '@AGENTS.md\n');
+  }
+  if (options.report) {
+    if (!isSafeWorkspaceRelativePath(options.report)) {
+      throw new Error('report must be a safe workspace-relative path.');
+    }
+    tree.write(options.report, renderWorkspaceInitPlan(adoptionPlan));
+  }
+  const installTask = modules.has('docs')
+    ? addDependenciesToPackageJson(
+        tree,
+        {},
+        {
+          '@content-collections/core': '0.15.2',
+          zod: '>=4.1 <5',
+        },
+      )
+    : () => undefined;
   await formatFiles(tree);
 
-  return runTasksInSerial(installTask, linkSkillsCallback(tree.root));
+  return modules.has('skills')
+    ? runTasksInSerial(installTask, linkSkillsCallback(tree.root))
+    : installTask;
 }
 
 export default workspaceInitGenerator;
