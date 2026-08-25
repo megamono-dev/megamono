@@ -520,7 +520,12 @@ function createTargets(
       inputs,
     },
   ] as const) {
-    const parts = ['wrangler', target.wrangler, ...configParts];
+    const parts = [
+      'wrangler',
+      target.wrangler,
+      ...(target.wrangler === 'types' ? [typegenOutput] : []),
+      ...configParts,
+    ];
     targets[target.name] = {
       executor: 'nx:run-commands',
       cache: target.cache,

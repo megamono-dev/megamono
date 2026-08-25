@@ -137,6 +137,10 @@ describe('projectsFromWranglerConfigs', () => {
     expect(project.targets?.['typegen']).toMatchObject({
       cache: true,
       outputs: ['{workspaceRoot}/apps/worker/worker-configuration.d.ts'],
+      options: {
+        command:
+          "'wrangler' 'types' 'apps/worker/worker-configuration.d.ts' '--config' 'apps/worker/wrangler.jsonc'",
+      },
     });
     expect(project.targets?.['tail']).toMatchObject({
       cache: false,

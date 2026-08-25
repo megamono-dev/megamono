@@ -268,13 +268,16 @@ export function typegenTask(
   configPath: string,
   runner: ExternalCommandRunner = runExternalCommand,
 ): PostFlushTask {
+  const outputPath = normalizePath(
+    join(dirname(configPath), 'worker-configuration.d.ts'),
+  );
   return {
     id: 'wrangler-types',
-    retry: `npm exec wrangler -- types --config ${configPath}`,
+    retry: `npm exec wrangler -- types ${outputPath} --config ${configPath}`,
     run: async () => {
       await runner(
         'npm',
-        ['exec', 'wrangler', '--', 'types', '--config', configPath],
+        ['exec', 'wrangler', '--', 'types', outputPath, '--config', configPath],
         workspaceRoot,
       );
     },

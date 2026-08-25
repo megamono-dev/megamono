@@ -48,6 +48,17 @@
             }
           ]
         }
+      },
+      "e2e-local-registry": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/nx-cloudflare/e2e/local-registry.e2e.mjs",
+          "cwd": "."
+        }
       }
     },
     "tags": [
