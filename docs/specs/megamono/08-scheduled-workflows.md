@@ -15,6 +15,7 @@ references:
     spec-megamono-0004,
     spec-megamono-0005,
     spec-megamono-0012,
+    spec-megamono-0014,
   ]
 external_references: [playstack:45-cli]
 ---
@@ -84,7 +85,9 @@ Compares `docs/specs/` against what exists in the graph. Flags specs describing 
 
 Architecture comparison uses only the optional `architecture.allowed_dependencies` and `architecture.forbidden_dependencies` spec front matter defined by `spec-megamono-0004`. A declared allowed edge that is absent and a declared forbidden edge that is present receive stable, spec-qualified fingerprints. Prose is never parsed as an edge contract.
 
-This check also compares managed repository skills with the templates shipped by the installed plugin. Missing, outdated, modified, and invalid managed copies are reported; ejected skills are deliberately excluded. Skill drift remains part of spec drift because these artifacts carry the repository's accepted operating contract.
+This check also evaluates the Megamono artifact registry from `spec-megamono-0014`. Missing, outdated, modified, and invalid managed artifacts are reported; seeded artifacts are repository-owned, derived artifacts are validated by their owning executor, and ejected artifacts are deliberately excluded. Managed skills use the same registry and remain part of spec drift because they carry the repository's accepted operating contract.
+
+Managed-artifact findings use stable `managed-artifact:<state>:<id>` fingerprints. Skill IDs retain the more specific `managed-skill:<state>:<name>` fingerprint for compatibility. A malformed registry or ownership path outside the workspace is a configuration error. Temporary structural-warning ratchets from workspace adoption are reported in this check until promoted or covered by their accepted decision; this does not add a sixth health check.
 
 Reports only. Never edits a spec (`spec-megamono-0005`, "Skills report, never auto-edit").
 
@@ -184,6 +187,7 @@ The required decision topic is fixed per check: `dependencies` for dependency al
 - npm, Expo, SwiftPM, and Cargo constraints are evaluated in v1. Laravel ships with its Wave 2 plugin. Gradle relationships come from the official Nx Gradle plugin; unsupported constraint forms lower confidence and produce a review candidate, never a deletion or upgrade recommendation.
 - Existing Renovate and Dependabot configuration is left unchanged. Megamono reports graph-wide conflicts and does not generate competing dependency PRs or silently narrow another tool's scope.
 - Scheduled execution is deterministic. Agent-assisted review skills remain explicit as defined in `spec-megamono-0005`.
+- Managed-artifact drift and temporary adoption ratchets remain part of `spec-drift`; seeded and ejected artifacts never produce ownership findings.
 
 ## Acceptance criteria
 
@@ -194,3 +198,4 @@ The required decision topic is fixed per check: `dependencies` for dependency al
 - Health never creates a branch or pull request, invokes a package updater, or converts a finding into a mutation plan.
 - Valid suppressions hide the primary finding but remain auditable; invalid, expired, wildcard, and superseded-decision suppressions fail configuration validation.
 - A missing ecosystem plugin lowers confidence and cannot produce an automatic deletion or dependency-upgrade recommendation.
+- Managed-artifact fixtures cover current, missing, outdated, modified, invalid, seeded, derived, and ejected states without mutating any artifact.

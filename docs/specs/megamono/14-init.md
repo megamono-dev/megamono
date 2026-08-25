@@ -4,7 +4,7 @@ type: spec
 status: accepted
 visibility: internal
 projects: [megamono]
-topics: [generators, lifecycle, docs, agents, lint]
+topics: [generators, lifecycle, docs, agents, lint, ci]
 summary: Defines additive, modular adoption of Megamono in an existing Nx workspace.
 date: 2026-08-24
 supersedes: null
@@ -54,6 +54,7 @@ Every execution installs a small baseline: `megamono.json`, the `megamono` proje
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `docs`      | Centralized corpus directories, Content Collections config, indexes, and `megamono-docs` targets (`spec-megamono-0004`, `spec-megamono-0011`) |
 | `agents`    | A managed section in `AGENTS.md`, a safe `CLAUDE.md` pointer when possible, and `docs/DESIGN.md`                                              |
+| `ci`        | A dedicated affected-CI workflow owned by Megamono; existing repository workflows remain untouched                                            |
 | `lint`      | Project-tag completion, structural checks, docs validation, and ESLint wiring (`spec-megamono-0006`)                                          |
 | `skills`    | Managed portable skills under `.agents/skills` and the `.claude/skills` projection (`spec-megamono-0005`)                                     |
 | `health`    | The deterministic scheduled health workflow and local health target (`spec-megamono-0008`)                                                    |
@@ -64,6 +65,51 @@ npm exec nx g @megamono/plugin:workspace-init --only=docs,agents
 ```
 
 `--only` accepts a comma-separated set of module names. Omitting it starts the guided flow. Selecting a module never silently selects another: when a capability is reduced because another module is absent, the preview names the reduction. For example, `health` without `docs` disables the spec-drift and stale-plan checks but can still run dependency-alignment and orphan checks.
+
+The `ci` module writes `.github/workflows/megamono-ci.yml`; it never replaces or inserts unbounded text into an existing general-purpose workflow. When the survey finds equivalent affected-CI coverage, it recommends skipping the module and reports the retained repository-owned workflow. An occupied `megamono-ci.yml` path is an owned-path conflict, not permission to overwrite it.
+
+## Artifact ownership and provenance
+
+Ownership follows the artifact's semantic lifecycle, not its file extension or the fact that a generator created it:
+
+| Mode              | Contract                                                                                                         |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `managed`         | Megamono owns the complete artifact and may update it only while its installed hash still matches.               |
+| `managed-section` | Megamono owns only the bytes between exact start and end delimiters in an otherwise repository-owned file.       |
+| `seeded`          | Megamono creates an initial artifact once; the repository owns it immediately and no plugin upgrade rewrites it. |
+| `derived`         | The artifact is deterministic output from canonical repository state and is regenerated rather than edited.      |
+
+The committed registry `.megamono/artifacts.json` is the authority for the lifecycle of Megamono-emitted workspace artifacts. It has schema version `1` and a stable, ID-sorted `artifacts` array. Each entry records `id`, `module`, `mode`, `target`, `sourceVersion`, `templateHash`, `installedHash`, `state: managed|seeded|derived|ejected`, and `ejectable`. A `managed-section` entry additionally records its exact start and end delimiters. A managed file set, such as a skill, records a stable, explicit `files` array under its target directory. Hashes are SHA-256 values prefixed with `sha256:`; a whole-file hash covers exact bytes, a section hash covers only the bytes inside its delimiters, and a file-set hash covers each sorted relative path, byte length, and file content. A symlink hash covers its normalized relative target.
+
+Artifact IDs match `^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)*$` and remain stable when a target path changes. V1 reserves `agents.instructions`, `agents.claude-pointer`, `ci.affected`, `health.workflow`, `docs.loader`, `docs.index`, `docs.archive-index`, and `skill.<name>` for their corresponding artifacts.
+
+Creating a directory never grants Megamono ownership of later descendants. Registry entries name files, symlinks, bounded sections, or an explicit file set; unlisted descendants are always repository-owned. The registry is committed and validated by `megamono:check`, but is not an entry in its own array and therefore has no self-referential hash.
+
+The canonical examples are:
+
+| Artifact                                             | Mode              |
+| ---------------------------------------------------- | ----------------- |
+| `megamono.json`                                      | `seeded`          |
+| Megamono Nx project configuration                    | `managed`         |
+| `.github/workflows/megamono-ci.yml`                  | `managed`         |
+| `.github/workflows/megamono-health.yml`              | `managed`         |
+| Megamono instructions within an existing `AGENTS.md` | `managed-section` |
+| A `CLAUDE.md` pointer created by Megamono            | `managed`         |
+| Installed portable skills                            | `managed`         |
+| `docs/DESIGN.md` and new document skeletons          | `seeded`          |
+| `docs/INDEX.md` and archive indexes                  | `derived`         |
+
+Playstack keeps a separate domain. `@playstack/cli` owns artifacts required by Playstack packages and their update/eject/merge state. Megamono owns repository-governance artifacts and may invoke the Playstack CLI, but `.megamono/artifacts.json` never mirrors or interprets `playstack.artifacts.json`, `.playstack/base`, or `playstack.json`. Human-authored product and organizational content is repository-owned regardless of which tool created its initial skeleton.
+
+### Ejection
+
+```text
+npm exec nx g @megamono/plugin:workspace-eject --artifact=agents.instructions
+```
+
+`workspace-eject` accepts one exact artifact ID plus `--dry-run`. It preserves the current content. For a whole file or symlink it removes any embedded Megamono provenance while leaving the target in place; for a managed section it removes only the delimiters and retains the section body in place; for a managed file set it leaves every listed and unlisted file unchanged. It then records `state: ejected` in the registry. Ejected artifacts are repository-owned, excluded from managed drift, and never reclaimed by workspace-init or a plugin upgrade.
+
+The command refuses unknown and `ejectable: false` artifacts before mutation. An already-ejected artifact is a successful no-op, preserving generator idempotency. `skill-eject --name=<name>` remains the ergonomic skill-specific command and delegates to the same ownership library and registry transition. There is no implicit re-adoption in V1.
 
 ## Survey before trust
 
@@ -114,10 +160,12 @@ Existing docs are inventoried but never moved or rewritten by init. The survey c
 
 Applying that mapping is a separate, explicitly reviewed docs-migration operation. This preserves init's no-moves guarantee and avoids a heuristic rewrite of repository-owned content. A partially adopted corpus is valid: existing docs may remain where they are while new Megamono records use the canonical corpus.
 
+The `docs` module owns its repository-docs loader/configuration plumbing only when it creates those complete files. This does not include content-level emissions owned by Playstack. `docs/DESIGN.md` and every generated document skeleton are seeded and immediately repository-owned. Indexes are derived. The IA directories themselves confer no ownership over their contents.
+
 ## Existing agent files
 
-- If `AGENTS.md` is absent, the `agents` module creates it. If present, init appends only a delimited managed section after preview approval and preserves all existing content above it.
-- If `CLAUDE.md` is absent, init creates the supported pointer to `AGENTS.md`. An existing pointer remains unchanged. A substantive `CLAUDE.md` or `.cursorrules` is never replaced or merged automatically; the survey reports duplicated instructions and a follow-up proposal.
+- If `AGENTS.md` is absent, the `agents` module creates a seeded repository-owned file containing a managed Megamono section. If present, init appends only that delimited managed section after preview approval and preserves all existing content outside it.
+- If `CLAUDE.md` is absent, init creates the supported pointer to `AGENTS.md` as a managed artifact. An existing pointer remains repository-owned and unchanged. A substantive `CLAUDE.md` or `.cursorrules` is never replaced or merged automatically; the survey reports duplicated instructions and a follow-up proposal.
 - Existing skills with a conflicting name block installation of that managed skill. Init never relies on undefined duplicate-name precedence.
 
 ## Lint adoption
@@ -134,7 +182,7 @@ All file/config preflight completes before the Nx tree is flushed. Package insta
 
 ## Re-running and recovery
 
-Init is idempotent and resumable. A later run detects installed modules, skips current managed artifacts, and plans only missing or safely upgradable pieces. An edited managed file is preserved and reported; taking ownership uses the package's explicit ejection mechanism rather than `--force`.
+Init is idempotent and resumable. A later run detects installed modules, skips current managed artifacts, regenerates derived artifacts, and plans only missing or safely upgradable managed pieces. Seeded and ejected artifacts are never rewritten. A modified managed artifact is preserved, reported with a diff, and points to `workspace-eject`; `--force` cannot reclaim it. A missing managed artifact is recreated only in an explicitly confirmed plan for its selected module.
 
 The completion summary lists modules adopted or skipped, paths added or modified, conventions retained, confidence gaps, and follow-up commands. `--report=<path>` persists the same Markdown only when explicitly requested. If an external command fails after tree flush, `MEGAMONO-RECOVERY.md` records the completed steps and exact retry command; init never attempts an automatic rollback.
 
@@ -143,9 +191,12 @@ The completion summary lists modules adopted or skipped, paths added or modified
 - `workspace-init` is the only canonical generator name; `@megamono/workspace:init` is not an alias.
 - Survey classification is conservative and proposal-only. Init never migrates existing docs.
 - Existing substantive agent files are preserved for explicit follow-up rather than merged by heuristic.
+- `ci` is an independent module and uses a dedicated managed workflow; init never takes ownership of an existing repository workflow.
 - Init offers but does not run repository health after adoption.
 - Existing Nest libraries are never renamed by init.
 - Partial module adoption is supported and recorded in `megamono.json`.
+- `.megamono/artifacts.json` is the sole authority for Megamono workspace-artifact ownership. Playstack artifact state remains external.
+- `workspace-eject` is the only general ownership transition in V1; there is no implicit re-adoption or force-reclaim path.
 
 ## Acceptance criteria
 
@@ -155,6 +206,9 @@ The completion summary lists modules adopted or skipped, paths added or modified
 - Dirty/default-branch execution, unsupported baselines, unresolved decisions, conflicting owned paths, and substantive alternate agent files fail or defer exactly as specified before mutation.
 - Each module is independently idempotent; every supported module subset either works or reports its documented capability reduction.
 - Existing project names, roots, valid tags, targets, docs, and agent content survive unchanged unless their exact edit was approved in preview.
+- Every emitted artifact is classified as managed, managed-section, seeded, or derived; registry hashes, delimiters, IDs, and ordering are deterministic.
+- Updating pristine managed artifacts succeeds, while modified, seeded, and ejected artifacts remain byte-for-byte unchanged; derived artifacts regenerate from canonical input.
+- `workspace-eject --dry-run` and execution produce the same ownership plan, preserve content, and never affect Playstack-owned artifacts.
 - Init never moves an existing path, and docs classification never applies during init.
 - Temporary structural warnings remain visible to health until ratcheted or covered by an accepted decision.
 - A failed external command writes recovery guidance without committing, pushing, or rolling back repository-owned changes.

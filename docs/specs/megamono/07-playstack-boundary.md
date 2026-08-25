@@ -16,6 +16,7 @@ references:
     spec-megamono-0003,
     spec-megamono-0011,
     spec-megamono-0012,
+    spec-megamono-0014,
   ]
 external_references:
   [
@@ -103,6 +104,8 @@ That distinction is what keeps the direction rule true in practice rather than o
 `@playstack/cli` is the universal path for artifacts that a Playstack package owns, including Prisma fragments, email templates, content configuration, and locale catalogs. A Megamono generator installs or invokes that CLI in the generated workspace rather than copying its merge, drift, ejection, or update logic.
 
 Megamono adds only the information the package CLI cannot know: it resolves the target project and conventional path from the Nx graph, records the explicit target in `playstack.json`, and wires Nx targets around the package operation. The CLI accepts those paths without reading Nx, `megamono.json`, or Megamono package state. This keeps the same package usable in a non-Nx application.
+
+Package-owned emissions remain entirely outside the Megamono artifact registry from `spec-megamono-0014`. Megamono never mirrors their hashes, bases, managed/ejected state, or update history into `.megamono/artifacts.json`; it treats the `@playstack/cli` result and exit classification as the authority.
 
 A generator that requires a package-owned artifact remains outside the published collection until `playstack:45-cli` supplies the installable package, compatible command contract, stable exit classifications, and fixture used by the Megamono acceptance suite. Gated generators must not carry a private copy of the missing mutation logic.
 
@@ -205,6 +208,7 @@ In each case the left side is thinner than it wants to be, and holding that line
 - A generator with a default dependency above the Free tier is excluded from the published collection.
 - Every published Playstack generator passes against the package's external fixture contract and supported version range.
 - Package-owned artifacts are produced through `@playstack/cli`; Megamono adds graph-aware target selection and Nx wiring without duplicating package merge or update logic.
+- Megamono never registers or manages a Playstack-owned emission in `.megamono/artifacts.json`.
 - No published `@playstack/*` package manifest or graph node depends on `@megamono/*`.
 - Prisma generators are idempotent, select or require a target deterministically, validate the combined schema, and never connect to a database.
 - Springbar selection performs the MCP handoff after successful workspace creation, while Megamono never writes Springbar configuration directly; handoff failure is non-fatal and retryable.

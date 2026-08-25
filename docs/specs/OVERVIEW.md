@@ -21,6 +21,8 @@ Repository documents are centralized under `docs/` and use stable IDs. Specs are
 
 `AGENTS.md` is the instruction source. Portable Agent Skills live once under `.agents/skills`; Claude Code receives a symlink at `.claude/skills`. Skills report or propose and are invoked explicitly. V1 CI and scheduled health workflows are deterministic and require no model provider or AI credential.
 
+Megamono classifies emitted repository-governance artifacts as managed, managed sections, seeded, or derived and records their lifecycle in `.megamono/artifacts.json`. Pristine managed artifacts may upgrade; modified artifacts are preserved until explicitly ejected with `workspace-eject`; seeded content is repository-owned immediately; derived output is regenerated. Playstack package artifacts remain exclusively in the `@playstack/cli` ownership domain.
+
 Structural rules are split by capability: ESLint handles source imports, `megamono:check` handles repository and graph structure, and `megamono-docs:validate` handles the Markdown corpus. The generated weekly health workflow updates one GitHub issue and never opens dependency PRs.
 
 ## Package and feature boundary

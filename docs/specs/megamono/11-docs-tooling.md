@@ -16,6 +16,7 @@ references:
     spec-megamono-0006,
     spec-megamono-0007,
     spec-megamono-0008,
+    spec-megamono-0014,
   ]
 external_references: [playstack:11-content]
 ---
@@ -124,6 +125,8 @@ That last one is the payoff of ID-based cross-referencing. A dangling reference 
 
 The `megamono-docs` project exposes the targets from `spec-megamono-0000`. `validate` declares `.content-collections/` as its output so results cache and `affected` work. The directory is gitignored. `INDEX.md` and `docs/archives/INDEX.md` are committed because they must be readable without a build.
 
+Under the ownership modes in `spec-megamono-0014`, committed indexes are `derived`: the index executor regenerates them from the validated corpus and byte differences fail the corresponding check. A repository-docs Content Collections configuration created wholesale by Megamono is `managed`; an existing loader configuration is repository-owned and receives only a previewed integration proposal. This ownership does not extend to content-level emissions owned by Playstack. `DESIGN.md` and document skeletons are `seeded`. Creating the corpus directories never grants Megamono ownership of documents later placed inside them.
+
 ## Generators
 
 | Generator                                                         | Does                                                                                                                   |
@@ -138,6 +141,10 @@ The `megamono-docs` project exposes the targets from `spec-megamono-0000`. `vali
 | `npm exec nx g @megamono/plugin:content-type <collection> <name>` | Document type within a content lib                                                                                     |
 
 IDs and numbering are automatic. Manual numbering is where suites drift, and manual IDs are where reference integrity dies.
+
+`docs-init` reuses the same `docs`, `agents`, and `skills` module primitives and `.megamono/artifacts.json` ownership library as `workspace-init`. It is a focused entry point, not a second template or provenance implementation.
+
+Generators own record shape at creation time, not record content afterward. Once a spec, plan, decision, research record, audit, or design brief is written, it is repository-owned and no plugin upgrade rewrites its prose or front matter. Only an explicitly invoked lifecycle executor may apply the narrowly specified metadata transition in this spec.
 
 ### Content lib generators
 
@@ -226,3 +233,5 @@ The mitigation is already structural: front matter and file layout are plain mar
 - Every generator is idempotent and produces IDs in the formats defined by `spec-megamono-0004`.
 - Archive dry-run and execution produce the same ordered path plan; a failed validation produces no changes.
 - Index output is byte-for-byte deterministic across two runs.
+- Plugin upgrades never rewrite seeded document bodies, while derived indexes regenerate and pristine managed loader plumbing may update through the common artifact registry.
+- Creating or ejecting docs tooling never claims, moves, or deletes descendant repository documents.

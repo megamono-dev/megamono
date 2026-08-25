@@ -52,6 +52,7 @@ The initial validation channel publishes `@megamono/plugin`, `@megamono/nx-apple
 
 ```text
 @megamono/plugin:workspace-init
+@megamono/plugin:workspace-eject
 @megamono/plugin:convert
 @megamono/plugin:skill-eject
 
@@ -80,11 +81,11 @@ The initial validation channel publishes `@megamono/plugin`, `@megamono/nx-apple
 
 These are stable names, not a promise that every generator ships in the first collection. V1 availability is explicit:
 
-| Availability                         | Generators                                                                                                                        |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| Unconditional core                   | `workspace-init`, `convert`, `skill-eject`, `docs-init`, `docs-spec`, `docs-decision`, `docs-plan`, `docs-research`, `docs-audit` |
-| Conditional on external fixture gate | `content-lib`, `content-type`, every `playstack-*` generator, `integration-sentry`, `integration-postmark`, `emails`              |
-| Reserved for later wave              | `integration-fathom`, `integration-stripe`, `playstack-admin`, `playstack-queues`                                                 |
+| Availability                         | Generators                                                                                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unconditional core                   | `workspace-init`, `workspace-eject`, `convert`, `skill-eject`, `docs-init`, `docs-spec`, `docs-decision`, `docs-plan`, `docs-research`, `docs-audit` |
+| Conditional on external fixture gate | `content-lib`, `content-type`, every `playstack-*` generator, `integration-sentry`, `integration-postmark`, `emails`                                 |
+| Reserved for later wave              | `integration-fathom`, `integration-stripe`, `playstack-admin`, `playstack-queues`                                                                    |
 
 The published collection is generated from this availability registry. Requesting a reserved or gated generator returns a diagnostic naming the unsatisfied gate; it never falls through to a partial implementation.
 
@@ -120,7 +121,7 @@ Every generator follows these rules:
 1. **Deterministic planning.** Resolve inputs and produce an in-memory change plan before writing.
 2. **No hidden prompts.** `--interactive=false` either has enough flags/config to finish or exits before mutation with the missing option names.
 3. **Idempotency.** Re-running with the same options produces no diff and exits successfully.
-4. **Conflict safety.** A generated file carrying a provenance header may be updated only when its recorded hash still matches. Modified files produce a diff and require `--force`; `--force` never applies to convert/import.
+4. **Conflict safety.** Workspace-governance artifacts use the ownership modes and committed registry from `spec-megamono-0014`. A pristine managed artifact may update only while its installed hash matches. A modified managed artifact is preserved, receives a diff, and must be made repository-owned with `workspace-eject`; `--force` never reclaims it. Generator-specific files outside that registry may expose a separately specified scoped `--force`, but `--force` never applies to workspace-init, convert, or import.
 5. **No implicit commits.** Generators write files but do not commit, push, open PRs, create secrets, run migrations against a database, or deploy.
 6. **External commands last.** Package installation and ecosystem CLIs run only after file preflight succeeds. Failure leaves a recovery report naming every completed step.
 7. **Secrets by name only.** Workflows declare required secret names; generators never request or persist secret values.
@@ -161,6 +162,7 @@ A spec is build-ready when it has `status: accepted`, no unresolved decision tha
 ## Acceptance criteria
 
 - Packed packages enforce the supported Node, npm, Nx, and TypeScript ranges and reject unsupported package managers and operating systems during preflight.
+- `workspace-eject` preserves artifact content, changes only Megamono ownership metadata or managed-section delimiters, and prevents later plugin upgrades from reclaiming the artifact.
 - Every public generator and executor name appears in this contract and resolves from a local-registry installation fixture.
 - Generator fixtures prove deterministic planning, dry-run parity, idempotency, conflict handling, stable exit codes, and absence of secret values.
 - Language-plugin fixtures prove current Nx 23 API exports, deterministic project discovery, and affected graph propagation.

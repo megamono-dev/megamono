@@ -15,6 +15,7 @@ references:
     spec-megamono-0006,
     spec-megamono-0008,
     spec-megamono-0011,
+    spec-megamono-0014,
   ]
 external_references: [playstack:01-overview, playstack:28-mcp]
 ---
@@ -190,13 +191,15 @@ Codex discovers `.agents/skills` from the working directory through the reposito
 
 Those locations follow the current [Codex skill discovery](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills) and [Claude Code skill discovery](https://code.claude.com/docs/en/skills#where-skills-live) contracts. The fixture suite treats a path change in either tool as a compatibility failure, not as permission to duplicate the skill tree.
 
-Skills are templates inside `@megamono/plugin` and are installed into the repository by `workspace-init`, never loaded from `node_modules` at runtime. Each installed skill has a sibling `.megamono-skill.json` containing the plugin version and template hash.
+Skills are templates inside `@megamono/plugin` and are installed into the repository by `workspace-init`, never loaded from `node_modules` at runtime. Each installed skill is a `managed` entry in `.megamono/artifacts.json` under the ownership contract in `spec-megamono-0014`; its entry covers the complete skill directory as a stable, path-sorted hash set.
 
-Codex does not define override precedence for duplicate names; duplicate names can both appear. Consequently, a repository must not create two skills with the same `name`. To customize a generated skill, run `npm exec nx g @megamono/plugin:skill-eject --name=<name>`. Ejection removes its managed provenance and makes the checked-in copy repository-owned. Future upgrades report it as ejected and never overwrite it. New repository-specific skills use unique names.
+Codex does not define override precedence for duplicate names; duplicate names can both appear. Consequently, a repository must not create two skills with the same `name`. To customize a generated skill, run `npm exec nx g @megamono/plugin:skill-eject --name=<name>`. It delegates to the same transition as `workspace-eject --artifact=skill.<name>`, preserves every skill file, records the entry as ejected, and makes the checked-in copy repository-owned. Future upgrades recognize it as ejected and never overwrite it. New repository-specific skills use unique names.
 
 ### Versioning
 
 Skills version with `@megamono/plugin`. Managed copies record their source version and template hash, so `spec-megamono-0008` can report a skill that has fallen behind. An ejected copy is intentionally excluded from that drift finding.
+
+Prerelease workspaces that contain the legacy sibling `.megamono-skill.json` provenance are migrated deterministically into `.megamono/artifacts.json` after validating the sidecar and installed hash. Migration changes provenance only, never skill content. Invalid or conflicting legacy provenance is reported and preserved for explicit repair.
 
 Managed-skill findings use the existing `spec-drift` health check rather than adding a sixth check. Missing, outdated, modified, or invalid managed copies receive stable `managed-skill:<state>:<name>` fingerprints. Ejected skills are repository-owned and intentionally silent. A decision suppressing one of these findings carries the `skills` topic.
 
@@ -228,6 +231,7 @@ shadcn ships `shadcn/skills` on the same premise — an agent that does not know
 - Skill content is portable Agent Skills Markdown. `.agents/skills` is canonical and `.claude/skills` is a symlink projection.
 - Every skill includes at least five positive and five negative example prompts. The package test suite runs the same prompt set through the supported discovery evaluator and fails when a positive example is not selected or a negative example is selected.
 - Managed skills upgrade only when their stored template hash matches; ejected skills are never changed.
+- Skill ownership uses the common Megamono artifact registry and ejection library; the legacy per-skill sidecar is migration input only.
 
 ## Acceptance criteria
 
@@ -236,4 +240,5 @@ shadcn ships `shadcn/skills` on the same premise — an agent that does not know
 - Positive and negative trigger fixtures pass for every skill.
 - Installing or updating the plugin does not install hooks, invoke a model, or require provider credentials.
 - Updating a pristine managed skill applies the template update; updating an edited or ejected skill leaves it untouched and reports the reason.
+- `skill-eject` and `workspace-eject --artifact=skill.<name>` produce the same registry transition and preserve identical skill bytes.
 - Deterministic CI remains usable when all AI tools and credentials are absent.

@@ -22,7 +22,7 @@ The suite is centralized under `docs/specs/megamono/`. Cross-document links insi
 | `spec-megamono-0011` | [Docs tooling](megamono/11-docs-tooling.md)                               | Typed graph, indexes, generators, archive, and retention                      |
 | `spec-megamono-0012` | [Integration generators](megamono/12-integration-generators.md)           | Wave 1 Sentry generator and template-drift checks                             |
 | `spec-megamono-0013` | [Email generator](megamono/13-emails.md)                                  | Gated typed email library and local preview                                   |
-| `spec-megamono-0014` | [Workspace init](megamono/14-init.md)                                     | Additive, modular adoption in an existing Nx workspace                        |
+| `spec-megamono-0014` | [Workspace init](megamono/14-init.md)                                     | Modular adoption, artifact ownership, CI, provenance, and ejection            |
 
 ## Normative boundary
 
