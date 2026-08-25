@@ -5,3 +5,13 @@ export {
   WRANGLER_VERSION,
   WRANGLER_VERSION_RANGE,
 } from './lib/compatibility';
+export {
+  collectWranglerConfigs,
+  parseWranglerConfig,
+} from './lib/wrangler-config';
+export type {
+  CloudflareDiagnostic,
+  WranglerConfig,
+  WranglerConfigRecord,
+  WranglerConfigSelection,
+} from './lib/wrangler-config';
