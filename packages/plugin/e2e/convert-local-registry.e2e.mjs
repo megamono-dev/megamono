@@ -115,10 +115,17 @@ function stripAnsi(value) {
 }
 
 function planLines(value) {
-  return stripAnsi(value)
+  const lines = stripAnsi(value)
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => /^\d+\. \*\*/.test(line));
+    .map((line) => line.trim());
+  const start = lines.indexOf('## Ordered plan');
+  if (start < 0) return [];
+  const section = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^#{1,2}\s/.test(line)) break;
+    if (/^\d+\. \*\*/.test(line)) section.push(line);
+  }
+  return section;
 }
 
 async function writeFixture(root) {
@@ -430,6 +437,7 @@ try {
     resolve(fixtureRoot, 'docs/reports/convert.md'),
     'utf8',
   );
+  assert(planLines(dryRun.stdout).length > 0, 'Dry-run omitted its ordered plan.');
   assert(
     JSON.stringify(planLines(dryRun.stdout)) ===
       JSON.stringify(planLines(execution.stdout)),
