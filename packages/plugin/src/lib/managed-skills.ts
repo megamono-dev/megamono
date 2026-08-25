@@ -4,6 +4,16 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import matter = require('gray-matter');
 import type { Diagnostic } from './diagnostics';
+import {
+  ejectManagedArtifact,
+  hashArtifactFileSet,
+  readArtifactRegistry,
+  readArtifactRegistryFromDisk,
+  upsertArtifactEntry,
+  writeArtifactRegistry,
+  type ManagedArtifactEntry,
+  type ManagedArtifactRegistry,
+} from './managed-artifacts';
 
 export const MANAGED_SKILL_NAMES = [
   'structure-review',
@@ -18,6 +28,7 @@ export const MANAGED_SKILL_NAMES = [
 
 export type ManagedSkillName = (typeof MANAGED_SKILL_NAMES)[number];
 
+/** @deprecated Legacy prerelease provenance read only for registry migration. */
 export interface ManagedSkillProvenance {
   readonly schemaVersion: 1;
   readonly name: ManagedSkillName;
@@ -38,6 +49,7 @@ export interface ManagedSkillTemplate {
 export type ManagedSkillInstallState =
   | 'installed'
   | 'updated'
+  | 'migrated'
   | 'current'
   | 'modified'
   | 'ejected'
@@ -65,9 +77,13 @@ export interface ManagedSkillsHealthState {
   >;
 }
 
-const PROVENANCE_FILE = '.megamono-skill.json';
+const LEGACY_PROVENANCE_FILE = '.megamono-skill.json';
 const TEMPLATE_ROOT = resolve(__dirname, '..', 'skills');
 const PACKAGE_ROOT = resolve(__dirname, '..', '..');
+
+function comparePaths(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
 
 function normalizePath(path: string): string {
   return path.split(sep).join('/');
@@ -77,7 +93,7 @@ function listDiskFiles(directory: string): string[] {
   const files: string[] = [];
   const visit = (current: string) => {
     for (const entry of readdirSync(current, { withFileTypes: true }).sort(
-      (left, right) => left.name.localeCompare(right.name),
+      (left, right) => comparePaths(left.name, right.name),
     )) {
       const path = join(current, entry.name);
       if (entry.isDirectory()) visit(path);
@@ -89,6 +105,12 @@ function listDiskFiles(directory: string): string[] {
 }
 
 export function hashManagedSkillFiles(
+  files: Readonly<Record<string, string>>,
+): string {
+  return hashArtifactFileSet(files);
+}
+
+function hashLegacyManagedSkillFiles(
   files: Readonly<Record<string, string>>,
 ): string {
   const hash = createHash('sha256');
@@ -193,14 +215,18 @@ function skillDirectory(name: ManagedSkillName): string {
   return `.agents/skills/${name}`;
 }
 
-function provenancePath(name: ManagedSkillName): string {
-  return `${skillDirectory(name)}/${PROVENANCE_FILE}`;
+function skillArtifactId(name: ManagedSkillName): string {
+  return `skill.${name}`;
+}
+
+function legacyProvenancePath(name: ManagedSkillName): string {
+  return `${skillDirectory(name)}/${LEGACY_PROVENANCE_FILE}`;
 }
 
 function listTreeFiles(tree: Tree, directory: string): string[] {
   const files: string[] = [];
   const visit = (current: string) => {
-    for (const child of tree.children(current).sort()) {
+    for (const child of tree.children(current).sort(comparePaths)) {
       const path = current ? `${current}/${child}` : child;
       if (tree.isFile(path)) files.push(path);
       else visit(path);
@@ -213,19 +239,24 @@ function listTreeFiles(tree: Tree, directory: string): string[] {
 function treeSkillFiles(
   tree: Tree,
   name: ManagedSkillName,
-): Record<string, string> {
+  listedFiles?: readonly string[],
+): Record<string, string> | undefined {
   const directory = skillDirectory(name);
-  return Object.fromEntries(
-    listTreeFiles(tree, directory)
-      .filter((path) => !path.endsWith(`/${PROVENANCE_FILE}`))
-      .map((path) => [
-        path.slice(directory.length + 1),
-        tree.read(path, 'utf8') ?? '',
-      ]),
-  );
+  const paths =
+    listedFiles?.map((path) => `${directory}/${path}`) ??
+    listTreeFiles(tree, directory).filter(
+      (path) => !path.endsWith(`/${LEGACY_PROVENANCE_FILE}`),
+    );
+  const files: Record<string, string> = {};
+  for (const path of paths) {
+    const content = tree.read(path, 'utf8');
+    if (content === null) return undefined;
+    files[path.slice(directory.length + 1)] = content;
+  }
+  return files;
 }
 
-function parseProvenance(
+function parseLegacyProvenance(
   source: string | null,
   name: ManagedSkillName,
 ): ManagedSkillProvenance | undefined {
@@ -248,19 +279,63 @@ function parseProvenance(
   }
 }
 
-function renderProvenance(
+function validLegacyInstallation(
+  tree: Tree,
+  name: ManagedSkillName,
+  provenance: ManagedSkillProvenance,
+): Record<string, string> | undefined {
+  const expectedFiles = [...provenance.files].sort(comparePaths);
+  const installedFiles = treeSkillFiles(tree, name);
+  if (
+    !installedFiles ||
+    new Set(provenance.files).size !== provenance.files.length ||
+    Object.keys(installedFiles).sort(comparePaths).join('\0') !==
+      expectedFiles.join('\0') ||
+    hashLegacyManagedSkillFiles(installedFiles) !== provenance.templateHash
+  ) {
+    return undefined;
+  }
+  return installedFiles;
+}
+
+function skillArtifact(
   template: ManagedSkillTemplate,
-  pluginVersion: string,
-): string {
-  return `${[
-    '{',
-    '  "schemaVersion": 1,',
-    `  "name": ${JSON.stringify(template.name)},`,
-    `  "pluginVersion": ${JSON.stringify(pluginVersion)},`,
-    `  "templateHash": ${JSON.stringify(template.templateHash)},`,
-    `  "files": ${JSON.stringify(Object.keys(template.files).sort())}`,
-    '}',
-  ].join('\n')}\n`;
+  sourceVersion: string,
+  installedHash = template.templateHash,
+): ManagedArtifactEntry {
+  return {
+    id: skillArtifactId(template.name),
+    module: 'skills',
+    mode: 'managed',
+    target: skillDirectory(template.name),
+    sourceVersion,
+    templateHash: template.templateHash,
+    installedHash,
+    state: 'managed',
+    ejectable: true,
+    files: Object.keys(template.files).sort(comparePaths),
+  };
+}
+
+function isExpectedSkillArtifact(
+  artifact: ManagedArtifactEntry,
+  name: ManagedSkillName,
+): boolean {
+  return (
+    artifact.id === skillArtifactId(name) &&
+    artifact.module === 'skills' &&
+    artifact.mode === 'managed' &&
+    artifact.target === skillDirectory(name) &&
+    artifact.ejectable &&
+    Array.isArray(artifact.files) &&
+    artifact.files.includes('SKILL.md')
+  );
+}
+
+function installTemplate(tree: Tree, template: ManagedSkillTemplate): void {
+  for (const [path, content] of Object.entries(template.files)) {
+    tree.write(`${skillDirectory(template.name)}/${path}`, content);
+  }
 }
 
 export function applyManagedSkillTemplates(
@@ -268,100 +343,213 @@ export function applyManagedSkillTemplates(
   templates = loadManagedSkillTemplates(),
   pluginVersion = readPluginVersion(),
 ): readonly ManagedSkillInstallResult[] {
+  let registry = readArtifactRegistry(tree);
+  let registryChanged = false;
   const actions = templates.map((template) => {
-    const installedFiles = treeSkillFiles(tree, template.name);
-    const hasInstalledFiles = Object.keys(installedFiles).length > 0;
-    const provenanceSource = tree.read(provenancePath(template.name), 'utf8');
-    const provenance = parseProvenance(provenanceSource, template.name);
-    if (!provenanceSource && !hasInstalledFiles) {
-      return { template, state: 'installed' as const };
+    const artifact = registry.artifacts.find(
+      ({ id }) => id === skillArtifactId(template.name),
+    );
+    const legacySource = tree.read(legacyProvenancePath(template.name), 'utf8');
+    const allInstalledFiles = treeSkillFiles(tree, template.name);
+    const hasInstalledFiles = Boolean(
+      allInstalledFiles && Object.keys(allInstalledFiles).length > 0,
+    );
+    if (artifact) {
+      if (legacySource || !isExpectedSkillArtifact(artifact, template.name)) {
+        return { template, state: 'invalid-provenance' as const };
+      }
+      if (artifact.state === 'ejected') {
+        return { template, state: 'ejected' as const };
+      }
+      const installedFiles = treeSkillFiles(
+        tree,
+        template.name,
+        artifact.files,
+      );
+      if (
+        !installedFiles ||
+        hashManagedSkillFiles(installedFiles) !== artifact.installedHash
+      ) {
+        return { template, state: 'modified' as const, artifact };
+      }
+      if (
+        artifact.templateHash !== template.templateHash ||
+        artifact.sourceVersion !== pluginVersion ||
+        artifact.files?.join('\0') !==
+          Object.keys(template.files).sort(comparePaths).join('\0')
+      ) {
+        return { template, state: 'updated' as const, artifact };
+      }
+      return { template, state: 'current' as const };
     }
-    if (!provenanceSource && installedFiles['SKILL.md']) {
+    if (legacySource) {
+      const provenance = parseLegacyProvenance(legacySource, template.name);
+      const installedFiles =
+        provenance && validLegacyInstallation(tree, template.name, provenance);
+      if (!provenance || !installedFiles) {
+        return { template, state: 'invalid-provenance' as const };
+      }
+      return {
+        template,
+        state: 'migrated' as const,
+        provenance,
+        installedHash: hashManagedSkillFiles(installedFiles),
+      };
+    }
+    if (!hasInstalledFiles) return { template, state: 'installed' as const };
+    if (allInstalledFiles?.['SKILL.md']) {
       return { template, state: 'ejected' as const };
     }
-    if (!provenanceSource) {
-      return { template, state: 'unmanaged' as const };
-    }
-    if (!provenance) {
-      return { template, state: 'invalid-provenance' as const };
-    }
-    if (hashManagedSkillFiles(installedFiles) !== provenance.templateHash) {
-      return { template, state: 'modified' as const };
-    }
-    if (
-      provenance.templateHash !== template.templateHash ||
-      provenance.pluginVersion !== pluginVersion
-    ) {
-      return { template, state: 'updated' as const };
-    }
-    return { template, state: 'current' as const };
+    return { template, state: 'unmanaged' as const };
   });
 
   for (const action of actions) {
-    const directory = skillDirectory(action.template.name);
-    if (action.state === 'updated') {
-      for (const path of listTreeFiles(tree, directory)) {
-        if (!path.endsWith(`/${PROVENANCE_FILE}`)) tree.delete(path);
+    if (action.state === 'updated' && action.artifact.files) {
+      for (const path of action.artifact.files) {
+        tree.delete(`${skillDirectory(action.template.name)}/${path}`);
       }
     }
     if (action.state === 'installed' || action.state === 'updated') {
-      for (const [path, content] of Object.entries(action.template.files)) {
-        tree.write(`${directory}/${path}`, content);
-      }
-      tree.write(
-        provenancePath(action.template.name),
-        renderProvenance(action.template, pluginVersion),
+      installTemplate(tree, action.template);
+      registry = upsertArtifactEntry(
+        registry,
+        skillArtifact(action.template, pluginVersion),
       );
+      registryChanged = true;
+    }
+    if (action.state === 'migrated') {
+      registry = upsertArtifactEntry(
+        registry,
+        skillArtifact(
+          action.template,
+          action.provenance.pluginVersion,
+          action.installedHash,
+        ),
+      );
+      tree.delete(legacyProvenancePath(action.template.name));
+      registryChanged = true;
     }
   }
+  if (registryChanged) writeArtifactRegistry(tree, registry);
 
   return actions.map(({ template, state }) => ({
     name: template.name,
     state,
     reason:
       state === 'installed'
-        ? 'installed managed template'
+        ? 'installed managed template and registered its artifact'
         : state === 'updated'
-          ? 'updated pristine managed template'
-          : state === 'current'
-            ? 'managed template is current'
-            : state === 'modified'
-              ? 'managed files differ from their recorded template hash'
-              : state === 'ejected'
-                ? 'skill has no managed provenance'
-                : state === 'unmanaged'
-                  ? 'skill directory contains unowned files'
-                  : 'managed provenance is invalid',
+          ? 'updated pristine managed template and registry hashes'
+          : state === 'migrated'
+            ? 'migrated validated legacy provenance into the artifact registry'
+            : state === 'current'
+              ? 'managed template is current'
+              : state === 'modified'
+                ? 'managed files differ from their recorded installed hash'
+                : state === 'ejected'
+                  ? 'skill is repository-owned and will not be reclaimed'
+                  : state === 'unmanaged'
+                    ? 'skill directory contains unowned files'
+                    : 'managed provenance is invalid or conflicting',
   }));
 }
 
 export function ejectManagedSkill(
   tree: Tree,
   name: ManagedSkillName,
+  options: { readonly dryRun?: boolean } = {},
 ): 'ejected' | 'already-ejected' {
   const entrypoint = `${skillDirectory(name)}/SKILL.md`;
   if (!tree.exists(entrypoint)) {
     throw new Error(`Managed skill ${name} is not installed.`);
   }
-  const path = provenancePath(name);
-  if (!tree.exists(path)) return 'already-ejected';
-  const provenance = parseProvenance(tree.read(path, 'utf8'), name);
-  if (!provenance) {
+  let registry = readArtifactRegistry(tree);
+  let artifact = registry.artifacts.find(
+    ({ id }) => id === skillArtifactId(name),
+  );
+  if (!artifact) {
+    const legacySource = tree.read(legacyProvenancePath(name), 'utf8');
+    if (!legacySource) return 'already-ejected';
+    const provenance = parseLegacyProvenance(legacySource, name);
+    const installedFiles =
+      provenance && validLegacyInstallation(tree, name, provenance);
+    if (!provenance || !installedFiles) {
+      throw new Error(
+        `Managed skill ${name} has invalid legacy provenance; repair it before ejection.`,
+      );
+    }
+    if (options.dryRun) return 'ejected';
+    const template = loadManagedSkillTemplates().find(
+      (candidate) => candidate.name === name,
+    );
+    if (!template)
+      throw new Error(`Managed skill template ${name} is missing.`);
+    artifact = skillArtifact(
+      template,
+      provenance.pluginVersion,
+      hashManagedSkillFiles(installedFiles),
+    );
+    registry = upsertArtifactEntry(registry, artifact);
+    writeArtifactRegistry(tree, registry);
+    tree.delete(legacyProvenancePath(name));
+  }
+  if (!isExpectedSkillArtifact(artifact, name)) {
     throw new Error(
-      `Managed skill ${name} has invalid provenance; repair it before ejection.`,
+      `Managed skill ${name} has conflicting artifact provenance; repair it before ejection.`,
     );
   }
-  tree.delete(path);
-  return 'ejected';
+  return ejectManagedArtifact(tree, skillArtifactId(name), options).state ===
+    'already-ejected'
+    ? 'already-ejected'
+    : 'ejected';
 }
 
-function diskSkillFiles(directory: string): Record<string, string> {
-  if (!existsSync(directory)) return {};
-  return Object.fromEntries(
-    listDiskFiles(directory)
-      .filter((path) => path !== PROVENANCE_FILE)
-      .map((path) => [path, readFileSync(join(directory, path), 'utf8')]),
+function diskSkillFiles(
+  directory: string,
+  listedFiles?: readonly string[],
+): Record<string, string> | undefined {
+  if (!existsSync(directory)) return undefined;
+  const paths =
+    listedFiles ??
+    listDiskFiles(directory).filter((path) => path !== LEGACY_PROVENANCE_FILE);
+  const files: Record<string, string> = {};
+  for (const path of paths) {
+    const absolutePath = join(directory, path);
+    if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+      return undefined;
+    }
+    files[path] = readFileSync(absolutePath, 'utf8');
+  }
+  return files;
+}
+
+function inspectLegacySkill(
+  directory: string,
+  template: ManagedSkillTemplate,
+): ManagedSkillHealthState {
+  const entrypoint = join(directory, 'SKILL.md');
+  const provenanceFile = join(directory, LEGACY_PROVENANCE_FILE);
+  if (!existsSync(entrypoint) && !existsSync(provenanceFile)) return 'missing';
+  if (!existsSync(provenanceFile)) return 'ejected';
+  const provenance = parseLegacyProvenance(
+    readFileSync(provenanceFile, 'utf8'),
+    template.name,
   );
+  const installedFiles = diskSkillFiles(directory);
+  if (
+    !provenance ||
+    !installedFiles ||
+    Object.keys(installedFiles).sort(comparePaths).join('\0') !==
+      [...(provenance?.files ?? [])].sort(comparePaths).join('\0')
+  ) {
+    return 'invalid-provenance';
+  }
+  if (hashLegacyManagedSkillFiles(installedFiles) !== provenance.templateHash) {
+    return 'modified';
+  }
+  return hashLegacyManagedSkillFiles(template.files) === provenance.templateHash
+    ? 'current'
+    : 'outdated';
 }
 
 export function inspectManagedSkills(
@@ -372,38 +560,46 @@ export function inspectManagedSkills(
   if (!existsSync(root) || !statSync(root).isDirectory()) {
     return { available: false, skills: {} };
   }
+  let registry: ManagedArtifactRegistry;
+  try {
+    registry = readArtifactRegistryFromDisk(workspaceRoot);
+  } catch {
+    return {
+      available: true,
+      skills: Object.fromEntries(
+        templates.map(({ name }) => [name, 'invalid-provenance']),
+      ),
+    };
+  }
   const skills = {} as Record<ManagedSkillName, ManagedSkillHealthState>;
   for (const template of templates) {
     const directory = join(root, template.name);
-    const entrypoint = join(directory, 'SKILL.md');
-    const provenanceFile = join(directory, PROVENANCE_FILE);
-    if (!existsSync(entrypoint) && !existsSync(provenanceFile)) {
-      skills[template.name] = 'missing';
-      continue;
-    }
-    if (!existsSync(provenanceFile)) {
-      skills[template.name] = 'ejected';
-      continue;
-    }
-    const provenance = parseProvenance(
-      readFileSync(provenanceFile, 'utf8'),
-      template.name,
+    const artifact = registry.artifacts.find(
+      ({ id }) => id === skillArtifactId(template.name),
     );
-    if (!provenance) {
+    if (!artifact) {
+      skills[template.name] = inspectLegacySkill(directory, template);
+      continue;
+    }
+    if (!isExpectedSkillArtifact(artifact, template.name)) {
       skills[template.name] = 'invalid-provenance';
       continue;
     }
-    if (
-      hashManagedSkillFiles(diskSkillFiles(directory)) !==
-      provenance.templateHash
-    ) {
+    if (artifact.state === 'ejected') {
+      skills[template.name] = 'ejected';
+      continue;
+    }
+    const installedFiles = diskSkillFiles(directory, artifact.files);
+    if (!installedFiles) {
+      skills[template.name] = 'missing';
+      continue;
+    }
+    if (hashManagedSkillFiles(installedFiles) !== artifact.installedHash) {
       skills[template.name] = 'modified';
       continue;
     }
     skills[template.name] =
-      provenance.templateHash === template.templateHash
-        ? 'current'
-        : 'outdated';
+      artifact.templateHash === template.templateHash ? 'current' : 'outdated';
   }
   return { available: true, skills };
 }
@@ -414,7 +610,7 @@ export function validateInstalledSkills(workspaceRoot: string): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const names = new Map<string, string>();
   for (const entry of readdirSync(root, { withFileTypes: true }).sort(
-    (left, right) => left.name.localeCompare(right.name),
+    (left, right) => comparePaths(left.name, right.name),
   )) {
     if (!entry.isDirectory()) continue;
     const relativePath = `.agents/skills/${entry.name}/SKILL.md`;

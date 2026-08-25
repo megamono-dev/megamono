@@ -3,24 +3,24 @@ import {
   applyManagedSkillTemplates,
   loadManagedSkillTemplates,
 } from '../../lib/managed-skills';
+import { readArtifactRegistry } from '../../lib/managed-artifacts';
 import { skillEjectGenerator } from './skill-eject';
 
 describe('skill-eject generator', () => {
   it('supports dry-run, execution, and idempotent reruns', async () => {
     const tree = createTreeWithEmptyWorkspace();
     const template = loadManagedSkillTemplates()[0];
-    const provenance = `.agents/skills/${template.name}/.megamono-skill.json`;
     applyManagedSkillTemplates(tree, [template], '1.0.0');
 
     await skillEjectGenerator(tree, { name: template.name, dryRun: true });
-    expect(tree.exists(provenance)).toBe(true);
+    expect(readArtifactRegistry(tree).artifacts[0].state).toBe('managed');
 
     await skillEjectGenerator(tree, { name: template.name });
-    expect(tree.exists(provenance)).toBe(false);
+    expect(readArtifactRegistry(tree).artifacts[0].state).toBe('ejected');
     expect(tree.exists(`.agents/skills/${template.name}/SKILL.md`)).toBe(true);
 
     await skillEjectGenerator(tree, { name: template.name });
-    expect(tree.exists(provenance)).toBe(false);
+    expect(readArtifactRegistry(tree).artifacts[0].state).toBe('ejected');
   });
 
   it('refuses a missing skill before mutation', async () => {

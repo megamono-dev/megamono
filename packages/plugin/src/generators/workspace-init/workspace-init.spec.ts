@@ -62,9 +62,15 @@ describe('workspace-init generator', () => {
     expect(tree.exists('content-collections.ts')).toBe(true);
     expect(tree.exists('docs/DESIGN.md')).toBe(true);
     expect(tree.exists('.agents/skills/structure-review/SKILL.md')).toBe(true);
-    expect(
-      tree.exists('.agents/skills/structure-review/.megamono-skill.json'),
-    ).toBe(true);
+    expect(tree.exists('.megamono/artifacts.json')).toBe(true);
+    expect(readJson(tree, '.megamono/artifacts.json').artifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'skill.structure-review',
+          mode: 'managed',
+        }),
+      ]),
+    );
     expect(
       tree.read('.agents/skills/structure-review/SKILL.md', 'utf8'),
     ).toContain('name: structure-review');

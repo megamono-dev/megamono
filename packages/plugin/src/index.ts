@@ -18,6 +18,7 @@ export {
   parseArtifactRegistry,
   planManagedArtifactEjection,
   readArtifactRegistry,
+  readArtifactRegistryFromDisk,
   renderArtifactRegistry,
   upsertArtifactEntry,
   writeArtifactRegistry,

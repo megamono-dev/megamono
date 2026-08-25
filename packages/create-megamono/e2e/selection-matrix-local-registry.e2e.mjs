@@ -311,18 +311,18 @@ async function verifyCase(root, testCase, environment) {
     destination,
     '.agents/skills/structure-review/SKILL.md',
   );
-  const managedProvenance = resolve(
-    destination,
-    '.agents/skills/structure-review/.megamono-skill.json',
-  );
+  const managedProvenance = resolve(destination, '.megamono/artifacts.json');
   assert(
     (await exists(managedSkill)) && (await exists(managedProvenance)),
     `${testCase.id}: managed Megamono skills were not installed.`,
   );
   const provenance = JSON.parse(await readFile(managedProvenance, 'utf8'));
+  const skillArtifact = provenance.artifacts.find(
+    ({ id }) => id === 'skill.structure-review',
+  );
   assert(
-    provenance.name === 'structure-review' &&
-      /^sha256:[a-f0-9]{64}$/.test(provenance.templateHash),
+    skillArtifact?.state === 'managed' &&
+      /^sha256:[a-f0-9]{64}$/.test(skillArtifact.templateHash),
     `${testCase.id}: managed skill provenance is invalid.`,
   );
   await rm(destination, { recursive: true, force: true });

@@ -334,6 +334,14 @@ export function readArtifactRegistry(tree: Tree): ManagedArtifactRegistry {
   return parseArtifactRegistry(source);
 }
 
+export function readArtifactRegistryFromDisk(
+  workspaceRoot: string,
+): ManagedArtifactRegistry {
+  const path = resolve(workspaceRoot, ARTIFACT_REGISTRY_PATH);
+  if (!existsSync(path)) return { schemaVersion: 1, artifacts: [] };
+  return parseArtifactRegistry(readFileSync(path, 'utf8'));
+}
+
 export function writeArtifactRegistry(
   tree: Tree,
   registry: ManagedArtifactRegistry,
