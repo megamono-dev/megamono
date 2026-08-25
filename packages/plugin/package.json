@@ -11,6 +11,7 @@
     "./availability.json": "./availability.json",
     "./compatibility.json": "./compatibility.json",
     "./schemas/megamono.schema.json": "./schemas/megamono.schema.json",
+    "./schemas/artifacts.schema.json": "./schemas/artifacts.schema.json",
     "./eslint": {
       "types": "./dist/eslint/plugin.d.ts",
       "import": "./dist/eslint.cjs",

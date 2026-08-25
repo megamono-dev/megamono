@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megamono.dev/schemas/artifacts.schema.json",
+  "title": "Megamono artifact registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "artifacts"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact" }
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "module",
+        "mode",
+        "target",
+        "sourceVersion",
+        "templateHash",
+        "installedHash",
+        "state",
+        "ejectable"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z0-9-]+)*$"
+        },
+        "module": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "mode": {
+          "enum": ["managed", "managed-section", "seeded", "derived"]
+        },
+        "target": { "$ref": "#/$defs/relativePath" },
+        "sourceVersion": { "type": "string", "minLength": 1 },
+        "templateHash": { "$ref": "#/$defs/hash" },
+        "installedHash": { "$ref": "#/$defs/hash" },
+        "state": { "enum": ["managed", "seeded", "derived", "ejected"] },
+        "ejectable": { "type": "boolean" },
+        "startDelimiter": { "type": "string", "minLength": 1 },
+        "endDelimiter": { "type": "string", "minLength": 1 },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relativePath" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "managed-section" } } },
+          "then": { "required": ["startDelimiter", "endDelimiter"] },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["startDelimiter"] },
+                { "required": ["endDelimiter"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": { "required": ["files"] },
+          "then": { "properties": { "mode": { "const": "managed" } } }
+        }
+      ]
+    }
+  }
+}
