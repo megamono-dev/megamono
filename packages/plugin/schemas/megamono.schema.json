@@ -64,6 +64,114 @@
         }
       }
     },
+    "adoption": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modules": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "docs",
+              "agents",
+              "ci",
+              "lint",
+              "skills",
+              "health",
+              "inference"
+            ]
+          }
+        },
+        "reductions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["module", "capability", "reason"],
+            "properties": {
+              "module": {
+                "enum": [
+                  "docs",
+                  "agents",
+                  "ci",
+                  "lint",
+                  "skills",
+                  "health",
+                  "inference"
+                ]
+              },
+              "capability": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              "reason": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "inference": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apple": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["plugin", "manifests"],
+              "properties": {
+                "plugin": { "const": "@megamono/nx-apple" },
+                "manifests": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+                  }
+                }
+              }
+            },
+            "cargo": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["plugin", "manifests"],
+              "properties": {
+                "plugin": { "const": "@megamono/nx-cargo" },
+                "manifests": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ratchets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["rule", "initialCount", "targetSeverity"],
+            "properties": {
+              "rule": {
+                "enum": [
+                  "module-boundaries",
+                  "docs-visibility-boundary",
+                  "no-deep-relative-imports",
+                  "require-tags",
+                  "naming-convention",
+                  "megamono-dev-only",
+                  "playstack-direction",
+                  "platform-boundary",
+                  "no-bare-jsx-strings"
+                ]
+              },
+              "initialCount": { "type": "integer", "minimum": 0 },
+              "targetSeverity": { "const": "error" }
+            }
+          }
+        }
+      }
+    },
     "platforms": {
       "type": "array",
       "uniqueItems": true,

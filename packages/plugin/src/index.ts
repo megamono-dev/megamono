@@ -57,6 +57,7 @@ export {
   type GeneratorAvailabilityStatus,
 } from './lib/availability';
 export {
+  ADOPTION_MODULES,
   BUILT_IN_TOPICS,
   DEFAULT_MEGAMONO_CONFIG,
   MEGAMONO_CONFIG_VERSION,

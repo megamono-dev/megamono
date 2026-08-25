@@ -12,8 +12,78 @@ describe('Megamono configuration', () => {
   it('parses the default configuration and exposes built-in topics', () => {
     const config = megamonoConfigSchema.parse(DEFAULT_MEGAMONO_CONFIG);
     expect(config.version).toBe(1);
+    expect(config.adoption).toEqual({
+      modules: [],
+      reductions: [],
+      inference: {},
+      ratchets: [],
+    });
     expect(config.services.requirements).toEqual({});
     expect(getTopicVocabulary(config)).toContain('architecture');
+  });
+
+  it('records modular adoption, reductions, inference, and lint ratchets', () => {
+    const config = megamonoConfigSchema.parse({
+      ...DEFAULT_MEGAMONO_CONFIG,
+      adoption: {
+        modules: ['docs', 'health', 'inference'],
+        reductions: [
+          {
+            module: 'health',
+            capability: 'stale-plans',
+            reason: 'Documentation migration remains pending.',
+          },
+        ],
+        inference: {
+          apple: {
+            plugin: '@megamono/nx-apple',
+            manifests: ['apps/apple/Package.swift'],
+          },
+        },
+        ratchets: [
+          {
+            rule: 'module-boundaries',
+            initialCount: 12,
+            targetSeverity: 'error',
+          },
+        ],
+      },
+    });
+
+    expect(config.adoption.modules).toEqual(['docs', 'health', 'inference']);
+    expect(config.adoption.inference.apple?.manifests).toEqual([
+      'apps/apple/Package.swift',
+    ]);
+  });
+
+  it('rejects duplicate modules and unsafe inferred manifest paths', () => {
+    expect(
+      megamonoConfigSchema.safeParse({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        adoption: {
+          modules: ['docs', 'docs'],
+          reductions: [],
+          inference: {},
+          ratchets: [],
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      megamonoConfigSchema.safeParse({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        adoption: {
+          modules: ['inference'],
+          reductions: [],
+          inference: {
+            cargo: {
+              plugin: '@megamono/nx-cargo',
+              manifests: ['../Cargo.toml'],
+            },
+          },
+          ratchets: [],
+        },
+      }).success,
+    ).toBe(false);
   });
 
   it('accepts pinned service requirements and rejects unknown service keys', () => {

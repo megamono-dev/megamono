@@ -54,6 +54,15 @@ const structuralRules = new Set<string>([
   'playstack-direction',
   'platform-boundary',
 ]);
+export const ADOPTION_MODULES = [
+  'docs',
+  'agents',
+  'ci',
+  'lint',
+  'skills',
+  'health',
+  'inference',
+] as const;
 
 export const MEGAMONO_CONFIG_VERSION = 1 as const;
 
@@ -122,11 +131,65 @@ const conventionsSchema = z
     }
   });
 
+const adoptionSchema = z
+  .object({
+    modules: z
+      .array(z.enum(ADOPTION_MODULES))
+      .refine((modules) => new Set(modules).size === modules.length, {
+        message: 'Adoption modules must be unique.',
+      })
+      .default([]),
+    reductions: z
+      .array(
+        z
+          .object({
+            module: z.enum(ADOPTION_MODULES),
+            capability: z.string().regex(topicPattern),
+            reason: z.string().min(1),
+          })
+          .strict(),
+      )
+      .default([]),
+    inference: z
+      .object({
+        apple: z
+          .object({
+            plugin: z.literal('@megamono/nx-apple'),
+            manifests: z.array(z.string().refine(isSafeWorkspaceRelativePath)),
+          })
+          .strict()
+          .optional(),
+        cargo: z
+          .object({
+            plugin: z.literal('@megamono/nx-cargo'),
+            manifests: z.array(z.string().refine(isSafeWorkspaceRelativePath)),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .default({}),
+    ratchets: z
+      .array(
+        z
+          .object({
+            rule: z.enum(CONVENTION_RULES),
+            initialCount: z.number().int().min(0),
+            targetSeverity: z.literal('error'),
+          })
+          .strict(),
+      )
+      .default([]),
+  })
+  .strict()
+  .default({ modules: [], reductions: [], inference: {}, ratchets: [] });
+
 export const megamonoConfigSchema = z
   .object({
     $schema: z.string().optional(),
     version: z.literal(MEGAMONO_CONFIG_VERSION),
     conventions: conventionsSchema,
+    adoption: adoptionSchema,
     platforms: z
       .array(
         z.enum(['web', 'node', 'worker', 'apple', 'rust', 'php', 'extension']),
@@ -245,6 +308,12 @@ export const DEFAULT_MEGAMONO_CONFIG: MegamonoConfig =
       docsLocation: 'centralized',
       packageManager: 'npm',
       rules: {},
+    },
+    adoption: {
+      modules: [],
+      reductions: [],
+      inference: {},
+      ratchets: [],
     },
     platforms: [],
     topics: { extend: [] },
