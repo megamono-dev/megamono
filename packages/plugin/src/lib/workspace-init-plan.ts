@@ -390,6 +390,18 @@ export function createWorkspaceInitPlan(
     '.megamono/artifacts.json',
     'Record deterministic artifact ownership.',
   );
+  for (const [id, target] of [
+    ['core.gitignore', '.gitignore'],
+    ['core.prettierignore', '.prettierignore'],
+  ] as const) {
+    operation(
+      operations,
+      'baseline',
+      ejected(id, target) ? 'retain' : tree.exists(target) ? 'modify' : 'add',
+      target,
+      'Maintain bounded ignore entries for generated Megamono state.',
+    );
+  }
   if (modules.includes('docs')) {
     operation(
       operations,

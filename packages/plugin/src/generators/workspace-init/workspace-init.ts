@@ -78,6 +78,8 @@ const healthTarget = {
 const AGENTS_SECTION_START = '<!-- megamono instructions start -->';
 const AGENTS_SECTION_END = '<!-- megamono instructions end -->';
 const LEGACY_AGENTS_MARKER = '<!-- megamono affected CI -->';
+const IGNORE_SECTION_START = '# megamono ignore entries start';
+const IGNORE_SECTION_END = '# megamono ignore entries end';
 const SUPPORTED_PLATFORMS = new Set([
   'web',
   'node',
@@ -200,6 +202,49 @@ function applyManagedFileTemplate(
     return false;
   }
   if (tree.read(target, 'utf8') !== template) tree.write(target, template);
+  return true;
+}
+
+function applyManagedSectionTemplate(
+  tree: Tree,
+  id: string,
+  target: string,
+  template: string,
+  startDelimiter: string,
+  endDelimiter: string,
+): boolean {
+  const current = artifactEntry(tree, id);
+  if (current?.state === 'ejected') return false;
+  const source = tree.read(target, 'utf8') ?? '';
+  const section = extractManagedSection(source, startDelimiter, endDelimiter);
+  if (!current) {
+    if (section !== undefined) {
+      logger.warn(
+        `${target} contains unregistered Megamono delimiters; left it unchanged.`,
+      );
+      return false;
+    }
+    const separator = source.length === 0 || source.endsWith('\n') ? '' : '\n';
+    tree.write(
+      target,
+      `${source}${separator}${startDelimiter}${template}${endDelimiter}\n`,
+    );
+    return true;
+  }
+  if (
+    section === undefined ||
+    hashArtifactBytes(section) !== current.installedHash
+  ) {
+    logger.warn(
+      `Megamono artifact ${id} is modified; left its ${target} section unchanged. Run workspace-eject to make it repository-owned.`,
+    );
+    return false;
+  }
+  const start = source.indexOf(startDelimiter);
+  const bodyStart = start + startDelimiter.length;
+  const end = source.indexOf(endDelimiter, bodyStart);
+  const updated = `${source.slice(0, bodyStart)}${template}${source.slice(end)}`;
+  if (updated !== source) tree.write(target, updated);
   return true;
 }
 
@@ -582,21 +627,6 @@ function preflightEslintConfig(tree: Tree): void {
       'eslint.config.mjs must export a flat config array before workspace-init can wire Megamono rules.',
     );
   }
-}
-
-function addIgnoreEntries(
-  tree: Tree,
-  path: string,
-  entries: readonly string[],
-): void {
-  let source = tree.read(path, 'utf8') ?? '';
-  const existing = new Set(source.split(/\r?\n/));
-  for (const entry of entries) {
-    if (existing.has(entry)) continue;
-    source = `${source}${source.endsWith('\n') || source.length === 0 ? '' : '\n'}${entry}\n`;
-    existing.add(entry);
-  }
-  tree.write(path, source);
 }
 
 function configuredWorkspacePlatforms(
@@ -1045,8 +1075,23 @@ export async function workspaceInitGenerator(
     '.megamono/graph.json',
     ...(modules.has('health') ? ['.megamono/health.json'] : []),
   ];
-  addIgnoreEntries(tree, '.gitignore', ignored);
-  addIgnoreEntries(tree, '.prettierignore', ignored);
+  const ignoreTemplate = `\n${ignored.join('\n')}\n`;
+  const gitignoreCanUpdate = applyManagedSectionTemplate(
+    tree,
+    'core.gitignore',
+    '.gitignore',
+    ignoreTemplate,
+    IGNORE_SECTION_START,
+    IGNORE_SECTION_END,
+  );
+  const prettierignoreCanUpdate = applyManagedSectionTemplate(
+    tree,
+    'core.prettierignore',
+    '.prettierignore',
+    ignoreTemplate,
+    IGNORE_SECTION_START,
+    IGNORE_SECTION_END,
+  );
   if (modules.has('docs'))
     updateJson(tree, 'tsconfig.base.json', (value) => {
       const compilerOptions = value.compilerOptions ?? {};
@@ -1237,6 +1282,27 @@ export async function workspaceInitGenerator(
     },
     pluginVersion,
   );
+  for (const [id, target, allowManagedUpdate] of [
+    ['core.gitignore', '.gitignore', gitignoreCanUpdate],
+    ['core.prettierignore', '.prettierignore', prettierignoreCanUpdate],
+  ] as const) {
+    registerFileArtifact(
+      tree,
+      {
+        id,
+        module: 'baseline',
+        mode: 'managed-section',
+        target,
+        ejectable: true,
+        startDelimiter: IGNORE_SECTION_START,
+        endDelimiter: IGNORE_SECTION_END,
+        templateContent: ignoreTemplate,
+        claimExisting: allowManagedUpdate,
+        allowManagedUpdate,
+      },
+      pluginVersion,
+    );
+  }
   if (modules.has('docs')) {
     registerFileArtifact(
       tree,

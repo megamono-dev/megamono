@@ -78,6 +78,10 @@ describe('workspace-init generator', () => {
         }),
         expect.objectContaining({ id: 'ci.affected', mode: 'managed' }),
         expect.objectContaining({ id: 'config.workspace', mode: 'seeded' }),
+        expect.objectContaining({
+          id: 'core.gitignore',
+          mode: 'managed-section',
+        }),
         expect.objectContaining({ id: 'docs.index', mode: 'derived' }),
         expect.objectContaining({ id: 'docs.loader', mode: 'managed' }),
         expect.objectContaining({ id: 'health.workflow', mode: 'managed' }),
@@ -91,6 +95,9 @@ describe('workspace-init generator', () => {
       tree.read('.agents/skills/structure-review/SKILL.md', 'utf8'),
     ).toContain('name: structure-review');
     expect(tree.read('.gitignore', 'utf8')).toContain('.content-collections/');
+    expect(tree.read('.gitignore', 'utf8')).toContain(
+      '# megamono ignore entries start',
+    );
     expect(tree.read('.gitignore', 'utf8')).toContain('.megamono/graph.json');
     expect(tree.read('.gitignore', 'utf8')).toContain('.megamono/health.json');
     expect(tree.read('.prettierignore', 'utf8')).toContain(
@@ -467,6 +474,17 @@ describe('workspace-init generator', () => {
     await workspaceInitGenerator(tree, { only: 'agents', yes: true });
 
     expect(tree.read('AGENTS.md', 'utf8')).toBe(customized);
+  });
+
+  it('updates ignore entries without claiming surrounding content', async () => {
+    tree.write('.gitignore', 'repository-cache/\n');
+    await workspaceInitGenerator(tree, { only: 'ci', yes: true });
+    await workspaceInitGenerator(tree, { only: 'health', yes: true });
+
+    const source = tree.read('.gitignore', 'utf8') ?? '';
+    expect(source).toContain('repository-cache/');
+    expect(source).toContain('.megamono/health.json');
+    expect(source.match(/# megamono ignore entries start/g)).toHaveLength(1);
   });
 
   it('registers only detected supported inference plugins and manifests', async () => {
