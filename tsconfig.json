@@ -26,6 +26,9 @@
     },
     {
       "path": "./packages/nx-apple"
+    },
+    {
+      "path": "./packages/nx-cloudflare"
     }
   ],
   "compilerOptions": {}
