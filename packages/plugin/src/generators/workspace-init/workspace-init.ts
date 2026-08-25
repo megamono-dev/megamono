@@ -20,11 +20,17 @@ import {
 } from '../../lib/config';
 import {
   applyManagedSkillTemplates,
+  readPluginVersion,
   type ManagedSkillInstallResult,
 } from '../../lib/managed-skills';
 import {
+  extractManagedSection,
+  hashArtifactBytes,
   readArtifactRegistry,
+  upsertArtifactEntry,
   writeArtifactRegistry,
+  type ArtifactMode,
+  type ManagedArtifactEntry,
 } from '../../lib/managed-artifacts';
 import type { WorkspaceInitGeneratorSchema } from './schema';
 import {
@@ -60,6 +66,108 @@ const healthTarget = {
   ],
   outputs: ['{workspaceRoot}/.megamono/health.json'],
 };
+
+const AGENTS_SECTION_START = '<!-- megamono instructions start -->';
+const AGENTS_SECTION_END = '<!-- megamono instructions end -->';
+const LEGACY_AGENTS_MARKER = '<!-- megamono affected CI -->';
+
+interface FileArtifactRegistration {
+  readonly id: string;
+  readonly module: string;
+  readonly mode: ArtifactMode;
+  readonly target: string;
+  readonly ejectable: boolean;
+  readonly templateContent?: string;
+  readonly startDelimiter?: string;
+  readonly endDelimiter?: string;
+  readonly claimExisting?: boolean;
+  readonly allowManagedUpdate?: boolean;
+}
+
+function artifactEntry(
+  tree: Tree,
+  id: string,
+): ManagedArtifactEntry | undefined {
+  return readArtifactRegistry(tree).artifacts.find(
+    (artifact) => artifact.id === id,
+  );
+}
+
+function artifactIsEjected(tree: Tree, id: string): boolean {
+  return artifactEntry(tree, id)?.state === 'ejected';
+}
+
+function registerFileArtifact(
+  tree: Tree,
+  registration: FileArtifactRegistration,
+  sourceVersion: string,
+): void {
+  const source = tree.read(registration.target, 'utf8');
+  if (source === null) return;
+  const registry = readArtifactRegistry(tree);
+  const current = registry.artifacts.find(({ id }) => id === registration.id);
+  if (current?.state === 'ejected' || current?.mode === 'seeded') return;
+  const ownedContent =
+    registration.mode === 'managed-section'
+      ? extractManagedSection(
+          source,
+          registration.startDelimiter ?? '',
+          registration.endDelimiter ?? '',
+        )
+      : source;
+  if (ownedContent === undefined) return;
+  const installedHash = hashArtifactBytes(ownedContent);
+  const templateHash = hashArtifactBytes(
+    registration.templateContent ?? ownedContent,
+  );
+  if (
+    current &&
+    current.installedHash !== installedHash &&
+    !registration.allowManagedUpdate
+  ) {
+    logger.warn(
+      `Megamono artifact ${registration.id} is modified; left ${registration.target} unchanged. Run workspace-eject to make it repository-owned.`,
+    );
+    return;
+  }
+  if (
+    !current &&
+    !registration.claimExisting &&
+    registration.templateContent !== undefined &&
+    templateHash !== installedHash
+  ) {
+    logger.warn(
+      `${registration.target} is repository-owned and was not added to the Megamono artifact registry.`,
+    );
+    return;
+  }
+  const state =
+    registration.mode === 'seeded'
+      ? 'seeded'
+      : registration.mode === 'derived'
+        ? 'derived'
+        : 'managed';
+  writeArtifactRegistry(
+    tree,
+    upsertArtifactEntry(registry, {
+      id: registration.id,
+      module: registration.module,
+      mode: registration.mode,
+      target: registration.target,
+      sourceVersion,
+      templateHash,
+      installedHash,
+      state,
+      ejectable: registration.ejectable,
+      ...(registration.mode === 'managed-section'
+        ? {
+            startDelimiter: registration.startDelimiter,
+            endDelimiter: registration.endDelimiter,
+          }
+        : {}),
+    }),
+  );
+}
 
 function ensureImportTarget(tree: Tree): boolean {
   const project = getProjects(tree).get('megamono');
@@ -486,6 +594,18 @@ export async function workspaceInitGenerator(
   }
   const modules = new Set(requestedModules);
   const docsRoot = existingConfig?.docs.root ?? options.docsRoot ?? 'docs';
+  const created = {
+    config: !tree.exists('megamono.json'),
+    project: !tree.exists('.megamono/project.json'),
+    docsLoader: !tree.exists('content-collections.ts'),
+    docsIndex: !tree.exists(`${docsRoot}/INDEX.md`),
+    docsArchiveIndex: !tree.exists(`${docsRoot}/archives/INDEX.md`),
+    design: !tree.exists(`${docsRoot}/DESIGN.md`),
+    agents: !tree.exists('AGENTS.md'),
+    claude: !tree.exists('CLAUDE.md'),
+    ci: !tree.exists('.github/workflows/megamono-ci.yml'),
+    health: !tree.exists('.github/workflows/megamono-health.yml'),
+  };
   if (!isSafeWorkspaceRelativePath(docsRoot)) {
     throw new Error('docsRoot must be a safe workspace-relative path.');
   }
@@ -714,45 +834,79 @@ export async function workspaceInitGenerator(
     if (!tree.exists(path)) tree.write(path, content);
   }
   if (modules.has('skills')) logManagedSkills(applyManagedSkillTemplates(tree));
-  if (modules.has('health') && config.health.cadence !== 'disabled') {
+  const healthWorkflow = renderHealthWorkflow(
+    config.health.cadence === 'disabled' ? 'weekly' : config.health.cadence,
+  );
+  if (
+    modules.has('health') &&
+    config.health.cadence !== 'disabled' &&
+    !artifactIsEjected(tree, 'health.workflow')
+  ) {
     const workflowPath = '.github/workflows/megamono-health.yml';
-    const workflow = renderHealthWorkflow(config.health.cadence);
     if (
       tree.exists(workflowPath) &&
-      tree.read(workflowPath, 'utf8') !== workflow
+      tree.read(workflowPath, 'utf8') !== healthWorkflow
     ) {
-      throw new Error(
-        `${workflowPath} already exists. Merge or remove it before running workspace-init.`,
+      logger.warn(
+        `${workflowPath} differs from the managed template; left it unchanged. Run workspace-eject before taking repository ownership.`,
       );
     }
-    if (!tree.exists(workflowPath)) tree.write(workflowPath, workflow);
+    if (!tree.exists(workflowPath)) tree.write(workflowPath, healthWorkflow);
   }
+  const ciWorkflow = renderCiWorkflow(
+    configuredWorkspacePlatforms(tree, options.defaultPlatform),
+  );
   if (modules.has('ci')) {
     const ciPath = '.github/workflows/megamono-ci.yml';
-    const workflow = renderCiWorkflow(
-      configuredWorkspacePlatforms(tree, options.defaultPlatform),
-    );
-    if (tree.exists(ciPath) && tree.read(ciPath, 'utf8') !== workflow) {
-      throw new Error(`${ciPath} differs from the managed Megamono template.`);
+    if (
+      !artifactIsEjected(tree, 'ci.affected') &&
+      tree.exists(ciPath) &&
+      tree.read(ciPath, 'utf8') !== ciWorkflow
+    ) {
+      logger.warn(
+        `${ciPath} differs from the managed template; left it unchanged. Run workspace-eject before taking repository ownership.`,
+      );
     }
-    if (!tree.exists(ciPath)) tree.write(ciPath, workflow);
+    if (!artifactIsEjected(tree, 'ci.affected') && !tree.exists(ciPath)) {
+      tree.write(ciPath, ciWorkflow);
+    }
   }
-  if (modules.has('agents') && !tree.exists('AGENTS.md')) {
+  if (
+    modules.has('agents') &&
+    !artifactIsEjected(tree, 'agents.instructions') &&
+    !tree.exists('AGENTS.md')
+  ) {
     tree.write(
       'AGENTS.md',
       `# Repository instructions\n\nRead ${docsRoot}/INDEX.md, accepted specs, decisions, and in-progress plans before changing the repository. Use Megamono generators instead of hand-rolling repository structure.\n`,
     );
   }
   const agentsPath = 'AGENTS.md';
-  const agentsMarker = '<!-- megamono affected CI -->';
   const agents = tree.read(agentsPath, 'utf8') ?? '';
-  if (modules.has('agents') && !agents.includes(agentsMarker)) {
-    tree.write(
-      agentsPath,
-      `${agents}${agents.endsWith('\n') || agents.length === 0 ? '' : '\n'}\n${agentsMarker}\n## Affected CI\n\nCI checks out full history and runs \`nrwl/nx-set-shas@v5\` before \`nx affected\`. Preserve that base/head convention when changing workflows so pull requests, merge queues, and default-branch runs compute the correct project set.\n`,
-    );
+  const agentsBody =
+    '\n## Affected CI\n\nCI checks out full history and runs `nrwl/nx-set-shas@v5` before `nx affected`. Preserve that base/head convention when changing workflows so pull requests, merge queues, and default-branch runs compute the correct project set.\n';
+  if (
+    modules.has('agents') &&
+    !artifactIsEjected(tree, 'agents.instructions') &&
+    !agents.includes(AGENTS_SECTION_START)
+  ) {
+    if (agents.includes(LEGACY_AGENTS_MARKER)) {
+      tree.write(
+        agentsPath,
+        `${agents.replace(LEGACY_AGENTS_MARKER, AGENTS_SECTION_START)}${agents.endsWith('\n') ? '' : '\n'}${AGENTS_SECTION_END}\n`,
+      );
+    } else {
+      tree.write(
+        agentsPath,
+        `${agents}${agents.endsWith('\n') || agents.length === 0 ? '' : '\n'}\n${AGENTS_SECTION_START}${agentsBody}${AGENTS_SECTION_END}\n`,
+      );
+    }
   }
-  if (modules.has('agents') && !tree.exists('CLAUDE.md')) {
+  if (
+    modules.has('agents') &&
+    !artifactIsEjected(tree, 'agents.claude-pointer') &&
+    !tree.exists('CLAUDE.md')
+  ) {
     tree.write('CLAUDE.md', '@AGENTS.md\n');
   }
   if (options.report) {
@@ -772,6 +926,159 @@ export async function workspaceInitGenerator(
       )
     : () => undefined;
   await formatFiles(tree);
+
+  const pluginVersion = readPluginVersion();
+  registerFileArtifact(
+    tree,
+    {
+      id: 'config.workspace',
+      module: 'baseline',
+      mode: 'seeded',
+      target: 'megamono.json',
+      ejectable: false,
+      claimExisting: created.config,
+    },
+    pluginVersion,
+  );
+  registerFileArtifact(
+    tree,
+    {
+      id: 'core.project',
+      module: 'baseline',
+      mode: 'managed',
+      target: '.megamono/project.json',
+      ejectable: false,
+      claimExisting: created.project || Boolean(existingConfig),
+      allowManagedUpdate: true,
+    },
+    pluginVersion,
+  );
+  if (modules.has('docs')) {
+    registerFileArtifact(
+      tree,
+      {
+        id: 'docs.loader',
+        module: 'docs',
+        mode: 'managed',
+        target: 'content-collections.ts',
+        ejectable: true,
+        templateContent: renderContentCollectionsConfig(docsRoot),
+        claimExisting: created.docsLoader,
+      },
+      pluginVersion,
+    );
+    for (const [id, target, wasCreated] of [
+      ['docs.index', `${docsRoot}/INDEX.md`, created.docsIndex],
+      [
+        'docs.archive-index',
+        `${docsRoot}/archives/INDEX.md`,
+        created.docsArchiveIndex,
+      ],
+    ] as const) {
+      registerFileArtifact(
+        tree,
+        {
+          id,
+          module: 'docs',
+          mode: 'derived',
+          target,
+          ejectable: false,
+          claimExisting: wasCreated,
+        },
+        pluginVersion,
+      );
+    }
+  }
+  if (modules.has('agents')) {
+    registerFileArtifact(
+      tree,
+      {
+        id: 'agents.instructions',
+        module: 'agents',
+        mode: 'managed-section',
+        target: 'AGENTS.md',
+        ejectable: true,
+        startDelimiter: AGENTS_SECTION_START,
+        endDelimiter: AGENTS_SECTION_END,
+        templateContent: agentsBody,
+        claimExisting: true,
+      },
+      pluginVersion,
+    );
+    if (created.agents) {
+      registerFileArtifact(
+        tree,
+        {
+          id: 'agents.instructions-file',
+          module: 'agents',
+          mode: 'seeded',
+          target: 'AGENTS.md',
+          ejectable: false,
+          claimExisting: true,
+        },
+        pluginVersion,
+      );
+    }
+    if (created.claude) {
+      registerFileArtifact(
+        tree,
+        {
+          id: 'agents.claude-pointer',
+          module: 'agents',
+          mode: 'managed',
+          target: 'CLAUDE.md',
+          ejectable: true,
+          templateContent: '@AGENTS.md\n',
+          claimExisting: true,
+        },
+        pluginVersion,
+      );
+    }
+    if (created.design) {
+      registerFileArtifact(
+        tree,
+        {
+          id: 'docs.design',
+          module: 'agents',
+          mode: 'seeded',
+          target: `${docsRoot}/DESIGN.md`,
+          ejectable: false,
+          claimExisting: true,
+        },
+        pluginVersion,
+      );
+    }
+  }
+  if (modules.has('ci')) {
+    registerFileArtifact(
+      tree,
+      {
+        id: 'ci.affected',
+        module: 'ci',
+        mode: 'managed',
+        target: '.github/workflows/megamono-ci.yml',
+        ejectable: true,
+        templateContent: ciWorkflow,
+        claimExisting: created.ci,
+      },
+      pluginVersion,
+    );
+  }
+  if (modules.has('health') && config.health.cadence !== 'disabled') {
+    registerFileArtifact(
+      tree,
+      {
+        id: 'health.workflow',
+        module: 'health',
+        mode: 'managed',
+        target: '.github/workflows/megamono-health.yml',
+        ejectable: true,
+        templateContent: healthWorkflow,
+        claimExisting: created.health,
+      },
+      pluginVersion,
+    );
+  }
 
   return modules.has('skills')
     ? runTasksInSerial(installTask, linkSkillsCallback(tree.root))

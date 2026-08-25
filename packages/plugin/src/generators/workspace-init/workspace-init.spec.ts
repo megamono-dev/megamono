@@ -67,6 +67,17 @@ describe('workspace-init generator', () => {
     expect(readJson(tree, '.megamono/artifacts.json').artifacts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          id: 'agents.instructions',
+          mode: 'managed-section',
+          startDelimiter: '<!-- megamono instructions start -->',
+          endDelimiter: '<!-- megamono instructions end -->',
+        }),
+        expect.objectContaining({ id: 'ci.affected', mode: 'managed' }),
+        expect.objectContaining({ id: 'config.workspace', mode: 'seeded' }),
+        expect.objectContaining({ id: 'docs.index', mode: 'derived' }),
+        expect.objectContaining({ id: 'docs.loader', mode: 'managed' }),
+        expect.objectContaining({ id: 'health.workflow', mode: 'managed' }),
+        expect.objectContaining({
           id: 'skill.structure-review',
           mode: 'managed',
         }),
@@ -280,5 +291,35 @@ describe('workspace-init generator', () => {
       'docs',
       'agents',
     ]);
+  });
+
+  it('does not reclaim an ejected managed workflow on rerun', async () => {
+    await workspaceInitGenerator(tree, { only: 'ci', yes: true });
+    const registry = readJson(tree, '.megamono/artifacts.json');
+    registry.artifacts = registry.artifacts.map(
+      (artifact: { id: string; state: string }) =>
+        artifact.id === 'ci.affected'
+          ? { ...artifact, state: 'ejected' }
+          : artifact,
+    );
+    tree.write(
+      '.megamono/artifacts.json',
+      `${JSON.stringify(registry, null, 2)}\n`,
+    );
+    tree.write(
+      '.github/workflows/megamono-ci.yml',
+      'repository-owned workflow\n',
+    );
+
+    await workspaceInitGenerator(tree, { only: 'ci', yes: true });
+
+    expect(tree.read('.github/workflows/megamono-ci.yml', 'utf8')).toBe(
+      'repository-owned workflow\n',
+    );
+    expect(
+      readJson(tree, '.megamono/artifacts.json').artifacts.find(
+        ({ id }: { id: string }) => id === 'ci.affected',
+      ).state,
+    ).toBe('ejected');
   });
 });
