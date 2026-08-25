@@ -6,6 +6,7 @@ import {
   readFileSync,
   readlinkSync,
   readdirSync,
+  writeFileSync,
 } from 'node:fs';
 import { join, posix, relative, resolve, sep } from 'node:path';
 import type { Diagnostic } from './diagnostics';
@@ -358,6 +359,17 @@ export function writeArtifactRegistry(
   registry: ManagedArtifactRegistry,
 ): void {
   tree.write(ARTIFACT_REGISTRY_PATH, renderArtifactRegistry(registry));
+}
+
+export function writeArtifactRegistryToDisk(
+  workspaceRoot: string,
+  registry: ManagedArtifactRegistry,
+): void {
+  writeFileSync(
+    resolve(workspaceRoot, ARTIFACT_REGISTRY_PATH),
+    renderArtifactRegistry(registry),
+    'utf8',
+  );
 }
 
 export function upsertArtifactEntry(

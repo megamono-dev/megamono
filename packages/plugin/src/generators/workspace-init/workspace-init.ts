@@ -10,8 +10,6 @@ import {
   type GeneratorCallback,
   type Tree,
 } from '@nx/devkit';
-import { existsSync, lstatSync, mkdirSync, symlinkSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import {
   DEFAULT_MEGAMONO_CONFIG,
   assertSupportedMegamonoConfigVersion,
@@ -45,6 +43,7 @@ import {
   collectWorkspaceInitHostState,
 } from '../../lib/workspace-init-preflight';
 import { createWorkspaceInitPostFlushCallback } from '../../lib/workspace-init-execution';
+import { ensureManagedSkillsProjection } from '../../lib/skills-projection';
 
 const importTarget = {
   executor: '@megamono/plugin:import',
@@ -251,27 +250,21 @@ function logManagedSkills(results: readonly ManagedSkillInstallResult[]): void {
   }
 }
 
-function linkSkillsCallback(workspaceRoot: string): GeneratorCallback {
+function linkSkillsCallback(
+  workspaceRoot: string,
+  pluginVersion: string,
+  allowRecreate: boolean,
+): GeneratorCallback {
   return () => {
-    const linkPath = join(workspaceRoot, '.claude', 'skills');
-    const target = join('..', '.agents', 'skills');
-    if (existsSync(linkPath)) {
-      const current = lstatSync(linkPath);
-      if (!current.isSymbolicLink()) {
-        logger.warn(
-          '.claude/skills already exists and is not a symlink; left it unchanged.',
-        );
-      }
-      return;
-    }
-    const parent = dirname(linkPath);
-    if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
-    try {
-      symlinkSync(target, linkPath, 'dir');
-    } catch (error) {
-      logger.warn(
-        `Unable to create .claude/skills symlink: ${(error as Error).message}`,
-      );
+    const result = ensureManagedSkillsProjection(workspaceRoot, pluginVersion, {
+      allowRecreate,
+    });
+    if (
+      result.state === 'conflict' ||
+      result.state === 'missing' ||
+      result.state === 'unmanaged'
+    ) {
+      logger.warn(`Megamono skills projection: ${result.reason}; unchanged.`);
     }
   };
 }
@@ -1239,7 +1232,10 @@ export async function workspaceInitGenerator(
     postFlushTasks,
   );
   return modules.has('skills')
-    ? runTasksInSerial(externalCommands, linkSkillsCallback(tree.root))
+    ? runTasksInSerial(
+        externalCommands,
+        linkSkillsCallback(tree.root, pluginVersion, Boolean(options.yes)),
+      )
     : externalCommands;
 }
 

@@ -23,6 +23,7 @@ export {
   upsertArtifactEntry,
   validateManagedArtifactRegistry,
   writeArtifactRegistry,
+  writeArtifactRegistryToDisk,
   type ArtifactMode,
   type ArtifactState,
   type ManagedArtifactEntry,
@@ -31,6 +32,14 @@ export {
   type ManagedArtifactInspectionState,
   type ManagedArtifactRegistry,
 } from './lib/managed-artifacts';
+export {
+  SKILLS_PROJECTION_ARTIFACT_ID,
+  SKILLS_PROJECTION_PATH,
+  SKILLS_PROJECTION_TARGET,
+  ensureManagedSkillsProjection,
+  type SkillsProjectionResult,
+  type SkillsProjectionState,
+} from './lib/skills-projection';
 export {
   WORKSPACE_INIT_MODULES,
   WorkspaceInitError,
