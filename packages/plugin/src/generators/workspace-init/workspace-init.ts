@@ -813,6 +813,20 @@ export async function workspaceInitGenerator(
     options.serviceRequirements,
   );
   const docsRoot = existingConfig?.docs.root ?? options.docsRoot ?? 'docs';
+  const docsStructureArtifacts = [
+    ['docs.structure.specs', `${docsRoot}/specs/.gitkeep`],
+    ['docs.structure.plans', `${docsRoot}/plans/.gitkeep`],
+    ['docs.structure.decisions', `${docsRoot}/decisions/.gitkeep`],
+    ['docs.structure.audits', `${docsRoot}/audits/.gitkeep`],
+    ['docs.structure.research', `${docsRoot}/research/.gitkeep`],
+    ['docs.structure.reports', `${docsRoot}/reports/.gitkeep`],
+    ['docs.structure.archives-specs', `${docsRoot}/archives/specs/.gitkeep`],
+    ['docs.structure.archives-plans', `${docsRoot}/archives/plans/.gitkeep`],
+    [
+      'docs.structure.archives-research',
+      `${docsRoot}/archives/research/.gitkeep`,
+    ],
+  ] as const;
   if (options.report && !isSafeWorkspaceRelativePath(options.report)) {
     throw new WorkspaceInitError(
       'options',
@@ -822,6 +836,7 @@ export async function workspaceInitGenerator(
   const created = {
     config: !tree.exists('megamono.json'),
     project: !tree.exists('.megamono/project.json'),
+    docsProject: !tree.exists(`${docsRoot}/project.json`),
     docsLoader: !tree.exists('content-collections.ts'),
     docsIndex: !tree.exists(`${docsRoot}/INDEX.md`),
     docsArchiveIndex: !tree.exists(`${docsRoot}/archives/INDEX.md`),
@@ -966,11 +981,31 @@ export async function workspaceInitGenerator(
   if (!tree.exists('.megamono/artifacts.json')) {
     writeArtifactRegistry(tree, readArtifactRegistry(tree));
   }
-  if (modules.has('docs') && !getProjects(tree).has('megamono-docs')) {
-    addProjectConfiguration(
+  const docsProjectCanUpdate =
+    modules.has('docs') &&
+    managedArtifactCanUpdate(
       tree,
-      'megamono-docs',
-      docsProjectConfiguration(docsRoot),
+      'docs.project',
+      `${docsRoot}/project.json`,
+      Boolean(options.yes),
+    );
+  if (modules.has('docs') && docsProjectCanUpdate) {
+    if (getProjects(tree).has('megamono-docs')) {
+      updateProjectConfiguration(
+        tree,
+        'megamono-docs',
+        docsProjectConfiguration(docsRoot),
+      );
+    } else {
+      addProjectConfiguration(
+        tree,
+        'megamono-docs',
+        docsProjectConfiguration(docsRoot),
+      );
+    }
+  } else if (modules.has('docs') && artifactEntry(tree, 'docs.project')) {
+    logger.warn(
+      `Megamono artifact docs.project is modified; left ${docsRoot}/project.json unchanged. Run workspace-eject to make it repository-owned.`,
     );
   }
 
@@ -1121,15 +1156,6 @@ export async function workspaceInitGenerator(
       ? {
           [`${docsRoot}/INDEX.md`]: '# Repository documentation index\n',
           [`${docsRoot}/archives/INDEX.md`]: '# Archived documentation index\n',
-          [`${docsRoot}/specs/.gitkeep`]: '',
-          [`${docsRoot}/plans/.gitkeep`]: '',
-          [`${docsRoot}/decisions/.gitkeep`]: '',
-          [`${docsRoot}/audits/.gitkeep`]: '',
-          [`${docsRoot}/research/.gitkeep`]: '',
-          [`${docsRoot}/reports/.gitkeep`]: '',
-          [`${docsRoot}/archives/specs/.gitkeep`]: '',
-          [`${docsRoot}/archives/plans/.gitkeep`]: '',
-          [`${docsRoot}/archives/research/.gitkeep`]: '',
         }
       : {}),
     ...(modules.has('agents')
@@ -1142,6 +1168,9 @@ export async function workspaceInitGenerator(
   };
   for (const [path, content] of Object.entries(files)) {
     if (!tree.exists(path)) tree.write(path, content);
+  }
+  if (modules.has('docs')) {
+    for (const [, path] of docsStructureArtifacts) tree.write(path, '');
   }
   if (modules.has('skills')) logManagedSkills(applyManagedSkillTemplates(tree));
   const healthWorkflow = renderHealthWorkflow(
@@ -1307,6 +1336,19 @@ export async function workspaceInitGenerator(
     registerFileArtifact(
       tree,
       {
+        id: 'docs.project',
+        module: 'docs',
+        mode: 'managed',
+        target: `${docsRoot}/project.json`,
+        ejectable: true,
+        claimExisting: created.docsProject,
+        allowManagedUpdate: docsProjectCanUpdate,
+      },
+      pluginVersion,
+    );
+    registerFileArtifact(
+      tree,
+      {
         id: 'docs.loader',
         module: 'docs',
         mode: 'managed',
@@ -1335,6 +1377,21 @@ export async function workspaceInitGenerator(
           target,
           ejectable: false,
           claimExisting: wasCreated,
+        },
+        pluginVersion,
+      );
+    }
+    for (const [id, target] of docsStructureArtifacts) {
+      registerFileArtifact(
+        tree,
+        {
+          id,
+          module: 'docs',
+          mode: 'derived',
+          target,
+          ejectable: false,
+          claimExisting: true,
+          allowManagedUpdate: true,
         },
         pluginVersion,
       );

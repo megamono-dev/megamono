@@ -1,6 +1,7 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import {
   addProjectConfiguration,
+  formatFiles,
   readJson,
   readProjectConfiguration,
   updateProjectConfiguration,
@@ -84,6 +85,11 @@ describe('workspace-init generator', () => {
         }),
         expect.objectContaining({ id: 'docs.index', mode: 'derived' }),
         expect.objectContaining({ id: 'docs.loader', mode: 'managed' }),
+        expect.objectContaining({ id: 'docs.project', mode: 'managed' }),
+        expect.objectContaining({
+          id: 'docs.structure.archives-plans',
+          mode: 'derived',
+        }),
         expect.objectContaining({ id: 'health.workflow', mode: 'managed' }),
         expect.objectContaining({
           id: 'skill.structure-review',
@@ -427,6 +433,63 @@ describe('workspace-init generator', () => {
     expect(tree.read('.github/workflows/megamono-ci.yml', 'utf8')).toBe(
       customized,
     );
+  });
+
+  it('updates only a pristine managed docs project', async () => {
+    await workspaceInitGenerator(tree, { only: 'docs', yes: true });
+    const oldProject = `${JSON.stringify({
+      name: 'megamono-docs',
+      root: 'docs',
+      projectType: 'library',
+      targets: {},
+    })}\n`;
+    const oldHash = hashArtifactBytes(oldProject);
+    const registry = readJson(tree, '.megamono/artifacts.json');
+    registry.artifacts = registry.artifacts.map((artifact: { id: string }) =>
+      artifact.id === 'docs.project'
+        ? {
+            ...artifact,
+            templateHash: oldHash,
+            installedHash: oldHash,
+            sourceVersion: '0.0.0-old',
+          }
+        : artifact,
+    );
+    tree.write('.megamono/artifacts.json', JSON.stringify(registry));
+    tree.write('docs/project.json', oldProject);
+
+    await workspaceInitGenerator(tree, { only: 'docs', yes: true });
+
+    expect(readProjectConfiguration(tree, 'megamono-docs').targets).toEqual(
+      expect.objectContaining({
+        validate: expect.objectContaining({
+          executor: '@megamono/plugin:docs-validate',
+        }),
+      }),
+    );
+    const updated = readJson(tree, '.megamono/artifacts.json').artifacts.find(
+      ({ id }: { id: string }) => id === 'docs.project',
+    );
+    expect(updated.installedHash).not.toBe(oldHash);
+    expect(updated.installedHash).toBe(updated.templateHash);
+  });
+
+  it('preserves a modified managed docs project', async () => {
+    await workspaceInitGenerator(tree, { only: 'docs', yes: true });
+    const customized = {
+      ...readProjectConfiguration(tree, 'megamono-docs'),
+      targets: {
+        ...readProjectConfiguration(tree, 'megamono-docs').targets,
+        custom: { executor: 'nx:noop' },
+      },
+    };
+    updateProjectConfiguration(tree, 'megamono-docs', customized);
+    await formatFiles(tree);
+    const customizedSource = tree.read('docs/project.json', 'utf8');
+
+    await workspaceInitGenerator(tree, { only: 'docs', yes: true });
+
+    expect(tree.read('docs/project.json', 'utf8')).toBe(customizedSource);
   });
 
   it('updates only a pristine managed AGENTS section', async () => {

@@ -413,7 +413,7 @@ export function createWorkspaceInitPlan(
     operation(
       operations,
       'docs',
-      tree.exists(`${docsRoot}/project.json`) ? 'retain' : 'add',
+      managedAction('docs.project', `${docsRoot}/project.json`),
       `${docsRoot}/project.json`,
       'Add documentation lifecycle targets.',
     );
