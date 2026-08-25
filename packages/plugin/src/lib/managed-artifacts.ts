@@ -8,6 +8,7 @@ import {
   readdirSync,
 } from 'node:fs';
 import { join, posix, relative, resolve, sep } from 'node:path';
+import type { Diagnostic } from './diagnostics';
 
 export const ARTIFACT_REGISTRY_PATH = '.megamono/artifacts.json';
 export const ARTIFACT_REGISTRY_SCHEMA_VERSION = 1;
@@ -213,6 +214,16 @@ function parseArtifactEntry(
   }
   if (entry.target === ARTIFACT_REGISTRY_PATH) {
     throw new ArtifactRegistryError('The artifact registry cannot own itself.');
+  }
+  if (
+    entry.id.startsWith('playstack.') ||
+    entry.target === 'playstack.json' ||
+    entry.target === 'playstack.artifacts.json' ||
+    entry.target.startsWith('.playstack/')
+  ) {
+    throw new ArtifactRegistryError(
+      `${label} attempts to register Playstack-owned artifact state.`,
+    );
   }
   if (
     !ARTIFACT_HASH_PATTERN.test(entry.templateHash) ||
@@ -562,6 +573,58 @@ export function inspectManagedArtifacts(
       reason: 'artifact matches its installed hash',
     };
   });
+}
+
+export function validateManagedArtifactRegistry(
+  workspaceRoot: string,
+): Diagnostic[] {
+  const path = resolve(workspaceRoot, ARTIFACT_REGISTRY_PATH);
+  if (!existsSync(path)) {
+    return [
+      {
+        severity: 'error',
+        code: 'artifact-registry-missing',
+        path: ARTIFACT_REGISTRY_PATH,
+        message:
+          'Megamono artifact registry is missing; rerun workspace-init to restore ownership metadata.',
+      },
+    ];
+  }
+  let registry: ManagedArtifactRegistry;
+  try {
+    registry = readArtifactRegistryFromDisk(workspaceRoot);
+  } catch (error) {
+    return [
+      {
+        severity: 'error',
+        code: 'artifact-registry-invalid',
+        path: ARTIFACT_REGISTRY_PATH,
+        message: (error as Error).message,
+      },
+    ];
+  }
+  return inspectManagedArtifacts(workspaceRoot, registry).flatMap(
+    ({ artifact, state, actualHash }) => {
+      if (
+        state === 'current' ||
+        state === 'ejected' ||
+        artifact.mode === 'seeded'
+      ) {
+        return [];
+      }
+      return [
+        {
+          severity: 'error' as const,
+          code: `managed-artifact-${state}`,
+          path: artifact.target,
+          message:
+            state === 'missing'
+              ? `Megamono artifact ${artifact.id} is missing.`
+              : `Megamono artifact ${artifact.id} differs from installed hash ${artifact.installedHash}${actualHash ? ` (actual ${actualHash})` : ''}. Eject it to retain the customization or restore the managed artifact.`,
+        },
+      ];
+    },
+  );
 }
 
 export function listUnregisteredArtifactFiles(

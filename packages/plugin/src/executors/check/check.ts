@@ -9,6 +9,7 @@ import { validateRepositoryDocs } from '../../lib/docs';
 import { checkWorkspaceStructure } from '../../lib/structural-check';
 import { checkProjectPreflights } from '../../lib/project-preflight';
 import { validateInstalledSkills } from '../../lib/managed-skills';
+import { validateManagedArtifactRegistry } from '../../lib/managed-artifacts';
 import type { CheckExecutorSchema } from './schema';
 
 const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
@@ -48,6 +49,7 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
     );
     diagnostics.push(...(await checkProjectPreflights(context.projectGraph)));
     diagnostics.push(...validateInstalledSkills(context.root));
+    diagnostics.push(...validateManagedArtifactRegistry(context.root));
     for (const diagnostic of diagnostics) {
       const message = formatDiagnostic(diagnostic);
       if (diagnostic.severity === 'error') logger.error(message);

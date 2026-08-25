@@ -21,6 +21,7 @@ export {
   readArtifactRegistryFromDisk,
   renderArtifactRegistry,
   upsertArtifactEntry,
+  validateManagedArtifactRegistry,
   writeArtifactRegistry,
   type ArtifactMode,
   type ArtifactState,

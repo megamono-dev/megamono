@@ -6,6 +6,10 @@ import type { ProjectGraph } from '@nx/devkit';
 import type { MegamonoConfig } from './config';
 import type { RepositoryDocument } from './docs';
 import { inspectManagedSkills } from './managed-skills';
+import {
+  inspectManagedArtifacts,
+  readArtifactRegistryFromDisk,
+} from './managed-artifacts';
 
 export const HEALTH_CHECKS = [
   'dependency-alignment',
@@ -541,6 +545,46 @@ function specDriftFindings(
             : 'Run the workspace-init generator to reconcile managed skills.',
       });
     }
+  }
+  try {
+    const registry = readArtifactRegistryFromDisk(workspaceRoot);
+    for (const inspection of inspectManagedArtifacts(workspaceRoot, registry)) {
+      const { artifact, state } = inspection;
+      if (
+        artifact.id.startsWith('skill.') ||
+        artifact.mode === 'seeded' ||
+        state === 'current' ||
+        state === 'ejected'
+      ) {
+        continue;
+      }
+      findings.push({
+        check: 'spec-drift',
+        fingerprint: `managed-artifact:${state}:${artifact.id}`,
+        state: `managed-artifact-${state}`,
+        confidence: 'complete',
+        summary:
+          state === 'missing'
+            ? `Managed artifact ${artifact.id} is missing.`
+            : `Managed artifact ${artifact.id} differs from its installed hash.`,
+        evidence: [artifact.target],
+        recommendation:
+          state === 'modified'
+            ? `Eject ${artifact.id} to retain the customization, or restore the managed artifact.`
+            : 'Run workspace-init to reconcile the managed artifact.',
+      });
+    }
+  } catch (error) {
+    findings.push({
+      check: 'spec-drift',
+      fingerprint: 'managed-artifact:invalid:registry',
+      state: 'managed-artifact-invalid',
+      confidence: 'complete',
+      summary: 'The Megamono artifact registry is invalid.',
+      evidence: [(error as Error).message],
+      recommendation:
+        'Repair .megamono/artifacts.json before running workspace-init.',
+    });
   }
   return findings;
 }

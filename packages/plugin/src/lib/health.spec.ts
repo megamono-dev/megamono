@@ -12,6 +12,7 @@ import {
   runRepositoryHealth,
   serializeHealthReport,
 } from './health';
+import { hashArtifactBytes, renderArtifactRegistry } from './managed-artifacts';
 
 const executeFile = promisify(execFile);
 
@@ -430,6 +431,54 @@ describe('repository health', () => {
       expect(report.findings).not.toContainEqual(
         expect.objectContaining({
           fingerprint: expect.stringContaining('structure-review'),
+        }),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports general managed artifact drift with stable fingerprints', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-health-artifact-'));
+    try {
+      await mkdir(join(root, '.megamono'), { recursive: true });
+      await mkdir(join(root, '.github', 'workflows'), { recursive: true });
+      await writeFile(
+        join(root, '.github', 'workflows', 'megamono-ci.yml'),
+        'repository edit\n',
+      );
+      await writeFile(
+        join(root, '.megamono', 'artifacts.json'),
+        renderArtifactRegistry({
+          schemaVersion: 1,
+          artifacts: [
+            {
+              id: 'ci.affected',
+              module: 'ci',
+              mode: 'managed',
+              target: '.github/workflows/megamono-ci.yml',
+              sourceVersion: '1.0.0',
+              templateHash: hashArtifactBytes('managed template\n'),
+              installedHash: hashArtifactBytes('managed template\n'),
+              state: 'managed',
+              ejectable: true,
+            },
+          ],
+        }),
+      );
+
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph: { nodes: {}, dependencies: {} },
+        config: DEFAULT_MEGAMONO_CONFIG,
+        documents: [],
+        checks: ['spec-drift'],
+      });
+
+      expect(report.findings).toContainEqual(
+        expect.objectContaining({
+          fingerprint: 'managed-artifact:modified:ci.affected',
+          state: 'managed-artifact-modified',
         }),
       );
     } finally {

@@ -15,6 +15,7 @@ import {
   readArtifactRegistry,
   renderArtifactRegistry,
   upsertArtifactEntry,
+  validateManagedArtifactRegistry,
   writeArtifactRegistry,
   type ManagedArtifactEntry,
 } from './managed-artifacts';
@@ -69,6 +70,19 @@ describe('managed artifacts', () => {
         }),
       ),
     ).toThrow(/cannot own itself/);
+    expect(() =>
+      parseArtifactRegistry(
+        JSON.stringify({
+          schemaVersion: 1,
+          artifacts: [
+            artifact({
+              id: 'playstack.content',
+              target: 'playstack.artifacts.json',
+            }),
+          ],
+        }),
+      ),
+    ).toThrow(/Playstack-owned/);
   });
 
   it('requires exact section delimiters and sorted explicit file sets', () => {
@@ -196,6 +210,48 @@ describe('managed artifacts', () => {
           artifacts: [entries[2]],
         })[0].state,
       ).toBe('modified');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('validates active managed artifacts while ignoring seeded and ejected drift', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-artifact-check-'));
+    try {
+      await mkdir(join(root, '.megamono'), { recursive: true });
+      await writeFile(join(root, 'managed.txt'), 'repository edit');
+      await writeFile(join(root, 'seeded.txt'), 'repository edit');
+      await writeFile(join(root, 'ejected.txt'), 'repository edit');
+      await writeFile(
+        join(root, '.megamono', 'artifacts.json'),
+        renderArtifactRegistry({
+          schemaVersion: 1,
+          artifacts: [
+            artifact({ target: 'managed.txt' }),
+            artifact({
+              id: 'docs.design',
+              module: 'docs',
+              mode: 'seeded',
+              target: 'seeded.txt',
+              state: 'seeded',
+              ejectable: false,
+            }),
+            artifact({
+              id: 'health.workflow',
+              module: 'health',
+              target: 'ejected.txt',
+              state: 'ejected',
+            }),
+          ],
+        }),
+      );
+
+      expect(validateManagedArtifactRegistry(root)).toEqual([
+        expect.objectContaining({
+          code: 'managed-artifact-modified',
+          path: 'managed.txt',
+        }),
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
