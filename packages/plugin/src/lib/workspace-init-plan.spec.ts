@@ -88,6 +88,15 @@ describe('workspace init survey and plan', () => {
     ).toThrow(/defaultPlatform is required/);
   });
 
+  it('classifies invalid module options separately from unresolved input', () => {
+    expect(() => parseWorkspaceInitModules('docs,unknown')).toThrowError(
+      expect.objectContaining<Partial<WorkspaceInitError>>({
+        diagnosticCode: 'workspace-init-options',
+        exitCode: 2,
+      }),
+    );
+  });
+
   it('reports occupied managed paths before application', () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write('.github/workflows/megamono-ci.yml', 'repository workflow');

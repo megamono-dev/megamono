@@ -40,6 +40,10 @@ import {
   renderWorkspaceInitSurvey,
   surveyWorkspaceInit,
 } from '../../lib/workspace-init-plan';
+import {
+  assertWorkspaceInitPreflight,
+  collectWorkspaceInitHostState,
+} from '../../lib/workspace-init-preflight';
 
 const importTarget = {
   executor: '@megamono/plugin:import',
@@ -618,6 +622,13 @@ export async function workspaceInitGenerator(
       renderWorkspaceInitSurvey(surveyWorkspaceInit(tree), outputFormat),
     );
     return () => undefined;
+  }
+  if (tree.root !== '/virtual') {
+    assertWorkspaceInitPreflight(
+      tree,
+      await collectWorkspaceInitHostState(tree.root),
+      { bootstrap: options.bootstrap },
+    );
   }
   let existingConfig: ReturnType<typeof megamonoConfigSchema.parse> | undefined;
   if (tree.exists('megamono.json')) {

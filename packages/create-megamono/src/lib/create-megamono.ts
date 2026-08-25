@@ -391,7 +391,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     ),
   ];
 
-  const plugins = new Set<string>(['@megamono/plugin']);
+  const plugins = new Set<string>(['@megamono/plugin', 'typescript']);
   for (const app of options.apps) {
     const plugin = appPlugin[app];
     if (plugin) plugins.add(plugin);
@@ -514,6 +514,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         ...(options.apps.includes('desktop') ? ['--defaultPlatform=rust'] : []),
         '--only=docs,agents,ci,lint,skills,health,inference',
         '--yes',
+        '--bootstrap',
         `--platforms=${requestedPlatforms(options).join(',')}`,
         `--serviceRunner=${options.serviceRunner}`,
         `--serviceRequirements=${JSON.stringify(requestedServiceRequirements(options))}`,

@@ -50,6 +50,11 @@ export {
   type WorkspaceInitSurveyProject,
 } from './lib/workspace-init-plan';
 export {
+  assertWorkspaceInitPreflight,
+  collectWorkspaceInitHostState,
+  type WorkspaceInitHostState,
+} from './lib/workspace-init-preflight';
+export {
   GENERATOR_AVAILABILITY,
   GeneratorAvailabilityError,
   assertGeneratorAvailable,

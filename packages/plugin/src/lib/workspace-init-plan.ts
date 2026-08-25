@@ -13,7 +13,11 @@ export const WORKSPACE_INIT_MODULES = [
 export type WorkspaceInitModule = (typeof WORKSPACE_INIT_MODULES)[number];
 export type WorkspaceInitOutputFormat = 'markdown' | 'json';
 export type WorkspaceInitErrorKind =
-  'preflight' | 'conflict' | 'decision-required' | 'external-command';
+  | 'options'
+  | 'preflight'
+  | 'conflict'
+  | 'decision-required'
+  | 'external-command';
 
 const ERROR_DETAILS: Readonly<
   Record<
@@ -21,14 +25,15 @@ const ERROR_DETAILS: Readonly<
     { readonly exitCode: number; readonly code: string }
   >
 > = {
-  preflight: { exitCode: 2, code: 'workspace-init-preflight' },
+  options: { exitCode: 2, code: 'workspace-init-options' },
+  preflight: { exitCode: 3, code: 'workspace-init-preflight' },
   conflict: { exitCode: 3, code: 'workspace-init-conflict' },
   'decision-required': {
     exitCode: 4,
     code: 'workspace-init-decision-required',
   },
   'external-command': {
-    exitCode: 5,
+    exitCode: 1,
     code: 'workspace-init-external-command',
   },
 };
@@ -200,14 +205,14 @@ export function parseWorkspaceInitModules(
   );
   if (unknown.length > 0) {
     throw new WorkspaceInitError(
-      'decision-required',
+      'options',
       `Unknown module selection: ${[...new Set(unknown)].sort(compare).join(', ')}.`,
     );
   }
   const selected = new Set(requested as WorkspaceInitModule[]);
   if (selected.size === 0) {
     throw new WorkspaceInitError(
-      'decision-required',
+      'options',
       'Select at least one module with --only.',
     );
   }

@@ -4,6 +4,7 @@ export interface WorkspaceInitGeneratorSchema {
   readonly only?: string;
   readonly yes?: boolean;
   readonly report?: string;
+  readonly bootstrap?: boolean;
   readonly platforms?: string;
   readonly serviceRunner?: 'none' | 'springbar';
   readonly serviceRequirements?: string;

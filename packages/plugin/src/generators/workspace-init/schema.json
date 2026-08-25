@@ -29,6 +29,11 @@
       "type": "string",
       "description": "Workspace-relative path for the optional completion report."
     },
+    "bootstrap": {
+      "type": "boolean",
+      "default": false,
+      "description": "Run inside create-megamono's trusted new-workspace transaction without existing-repository Git checks."
+    },
     "platforms": {
       "type": "string",
       "description": "Comma-separated platform vocabulary determined by a calling scaffolder."

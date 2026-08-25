@@ -103,6 +103,7 @@ describe('createPlan', () => {
       '--only=docs,agents,ci,lint,skills,health,inference',
     );
     expect(rendered).toContain('--yes');
+    expect(rendered).toContain('--bootstrap');
     expect(rendered).toContain('--platforms=web');
     expect(rendered).toContain('--serviceRunner=none');
     expect(rendered).toContain('--serviceRequirements={}');
