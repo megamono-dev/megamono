@@ -1,4 +1,6 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
+import { prompt } from 'enquirer';
+import { vi } from 'vitest';
 import {
   addProjectConfiguration,
   formatFiles,
@@ -11,6 +13,8 @@ import { hashArtifactBytes } from '../../lib/managed-artifacts';
 
 import { workspaceInitGenerator } from './workspace-init';
 import { WorkspaceInitGeneratorSchema } from './schema';
+
+vi.mock('enquirer', () => ({ prompt: vi.fn() }));
 
 describe('workspace-init generator', () => {
   let tree: Tree;
@@ -462,6 +466,45 @@ describe('workspace-init generator', () => {
     expect(tree.read('.github/workflows/megamono-ci.yml', 'utf8')).toBe(
       customized,
     );
+  });
+
+  it('recreates a missing managed artifact after guided confirmation', async () => {
+    await workspaceInitGenerator(tree, { only: 'docs', yes: true });
+    tree.delete('content-collections.ts');
+    const stdinDescriptor = Object.getOwnPropertyDescriptor(
+      process.stdin,
+      'isTTY',
+    );
+    const stdoutDescriptor = Object.getOwnPropertyDescriptor(
+      process.stdout,
+      'isTTY',
+    );
+    Object.defineProperty(process.stdin, 'isTTY', {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      configurable: true,
+      value: true,
+    });
+    vi.mocked(prompt).mockResolvedValueOnce({ confirmed: true });
+
+    try {
+      await workspaceInitGenerator(tree, { only: 'docs' });
+    } finally {
+      if (stdinDescriptor) {
+        Object.defineProperty(process.stdin, 'isTTY', stdinDescriptor);
+      } else {
+        delete (process.stdin as { isTTY?: boolean }).isTTY;
+      }
+      if (stdoutDescriptor) {
+        Object.defineProperty(process.stdout, 'isTTY', stdoutDescriptor);
+      } else {
+        delete (process.stdout as { isTTY?: boolean }).isTTY;
+      }
+    }
+
+    expect(tree.exists('content-collections.ts')).toBe(true);
   });
 
   it('updates only a pristine managed docs project', async () => {

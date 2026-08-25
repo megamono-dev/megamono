@@ -830,6 +830,7 @@ export async function workspaceInitGenerator(
     }
     if (!(await promptForConfirmation())) return () => undefined;
   }
+  const planConfirmed = true;
   const modules = new Set(requestedModules);
   const requestedPlatforms = parseConfiguredPlatforms(options.platforms);
   const serviceRequirements = parseServiceRequirements(
@@ -989,7 +990,7 @@ export async function workspaceInitGenerator(
     tree,
     'core.project',
     '.megamono/project.json',
-    Boolean(options.yes),
+    planConfirmed,
   );
   if (!projects.has('megamono')) {
     addProjectConfiguration(tree, 'megamono', {
@@ -1037,7 +1038,7 @@ export async function workspaceInitGenerator(
       tree,
       'docs.project',
       `${docsRoot}/project.json`,
-      Boolean(options.yes),
+      planConfirmed,
     );
   if (modules.has('docs') && docsProjectCanUpdate) {
     if (getProjects(tree).has('megamono-docs')) {
@@ -1176,7 +1177,7 @@ export async function workspaceInitGenerator(
         'docs.loader',
         'content-collections.ts',
         docsLoaderTemplate,
-        Boolean(options.yes),
+        planConfirmed,
       )
     : false;
   const ignored = [
@@ -1257,7 +1258,7 @@ export async function workspaceInitGenerator(
           'health.workflow',
           '.github/workflows/megamono-health.yml',
           healthWorkflow,
-          Boolean(options.yes),
+          planConfirmed,
         )
       : false;
   const ciWorkflow = renderCiWorkflow(
@@ -1269,7 +1270,7 @@ export async function workspaceInitGenerator(
         'ci.affected',
         '.github/workflows/megamono-ci.yml',
         ciWorkflow,
-        Boolean(options.yes),
+        planConfirmed,
       )
     : false;
   if (
@@ -1587,7 +1588,7 @@ export async function workspaceInitGenerator(
   return modules.has('skills')
     ? runTasksInSerial(
         externalCommands,
-        linkSkillsCallback(tree.root, pluginVersion, Boolean(options.yes)),
+        linkSkillsCallback(tree.root, pluginVersion, planConfirmed),
       )
     : externalCommands;
 }
