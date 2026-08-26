@@ -51,7 +51,13 @@ async function createTarget(root: string) {
   await writeJson(root, 'tsconfig.base.json', {
     compilerOptions: { paths: { '@fixture/shared': ['./libs/shared/src.ts'] } },
   });
-  await writeJson(root, 'megamono.json', DEFAULT_MEGAMONO_CONFIG);
+  await writeJson(root, 'megamono.json', {
+    ...DEFAULT_MEGAMONO_CONFIG,
+    conventions: {
+      ...DEFAULT_MEGAMONO_CONFIG.conventions,
+      packageManager: 'npm',
+    },
+  });
   await writeFile(
     join(root, '.env'),
     'SHARED_TOKEN=target-fixture-value\n',
@@ -230,6 +236,26 @@ describe('repository import analysis', { timeout: 20_000 }, () => {
     expect(
       (await run(sourceRoot, 'git', ['status', '--porcelain'])).stdout,
     ).toBe(sourceBefore.stdout);
+  });
+
+  it('uses the target workspace package manager for imported commands', async () => {
+    await writeJson(targetRoot, 'megamono.json', DEFAULT_MEGAMONO_CONFIG);
+    await run(targetRoot, 'git', ['add', 'megamono.json']);
+    await run(targetRoot, 'git', ['commit', '-m', 'use pnpm']);
+    await createSource(sourceRoot, false);
+
+    const result = await analyzeRepositoryImport({
+      workspaceRoot: targetRoot,
+      options: { source: sourceRoot, name: 'imported-app' },
+    });
+
+    expect(result.packageManager).toBe('pnpm');
+    expect(result.commands).toMatchObject({
+      build: 'pnpm run build',
+      test: 'pnpm run test',
+      lint: 'pnpm run lint',
+    });
+    expect(result.ready).toBe(true);
   });
 
   it('validates collision destinations and plans an exact build-ready rewrite scope', async () => {

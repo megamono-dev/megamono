@@ -110,6 +110,7 @@ export interface RepositoryImportAnalysis {
   readonly destination: string;
   readonly history?: ImportHistoryStrategy;
   readonly verify: ImportVerifyMode;
+  readonly packageManager: 'pnpm' | 'npm';
   readonly targetGit: ImportGitState;
   readonly sourceGit: ImportGitState;
   readonly sourcePackageName?: string;
@@ -1348,19 +1349,25 @@ export async function analyzeRepositoryImport(
         message: 'The local source working tree must be clean.',
       });
     }
-    if (snapshot.manifest.workspaces) {
+    if (
+      snapshot.manifest.workspaces ||
+      snapshot.files.includes('pnpm-workspace.yaml')
+    ) {
       blockers.push({
         code: 'import-unsupported-source-shape',
-        message: 'V1 imports one root npm package, not a source monorepo.',
+        message: 'V1 imports one root package, not a source monorepo.',
       });
     }
+    const sourcePackageManager =
+      snapshot.manifest.packageManager?.split('@')[0];
     if (
-      snapshot.manifest.packageManager &&
-      !snapshot.manifest.packageManager.startsWith('npm@')
+      sourcePackageManager &&
+      sourcePackageManager !== 'pnpm' &&
+      sourcePackageManager !== 'npm'
     ) {
       blockers.push({
         code: 'import-unsupported-package-manager',
-        message: 'V1 imports npm sources only.',
+        message: 'V1 imports pnpm and npm sources only.',
       });
     }
     if (
@@ -1660,9 +1667,13 @@ export async function analyzeRepositoryImport(
         (left.subject ?? '').localeCompare(right.subject ?? ''),
     );
 
+    const packageManager =
+      hostConfig?.conventions.packageManager === 'npm' ? 'npm' : 'pnpm';
     const commands = Object.fromEntries(
       (['build', 'test', 'lint', 'deploy'] as const).flatMap((name) =>
-        snapshot.manifest.scripts?.[name] ? [[name, `npm run ${name}`]] : [],
+        snapshot.manifest.scripts?.[name]
+          ? [[name, `${packageManager} run ${name}`]]
+          : [],
       ),
     );
     const hostDependencies = new Set(Object.keys(targetDependencies));
@@ -1718,6 +1729,7 @@ export async function analyzeRepositoryImport(
       destination,
       ...(options.history ? { history: options.history } : {}),
       verify: options.verify ?? 'config',
+      packageManager,
       targetGit,
       sourceGit: snapshot.git,
       ...(snapshot.manifest.name

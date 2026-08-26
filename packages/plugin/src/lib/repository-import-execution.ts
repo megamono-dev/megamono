@@ -331,6 +331,45 @@ function addWorkspace(
   manifest.workspaces = [...new Set([...values, destination])].sort();
 }
 
+async function addPnpmWorkspace(
+  workspaceRoot: string,
+  destination: string,
+): Promise<void> {
+  const path = join(workspaceRoot, 'pnpm-workspace.yaml');
+  let source: string;
+  try {
+    source = await readFile(path, 'utf8');
+  } catch (error) {
+    throw new ImportPreflightError(
+      'import-pnpm-workspace-missing',
+      'A pnpm target must contain pnpm-workspace.yaml.',
+      { cause: error },
+    );
+  }
+  const escapedDestination = destination.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (
+    new RegExp(
+      `^\\s*-\\s*['"]?${escapedDestination}['"]?\\s*(?:#.*)?$`,
+      'm',
+    ).test(source)
+  ) {
+    return;
+  }
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.split(/\r?\n/);
+  const packagesIndex = lines.findIndex((line) => /^packages:\s*$/.test(line));
+  if (packagesIndex === -1) {
+    throw new ImportPreflightError(
+      'import-pnpm-workspace-shape',
+      'pnpm-workspace.yaml must contain a block-style packages list.',
+    );
+  }
+  let end = packagesIndex + 1;
+  while (end < lines.length && /^\s+\S/.test(lines[end])) end += 1;
+  lines.splice(end, 0, `  - '${destination}'`);
+  await writeFile(path, lines.join(newline), 'utf8');
+}
+
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
@@ -350,7 +389,11 @@ async function integratePackageManifests(
     string,
     unknown
   >;
-  addWorkspace(root, analysis.destination);
+  if (analysis.packageManager === 'pnpm') {
+    await addPnpmWorkspace(workspaceRoot, analysis.destination);
+  } else {
+    addWorkspace(root, analysis.destination);
+  }
   for (const conflict of analysis.dependencyConflicts) {
     if (!conflict.resolution) continue;
     for (const section of ['dependencies', 'devDependencies'] as const) {
@@ -569,32 +612,41 @@ function verificationCommands(
   analysis: RepositoryImportAnalysis,
 ): ImportExecutionCommand[] {
   if (analysis.verify === 'none') return [];
+  const packageManager = analysis.packageManager;
+  const nxArgs = (args: readonly string[], separator = false) => [
+    'exec',
+    'nx',
+    ...(separator && packageManager === 'npm' ? ['--'] : []),
+    ...args,
+  ];
+  const nxDisplay = (args: readonly string[], separator = false) =>
+    `${packageManager} exec nx${separator && packageManager === 'npm' ? ' --' : ''} ${args.join(' ')}`;
   const commands: ImportExecutionCommand[] = [
     {
       phase: 'config',
-      command: 'npm',
-      args: ['exec', 'nx', 'run', 'megamono-docs:validate'],
-      display: 'npm exec nx run megamono-docs:validate',
+      command: packageManager,
+      args: nxArgs(['run', 'megamono-docs:validate']),
+      display: nxDisplay(['run', 'megamono-docs:validate']),
     },
     {
       phase: 'config',
-      command: 'npm',
-      args: ['exec', 'nx', 'run', 'megamono:check'],
-      display: 'npm exec nx run megamono:check',
+      command: packageManager,
+      args: nxArgs(['run', 'megamono:check']),
+      display: nxDisplay(['run', 'megamono:check']),
     },
     {
       phase: 'config',
-      command: 'npm',
-      args: ['exec', 'nx', 'show', 'project', analysis.name, '--json'],
-      display: `npm exec nx show project ${analysis.name} --json`,
+      command: packageManager,
+      args: nxArgs(['show', 'project', analysis.name, '--json']),
+      display: nxDisplay(['show', 'project', analysis.name, '--json']),
     },
   ];
   if (analysis.expectedGraphDependencies.length > 0) {
     commands.push({
       phase: 'graph',
-      command: 'npm',
-      args: ['exec', 'nx', '--', 'graph', '--print'],
-      display: 'npm exec nx -- graph --print',
+      command: packageManager,
+      args: nxArgs(['graph', '--print'], true),
+      display: nxDisplay(['graph', '--print'], true),
       captureOutput: true,
     });
   }
@@ -603,9 +655,9 @@ function verificationCommands(
       if (!analysis.commands[phase]) continue;
       commands.push({
         phase,
-        command: 'npm',
-        args: ['exec', 'nx', 'run', `${analysis.name}:${phase}`],
-        display: `npm exec nx run ${analysis.name}:${phase}`,
+        command: packageManager,
+        args: nxArgs(['run', `${analysis.name}:${phase}`]),
+        display: nxDisplay(['run', `${analysis.name}:${phase}`]),
       });
     }
   }
@@ -788,15 +840,15 @@ export async function executeSubtreeRepositoryImport(
     const commands: ImportExecutionCommand[] = [
       {
         phase: 'dependencies',
-        command: 'npm',
+        command: analysis.packageManager,
         args: ['install'],
-        display: 'npm install',
+        display: `${analysis.packageManager} install`,
       },
       {
         phase: 'docs',
-        command: 'npm',
+        command: analysis.packageManager,
         args: ['exec', 'nx', 'run', 'megamono-docs:index'],
-        display: 'npm exec nx run megamono-docs:index',
+        display: `${analysis.packageManager} exec nx run megamono-docs:index`,
       },
       ...verificationCommands(analysis),
     ];

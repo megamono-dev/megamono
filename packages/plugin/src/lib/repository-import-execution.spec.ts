@@ -53,7 +53,13 @@ async function createTarget(root: string) {
       paths: { '@fixture/shared/*': ['./libs/shared/*'] },
     },
   });
-  await writeJson(root, 'megamono.json', DEFAULT_MEGAMONO_CONFIG);
+  await writeJson(root, 'megamono.json', {
+    ...DEFAULT_MEGAMONO_CONFIG,
+    conventions: {
+      ...DEFAULT_MEGAMONO_CONFIG.conventions,
+      packageManager: 'npm',
+    },
+  });
   await writeFile(join(root, '.env'), 'SHARED_TOKEN=target-value\n', 'utf8');
   await writeFile(join(root, '.gitignore'), 'node_modules/\n.nx/\n', 'utf8');
   await initializeGit(root, 'target seed');
@@ -375,6 +381,52 @@ describe('repository import subtree execution', { timeout: 20_000 }, () => {
     expect(result.integrationCommit).toBe(
       (await run(targetRoot, 'git', ['rev-parse', 'HEAD'])).stdout.trim(),
     );
+  });
+
+  it('integrates and verifies with the target pnpm command family', async () => {
+    await writeJson(targetRoot, 'megamono.json', DEFAULT_MEGAMONO_CONFIG);
+    await writeFile(
+      join(targetRoot, 'pnpm-workspace.yaml'),
+      "packages:\n  - 'packages/*'\n",
+      'utf8',
+    );
+    await run(targetRoot, 'git', ['add', '.']);
+    await run(targetRoot, 'git', ['commit', '-m', 'use pnpm']);
+    const importAnalysis = await analysis();
+    const commands: string[] = [];
+
+    await executeSubtreeRepositoryImport(
+      targetRoot,
+      importAnalysis,
+      {
+        source: sourceRoot,
+        name: 'imported-app',
+        expectedSourceSha: sourceSha,
+        history: 'subtree',
+        verify: 'none',
+        execute: true,
+        resolutions: {
+          aliases: { '@fixture/shared/*': '@imported/shared/*' },
+          environment: { SHARED_TOKEN: 'IMPORTED_SHARED_TOKEN' },
+        },
+      },
+      async (command) => {
+        commands.push(command.display);
+      },
+    );
+
+    expect(importAnalysis.packageManager).toBe('pnpm');
+    expect(commands).toEqual([
+      'pnpm install',
+      'pnpm exec nx run megamono-docs:index',
+    ]);
+    expect(
+      await readFile(join(targetRoot, 'pnpm-workspace.yaml'), 'utf8'),
+    ).toContain("- 'apps/imported-app'");
+    expect(
+      JSON.parse(await readFile(join(targetRoot, 'package.json'), 'utf8'))
+        .workspaces,
+    ).toEqual([]);
   });
 
   it('leaves the graft intact and writes recovery guidance after a command failure', async () => {
