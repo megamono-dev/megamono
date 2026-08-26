@@ -1044,6 +1044,7 @@ describe('executePlan', () => {
         expect(billboard).toContain('https://playstack.dev');
         expect(billboard).toContain('https://springbar.app');
         expect(billboard).toContain('https://www.commune.software');
+        expect(billboard).toContain('const services: string[] = [];');
         expect(billboard).not.toContain('Welcome to Nx');
         const e2e = await readFile(
           resolve(

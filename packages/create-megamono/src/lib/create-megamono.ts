@@ -1400,8 +1400,8 @@ import Head from 'next/head';
 
 const workspaceName = ${JSON.stringify(plan.options.name)};
 const surfaceName = ${JSON.stringify(appLabels[app])};
-const surfaces = ${JSON.stringify(surfaces)};
-const services = ${JSON.stringify(services)};
+const surfaces: string[] = ${JSON.stringify(surfaces)};
+const services: string[] = ${JSON.stringify(services)};
 const commands = ${JSON.stringify(commands)};
 const workflow = [
   {
