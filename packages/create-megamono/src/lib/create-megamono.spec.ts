@@ -64,7 +64,16 @@ async function writeInferredE2ePackage(
     resolve(root, 'package.json'),
     JSON.stringify({
       name: `generated-${app}-e2e`,
-      nx: { name: `acme-tools-${app}-e2e` },
+      nx: {
+        name: `acme-tools-${app}-e2e`,
+        ...(app === 'api'
+          ? {
+              targets: {
+                e2e: { options: { jestConfig: 'apps/api-e2e/jest.config.cts' } },
+              },
+            }
+          : {}),
+      },
     }),
   );
   if (app === 'api') {
@@ -635,6 +644,9 @@ describe('executePlan', () => {
       nx: {
         name: 'acme-tools-api-e2e',
         projectType: 'application',
+        targets: {
+          e2e: { options: { jestConfig: 'apps/api-e2e/jest.config.cjs' } },
+        },
         tags: [
           'platform:node',
           'scope:acme-tools',
@@ -667,6 +679,12 @@ describe('executePlan', () => {
     expect(
       await readFile(resolve(plan.options.destination, 'jest.preset.js'), 'utf8'),
     ).toContain("require('@nx/jest/preset').default");
+    expect(
+      await readFile(
+        resolve(plan.options.destination, 'apps/api-e2e/jest.config.cjs'),
+        'utf8',
+      ),
+    ).toContain("module.exports = {");
   });
 
   it('commits a staged workspace over an empty destination', async () => {

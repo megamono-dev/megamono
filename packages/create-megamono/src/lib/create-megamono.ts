@@ -1343,6 +1343,14 @@ async function configureE2ePackage(
     'type:app',
     'visibility:internal',
   ];
+  if (app === 'api') {
+    const targets = packageJson.nx.targets as
+      | Record<string, { options?: Record<string, unknown> }>
+      | undefined;
+    if (targets?.e2e?.options) {
+      targets.e2e.options.jestConfig = 'apps/api-e2e/jest.config.cjs';
+    }
+  }
   await writeFile(
     packagePath,
     `${JSON.stringify(packageJson, null, 2)}\n`,
@@ -1358,6 +1366,38 @@ async function configureE2ePackage(
 module.exports = { ...nxPreset };
 `,
       'utf8',
+    );
+    await writeFile(
+      resolve(
+        plan.options.stagingDirectory,
+        'apps/api-e2e/jest.config.cjs',
+      ),
+      `const { readFileSync } = require('node:fs');
+
+const swcJestConfig = JSON.parse(
+  readFileSync(\`${'${__dirname}'}/.spec.swcrc\`, 'utf8'),
+);
+swcJestConfig.swcrc = false;
+
+module.exports = {
+  displayName: '${plan.options.scope}-api-e2e',
+  preset: '../../jest.preset.js',
+  globalSetup: '<rootDir>/src/support/global-setup.ts',
+  globalTeardown: '<rootDir>/src/support/global-teardown.ts',
+  setupFiles: ['<rootDir>/src/support/test-setup.ts'],
+  testEnvironment: 'node',
+  transform: {
+    '^.+\\\\.[tj]s$': ['@swc/jest', swcJestConfig],
+  },
+  moduleFileExtensions: ['ts', 'js', 'html'],
+  coverageDirectory: 'test-output/jest/coverage',
+};
+`,
+      'utf8',
+    );
+    await rm(
+      resolve(plan.options.stagingDirectory, 'apps/api-e2e/jest.config.cts'),
+      { force: true },
     );
     const replacements = [
       [
