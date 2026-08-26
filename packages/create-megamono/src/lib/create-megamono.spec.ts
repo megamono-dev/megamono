@@ -659,7 +659,7 @@ describe('executePlan', () => {
             'utf8',
           ),
         ).toBe(
-          'packages:\n  - "packages/*"\n  - \'apps/*\'\n\nautoInstallPeers: true\nallowBuilds:\n  "@parcel/watcher": true\n  esbuild: true\n  less: true\n  nx: true\n  unrs-resolver: true\n',
+          'packages:\n  - "packages/*"\n  - \'apps/*\'\n\nautoInstallPeers: true\nallowBuilds:\n  "@parcel/watcher": true\n  "@swc/core": true\n  esbuild: true\n  less: true\n  nx: true\n  sharp: true\n  unrs-resolver: true\n',
         );
       }
       expect(rootPackage.packageManager).toBe(

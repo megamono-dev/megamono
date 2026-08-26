@@ -15,9 +15,11 @@
   },
   "pnpmAllowBuilds": [
     "@parcel/watcher",
+    "@swc/core",
     "esbuild",
     "less",
     "nx",
+    "sharp",
     "unrs-resolver"
   ],
   "scaffoldPackages": {
