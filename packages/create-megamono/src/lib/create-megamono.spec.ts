@@ -982,13 +982,32 @@ describe('executePlan', () => {
         });
         expect(
           await readFile(
-            resolve(
-              plan.options.destination,
-              `apps/${app}/src/pages/_app.tsx`,
-            ),
+            resolve(plan.options.destination, `apps/${app}/src/pages/_app.tsx`),
             'utf8',
           ),
         ).toContain('<ChakraProvider value={megamonoSystem}>');
+        const billboard = await readFile(
+          resolve(plan.options.destination, `apps/${app}/src/pages/index.tsx`),
+          'utf8',
+        );
+        expect(billboard).toContain('How to use Megamono');
+        expect(billboard).toContain('https://playstack.dev');
+        expect(billboard).toContain('https://springbar.app');
+        expect(billboard).toContain('https://www.commune.software');
+        expect(billboard).not.toContain('Welcome to Nx');
+        const e2e = await readFile(
+          resolve(
+            plan.options.destination,
+            `apps/${app}-e2e/src/example.spec.ts`,
+          ),
+          'utf8',
+        );
+        expect(e2e).toContain(
+          "test('introduces the workspace and Commune development tools'",
+        );
+        expect(e2e).toContain(
+          `${app === 'site' ? 'Marketing site' : 'Web app'}`,
+        );
       }
       expect(renderPlan(plan)).toContain(
         `normalize apps/${app} as an application project`,

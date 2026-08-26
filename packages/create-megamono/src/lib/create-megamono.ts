@@ -1242,10 +1242,7 @@ async function configurePackageApplication(
 
   if (app === 'site' || app === 'web') {
     await writeFile(
-      resolve(
-        plan.options.stagingDirectory,
-        `apps/${app}/src/pages/_app.tsx`,
-      ),
+      resolve(plan.options.stagingDirectory, `apps/${app}/src/pages/_app.tsx`),
       `import { ChakraProvider } from '@chakra-ui/react';
 import { megamonoSystem } from '@${plan.options.scope}/theme';
 import type { AppProps } from 'next/app';
@@ -1260,7 +1257,317 @@ export default function App({ Component, pageProps }: AppProps) {
 `,
       'utf8',
     );
+    await writeFile(
+      resolve(plan.options.stagingDirectory, `apps/${app}/src/pages/index.tsx`),
+      billboardPageSource(plan, app),
+      'utf8',
+    );
+    const e2eRoot = resolve(
+      plan.options.stagingDirectory,
+      `apps/${app}-e2e/src`,
+    );
+    await mkdir(e2eRoot, { recursive: true });
+    await writeFile(
+      resolve(e2eRoot, 'example.spec.ts'),
+      billboardE2eSource(plan, app),
+      'utf8',
+    );
   }
+}
+
+const appLabels: Record<AppId, string> = {
+  web: 'Web app',
+  api: 'Nest API',
+  worker: 'Cloudflare Worker',
+  mobile: 'Expo mobile app',
+  desktop: 'Tauri desktop app',
+  apple: 'Apple native app',
+  site: 'Marketing site',
+};
+
+function billboardPageSource(plan: CreationPlan, app: 'site' | 'web'): string {
+  const nx =
+    plan.options.packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
+  const commands = [
+    `${nx} show projects`,
+    `${nx} graph`,
+    `${nx} run megamono:check`,
+  ];
+  const surfaces = plan.options.apps.map((surface) => appLabels[surface]);
+  const services = plan.options.services.map((service) =>
+    service === 'postgres' ? 'PostgreSQL' : service,
+  );
+  const tools = [
+    {
+      name: 'Megamono',
+      description:
+        'Structure the repository, preserve architectural boundaries, and keep human and agent work aligned.',
+      href: 'https://megamono.com',
+      cta: 'Explore Megamono',
+    },
+    {
+      name: 'Playstack',
+      description:
+        'Compose application capabilities from portable contracts and explicit framework adapters.',
+      href: 'https://playstack.dev',
+      cta: 'Explore Playstack',
+    },
+    {
+      name: 'Springbar',
+      description:
+        plan.options.serviceRunner === 'springbar'
+          ? 'Run this workspace and its requested local services through the Springbar development environment.'
+          : 'Run applications and local services together when this workspace is ready for orchestration.',
+      href: 'https://springbar.app',
+      cta: 'Explore Springbar',
+    },
+    {
+      name: 'Commune Software',
+      description:
+        'Independent development tools for building, operating, and growing thoughtful software products.',
+      href: 'https://www.commune.software',
+      cta: 'Visit Commune Software',
+    },
+  ];
+  return `import {
+  Badge,
+  Box,
+  Code,
+  Container,
+  Flex,
+  Heading,
+  Link,
+  SimpleGrid,
+  Stack,
+  Text,
+} from '@chakra-ui/react';
+import Head from 'next/head';
+
+const workspaceName = ${JSON.stringify(plan.options.name)};
+const surfaceName = ${JSON.stringify(appLabels[app])};
+const surfaces = ${JSON.stringify(surfaces)};
+const services = ${JSON.stringify(services)};
+const commands = ${JSON.stringify(commands)};
+const workflow = [
+  {
+    title: 'Start with intent',
+    description:
+      'Read docs/DESIGN.md and docs/INDEX.md before changing structure or product direction.',
+  },
+  {
+    title: 'Compose at the edges',
+    description:
+      'Keep applications thin composition roots. Put reusable product behavior in tagged libraries.',
+  },
+  {
+    title: 'Generate structure',
+    description:
+      'Use Megamono and Nx generators for projects and integrations so conventions stay encoded.',
+  },
+  {
+    title: 'Validate before commit',
+    description:
+      'Run lint, tests, and megamono:check. Capture durable choices in specs, plans, and decisions.',
+  },
+] as const;
+const tools = ${JSON.stringify(tools, null, 2)} as const;
+const copy = {
+  eyebrow: 'Commune development tools',
+  title: \`${'${workspaceName}'} is ready to build.\`,
+  summary:
+    'Megamono has prepared an opinionated workspace for people and agents to build against the same architecture.',
+  generatedSurface: \`This ${'${surfaceName.toLowerCase()}'} is repository-owned starter content. Replace it when your product is ready.\`,
+  surfaces: 'Generated surfaces',
+  services: 'Requested services',
+  workflow: 'How to use Megamono',
+  commands: 'Start exploring',
+  tools: 'Keep building with Commune',
+  toolsSummary:
+    'Megamono, Playstack, and Springbar cover the repository, application, and local-development layers without hiding their boundaries.',
+} as const;
+const pageTitle = \`${'${workspaceName}'} · Built with Megamono\`;
+
+export default function Index() {
+  return (
+    <>
+      <Head>
+        <title>{pageTitle}</title>
+        <meta name="description" content={copy.summary} />
+      </Head>
+      <Box as="main" minH="100vh" bg="gray.950" color="gray.50">
+        <Container maxW="7xl" py={{ base: '12', md: '20' }}>
+          <Stack gap={{ base: '14', md: '20' }}>
+            <Stack gap="6" maxW="5xl">
+              <Badge
+                alignSelf="flex-start"
+                colorPalette="yellow"
+                variant="surface"
+              >
+                {copy.eyebrow}
+              </Badge>
+              <Heading
+                as="h1"
+                fontSize={{ base: '4xl', md: '7xl' }}
+                lineHeight="0.95"
+                letterSpacing="tight"
+              >
+                {copy.title}
+              </Heading>
+              <Text color="gray.300" fontSize={{ base: 'lg', md: '2xl' }}>
+                {copy.summary}
+              </Text>
+              <Text color="gray.500">{copy.generatedSurface}</Text>
+            </Stack>
+
+            <SimpleGrid columns={{ base: 1, md: 2 }} gap="6">
+              <Box borderWidth="1px" borderColor="gray.800" rounded="2xl" p="7">
+                <Heading as="h2" size="lg" mb="5">
+                  {copy.surfaces}
+                </Heading>
+                <Flex gap="3" wrap="wrap">
+                  {surfaces.map((surface) => (
+                    <Badge key={surface} colorPalette="yellow" variant="outline">
+                      {surface}
+                    </Badge>
+                  ))}
+                </Flex>
+              </Box>
+              <Box borderWidth="1px" borderColor="gray.800" rounded="2xl" p="7">
+                <Heading as="h2" size="lg" mb="5">
+                  {copy.services}
+                </Heading>
+                <Flex gap="3" wrap="wrap">
+                  {(services.length > 0 ? services : ['None requested']).map(
+                    (service) => (
+                      <Badge key={service} variant="outline">
+                        {service}
+                      </Badge>
+                    ),
+                  )}
+                </Flex>
+              </Box>
+            </SimpleGrid>
+
+            <Stack gap="8">
+              <Heading as="h2" fontSize={{ base: '3xl', md: '5xl' }}>
+                {copy.workflow}
+              </Heading>
+              <SimpleGrid columns={{ base: 1, md: 2 }} gap="6">
+                {workflow.map((step, index) => (
+                  <Box
+                    key={step.title}
+                    bg="gray.900"
+                    borderWidth="1px"
+                    borderColor="gray.800"
+                    rounded="2xl"
+                    p="7"
+                  >
+                    <Text color="yellow.300" fontFamily="mono" mb="4">
+                      {String(index + 1).padStart(2, '0')}
+                    </Text>
+                    <Heading as="h3" size="lg" mb="3">
+                      {step.title}
+                    </Heading>
+                    <Text color="gray.400">{step.description}</Text>
+                  </Box>
+                ))}
+              </SimpleGrid>
+            </Stack>
+
+            <Stack gap="6">
+              <Heading as="h2" fontSize={{ base: '3xl', md: '5xl' }}>
+                {copy.commands}
+              </Heading>
+              <Stack gap="3">
+                {commands.map((command) => (
+                  <Code
+                    key={command}
+                    bg="black"
+                    color="yellow.200"
+                    display="block"
+                    fontSize={{ base: 'sm', md: 'md' }}
+                    px="5"
+                    py="4"
+                    rounded="xl"
+                  >
+                    {command}
+                  </Code>
+                ))}
+              </Stack>
+            </Stack>
+
+            <Stack gap="8">
+              <Stack gap="3" maxW="3xl">
+                <Heading as="h2" fontSize={{ base: '3xl', md: '5xl' }}>
+                  {copy.tools}
+                </Heading>
+                <Text color="gray.400" fontSize="lg">
+                  {copy.toolsSummary}
+                </Text>
+              </Stack>
+              <SimpleGrid columns={{ base: 1, md: 2 }} gap="6">
+                {tools.map((tool) => (
+                  <Stack
+                    key={tool.name}
+                    borderTopWidth="1px"
+                    borderColor="gray.700"
+                    gap="4"
+                    pt="6"
+                  >
+                    <Heading as="h3" size="lg">
+                      {tool.name}
+                    </Heading>
+                    <Text color="gray.400">{tool.description}</Text>
+                    <Link
+                      href={tool.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      color="yellow.300"
+                      fontWeight="semibold"
+                      width="fit-content"
+                    >
+                      {tool.cta}
+                    </Link>
+                  </Stack>
+                ))}
+              </SimpleGrid>
+            </Stack>
+          </Stack>
+        </Container>
+      </Box>
+    </>
+  );
+}
+`;
+}
+
+function billboardE2eSource(plan: CreationPlan, app: 'site' | 'web'): string {
+  return `import { expect, test } from '@playwright/test';
+
+test('introduces the workspace and Commune development tools', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(
+    page.getByRole('heading', {
+      level: 1,
+      name: ${JSON.stringify(`${plan.options.name} is ready to build.`)},
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'How to use Megamono' }),
+  ).toBeVisible();
+  await expect(page.getByText(${JSON.stringify(appLabels[app])}, { exact: true })).toBeVisible();
+
+  for (const [name, href] of [
+    ['Explore Megamono', 'https://megamono.com'],
+    ['Explore Playstack', 'https://playstack.dev'],
+    ['Explore Springbar', 'https://springbar.app'],
+    ['Visit Commune Software', 'https://www.commune.software'],
+  ] as const) {
+    await expect(page.getByRole('link', { name })).toHaveAttribute('href', href);
+  }
+});
+`;
 }
 
 async function configureTheme(plan: CreationPlan): Promise<void> {
@@ -1295,10 +1602,7 @@ async function configureTheme(plan: CreationPlan): Promise<void> {
     'utf8',
   );
   await writeFile(
-    resolve(
-      plan.options.stagingDirectory,
-      'packages/theme/src/lib/system.ts',
-    ),
+    resolve(plan.options.stagingDirectory, 'packages/theme/src/lib/system.ts'),
     `import { createSystem, defaultConfig, defineConfig } from '@chakra-ui/react';
 
 const config = defineConfig({
