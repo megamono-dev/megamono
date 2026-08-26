@@ -4,7 +4,8 @@
   "license": "MIT",
   "scripts": {
     "release:check-private": "node tools/check-private-publish.mjs",
-    "yalc:publish": "node tools/publish-yalc.mjs"
+    "yalc:publish": "node tools/publish-yalc.mjs",
+    "yalc:install-cli": "node tools/install-yalc-cli.mjs"
   },
   "private": true,
   "devDependencies": {
