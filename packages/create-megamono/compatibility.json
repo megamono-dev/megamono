@@ -3,6 +3,7 @@
   "schemaVersion": 1,
   "toolchains": {
     "node": ">=24 <25",
+    "pnpm": ">=11 <12",
     "npm": ">=11 <12",
     "nx": ">=23.1 <24",
     "typescript": ">=6.0 <6.1",

@@ -46,7 +46,11 @@
       "properties": {
         "nestFeatureLibraries": { "type": "boolean" },
         "docsLocation": { "const": "centralized" },
-        "packageManager": { "const": "npm" },
+        "packageManager": {
+          "type": "string",
+          "enum": ["pnpm", "npm"],
+          "default": "pnpm"
+        },
         "rules": {
           "type": "object",
           "additionalProperties": false,

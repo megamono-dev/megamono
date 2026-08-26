@@ -105,14 +105,14 @@ Emitted per repo, tuned to the selected platforms.
 - uses: actions/checkout@v7
   with:
     fetch-depth: 0
-- run: npm ci
+- run: pnpm install --frozen-lockfile
 - uses: nrwl/nx-set-shas@v5
-- run: npm exec nx affected -t lint test build
+- run: pnpm exec nx affected -t lint test build
 ```
 
 The CI job grants `contents: read` and `actions: read`; pull-request and merge-queue jobs also grant `pull-requests: read`. No generic CI job has write permission.
 
-Deployment is a separate job, never part of the generic CI command. It runs only on the default branch, declares a GitHub Environment per destination, uses environment protection for production, and invokes `npm exec nx affected -t deploy` after CI succeeds. A repository may omit deploy entirely.
+Deployment is a separate job, never part of the generic CI command. It runs only on the default branch, declares a GitHub Environment per destination, uses environment protection for production, and invokes the selected package manager's Nx execution command after CI succeeds. A repository may omit deploy entirely. The example above is the pnpm default; npm workspaces emit `npm ci` and `npm exec nx` instead.
 
 ### The `affected` base — pin this
 
@@ -164,7 +164,7 @@ Repo-level config recording the choices made at scaffold time, so generators add
   "conventions": {
     "nestFeatureLibraries": true,
     "docsLocation": "centralized",
-    "packageManager": "npm",
+    "packageManager": "pnpm",
     "rules": {
       "no-bare-jsx-strings": { "severity": "warning" },
     },

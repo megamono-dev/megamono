@@ -64,6 +64,8 @@ export const ADOPTION_MODULES = [
   'health',
   'inference',
 ] as const;
+export const PACKAGE_MANAGERS = ['pnpm', 'npm'] as const;
+export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
 
 export const MEGAMONO_CONFIG_VERSION = 1 as const;
 
@@ -109,7 +111,7 @@ const conventionsSchema = z
   .object({
     nestFeatureLibraries: z.boolean().default(true),
     docsLocation: z.literal('centralized').default('centralized'),
-    packageManager: z.literal('npm').default('npm'),
+    packageManager: z.enum(PACKAGE_MANAGERS).default('pnpm'),
     rules: z
       .partialRecord(z.enum(CONVENTION_RULES), ruleOverrideSchema)
       .default({}),
@@ -314,7 +316,7 @@ export const DEFAULT_MEGAMONO_CONFIG: MegamonoConfig =
     conventions: {
       nestFeatureLibraries: true,
       docsLocation: 'centralized',
-      packageManager: 'npm',
+      packageManager: 'pnpm',
       rules: {},
     },
     adoption: {

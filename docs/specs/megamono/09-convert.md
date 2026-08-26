@@ -129,17 +129,17 @@ If execution fails after the Nx tree flushes, the generator writes `MEGAMONO-REC
 
 ## V1 decisions
 
-- V1 supports one npm package or plain npm workspaces after `nx init`. Detection of Lerna, Turborepo, Rush, pnpm, Yarn, or another workspace orchestrator produces an analysis report and refuses before mutation with `convert-unsupported-orchestrator` (programmatic classification `3`; Nx generator process status `1`, per `spec-megamono-0000`).
+- V1 supports one package or plain pnpm/npm workspaces after `nx init`. The detected manager is preserved and written to `megamono.json`. Detection of Lerna, Turborepo, Rush, Yarn, Bun, conflicting lockfiles, or another workspace orchestrator produces an analysis report and refuses before mutation with `convert-unsupported-orchestrator` (programmatic classification `3`; Nx generator process status `1`, per `spec-megamono-0000`).
 - No library extraction is automatic. A proposal requires at least two statically identified consumers and explicit approval or a non-interactive `--extract=<source>:<destination>` mapping.
 - `--verify=config` runs docs validation, `megamono:check`, graph construction, and local health analysis. Health findings appear in the conversion summary and never create or update a GitHub issue during convert.
 - A source-root file is classified before moving. Repository infrastructure (`.github`, editor config, licenses, root manifests, Git files, and Nx files) remains at root; app-owned framework and source files move. Unclassified files are unresolved decisions, not guessed moves.
 
 ## Acceptance criteria
 
-- Single-package and plain npm-workspace fixtures convert with preserved commands, project names, and graph edges.
+- Single-package and plain pnpm/npm-workspace fixtures convert with preserved commands, project names, and graph edges.
 - Dirty trees, default-branch execution, unsupported orchestrators, ambiguous files, and unresolved non-interactive choices exit before mutation.
 - Dry-run and execution produce the same ordered move/update plan.
 - Every source build/test/lint command has a behaviorally equivalent target; deploy is emitted only when detected.
 - `git log --follow` crosses representative file moves in the history fixture.
 - Running convert a second time is a no-op, and a failure after tree flush writes a recovery file without committing or reverting changes.
-- `--verify=build` proves the converted app builds and tests from a clean npm install.
+- `--verify=build` proves the converted app builds and tests from a clean selected-package-manager install.

@@ -103,7 +103,7 @@ Same logic as `spec-megamono-0008`, applied at merge time. For each conflicting 
 
 **Never silently take the higher version.** That is the default behaviour of naive merges and it is how an import breaks the app that was working before the import.
 
-Where isolation is required, prefer package-manager-native mechanisms that remain compatible with npm workspaces. A root `overrides` rule is allowed only when it satisfies both sides; nested independent installs are not accepted because they make lockfile and affected behavior ambiguous. An unsatisfied conflict blocks the import.
+Where isolation is required, prefer mechanisms native to the target workspace's recorded package manager. A root `overrides` rule is allowed only when it satisfies both sides; nested independent installs are not accepted because they make lockfile and affected behavior ambiguous. An unsatisfied conflict blocks the import. A pnpm target may use catalogs for aligned shared versions and `workspace:` for local packages; an npm target retains npm-compatible declarations.
 
 ### Phase 4 — Translate builds
 
@@ -150,6 +150,6 @@ Execution creates a history-graft commit first. It then applies integration chan
 - Subtree, filter-repo, and squash fixtures preserve exactly the history promised by their selected strategy; squash cannot execute without `--allow-history-loss`.
 - Dirty trees, default-branch execution, unresolved SHAs, unsupported source shapes, missing plugins, and unresolved collisions fail before the graft commit.
 - Dependency reconciliation never selects a version merely because it is newer; every conflict has an accepted resolution in the execution plan.
-- Successful imports build, test, lint, and expose expected graph edges from a clean root npm install.
+- Successful imports build, test, lint, and expose expected graph edges from a clean root selected-package-manager install.
 - Failed validation leaves the source untouched, creates no final integration commit or push, and writes a recovery report on the target branch.
 - The executor is idempotent by source SHA and destination: an already completed import exits `0` with no new commit; a partial prior import exits `3` with recovery guidance.

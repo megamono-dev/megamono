@@ -23,27 +23,28 @@ Megamono v1 targets one deliberately narrow toolchain:
 | Surface                            | Supported in v1                                              |
 | ---------------------------------- | ------------------------------------------------------------ |
 | Node.js                            | `>=24 <25`                                                   |
-| npm                                | `>=11 <12`; npm workspaces only                              |
+| pnpm                               | `>=11 <12`; default for new workspaces                       |
+| npm                                | `>=11 <12`; supported compatibility option                   |
 | Nx                                 | `>=23.1 <24`                                                 |
 | TypeScript                         | `>=6.0 <6.1`                                                 |
 | Operating systems for core tooling | macOS and Linux                                              |
 | Windows                            | Unsupported in v1; fail preflight with an actionable message |
 
-The core packages declare these ranges in `engines` and `peerDependencies`. Supporting a second package manager or Nx major is a separate compatibility project, not an incidental bug fix.
+The core packages declare these ranges in `engines` and `peerDependencies`. `create-megamono` accepts `--package-manager=pnpm|npm`, defaults to pnpm, and records the selection in both the root `packageManager` field and `megamono.json`. Every generated install, execution, CI, verification, recovery, and local-package command uses that recorded manager. Existing-workspace adoption detects an unambiguous pnpm or npm lockfile and preserves it; conflicting or unsupported lockfiles fail preflight. Supporting another package manager or Nx major is a separate compatibility project, not an incidental bug fix.
 
 `@megamono/plugin/compatibility.json` is a public, versioned data export containing the exact scaffold defaults and tested ranges for application frameworks, service images, vendor SDKs, and optional external CLIs. Generators read that file rather than resolving `latest`. Changing an entry requires the affected fixture and snapshot suite in the same release.
 
 ## Published package map
 
-| Package                   | Responsibility                                                                                      | Runtime dependency?                    |
-| ------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `create-megamono`         | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `npm create` / `npx` |
-| `@megamono/plugin`        | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                    |
-| `@megamono/nx-apple`      | Apple project inference, targets, and graph edges                                                   | Dev dependency only                    |
-| `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                    |
-| `@megamono/nx-extension`  | WXT extension inference and generators; Wave 2                                                      | Dev dependency only                    |
-| `@megamono/nx-laravel`    | Composer/Laravel inference and generators; Wave 2                                                   | Dev dependency only                    |
-| `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators; Wave 3                            | Dev dependency only                    |
+| Package                   | Responsibility                                                                                      | Runtime dependency?                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `create-megamono`         | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `pnpm dlx` / `npx` |
+| `@megamono/plugin`        | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                  |
+| `@megamono/nx-apple`      | Apple project inference, targets, and graph edges                                                   | Dev dependency only                  |
+| `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                  |
+| `@megamono/nx-extension`  | WXT extension inference and generators; Wave 2                                                      | Dev dependency only                  |
+| `@megamono/nx-laravel`    | Composer/Laravel inference and generators; Wave 2                                                   | Dev dependency only                  |
+| `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators; Wave 3                            | Dev dependency only                  |
 
 The initial validation channel publishes `@megamono/plugin`, `@megamono/nx-apple`, and `@megamono/nx-cargo` as restricted packages on npm from `megamono-dev/megamono`. Their canonical names do not change when they graduate to public npm. The unscoped `create-megamono` entry package cannot be private on npm and remains in a separate release group until public promotion.
 
@@ -130,6 +131,8 @@ Every generator follows these rules:
 7. **Secrets by name only.** Workflows declare required secret names; generators never request or persist secret values.
 8. **Dry run.** Mutating generators support `--dry-run`, print the same ordered plan used for execution, and write nothing.
 
+Commands emitted by a generator are package-manager-aware. pnpm workspaces use `pnpm install`, `pnpm exec`, `pnpm run`, and `workspace:` dependency declarations. npm workspaces use `npm install`, `npm exec`, `npm run`, and npm-compatible local workspace declarations. A generator never mixes command families or infers a manager from executable availability after the workspace contract has been recorded.
+
 Megamono error classifications are stable: `0` success/no-op, `1` validation or execution failure, `2` invalid options, `3` preflight refusal, and `4` unresolved user decision in non-interactive mode. Standalone CLIs and executors use those values as process exit codes. Nx 23's generator runner catches every thrown generator error and returns process status `1`, so `nx generate` exposes classifications `2`–`4` through the error object's `exitCode` and a stable diagnostic code rather than through the process status. Packed-generator fixtures assert status `1` plus that diagnostic code; direct tests assert the programmatic classification.
 
 ## Compatibility and fixture tests
@@ -164,7 +167,7 @@ A spec is build-ready when it has `status: accepted`, no unresolved decision tha
 
 ## Acceptance criteria
 
-- Packed packages enforce the supported Node, npm, Nx, and TypeScript ranges and reject unsupported package managers and operating systems during preflight.
+- Packed packages enforce the supported Node, pnpm/npm, Nx, and TypeScript ranges and reject unsupported or ambiguous package managers and operating systems during preflight.
 - `workspace-eject` preserves artifact content, changes only Megamono ownership metadata or managed-section delimiters, and prevents later plugin upgrades from reclaiming the artifact.
 - Every public generator and executor name appears in this contract and resolves from a local-registry installation fixture.
 - Generator fixtures prove deterministic planning, dry-run parity, idempotency, conflict handling, stable exit codes, and absence of secret values.

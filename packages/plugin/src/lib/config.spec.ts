@@ -19,7 +19,20 @@ describe('Megamono configuration', () => {
       ratchets: [],
     });
     expect(config.services.requirements).toEqual({});
+    expect(config.conventions.packageManager).toBe('pnpm');
     expect(getTopicVocabulary(config)).toContain('architecture');
+  });
+
+  it('accepts npm as an explicit compatibility option', () => {
+    expect(
+      megamonoConfigSchema.parse({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        conventions: {
+          ...DEFAULT_MEGAMONO_CONFIG.conventions,
+          packageManager: 'npm',
+        },
+      }).conventions.packageManager,
+    ).toBe('npm');
   });
 
   it('records modular adoption, reductions, inference, and lint ratchets', () => {
@@ -149,7 +162,7 @@ describe('Megamono configuration', () => {
         JSON.stringify(DEFAULT_MEGAMONO_CONFIG),
       );
       const config = await readMegamonoConfig(root, 'config/megamono.json');
-      expect(config.conventions.packageManager).toBe('npm');
+      expect(config.conventions.packageManager).toBe('pnpm');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

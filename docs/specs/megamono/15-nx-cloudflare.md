@@ -44,7 +44,7 @@ Inference and graph repair are the product. Scaffolding is deliberately secondar
 
 ## Compatibility and discovery
 
-The package follows the Node, npm, Nx, and TypeScript ranges in `spec-megamono-0000`. Its tested Wrangler range, pinned scaffold version, and pinned scaffold `compatibility_date` live in `@megamono/plugin/compatibility.json`; no generator resolves `latest` or chooses a date from the wall clock.
+The package follows the Node, pnpm/npm, Nx, and TypeScript ranges in `spec-megamono-0000`. Its tested Wrangler range, pinned scaffold version, and pinned scaffold `compatibility_date` live in `@megamono/plugin/compatibility.json`; no generator resolves `latest` or chooses a date from the wall clock.
 
 `createNodes` discovers the standard Wrangler configuration names:
 
@@ -163,7 +163,7 @@ The package is build-ready when:
 - an affected fixture proves changing a dependency marks its Worker consumers affected;
 - target snapshots prove cache, continuous, input, output, override, and environment-configuration behavior;
 - current and out-of-range Wrangler fixtures prove the compatibility gate and type generation;
-- a packed local-registry fixture installs the published tarball into a clean Node 24/npm 11/Nx 23 workspace and repeats graph, target, generator, and affected checks;
+- packed local-registry fixtures install the published tarball into clean Node 24/pnpm 11/Nx 23 and Node 24/npm 11/Nx 23 workspaces and repeat graph, target, generator, and affected checks;
 - Springbar is absent from the package manifest and generated files, while normalized vendor metadata remains available to any graph consumer.
 
 ## Cross-references

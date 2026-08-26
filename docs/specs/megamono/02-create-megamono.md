@@ -37,7 +37,7 @@ Not a fixed preset. A guided setup that asks a handful of good questions and com
 The design tension is a combinatorial matrix that becomes unmaintainable. The line:
 
 - **Fixed (the opinionated spine):** docs and agent structure, conventions, lint rules, library boundaries, release mechanics.
-- **Variable:** which platforms are in play, whether there's a Nest API, which services, and which integrations. V1 is npm-only per `spec-megamono-0000`.
+- **Variable:** which platforms are in play, whether there's a Nest API, which services, which integrations, and whether the workspace uses pnpm or npm. pnpm is the default per `spec-megamono-0000`.
 
 ### Adaptive prompting
 
@@ -78,7 +78,7 @@ Then conventions, then integrations.
 
 ### V1 app outputs
 
-The repository name becomes the npm scope and default project-name prefix after normalization. Each selected surface emits one project:
+The repository name becomes the package scope and default project-name prefix after normalization. Each selected surface emits one project:
 
 | Selection    | Default project  | Implementation                                                              |
 | ------------ | ---------------- | --------------------------------------------------------------------------- |
@@ -92,7 +92,7 @@ The repository name becomes the npm scope and default project-name prefix after 
 
 At least one app is required. Selecting Desktop or Apple installs the matching inference plugin. App names and directories have explicit override flags; collisions are detected before any files are written.
 
-Desktop scaffolding invokes the exact `create-tauri-app` version in `@megamono/plugin/compatibility.json` with the npm manager, `vanilla-ts` template, and Tauri 2. The bootstrap then normalizes the upstream output to `apps/desktop`: the npm package, Cargo package, Tauri product, and inferred Nx project are all named `<repo>-desktop`; the application identifier is `com.<repo>.desktop`; `apps/*` is registered as an npm workspace; and `@megamono/nx-cargo` is added to `nx.json` with `scope:<repo>` and `tauriTargetName:tauri-build`. The distinct target name preserves the upstream npm `tauri` script without colliding with the cacheable inferred Tauri build. Every npm and Rust dependency emitted by the upstream template is replaced with its exact tested compatibility pin before installation or graph construction.
+Desktop scaffolding invokes the exact `create-tauri-app` version in `@megamono/plugin/compatibility.json` with the selected package manager, `vanilla-ts` template, and Tauri 2. The bootstrap then normalizes the upstream output to `apps/desktop`: the JavaScript package, Cargo package, Tauri product, and inferred Nx project are all named `<repo>-desktop`; the application identifier is `com.<repo>.desktop`; `apps/*` is registered in the selected workspace format; and `@megamono/nx-cargo` is added to `nx.json` with `scope:<repo>` and `tauriTargetName:tauri-build`. The distinct target name preserves the upstream `tauri` script without colliding with the cacheable inferred Tauri build. Every JavaScript and Rust dependency emitted by the upstream template is replaced with its exact tested compatibility pin before installation or graph construction.
 
 ### CLI contract
 
@@ -105,15 +105,16 @@ npx create-megamono <name>
   --integrations sentry
   --interactive true|false
   --install true|false
+  --package-manager pnpm|npm
   --local-packages registry|yalc
   --verify none|config|build
   --cleanup-on-failure
   --dry-run
 ```
 
-Defaults are `--service-runner=none`, no integrations, `--install=true`, `--local-packages=registry`, and `--verify=config`. Non-interactive mode requires `name` and `apps`; all other omitted values use those defaults. `--verify=config` runs formatting, docs validation, `megamono:check`, and graph creation. `--verify=build` additionally runs affected build/test/lint targets for generated projects.
+Defaults are `--service-runner=none`, no integrations, `--install=true`, `--package-manager=pnpm`, `--local-packages=registry`, and `--verify=config`. Non-interactive mode requires `name` and `apps`; all other omitted values use those defaults. `--verify=config` runs formatting, docs validation, `megamono:check`, and graph creation. `--verify=build` additionally runs affected build/test/lint targets for generated projects.
 
-`--local-packages=yalc` is a development-only override for exercising unpublished Megamono packages in integration repositories. Third-party scaffold dependencies still come from their exact compatibility pins. Before staging, the binary resolves `yalc dir` and requires the exact compatible versions of `@megamono/plugin` plus each selected platform plugin. It then adds those packages as local dev dependencies and hydrates their transitive registry dependencies before invoking any generator. A missing executable, package, or exact version exits `3` without creating the staging directory. The default registry flow never reads the yalc store.
+`--local-packages=yalc` is a development-only override for exercising unpublished Megamono packages in integration repositories. Third-party scaffold dependencies still come from their exact compatibility pins. Before staging, the binary resolves `yalc dir` and requires the exact compatible versions of `@megamono/plugin` plus each selected platform plugin. It then adds those packages as local dev dependencies and hydrates their transitive registry dependencies with the selected package manager before invoking any generator. A missing executable, package, or exact version exits `3` without creating the staging directory. The default registry flow never reads the yalc store.
 
 The integration prompt and flag enumerate only generators currently present in the published collection. Reserved names such as Fathom, Postmark, and Stripe are not accepted as bootstrap options until their availability gate in `spec-megamono-0000` passes.
 
@@ -186,7 +187,7 @@ That generator refuses a workspace already carrying `megamono.json` unless it is
 
 ## V1 decisions
 
-- npm is the only supported package manager. Other lockfiles fail preflight with an explicit compatibility message.
+- pnpm and npm are supported. pnpm is the default; other or conflicting lockfiles fail preflight with an explicit compatibility message.
 - Selecting `apple` requires macOS. On Linux it exits `3` before staging; other selections remain supported.
 - The binary creates new workspaces only; `workspace-init` owns existing workspaces.
 - No analytics or first-party product integration is selected by default.
@@ -204,4 +205,4 @@ That generator refuses a workspace already carrying `megamono.json` unless it is
 - Re-running against a non-empty destination exits `3` without modifying it.
 - `AGENTS.md` contains the rules and `CLAUDE.md` contains only the pointer/import.
 - No generated manifest uses an unbounded dependency range, and no secret value appears in generated files or process arguments.
-- The final workspace passes docs validation, structural checks, graph construction, and an npm install from a clean cache.
+- The final workspace passes docs validation, structural checks, graph construction, and a selected-package-manager install from a clean cache.
