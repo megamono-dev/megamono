@@ -116,6 +116,8 @@ Defaults are `--service-runner=none`, no integrations, `--install=true`, `--pack
 
 `--local-packages=yalc` is a development-only override for exercising unpublished Megamono packages in integration repositories. Third-party scaffold dependencies still come from their exact compatibility pins. Before staging, the binary resolves `yalc dir` and requires the exact compatible versions of `@megamono/plugin` plus each selected platform plugin. It then adds those packages as local dev dependencies and hydrates their transitive registry dependencies with the selected package manager before invoking any generator. A missing executable, package, or exact version exits `3` without creating the staging directory. The default registry flow never reads the yalc store.
 
+For pnpm, bootstrap records the exact tested manager version and configures `allowBuilds` before adding plugins or invoking generators. The allowlist contains only lifecycle packages exercised by the pinned scaffold matrix and lives in the compatibility registry; an unlisted lifecycle script fails the transaction instead of being approved implicitly.
+
 The integration prompt and flag enumerate only generators currently present in the published collection. Reserved names such as Fathom, Postmark, and Stripe are not accepted as bootstrap options until their availability gate in `spec-megamono-0000` passes.
 
 ## The Nest feature-library convention

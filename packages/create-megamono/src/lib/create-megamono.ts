@@ -94,6 +94,7 @@ export type PlanStep =
   | {
       kind: 'configure';
       id:
+        | 'configure-package-manager'
         | 'configure-desktop'
         | 'configure-mobile'
         | 'configure-site'
@@ -129,6 +130,7 @@ export class CreateMegamonoError extends Error {
 
 interface CompatibilityRegistry {
   packageManagers: Record<PackageManager, string>;
+  pnpmAllowBuilds: string[];
   scaffoldPackages: Record<string, string>;
   services: Record<string, string>;
   rustCrates: Record<string, string>;
@@ -442,6 +444,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       ]),
       'parent',
     ),
+    { kind: 'configure', id: 'configure-package-manager' },
   ];
 
   const plugins = new Set<string>(['@megamono/plugin', 'typescript']);
@@ -804,6 +807,8 @@ export function renderPlan(plan: CreationPlan): string {
         return `${index + 1}. commit ${plan.options.stagingDirectory} -> ${plan.options.destination}`;
       }
       if (step.kind === 'configure') {
+        if (step.id === 'configure-package-manager')
+          return `${index + 1}. [staging] record ${plan.options.packageManager} and configure package-manager policy`;
         if (step.id === 'configure-desktop')
           return `${index + 1}. [staging] normalize apps/desktop and register @megamono/nx-cargo`;
         if (
@@ -894,6 +899,55 @@ async function registerPnpmWorkspace(
     insertionIndex += 1;
   }
   lines.splice(insertionIndex, 0, `  - '${workspacePattern}'`);
+  await writeFile(workspacePath, lines.join(newline), 'utf8');
+}
+
+async function configurePackageManager(plan: CreationPlan): Promise<void> {
+  const packagePath = resolve(plan.options.stagingDirectory, 'package.json');
+  const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as {
+    packageManager?: string;
+  };
+  packageJson.packageManager = `${plan.options.packageManager}@${compatibility.packageManagers[plan.options.packageManager]}`;
+  await writeFile(
+    packagePath,
+    `${JSON.stringify(packageJson, null, 2)}\n`,
+    'utf8',
+  );
+
+  if (plan.options.packageManager !== 'pnpm') return;
+  const workspacePath = resolve(
+    plan.options.stagingDirectory,
+    'pnpm-workspace.yaml',
+  );
+  const source = await readFile(workspacePath, 'utf8');
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.split(/\r?\n/);
+  let allowBuildsIndex = lines.findIndex((line) =>
+    /^allowBuilds:\s*$/.test(line),
+  );
+  if (allowBuildsIndex === -1) {
+    while (lines.at(-1) === '') lines.pop();
+    lines.push('', 'allowBuilds:');
+    allowBuildsIndex = lines.length - 1;
+  }
+  let end = allowBuildsIndex + 1;
+  while (end < lines.length && /^\s+\S/.test(lines[end])) end += 1;
+  const entries = new Map<string, string>();
+  for (const line of lines.slice(allowBuildsIndex + 1, end)) {
+    const match = line.match(/^\s{2}([^:#]+):\s*(.+)$/);
+    if (match) entries.set(match[1].trim(), match[2].trim());
+  }
+  for (const name of compatibility.pnpmAllowBuilds) entries.set(name, 'true');
+  lines.splice(
+    allowBuildsIndex + 1,
+    end - allowBuildsIndex - 1,
+    ...[...entries]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, value]) => {
+        const key = /^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.stringify(name);
+        return `  ${key}: ${value}`;
+      }),
+  );
   await writeFile(workspacePath, lines.join(newline), 'utf8');
 }
 
@@ -1153,7 +1207,9 @@ export async function executePlan(
     for (const step of plan.steps) {
       if (step.kind === 'commit') await commitWorkspace(plan);
       else if (step.kind === 'configure') {
-        if (step.id === 'configure-desktop') await configureDesktop(plan);
+        if (step.id === 'configure-package-manager')
+          await configurePackageManager(plan);
+        else if (step.id === 'configure-desktop') await configureDesktop(plan);
         else if (step.id === 'configure-mobile')
           await configurePackageApplication(plan, 'mobile');
         else if (step.id === 'configure-site')

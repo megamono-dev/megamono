@@ -170,6 +170,7 @@ describe('createPlan', () => {
     const rendered = renderPlan(plan);
     expect(plan.steps.map((step) => step.id)).toEqual([
       'create-nx-workspace',
+      'configure-package-manager',
       'install-plugins',
       'generate-site',
       'configure-site',
@@ -222,6 +223,7 @@ describe('createPlan', () => {
     );
     expect(plan.steps.map((step) => step.id)).toEqual([
       'create-nx-workspace',
+      'configure-package-manager',
       'install-plugins',
       'generate-desktop',
       'configure-desktop',
@@ -245,6 +247,7 @@ describe('createPlan', () => {
     );
     expect(plan.steps.map((step) => step.id)).toEqual([
       'create-nx-workspace',
+      'configure-package-manager',
       'install-plugins',
       'generate-apple',
       'initialize-megamono',
@@ -274,6 +277,7 @@ describe('createPlan', () => {
     );
     expect(plan.steps.map((step) => step.id)).toEqual([
       'create-nx-workspace',
+      'configure-package-manager',
       'install-plugins',
       'generate-worker',
       'initialize-megamono',
@@ -303,6 +307,7 @@ describe('createPlan', () => {
     );
     expect(plan.steps.map((step) => step.id)).toEqual([
       'create-nx-workspace',
+      'configure-package-manager',
       'install-plugins',
       'generate-desktop',
       'configure-desktop',
@@ -334,14 +339,15 @@ describe('createPlan', () => {
       '@megamono/nx-cloudflare',
       '@megamono/plugin',
     ]);
-    expect(plan.steps.slice(0, 4).map((step) => step.id)).toEqual([
+    expect(plan.steps.slice(0, 5).map((step) => step.id)).toEqual([
       'create-nx-workspace',
+      'configure-package-manager',
       'install-plugins',
       'install-local-packages',
       'hydrate-local-packages',
     ]);
-    const registryInstall = plan.steps[1];
-    const yalcInstall = plan.steps[2];
+    const registryInstall = plan.steps[2];
+    const yalcInstall = plan.steps[3];
     expect(registryInstall).toMatchObject({
       kind: 'command',
       command: 'npm',
@@ -485,8 +491,13 @@ describe('executePlan', () => {
     expect(invocations[4]).toContain('@nx/nest:application');
     expect(invocations[5]).toContain('@megamono/plugin:workspace-init');
     expect(
-      await readFile(resolve(plan.options.destination, 'package.json'), 'utf8'),
-    ).toBe('{}');
+      JSON.parse(
+        await readFile(
+          resolve(plan.options.destination, 'package.json'),
+          'utf8',
+        ),
+      ),
+    ).toEqual({ packageManager: 'npm@11.17.0' });
   });
 
   it('commits a staged workspace over an empty destination', async () => {
@@ -505,6 +516,10 @@ describe('executePlan', () => {
         '{}',
       );
       await writeFile(
+        resolve(plan.options.stagingDirectory, 'package.json'),
+        '{}',
+      );
+      await writeFile(
         resolve(plan.options.stagingDirectory, 'megamono.json'),
         JSON.stringify({
           version: 1,
@@ -516,8 +531,13 @@ describe('executePlan', () => {
     };
     await executePlan(plan, runner);
     expect(
-      await readFile(resolve(plan.options.destination, 'package.json'), 'utf8'),
-    ).toBe('{}');
+      JSON.parse(
+        await readFile(
+          resolve(plan.options.destination, 'package.json'),
+          'utf8',
+        ),
+      ),
+    ).toEqual({ packageManager: 'npm@11.17.0' });
     expect(
       JSON.parse(
         await readFile(
@@ -568,7 +588,7 @@ describe('executePlan', () => {
         if (packageManager === 'pnpm') {
           await writeFile(
             resolve(plan.options.stagingDirectory, 'pnpm-workspace.yaml'),
-            "packages:\n  - 'packages/*'\n",
+            'packages:\n  - "packages/*"\n\nautoInstallPeers: true\nallowBuilds:\n  nx: true\n  unrs-resolver: set this to true or false\n',
           );
         }
         await writeFile(
@@ -638,8 +658,13 @@ describe('executePlan', () => {
             resolve(plan.options.destination, 'pnpm-workspace.yaml'),
             'utf8',
           ),
-        ).toBe("packages:\n  - 'packages/*'\n  - 'apps/*'\n");
+        ).toBe(
+          'packages:\n  - "packages/*"\n  - \'apps/*\'\n\nautoInstallPeers: true\nallowBuilds:\n  "@parcel/watcher": true\n  esbuild: true\n  less: true\n  nx: true\n  unrs-resolver: true\n',
+        );
       }
+      expect(rootPackage.packageManager).toBe(
+        `${packageManager}@${packageManager === 'pnpm' ? '11.24.0' : '11.17.0'}`,
+      );
       expect(rootPackage.devDependencies).toMatchObject({ vite: '8.1.4' });
       const desktopPackage = JSON.parse(
         await readFile(
@@ -926,6 +951,10 @@ describe('executePlan', () => {
       first = false;
       await mkdir(plan.options.stagingDirectory);
       await writeFile(
+        resolve(plan.options.stagingDirectory, 'package.json'),
+        '{}',
+      );
+      await writeFile(
         resolve(plan.options.stagingDirectory, 'megamono.json'),
         JSON.stringify({ version: 1 }),
       );
@@ -973,6 +1002,10 @@ describe('executePlan', () => {
         if (!first) return;
         first = false;
         await mkdir(plan.options.stagingDirectory);
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'package.json'),
+          '{}',
+        );
         await writeFile(
           resolve(plan.options.stagingDirectory, 'megamono.json'),
           JSON.stringify({ version: 1 }),
