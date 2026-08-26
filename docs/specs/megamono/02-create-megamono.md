@@ -4,7 +4,7 @@ type: spec
 status: accepted
 visibility: internal
 projects: [megamono]
-topics: [generators, bootstrap, nx, agents]
+topics: [generators, bootstrap, nx, agents, lint, positioning, testing]
 summary: Defines the new-workspace bootstrap flow, supported prompts, emitted structure, and integration boundaries.
 date: 2026-08-23
 supersedes: null
@@ -36,7 +36,7 @@ Not a fixed preset. A guided setup that asks a handful of good questions and com
 
 The design tension is a combinatorial matrix that becomes unmaintainable. The line:
 
-- **Fixed (the opinionated spine):** docs and agent structure, conventions, lint rules, library boundaries, release mechanics.
+- **Fixed (the opinionated spine):** docs and agent structure, conventions, lint rules, library boundaries, release mechanics, and maintained framework presets. The Next preset is Pages Router, Chakra UI, `src/`, ESLint, and Playwright; these are explicit generator inputs rather than inherited Nx defaults.
 - **Variable:** which platforms are in play, whether there's a Nest API, which services, which integrations, and whether the workspace uses pnpm or npm. pnpm is the default per `spec-megamono-0000`.
 
 ### Adaptive prompting
@@ -82,15 +82,31 @@ The repository name becomes the package scope and default project-name prefix af
 
 | Selection    | Default project  | Implementation                                                              |
 | ------------ | ---------------- | --------------------------------------------------------------------------- |
-| Web app      | `<repo>-web`     | Next.js Pages Router app under `apps/web`                                   |
-| API          | `<repo>-api`     | Thin Nest app under `apps/api`; features live in libraries                  |
+| Web app      | `<repo>-web`     | Next.js Pages Router + Chakra UI app under `apps/web`, with Playwright e2e  |
+| API          | `<repo>-api`     | Thin Nest app under `apps/api`, with Jest/Supertest e2e                     |
 | Worker       | `<repo>-worker`  | TypeScript Cloudflare Worker under `apps/worker`                            |
 | Mobile       | `<repo>-mobile`  | Expo app under `apps/mobile`                                                |
 | Desktop      | `<repo>-desktop` | Tauri app under `apps/desktop`, registered through `@megamono/nx-cargo`     |
 | Apple native | `<repo>-apple`   | Xcode/Swift app under `apps/apple`, registered through `@megamono/nx-apple` |
-| Marketing    | `<repo>-site`    | Next.js Pages Router app under `apps/site`                                  |
+| Marketing    | `<repo>-site`    | Next.js Pages Router + Chakra UI app under `apps/site`, with Playwright e2e |
 
 At least one app is required. Selecting Desktop or Apple installs the matching inference plugin. App names and directories have explicit override flags; collisions are detected before any files are written.
+
+### Maintained Next preset
+
+Megamono does not hand control to Nx's nested interactive prompts. It gathers Megamono-level intent before the transaction and invokes every upstream generator with explicit options so an Nx upgrade cannot silently change a scaffold. V1's maintained Next preset is:
+
+- Pages Router (`appDir=false`)
+- a `src/` directory
+- Chakra UI v3 and Emotion instead of an Nx stylesheet starter
+- ESLint with the generated project covered by Megamono's root structural rules
+- Playwright e2e in a sibling `<app>-e2e` project
+
+The generated Next surfaces share a small repository-owned Chakra system module. That module is starter composition, not a Megamono component library and not a substitute for the Playstack-owned theme surface in `spec-megamono-0007`; repositories may replace or compose it through ordinary Chakra APIs.
+
+The Nx placeholder page is replaced by a repository-owned onboarding billboard. It names the generated workspace and requested surfaces, explains the Megamono workflow (apps as composition roots, feature libraries, tags and boundaries, docs as intent, generators for structure, and `megamono:check` before commit), links to the emitted documentation entry points, and introduces Commune's Megamono, Playstack, and Springbar development tools. It performs no telemetry or runtime calls, does not require a private Playstack package, uses no secret or machine-specific value, and is deliberately easy to replace. The generated Playwright test verifies its heading, onboarding guidance, and outbound tool links rather than Nx placeholder copy.
+
+New Nest applications explicitly enable ESLint and emit their Jest/Supertest e2e project. Greenfield lint violations are errors. Existing-workspace adoption and conversion retain their separate warning-first migration contract.
 
 Desktop scaffolding invokes the exact `create-tauri-app` version in `@megamono/plugin/compatibility.json` with the selected package manager, `vanilla-ts` template, and Tauri 2. The bootstrap then normalizes the upstream output to `apps/desktop`: the JavaScript package, Cargo package, Tauri product, and inferred Nx project are all named `<repo>-desktop`; the application identifier is `com.<repo>.desktop`; `apps/*` is registered in the selected workspace format; and `@megamono/nx-cargo` is added to `nx.json` with `scope:<repo>` and `tauriTargetName:tauri-build`. The distinct target name preserves the upstream `tauri` script without colliding with the cacheable inferred Tauri build. Every JavaScript and Rust dependency emitted by the upstream template is replaced with its exact tested compatibility pin before installation or graph construction.
 
@@ -194,6 +210,7 @@ That generator refuses a workspace already carrying `megamono.json` unless it is
 - The binary creates new workspaces only; `workspace-init` owns existing workspaces.
 - No analytics or first-party product integration is selected by default.
 - Generated code targets the compatibility ranges in `spec-megamono-0000`; it never resolves unbounded `latest` versions.
+- Upstream generators remain non-interactive. Maintained preset choices are explicit Megamono inputs; raw Nx prompt changes do not alter generated output.
 
 ## Acceptance criteria
 
@@ -207,4 +224,8 @@ That generator refuses a workspace already carrying `megamono.json` unless it is
 - Re-running against a non-empty destination exits `3` without modifying it.
 - `AGENTS.md` contains the rules and `CLAUDE.md` contains only the pointer/import.
 - No generated manifest uses an unbounded dependency range, and no secret value appears in generated files or process arguments.
+- Generated Next apps use Pages Router under `src/`, render through Chakra UI, and contain no Nx placeholder content.
+- Each generated Next app has a passing Playwright e2e project whose assertions cover the onboarding billboard; each generated Nest app has a passing Jest/Supertest e2e project.
+- Generated application and e2e projects are covered by ESLint, Megamono structural rules, and the affected CI lint target.
+- The onboarding billboard explains the Megamono workflow and links to Megamono, Playstack, Springbar, and Commune without telemetry or private runtime dependencies.
 - The final workspace passes docs validation, structural checks, graph construction, and a selected-package-manager install from a clean cache.
