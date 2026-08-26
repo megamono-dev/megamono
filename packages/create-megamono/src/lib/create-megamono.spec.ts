@@ -213,12 +213,11 @@ describe('createPlan', () => {
           command: 'pnpm',
         }),
         expect.objectContaining({
-          id: 'verify-generated-e2e',
+          id: 'verify-acme-tools-web-e2e',
           command: 'pnpm',
           args: expect.arrayContaining([
-            '--targets=e2e',
-            '--projects=acme-tools-web-e2e',
-            '--parallel=1',
+            'run',
+            'acme-tools-web-e2e:e2e',
           ]),
         }),
       ]),
@@ -248,7 +247,8 @@ describe('createPlan', () => {
       'check-structure',
       'build-project-graph',
       'verify-generated-projects',
-      'verify-generated-e2e',
+      'verify-acme-tools-site-e2e',
+      'verify-acme-tools-web-e2e',
       'commit-workspace',
     ]);
     expect(rendered).toContain('create-nx-workspace@23.1.1');
@@ -287,7 +287,7 @@ describe('createPlan', () => {
     expect(rendered).toContain('--linter=eslint');
     expect(rendered).toContain('--unitTestRunner=none');
     expect(rendered).toContain('--e2eTestRunner=jest');
-    expect(rendered).toContain('--projects=acme-tools-api-e2e');
+    expect(rendered).toContain('acme-tools-api-e2e:e2e');
   });
 
   it('ships the same compatibility registry as the workspace plugin', async () => {

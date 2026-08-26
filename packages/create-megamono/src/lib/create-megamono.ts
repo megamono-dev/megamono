@@ -710,17 +710,12 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       ),
     );
     const e2eProjects = generatedE2eProjects(options);
-    if (e2eProjects.length > 0) {
+    for (const project of e2eProjects) {
       steps.push(
         commandStep(
-          'verify-generated-e2e',
+          `verify-${project}`,
           options.packageManager,
-          nxArgs(options.packageManager, [
-            'run-many',
-            '--targets=e2e',
-            `--projects=${e2eProjects.join(',')}`,
-            '--parallel=1',
-          ]),
+          nxArgs(options.packageManager, ['run', `${project}:e2e`]),
           'staging',
         ),
       );
