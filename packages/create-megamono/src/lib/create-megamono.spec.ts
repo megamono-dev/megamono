@@ -641,7 +641,7 @@ describe('executePlan', () => {
         resolve(plan.options.destination, 'apps/api/src/main.ts'),
         'utf8',
       ),
-    ).toContain('process.env.PORT || 3333');
+    ).toContain('process.env.PORT || 43016');
     for (const supportFile of [
       'test-setup.ts',
       'global-setup.ts',
@@ -655,7 +655,7 @@ describe('executePlan', () => {
           ),
           'utf8',
         ),
-      ).toContain('3333');
+      ).toContain('43016');
     }
   });
 
@@ -1111,10 +1111,10 @@ describe('executePlan', () => {
           'utf8',
         );
         expect(playwright).toContain(
-          `process.env['PORT'] || '${app === 'site' ? '4200' : '4201'}'`,
+          `process.env['PORT'] || '${app === 'site' ? '43017' : '43018'}'`,
         );
         expect(playwright).toContain(
-          `npm exec nx -- run acme-tools-${app}:dev --port=${app === 'site' ? '4200' : '4201'}`,
+          `npm exec nx -- run acme-tools-${app}:dev --port=\${port}`,
         );
         expect(playwright).toContain('reuseExistingServer: false');
         expect(

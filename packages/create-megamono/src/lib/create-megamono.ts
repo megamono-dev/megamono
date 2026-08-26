@@ -438,6 +438,18 @@ function generatedE2eProjects(options: NormalizedCreateOptions): string[] {
     .map((app) => `${options.scope}-${app}-e2e`);
 }
 
+function scaffoldPort(
+  options: NormalizedCreateOptions,
+  app: 'api' | 'site' | 'web',
+): number {
+  const hash = [...options.scope].reduce(
+    (value, character) =>
+      (value * 31 + (character.codePointAt(0) ?? 0)) >>> 0,
+    0,
+  );
+  return 40_000 + (hash % 8_000) + { api: 0, site: 1, web: 2 }[app];
+}
+
 function requestedServiceRequirements(
   options: NormalizedCreateOptions,
 ): Record<string, string> {
@@ -1324,7 +1336,7 @@ async function configureE2ePackage(
     'utf8',
   );
 
-  const port = { api: 3333, site: 4200, web: 4201 }[app];
+  const port = scaffoldPort(plan.options, app);
   if (app === 'api') {
     const replacements = [
       [
@@ -1386,7 +1398,7 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: '${nx} run ${plan.options.scope}-${app}:dev --port=${port}',
+    command: \`${nx} run ${plan.options.scope}-${app}:dev --port=\${port}\`,
     url: baseURL,
     reuseExistingServer: false,
     cwd: workspaceRoot,
