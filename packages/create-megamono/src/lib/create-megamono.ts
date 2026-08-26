@@ -662,6 +662,12 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
   if (options.verify !== 'none') {
     steps.push(
       commandStep(
+        'sync-workspace',
+        options.packageManager,
+        nxArgs(options.packageManager, ['sync']),
+        'staging',
+      ),
+      commandStep(
         'format',
         options.packageManager,
         nxArgs(options.packageManager, ['format:write']),

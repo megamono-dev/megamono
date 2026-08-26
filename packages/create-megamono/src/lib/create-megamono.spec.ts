@@ -242,6 +242,7 @@ describe('createPlan', () => {
       'generate-web',
       'configure-web',
       'initialize-megamono',
+      'sync-workspace',
       'format',
       'validate-docs',
       'check-structure',
@@ -271,6 +272,7 @@ describe('createPlan', () => {
     expect(rendered).toContain('--serviceRunner=none');
     expect(rendered).toContain('--serviceRequirements={}');
     expect(rendered).not.toContain('--router=pages');
+    expect(rendered).toContain('"nx" "--" "sync"');
     expect(rendered).toContain('format:write');
     expect(rendered).not.toContain('@latest');
   });
@@ -338,6 +340,7 @@ describe('createPlan', () => {
       'install-plugins',
       'generate-apple',
       'initialize-megamono',
+      'sync-workspace',
       'format',
       'validate-docs',
       'check-structure',
@@ -368,6 +371,7 @@ describe('createPlan', () => {
       'install-plugins',
       'generate-worker',
       'initialize-megamono',
+      'sync-workspace',
       'format',
       'validate-docs',
       'check-structure',
