@@ -128,6 +128,7 @@ export class CreateMegamonoError extends Error {
 }
 
 interface CompatibilityRegistry {
+  packageManagers: Record<PackageManager, string>;
   scaffoldPackages: Record<string, string>;
   services: Record<string, string>;
   rustCrates: Record<string, string>;
@@ -585,6 +586,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         `--platforms=${requestedPlatforms(options).join(',')}`,
         `--serviceRunner=${options.serviceRunner}`,
         `--serviceRequirements=${JSON.stringify(requestedServiceRequirements(options))}`,
+        `--packageManager=${options.packageManager}`,
         '--interactive=false',
       ]),
       'staging',

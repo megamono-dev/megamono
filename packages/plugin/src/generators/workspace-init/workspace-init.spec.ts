@@ -21,6 +21,7 @@ describe('workspace-init generator', () => {
   let tree: Tree;
   const options: WorkspaceInitGeneratorSchema = {
     only: 'docs,agents,ci,lint,skills,health,inference',
+    packageManager: 'npm',
     yes: true,
   };
 
@@ -134,6 +135,31 @@ describe('workspace-init generator', () => {
     });
   });
 
+  it('records pnpm and emits pnpm-only CI and health workflows', async () => {
+    await workspaceInitGenerator(tree, {
+      only: 'ci,health',
+      packageManager: 'pnpm',
+      yes: true,
+    });
+
+    expect(readJson(tree, 'megamono.json').conventions.packageManager).toBe(
+      'pnpm',
+    );
+    expect(readJson(tree, 'package.json').packageManager).toBe('pnpm@11.24.0');
+    for (const path of [
+      '.github/workflows/megamono-ci.yml',
+      '.github/workflows/megamono-health.yml',
+    ]) {
+      const workflow = tree.read(path, 'utf8') ?? '';
+      expect(workflow).toContain('pnpm/action-setup@v4');
+      expect(workflow).toContain('cache: pnpm');
+      expect(workflow).toContain('pnpm install --frozen-lockfile');
+      expect(workflow).toContain('pnpm exec nx');
+      expect(workflow).not.toContain('npm ci');
+      expect(workflow).not.toContain('- run: npm exec');
+    }
+  });
+
   it('requires explicit module input without an interactive terminal', async () => {
     const changes = tree.listChanges();
 
@@ -150,6 +176,7 @@ describe('workspace-init generator', () => {
   it('writes the same completion summary only when a safe report is requested', async () => {
     await workspaceInitGenerator(tree, {
       only: 'health',
+      packageManager: 'npm',
       yes: true,
       report: '.megamono/init-report.md',
     });
@@ -470,7 +497,11 @@ export default [
   });
 
   it('keeps health useful without docs and records its reductions', async () => {
-    await workspaceInitGenerator(tree, { only: 'health', yes: true });
+    await workspaceInitGenerator(tree, {
+      only: 'health',
+      packageManager: 'npm',
+      yes: true,
+    });
 
     expect(
       readProjectConfiguration(tree, 'megamono').targets?.health?.executor,

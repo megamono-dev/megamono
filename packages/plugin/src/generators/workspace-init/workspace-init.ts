@@ -13,6 +13,8 @@ import {
   type Tree,
 } from '@nx/devkit';
 import { prompt } from 'enquirer';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   ADOPTION_STRUCTURAL_RULES,
   DEFAULT_MEGAMONO_CONFIG,
@@ -53,6 +55,12 @@ import {
 import { createWorkspaceInitPostFlushCallback } from '../../lib/workspace-init-execution';
 import { ensureManagedSkillsProjection } from '../../lib/skills-projection';
 
+const compatibility = JSON.parse(
+  readFileSync(join(__dirname, '../../../compatibility.json'), 'utf8'),
+) as {
+  packageManagers: Record<'pnpm' | 'npm', string>;
+};
+
 const importTarget = {
   executor: '@megamono/plugin:import',
   cache: false,
@@ -67,6 +75,7 @@ const healthTarget = {
     '{workspaceRoot}/.megamono/artifacts.json',
     '{workspaceRoot}/package.json',
     '{workspaceRoot}/package-lock.json',
+    '{workspaceRoot}/pnpm-lock.yaml',
     '{workspaceRoot}/nx.json',
     '{workspaceRoot}/docs/**/*.md',
     '{workspaceRoot}/**/package.json',
@@ -474,8 +483,13 @@ export default defineConfig({ content: [repoDocs, archivedDocs] });
 function renderHealthWorkflow(
   cadence: 'weekly' | 'daily',
   target: 'megamono:health' | 'megamono-docs:health',
+  packageManager: 'pnpm' | 'npm',
 ): string {
   const cron = cadence === 'daily' ? '17 9 * * *' : '17 9 * * 1';
+  const packageManagerSetup = renderPackageManagerSetup(packageManager);
+  const install =
+    packageManager === 'pnpm' ? 'pnpm install --frozen-lockfile' : 'npm ci';
+  const nx = packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
   return `name: Megamono repository health
 
 on:
@@ -494,12 +508,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm exec nx -- run ${target}
+${packageManagerSetup}
+      - run: ${install}
+      - run: ${nx} run ${target}
       - uses: actions/github-script@v8
         with:
           script: |
@@ -510,15 +521,36 @@ jobs:
 `;
 }
 
-function renderCiWorkflow(platforms: ReadonlySet<string>): string {
+function renderPackageManagerSetup(packageManager: 'pnpm' | 'npm'): string {
+  const pnpmSetup =
+    packageManager === 'pnpm'
+      ? `      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+`
+      : '';
+  return `${pnpmSetup}      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: ${packageManager}`;
+}
+
+function renderCiWorkflow(
+  platforms: ReadonlySet<string>,
+  packageManager: 'pnpm' | 'npm',
+): string {
   const linuxPlatforms = ['web', 'node', 'worker', 'rust', 'php', 'extension'];
   const hasLinux = linuxPlatforms.some((platform) => platforms.has(platform));
   const hasApple = platforms.has('apple');
   const gh = (expression: string) => '${{ ' + expression + ' }}';
+  const packageManagerSetup = renderPackageManagerSetup(packageManager);
+  const install =
+    packageManager === 'pnpm' ? 'pnpm install --frozen-lockfile' : 'npm ci';
+  const nx = packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
   const planChecks = [
     ...(hasLinux
       ? [
-          `          if [ -n "$(npm exec nx -- show projects --affected --exclude=tag:platform:apple)" ]; then
+          `          if [ -n "$(${nx} show projects --affected --exclude=tag:platform:apple)" ]; then
             echo "linux=true" >> "$GITHUB_OUTPUT"
           else
             echo "linux=false" >> "$GITHUB_OUTPUT"
@@ -527,7 +559,7 @@ function renderCiWorkflow(platforms: ReadonlySet<string>): string {
       : []),
     ...(hasApple
       ? [
-          `          if [ -n "$(npm exec nx -- show projects --affected${hasLinux ? ' --projects=tag:platform:apple' : ''})" ]; then
+          `          if [ -n "$(${nx} show projects --affected${hasLinux ? ' --projects=tag:platform:apple' : ''})" ]; then
             echo "apple=true" >> "$GITHUB_OUTPUT"
           else
             echo "apple=false" >> "$GITHUB_OUTPUT"
@@ -549,12 +581,9 @@ function renderCiWorkflow(platforms: ReadonlySet<string>): string {
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-${platforms.has('rust') ? '      - uses: dtolnay/rust-toolchain@stable\n' : ''}${platforms.has('php') ? '      - uses: shivammathur/setup-php@v2\n        with:\n          php-version: 8.4\n' : ''}      - run: npm ci
-      - run: npm exec nx -- affected -t lint test build --exclude=tag:platform:apple --output-style=static`,
+${packageManagerSetup}
+${platforms.has('rust') ? '      - uses: dtolnay/rust-toolchain@stable\n' : ''}${platforms.has('php') ? '      - uses: shivammathur/setup-php@v2\n        with:\n          php-version: 8.4\n' : ''}      - run: ${install}
+      - run: ${nx} affected -t lint test build --exclude=tag:platform:apple --output-style=static`,
         ]
       : []),
     ...(hasApple
@@ -570,13 +599,10 @@ ${platforms.has('rust') ? '      - uses: dtolnay/rust-toolchain@stable\n' : ''}$
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
+${packageManagerSetup}
+      - run: ${install}
       - run: xcodebuild -downloadComponent MetalToolchain
-      - run: npm exec nx -- affected -t lint test build${hasLinux ? " --exclude='*,!tag:platform:apple'" : ''} --output-style=static`,
+      - run: ${nx} affected -t lint test build${hasLinux ? " --exclude='*,!tag:platform:apple'" : ''} --output-style=static`,
         ]
       : []),
   ].join('\n\n');
@@ -603,11 +629,8 @@ ${hasLinux ? `      linux: ${gh('steps.affected.outputs.linux')}\n` : ''}${hasAp
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
+${packageManagerSetup}
+      - run: ${install}
       - uses: nrwl/nx-set-shas@v5
       - id: affected
         shell: bash
@@ -886,17 +909,34 @@ export async function workspaceInitGenerator(
   options: WorkspaceInitGeneratorSchema,
 ): Promise<GeneratorCallback> {
   const outputFormat = options.format ?? 'markdown';
-  if (options.survey) {
-    logger.info(
-      renderWorkspaceInitSurvey(surveyWorkspaceInit(tree), outputFormat),
+  const initialSurvey = surveyWorkspaceInit(tree);
+  const declaredPackageManager =
+    initialSurvey.baseline.packageManager?.split('@')[0];
+  if (
+    options.packageManager &&
+    declaredPackageManager &&
+    declaredPackageManager !== options.packageManager
+  ) {
+    throw new WorkspaceInitError(
+      'options',
+      `Requested ${options.packageManager}, but package.json declares ${initialSurvey.baseline.packageManager}.`,
     );
+  }
+  const packageManager =
+    options.packageManager ??
+    (initialSurvey.baseline.packageManager?.startsWith('npm') ||
+    (!initialSurvey.baseline.packageManager && tree.exists('package-lock.json'))
+      ? 'npm'
+      : 'pnpm');
+  if (options.survey) {
+    logger.info(renderWorkspaceInitSurvey(initialSurvey, outputFormat));
     return () => undefined;
   }
   if (tree.root !== '/virtual') {
     assertWorkspaceInitPreflight(
       tree,
       await collectWorkspaceInitHostState(tree.root),
-      { bootstrap: options.bootstrap },
+      { bootstrap: options.bootstrap, packageManager },
     );
   }
   let existingConfig: ReturnType<typeof megamonoConfigSchema.parse> | undefined;
@@ -922,7 +962,7 @@ export async function workspaceInitGenerator(
     }
     existingConfig = parsed.data;
   }
-  const workspaceSurvey = surveyWorkspaceInit(tree);
+  const workspaceSurvey = initialSurvey;
   logger.info(renderWorkspaceInitSurvey(workspaceSurvey, outputFormat));
   let only = options.only;
   if (!only) {
@@ -941,6 +981,7 @@ export async function workspaceInitGenerator(
     yes: false,
     only: requestedModules,
     defaultPlatform,
+    packageManager,
   });
   if (adoptionPlan.decisions.length > 0 && !defaultPlatform) {
     if (!canPrompt(options)) {
@@ -955,6 +996,7 @@ export async function workspaceInitGenerator(
       yes: false,
       only: requestedModules,
       defaultPlatform,
+      packageManager,
     });
   }
   if (adoptionPlan.conflicts.length > 0) {
@@ -1284,6 +1326,7 @@ export async function workspaceInitGenerator(
     ...(existingConfig ?? DEFAULT_MEGAMONO_CONFIG),
     conventions: {
       ...(existingConfig?.conventions ?? DEFAULT_MEGAMONO_CONFIG.conventions),
+      packageManager,
       rules: {
         ...(existingConfig?.conventions.rules ??
           DEFAULT_MEGAMONO_CONFIG.conventions.rules),
@@ -1316,6 +1359,13 @@ export async function workspaceInitGenerator(
           : (existingConfig?.services.requirements ?? {}),
     },
   });
+  updateJson(tree, 'package.json', (manifest) => ({
+    ...manifest,
+    packageManager:
+      typeof manifest.packageManager === 'string'
+        ? manifest.packageManager
+        : `${packageManager}@${compatibility.packageManagers[packageManager]}`,
+  }));
   tree.write('megamono.json', `${JSON.stringify(config, null, 2)}\n`);
   const eslintWiring = modules.has('lint')
     ? wireEslintConfig(tree)
@@ -1401,6 +1451,7 @@ export async function workspaceInitGenerator(
   const healthWorkflow = renderHealthWorkflow(
     config.health.cadence === 'disabled' ? 'weekly' : config.health.cadence,
     modules.has('docs') ? 'megamono-docs:health' : 'megamono:health',
+    packageManager,
   );
   const healthCanUpdate =
     modules.has('health') && config.health.cadence !== 'disabled'
@@ -1414,6 +1465,7 @@ export async function workspaceInitGenerator(
       : false;
   const ciWorkflow = renderCiWorkflow(
     configuredWorkspacePlatforms(tree, defaultPlatform),
+    packageManager,
   );
   const ciCanUpdate = modules.has('ci')
     ? applyManagedFileTemplate(
@@ -1794,7 +1846,7 @@ export async function workspaceInitGenerator(
       ? [
           {
             id: 'install-dependencies',
-            retry: 'npm install',
+            retry: `${packageManager} install`,
             run: installTask,
           },
         ]

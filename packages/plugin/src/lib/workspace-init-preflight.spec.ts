@@ -30,6 +30,7 @@ const featureBranch: WorkspaceInitHostState = {
   platform: 'darwin',
   node: 'v24.7.0',
   npm: '11.5.2',
+  pnpm: '11.24.0',
   git: {
     available: true,
     clean: true,
@@ -69,12 +70,30 @@ describe('workspace init preflight', () => {
     },
   );
 
-  it('refuses non-npm lockfiles and incompatible workspace dependencies', () => {
-    const nonNpm = supportedTree();
-    nonNpm.write('pnpm-lock.yaml', 'lockfileVersion: 9');
-    expect(() => assertWorkspaceInitPreflight(nonNpm, featureBranch)).toThrow(
-      /requires npm/,
+  it('accepts a supported pnpm workspace', () => {
+    const pnpm = supportedTree();
+    pnpm.delete('package-lock.json');
+    pnpm.write('pnpm-lock.yaml', 'lockfileVersion: 9');
+    pnpm.write(
+      'package.json',
+      JSON.stringify({
+        packageManager: 'pnpm@11.24.0',
+        devDependencies: { nx: '23.1.1', typescript: '6.0.3' },
+      }),
     );
+    expect(() =>
+      assertWorkspaceInitPreflight(pnpm, featureBranch, {
+        packageManager: 'pnpm',
+      }),
+    ).not.toThrow();
+  });
+
+  it('refuses unsupported, conflicting, and mismatched package managers', () => {
+    const conflicting = supportedTree();
+    conflicting.write('pnpm-lock.yaml', 'lockfileVersion: 9');
+    expect(() =>
+      assertWorkspaceInitPreflight(conflicting, featureBranch),
+    ).toThrow(/Conflicting/);
 
     const declaredYarn = supportedTree();
     const manifest = JSON.parse(
@@ -86,8 +105,30 @@ describe('workspace init preflight', () => {
     );
     expect(() =>
       assertWorkspaceInitPreflight(declaredYarn, featureBranch),
-    ).toThrow(/declares yarn@4.9.0/);
+    ).toThrow(/unsupported package manager yarn@4.9.0/);
 
+    expect(() =>
+      assertWorkspaceInitPreflight(supportedTree(), featureBranch, {
+        packageManager: 'pnpm',
+      }),
+    ).toThrow(/Requested pnpm.*npm lockfile/);
+
+    const pnpmWithNpmDeclaration = supportedTree();
+    pnpmWithNpmDeclaration.delete('package-lock.json');
+    pnpmWithNpmDeclaration.write('pnpm-lock.yaml', 'lockfileVersion: 9');
+    expect(() =>
+      assertWorkspaceInitPreflight(pnpmWithNpmDeclaration, featureBranch),
+    ).toThrow(/declares npm@11.5.2.*pnpm lockfile/);
+
+    const yarn = supportedTree();
+    yarn.delete('package-lock.json');
+    yarn.write('yarn.lock', '');
+    expect(() => assertWorkspaceInitPreflight(yarn, featureBranch)).toThrow(
+      /Unsupported package-manager lockfile yarn.lock/,
+    );
+  });
+
+  it('refuses incompatible workspace dependencies', () => {
     const oldNx = supportedTree();
     oldNx.write(
       'package-lock.json',

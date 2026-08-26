@@ -9,6 +9,7 @@ export interface WorkspaceInitHostState {
   readonly platform: NodeJS.Platform;
   readonly node: string;
   readonly npm?: string;
+  readonly pnpm?: string;
   readonly git: {
     readonly available: boolean;
     readonly clean: boolean;
@@ -41,11 +42,13 @@ export async function collectWorkspaceInitHostState(
     '--is-inside-work-tree',
   ]);
   const npm = await commandOutput(workspaceRoot, 'npm', ['--version']);
+  const pnpm = await commandOutput(workspaceRoot, 'pnpm', ['--version']);
   if (inside !== 'true') {
     return {
       platform: process.platform,
       node: process.version,
       ...(npm ? { npm } : {}),
+      ...(pnpm ? { pnpm } : {}),
       git: { available: false, clean: false },
     };
   }
@@ -71,6 +74,7 @@ export async function collectWorkspaceInitHostState(
     platform: process.platform,
     node: process.version,
     ...(npm ? { npm } : {}),
+    ...(pnpm ? { pnpm } : {}),
     git: {
       available: true,
       clean: status === '',
@@ -148,7 +152,10 @@ function requireVersion(
 export function assertWorkspaceInitPreflight(
   tree: Tree,
   state: WorkspaceInitHostState,
-  options: { readonly bootstrap?: boolean } = {},
+  options: {
+    readonly bootstrap?: boolean;
+    readonly packageManager?: 'pnpm' | 'npm';
+  } = {},
 ): void {
   if (state.platform !== 'darwin' && state.platform !== 'linux') {
     throw new WorkspaceInitError(
@@ -160,17 +167,13 @@ export function assertWorkspaceInitPreflight(
   if (!manifestSource) {
     throw new WorkspaceInitError('preflight', 'package.json is missing.');
   }
+  let declaredPackageManager: string | undefined;
   try {
     const manifest = JSON.parse(manifestSource) as { packageManager?: unknown };
-    if (
-      typeof manifest.packageManager === 'string' &&
-      !/^npm(?:@|$)/.test(manifest.packageManager)
-    ) {
-      throw new WorkspaceInitError(
-        'preflight',
-        `V1 requires npm; package.json declares ${manifest.packageManager}.`,
-      );
-    }
+    declaredPackageManager =
+      typeof manifest.packageManager === 'string'
+        ? manifest.packageManager
+        : undefined;
   } catch (error) {
     if (error instanceof WorkspaceInitError) throw error;
     throw new WorkspaceInitError(
@@ -184,27 +187,52 @@ export function assertWorkspaceInitPreflight(
       'nx.json is missing; run nx init before workspace-init.',
     );
   }
-  for (const lockfile of [
-    'pnpm-lock.yaml',
-    'yarn.lock',
-    'bun.lock',
-    'bun.lockb',
-  ]) {
+  for (const lockfile of ['yarn.lock', 'bun.lock', 'bun.lockb']) {
     if (tree.exists(lockfile)) {
       throw new WorkspaceInitError(
         'preflight',
-        `V1 requires npm; remove the unsupported ${lockfile} before initialization.`,
+        `Unsupported package-manager lockfile ${lockfile}; Megamono supports pnpm and npm.`,
       );
     }
   }
-  if (!tree.exists('package-lock.json')) {
+  const lockfileManagers = [
+    ...(tree.exists('pnpm-lock.yaml') ? (['pnpm'] as const) : []),
+    ...(tree.exists('package-lock.json') ? (['npm'] as const) : []),
+  ];
+  if (lockfileManagers.length !== 1) {
     throw new WorkspaceInitError(
       'preflight',
-      'V1 requires an npm package-lock.json.',
+      lockfileManagers.length === 0
+        ? 'A pnpm-lock.yaml or package-lock.json is required.'
+        : 'Conflicting pnpm-lock.yaml and package-lock.json files are not supported.',
+    );
+  }
+  const packageManager = lockfileManagers[0];
+  const declaredName = declaredPackageManager?.split('@')[0];
+  if (declaredName && declaredName !== 'pnpm' && declaredName !== 'npm') {
+    throw new WorkspaceInitError(
+      'preflight',
+      `package.json declares unsupported package manager ${declaredPackageManager}.`,
+    );
+  }
+  if (declaredName && declaredName !== packageManager) {
+    throw new WorkspaceInitError(
+      'preflight',
+      `package.json declares ${declaredPackageManager}, but the workspace has the ${packageManager} lockfile.`,
+    );
+  }
+  if (options.packageManager && options.packageManager !== packageManager) {
+    throw new WorkspaceInitError(
+      'preflight',
+      `Requested ${options.packageManager}, but the workspace has the ${packageManager} lockfile.`,
     );
   }
   requireVersion('Node.js', state.node, 24);
-  requireVersion('npm', state.npm, 11);
+  requireVersion(
+    packageManager,
+    packageManager === 'pnpm' ? state.pnpm : state.npm,
+    11,
+  );
   requireVersion('Nx', dependencyVersion(tree, 'nx'), 23, 1);
   requireVersion('TypeScript', dependencyVersion(tree, 'typescript'), 6, 0, 1);
 

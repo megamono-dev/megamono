@@ -146,6 +146,7 @@ export interface WorkspaceInitPlanOptions {
   readonly defaultScope?: string;
   readonly defaultPlatform?: string;
   readonly yes?: boolean;
+  readonly packageManager?: 'pnpm' | 'npm';
 }
 
 function compare(left: string, right: string): number {
@@ -354,9 +355,11 @@ export function surveyWorkspaceInit(tree: Tree): WorkspaceInitSurvey {
   const packageManager =
     typeof manifest.packageManager === 'string'
       ? manifest.packageManager
-      : typeof engines.npm === 'string'
-        ? `npm@${engines.npm}`
-        : null;
+      : typeof engines.pnpm === 'string'
+        ? `pnpm@${engines.pnpm}`
+        : typeof engines.npm === 'string'
+          ? `npm@${engines.npm}`
+          : null;
   const projects = [...getProjects(tree).entries()]
     .map(([name, project]) => ({
       name,
@@ -475,6 +478,9 @@ export function createWorkspaceInitPlan(
 ): WorkspaceInitPlan {
   const modules = parseWorkspaceInitModules(options.only);
   const survey = surveyWorkspaceInit(tree);
+  const packageManager =
+    options.packageManager ??
+    (survey.baseline.packageManager?.startsWith('npm') ? 'npm' : 'pnpm');
   const docsRoot = options.docsRoot ?? 'docs';
   const operations: WorkspaceInitPlanOperation[] = [];
   const reductions: WorkspaceInitReduction[] = [];
@@ -517,6 +523,13 @@ export function createWorkspaceInitPlan(
     tree.exists('megamono.json') ? 'retain' : 'add',
     'megamono.json',
     'Record Megamono conventions and selected adoption modules.',
+  );
+  operation(
+    operations,
+    'baseline',
+    survey.baseline.packageManager ? 'retain' : 'modify',
+    'package.json#packageManager',
+    `Record ${packageManager} as the workspace package manager.`,
   );
   operation(
     operations,
@@ -816,7 +829,7 @@ export function createWorkspaceInitPlan(
     operations,
     'baseline',
     'run-last',
-    'npm install',
+    `${packageManager} install`,
     'Install required dependencies after all file preflights and tree writes.',
   );
 
@@ -979,16 +992,22 @@ export function renderWorkspaceInitCompletion(plan: WorkspaceInitPlan): string {
       .filter(({ action }) => action === 'skip')
       .map(({ module, target, detail }) => `${module}.${target}: ${detail}`),
   ];
+  const packageManager = plan.operations.some(
+    ({ action, target }) => action === 'run-last' && target === 'npm install',
+  )
+    ? 'npm'
+    : 'pnpm';
+  const nx = `${packageManager} exec nx`;
   const followUps = [
-    'npm exec nx run megamono:check',
+    `${nx} run megamono:check`,
     ...(plan.modules.includes('docs')
-      ? ['npm exec nx run megamono-docs:validate']
+      ? [`${nx} run megamono-docs:validate`]
       : []),
     ...(plan.modules.includes('health')
       ? [
           plan.modules.includes('docs')
-            ? 'npm exec nx run megamono-docs:health'
-            : 'npm exec nx run megamono:health',
+            ? `${nx} run megamono-docs:health`
+            : `${nx} run megamono:health`,
         ]
       : []),
   ];

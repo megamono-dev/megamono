@@ -9,6 +9,10 @@
     "typescript": ">=6.0 <6.1",
     "prisma": ">=6.7"
   },
+  "packageManagers": {
+    "pnpm": "11.24.0",
+    "npm": "11.17.0"
+  },
   "scaffoldPackages": {
     "create-nx-workspace": "23.1.1",
     "@nx/js": "23.1.1",

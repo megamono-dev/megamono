@@ -251,8 +251,8 @@ describe('workspace init survey and plan', () => {
     expect(summary).toContain('## Modules adopted\n\n- health');
     expect(summary).toContain('- docs');
     expect(summary).toContain('health.spec-drift');
-    expect(summary).toContain('`npm exec nx run megamono:check`');
-    expect(summary).toContain('`npm exec nx run megamono:health`');
+    expect(summary).toContain('`pnpm exec nx run megamono:check`');
+    expect(summary).toContain('`pnpm exec nx run megamono:health`');
     expect(summary).not.toContain('megamono-docs:validate');
   });
 });

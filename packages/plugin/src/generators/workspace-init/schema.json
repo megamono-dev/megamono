@@ -52,6 +52,11 @@
       "type": "string",
       "description": "JSON object of service names to tested version requirements."
     },
+    "packageManager": {
+      "type": "string",
+      "enum": ["pnpm", "npm"],
+      "description": "Package manager selected by a calling scaffolder; existing workspaces infer it from their lockfile."
+    },
     "docsRoot": {
       "type": "string",
       "description": "Repository documentation root.",
