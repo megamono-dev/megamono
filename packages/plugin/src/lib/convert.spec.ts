@@ -156,6 +156,33 @@ describe('conversion analysis', () => {
     );
   });
 
+  it('preserves pnpm workspace roots and commands', () => {
+    const tree = createFixture({
+      packageManager: 'pnpm@11.24.0',
+      scripts: { build: 'node build.mjs' },
+    });
+    tree.delete('package-lock.json');
+    tree.write('pnpm-lock.yaml', 'lockfileVersion: 9\n');
+    tree.write('pnpm-workspace.yaml', "packages:\n  - 'packages/*'\n");
+    tree.write('src/index.ts', 'export {};\n');
+    writeJson(tree, 'packages/shared/package.json', {
+      name: '@fixture/shared',
+    });
+
+    const result = analyze(tree);
+
+    expect(result.ready).toBe(true);
+    expect(result.detection).toMatchObject({
+      packageManager: 'pnpm',
+      shape: 'pnpm-workspaces',
+      workspacePatterns: ['packages/*'],
+      commands: { build: 'pnpm run build' },
+    });
+    expect(result.operations).not.toContainEqual(
+      expect.objectContaining({ source: 'packages' }),
+    );
+  });
+
   it('requires explicit decisions for ambiguous files and plan acceptance', () => {
     const tree = createFixture();
     tree.write('src/index.ts', 'export {};\n');
@@ -259,7 +286,13 @@ describe('conversion analysis', () => {
       result.blockers
         .filter(({ code }) => code === 'convert-unsupported-orchestrator')
         .map(({ path }) => path),
-    ).toEqual(['pnpm-lock.yaml', 'turbo.json']);
+    ).toEqual(['turbo.json']);
+    expect(result.blockers).toContainEqual(
+      expect.objectContaining({
+        code: 'convert-package-lock',
+        message: expect.stringContaining('conflicting'),
+      }),
+    );
     expect(result.blockers).toContainEqual(
       expect.objectContaining({
         code: 'convert-unsupported-package-manager',

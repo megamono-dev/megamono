@@ -139,6 +139,47 @@ function setWorkspacePatterns(
   }
 }
 
+function pnpmWorkspacePatterns(tree: Tree): string[] {
+  const source = tree.read('pnpm-workspace.yaml', 'utf8') ?? 'packages:\n';
+  const lines = source.split(/\r?\n/);
+  const packagesIndex = lines.findIndex((line) => /^packages:\s*$/.test(line));
+  if (packagesIndex === -1) {
+    throw new Error(
+      'pnpm-workspace.yaml must contain a block-style packages list.',
+    );
+  }
+  const patterns: string[] = [];
+  for (const line of lines.slice(packagesIndex + 1)) {
+    if (line.trim() === '') continue;
+    if (!/^\s/.test(line)) break;
+    const match = line.match(/^\s*-\s*['"]?([^'"#]+?)['"]?\s*(?:#.*)?$/);
+    if (match) patterns.push(match[1].trim());
+  }
+  return patterns;
+}
+
+function setPnpmWorkspacePatterns(
+  tree: Tree,
+  patterns: readonly string[],
+): void {
+  const source = tree.read('pnpm-workspace.yaml', 'utf8') ?? 'packages:\n';
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.split(/\r?\n/);
+  const packagesIndex = lines.findIndex((line) => /^packages:\s*$/.test(line));
+  if (packagesIndex === -1) {
+    throw new Error(
+      'pnpm-workspace.yaml must contain a block-style packages list.',
+    );
+  }
+  let end = packagesIndex + 1;
+  while (end < lines.length && /^\s+\S/.test(lines[end])) end += 1;
+  const replacement = [...new Set(patterns)]
+    .sort()
+    .map((pattern) => `  - '${pattern}'`);
+  lines.splice(packagesIndex + 1, end - packagesIndex - 1, ...replacement);
+  tree.write('pnpm-workspace.yaml', lines.join(newline));
+}
+
 function targetConfiguration(command: string): TargetConfiguration {
   return {
     executor: 'nx:run-commands',
@@ -351,7 +392,9 @@ export function applyConversionPlan(
             name as keyof typeof analysis.detection.commands
           ]
             ? `nx run ${analysis.appName}:${name}`
-            : `npm --prefix ${analysis.destination} run ${name}`,
+            : analysis.detection.packageManager === 'pnpm'
+              ? `pnpm --dir ${analysis.destination} run ${name}`
+              : `npm --prefix ${analysis.destination} run ${name}`,
         ]),
     );
   } else {
@@ -360,11 +403,19 @@ export function applyConversionPlan(
   const extractionDestinations = extractionOperations(analysis).flatMap(
     ({ destination }) => (destination ? [destination] : []),
   );
-  setWorkspacePatterns(rootManifest, [
-    ...workspacePatterns(rootManifest),
-    analysis.destination,
-    ...extractionDestinations,
-  ]);
+  if (analysis.detection.packageManager === 'pnpm') {
+    setPnpmWorkspacePatterns(tree, [
+      ...pnpmWorkspacePatterns(tree),
+      analysis.destination,
+      ...extractionDestinations,
+    ]);
+  } else {
+    setWorkspacePatterns(rootManifest, [
+      ...workspacePatterns(rootManifest),
+      analysis.destination,
+      ...extractionDestinations,
+    ]);
+  }
   writeJson(tree, 'package.json', rootManifest);
 
   addProjectConfiguration(tree, analysis.appName, {
@@ -435,47 +486,51 @@ export function conversionVerificationCommands(
   analysis: ConvertAnalysis,
 ): readonly ConvertVerificationCommand[] {
   if (analysis.verify === 'none') return [];
+  const packageManager = analysis.detection.packageManager;
+  const nxArgs = (args: readonly string[]) => ['exec', 'nx', ...args];
+  const nxDisplay = (args: readonly string[]) =>
+    `${packageManager} exec nx ${args.join(' ')}`;
   const commands: ConvertVerificationCommand[] = [
     {
       phase: 'config',
-      command: 'npm',
-      args: ['exec', 'nx', 'run', 'megamono-docs:validate'],
-      display: 'npm exec nx run megamono-docs:validate',
+      command: packageManager,
+      args: nxArgs(['run', 'megamono-docs:validate']),
+      display: nxDisplay(['run', 'megamono-docs:validate']),
     },
     {
       phase: 'config',
-      command: 'npm',
-      args: ['exec', 'nx', 'run', 'megamono:check'],
-      display: 'npm exec nx run megamono:check',
+      command: packageManager,
+      args: nxArgs(['run', 'megamono:check']),
+      display: nxDisplay(['run', 'megamono:check']),
     },
     {
       phase: 'config',
-      command: 'npm',
-      args: ['exec', 'nx', 'show', 'project', analysis.appName, '--json'],
-      display: `npm exec nx show project ${analysis.appName} --json`,
+      command: packageManager,
+      args: nxArgs(['show', 'project', analysis.appName, '--json']),
+      display: nxDisplay(['show', 'project', analysis.appName, '--json']),
     },
     {
       phase: 'config',
-      command: 'npm',
-      args: ['exec', 'nx', 'run', 'megamono-docs:health'],
-      display: 'npm exec nx run megamono-docs:health',
+      command: packageManager,
+      args: nxArgs(['run', 'megamono-docs:health']),
+      display: nxDisplay(['run', 'megamono-docs:health']),
     },
   ];
   if (analysis.verify === 'build') {
     if (analysis.detection.commands.build) {
       commands.push({
         phase: 'build',
-        command: 'npm',
-        args: ['exec', 'nx', 'run', `${analysis.appName}:build`],
-        display: `npm exec nx run ${analysis.appName}:build`,
+        command: packageManager,
+        args: nxArgs(['run', `${analysis.appName}:build`]),
+        display: nxDisplay(['run', `${analysis.appName}:build`]),
       });
     }
     if (analysis.detection.commands.test) {
       commands.push({
         phase: 'test',
-        command: 'npm',
-        args: ['exec', 'nx', 'run', `${analysis.appName}:test`],
-        display: `npm exec nx run ${analysis.appName}:test`,
+        command: packageManager,
+        args: nxArgs(['run', `${analysis.appName}:test`]),
+        display: nxDisplay(['run', `${analysis.appName}:test`]),
       });
     }
   }
@@ -537,19 +592,20 @@ Inspect the working tree before retrying. To abandon the conversion, return to t
 
 function recoveryCommand(
   phase: 'dependencies' | 'docs',
+  packageManager: ConvertAnalysis['detection']['packageManager'],
 ): ConvertVerificationCommand {
   return phase === 'dependencies'
     ? {
         phase,
-        command: 'npm',
+        command: packageManager,
         args: ['install'],
-        display: 'npm install',
+        display: `${packageManager} install`,
       }
     : {
         phase,
-        command: 'npm',
+        command: packageManager,
         args: ['exec', 'nx', 'run', 'megamono-docs:index'],
-        display: 'npm exec nx run megamono-docs:index',
+        display: `${packageManager} exec nx run megamono-docs:index`,
       };
 }
 
@@ -567,12 +623,18 @@ export function createConvertPostFlushCallback(
   runner: ConvertCommandRunner = runConvertCommand,
 ): GeneratorCallback {
   return async () => {
-    let failedCommand = recoveryCommand('dependencies');
+    let failedCommand = recoveryCommand(
+      'dependencies',
+      analysis.detection.packageManager,
+    );
     try {
       for (const callback of dependencyCallbacks) {
         await runCallback(callback);
       }
-      failedCommand = recoveryCommand('docs');
+      failedCommand = recoveryCommand(
+        'docs',
+        analysis.detection.packageManager,
+      );
       await runCallback(docsCallback);
       await runConversionVerification(workspaceRoot, analysis, runner);
     } catch (error) {

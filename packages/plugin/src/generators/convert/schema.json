@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/schema",
   "$id": "MegamonoConvert",
-  "title": "Convert an existing npm repository to Megamono",
-  "description": "Analyze and restructure an existing single-package or plain npm-workspace repository on a conversion branch.",
+  "title": "Convert an existing pnpm or npm repository to Megamono",
+  "description": "Analyze and restructure an existing single-package or plain pnpm/npm-workspace repository on a conversion branch.",
   "type": "object",
   "properties": {
     "appName": {

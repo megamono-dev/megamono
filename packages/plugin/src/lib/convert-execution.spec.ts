@@ -145,6 +145,43 @@ describe('conversion execution', () => {
     expect(project.targets?.deploy).toBeUndefined();
   });
 
+  it('preserves pnpm workspace configuration and command families', () => {
+    const tree = fixture({
+      packageManager: 'pnpm@11.24.0',
+      scripts: { build: 'node build.mjs', start: 'node server.mjs' },
+    });
+    tree.delete('package-lock.json');
+    tree.write('pnpm-lock.yaml', 'lockfileVersion: 9\n');
+    tree.write('pnpm-workspace.yaml', "packages:\n  - 'packages/*'\n");
+    tree.write('src/index.ts', 'export {};\n');
+
+    const analysis = acceptedAnalysis(tree, { verify: 'build' });
+    applyConversionPlan(tree, analysis);
+
+    expect(readJson(tree, 'package.json')).toMatchObject({
+      packageManager: 'pnpm@11.24.0',
+      scripts: {
+        build: 'nx run example-app:build',
+        start: 'pnpm --dir apps/example-app run start',
+      },
+    });
+    expect(tree.read('pnpm-workspace.yaml', 'utf8')).toBe(
+      "packages:\n  - 'apps/example-app'\n  - 'packages/*'\n",
+    );
+    expect(conversionVerificationCommands(analysis)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          command: 'pnpm',
+          display: 'pnpm exec nx run megamono:check',
+        }),
+        expect.objectContaining({
+          command: 'pnpm',
+          display: 'pnpm exec nx run example-app:build',
+        }),
+      ]),
+    );
+  });
+
   it('moves explicit extractions, adds aliases, and rewrites consumers', () => {
     const tree = fixture({ scripts: { build: 'tsc' } });
     tree.write(

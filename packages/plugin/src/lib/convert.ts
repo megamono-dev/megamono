@@ -4,7 +4,9 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 
 export type ConvertFramework = 'next' | 'nest' | 'expo' | 'vite' | 'node';
-export type ConvertRepositoryShape = 'single-package' | 'npm-workspaces';
+export type ConvertPackageManager = 'pnpm' | 'npm';
+export type ConvertRepositoryShape =
+  'single-package' | 'pnpm-workspaces' | 'npm-workspaces';
 export type ConvertVerifyMode = 'none' | 'config' | 'build';
 export type ConvertPlanPhase =
   'restructure' | 'targets' | 'conventions' | 'docs';
@@ -31,7 +33,7 @@ export interface ConvertGitState {
 }
 
 export interface ConvertDetection {
-  readonly packageManager: 'npm';
+  readonly packageManager: ConvertPackageManager;
   readonly shape: ConvertRepositoryShape;
   readonly framework: ConvertFramework;
   readonly testRunner?: 'vitest' | 'jest' | 'node-test';
@@ -174,6 +176,22 @@ function workspacePatterns(manifest: PackageManifest): string[] {
   return [...new Set(patterns)].sort();
 }
 
+function pnpmWorkspacePatterns(tree: Tree): string[] {
+  const source = tree.read('pnpm-workspace.yaml', 'utf8');
+  if (!source) return [];
+  const lines = source.split(/\r?\n/);
+  const packagesIndex = lines.findIndex((line) => /^packages:\s*$/.test(line));
+  if (packagesIndex === -1) return [];
+  const patterns: string[] = [];
+  for (const line of lines.slice(packagesIndex + 1)) {
+    if (line.trim() === '') continue;
+    if (!/^\s/.test(line)) break;
+    const match = line.match(/^\s*-\s*['"]?([^'"#]+?)['"]?\s*(?:#.*)?$/);
+    if (match) patterns.push(match[1].trim());
+  }
+  return [...new Set(patterns)].sort();
+}
+
 function dependencyNames(manifest: PackageManifest): Set<string> {
   return new Set([
     ...Object.keys(manifest.dependencies ?? {}),
@@ -274,7 +292,7 @@ function isRepositoryInfrastructure(
   if (infrastructureDirectories.has(entry)) return true;
   if (workspaces.some((pattern) => globRoot(pattern) === entry)) return true;
   if (
-    /^(?:\.DS_Store|AGENTS\.md|CLAUDE\.md|README(?:\.[^.]+)?|LICENSE(?:\.[^.]+)?|package(?:-lock)?\.json|nx\.json|project\.json|megamono\.json|opencode\.json|content-collections\.ts|tsconfig\.base\.json|eslint\.config\.[cm]?[jt]s|\.gitignore|\.gitattributes|\.editorconfig|\.npmrc|\.prettierignore|\.prettierrc(?:\..+)?)$/.test(
+    /^(?:\.DS_Store|AGENTS\.md|CLAUDE\.md|README(?:\.[^.]+)?|LICENSE(?:\.[^.]+)?|package(?:-lock)?\.json|pnpm-(?:lock|workspace)\.yaml|nx\.json|project\.json|megamono\.json|opencode\.json|content-collections\.ts|tsconfig\.base\.json|eslint\.config\.[cm]?[jt]s|\.gitignore|\.gitattributes|\.editorconfig|\.npmrc|\.prettierignore|\.prettierrc(?:\..+)?)$/.test(
       entry,
     )
   ) {
@@ -520,8 +538,6 @@ export function analyzeConversion(
   }
 
   const unsupportedMarkers = [
-    ['pnpm-lock.yaml', 'pnpm'],
-    ['pnpm-workspace.yaml', 'pnpm'],
     ['yarn.lock', 'Yarn'],
     ['bun.lock', 'Bun'],
     ['bun.lockb', 'Bun'],
@@ -538,18 +554,43 @@ export function analyzeConversion(
       });
     }
   }
-  if (manifest.packageManager && !/^npm(?:@|$)/.test(manifest.packageManager)) {
+  const declaredPackageManager = manifest.packageManager?.split('@')[0];
+  if (
+    declaredPackageManager &&
+    declaredPackageManager !== 'pnpm' &&
+    declaredPackageManager !== 'npm'
+  ) {
     blockers.push({
       code: 'convert-unsupported-package-manager',
-      message: `V1 conversion supports npm, not ${manifest.packageManager}.`,
+      message: `Conversion supports pnpm and npm, not ${manifest.packageManager}.`,
       path: manifestPath,
     });
   }
-  if (!tree.exists('package-lock.json')) {
+  const lockfileManagers: ConvertPackageManager[] = [
+    ...(tree.exists('pnpm-lock.yaml') ? (['pnpm'] as const) : []),
+    ...(tree.exists('package-lock.json') ? (['npm'] as const) : []),
+  ];
+  if (lockfileManagers.length !== 1) {
     blockers.push({
       code: 'convert-package-lock',
-      message: 'V1 conversion requires an npm package-lock.json.',
-      path: 'package-lock.json',
+      message:
+        lockfileManagers.length === 0
+          ? 'Conversion requires pnpm-lock.yaml or package-lock.json.'
+          : 'Conversion refuses conflicting pnpm-lock.yaml and package-lock.json files.',
+    });
+  }
+  const packageManager: ConvertPackageManager =
+    lockfileManagers[0] ?? (declaredPackageManager === 'pnpm' ? 'pnpm' : 'npm');
+  if (
+    declaredPackageManager &&
+    (declaredPackageManager === 'pnpm' || declaredPackageManager === 'npm') &&
+    lockfileManagers.length === 1 &&
+    declaredPackageManager !== packageManager
+  ) {
+    blockers.push({
+      code: 'convert-package-manager-mismatch',
+      message: `package.json declares ${manifest.packageManager}, but the repository has the ${packageManager} lockfile.`,
+      path: manifestPath,
     });
   }
   if (
@@ -564,14 +605,17 @@ export function analyzeConversion(
     });
   }
 
-  const patterns = workspacePatterns(manifest);
+  const patterns =
+    packageManager === 'pnpm'
+      ? pnpmWorkspacePatterns(tree)
+      : workspacePatterns(manifest);
   const dependencies = dependencyNames(manifest);
   const framework = detectFramework(relativeFiles, dependencies, unresolved);
   const testRunner = detectTestRunner(manifest, dependencies, unresolved);
   const commands = Object.fromEntries(
     (['build', 'test', 'lint', 'deploy'] as const).flatMap((name) => {
       const script = manifest.scripts?.[name];
-      return script ? [[name, `npm run ${name}`]] : [];
+      return script ? [[name, `${packageManager} run ${name}`]] : [];
     }),
   ) as ConvertDetection['commands'];
   const nonJsSurfaces = detectNonJsSurfaces(sourceFiles);
@@ -713,8 +757,13 @@ export function analyzeConversion(
     verify,
     git,
     detection: {
-      packageManager: 'npm',
-      shape: patterns.length > 0 ? 'npm-workspaces' : 'single-package',
+      packageManager,
+      shape:
+        patterns.length > 0
+          ? packageManager === 'pnpm'
+            ? 'pnpm-workspaces'
+            : 'npm-workspaces'
+          : 'single-package',
       framework,
       ...(testRunner ? { testRunner } : {}),
       workspacePatterns: patterns,
