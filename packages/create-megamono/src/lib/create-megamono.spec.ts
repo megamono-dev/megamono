@@ -603,6 +603,7 @@ describe('executePlan', () => {
     ).toMatchObject({
       name: '@acme-tools/api-e2e',
       nx: {
+        name: 'acme-tools-api-e2e',
         projectType: 'application',
         tags: [
           'platform:node',
@@ -1067,6 +1068,7 @@ describe('executePlan', () => {
         ).toMatchObject({
           name: `@acme-tools/${app}-e2e`,
           nx: {
+            name: `acme-tools-${app}-e2e`,
             projectType: 'application',
             tags: [
               'platform:web',

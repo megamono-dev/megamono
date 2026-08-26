@@ -1315,6 +1315,7 @@ async function configureE2ePackage(
   };
   packageJson.name = `@${plan.options.scope}/${app}-e2e`;
   packageJson.nx ??= {};
+  packageJson.nx.name = `${plan.options.scope}-${app}-e2e`;
   packageJson.nx.projectType = 'application';
   packageJson.nx.tags = [
     `platform:${app === 'api' ? 'node' : 'web'}`,
