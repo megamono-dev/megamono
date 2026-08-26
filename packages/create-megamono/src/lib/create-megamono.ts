@@ -1399,6 +1399,23 @@ module.exports = {
       resolve(plan.options.stagingDirectory, 'apps/api-e2e/jest.config.cts'),
       { force: true },
     );
+    const e2eTsconfigPath = resolve(
+      plan.options.stagingDirectory,
+      'apps/api-e2e/tsconfig.json',
+    );
+    if (await pathExists(e2eTsconfigPath)) {
+      const e2eTsconfig = JSON.parse(
+        await readFile(e2eTsconfigPath, 'utf8'),
+      ) as { include?: string[] };
+      e2eTsconfig.include = (e2eTsconfig.include ?? []).filter(
+        (entry) => !entry.startsWith('jest.config.'),
+      );
+      await writeFile(
+        e2eTsconfigPath,
+        `${JSON.stringify(e2eTsconfig, null, 2)}\n`,
+        'utf8',
+      );
+    }
     const replacements = [
       [
         resolve(plan.options.stagingDirectory, 'apps/api/src/main.ts'),

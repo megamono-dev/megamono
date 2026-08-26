@@ -91,6 +91,10 @@ async function writeInferredE2ePackage(
       resolve(support, 'global-teardown.ts'),
       'const port = process.env.PORT ? Number(process.env.PORT) : 3000;\n',
     );
+    await writeFile(
+      resolve(root, 'tsconfig.json'),
+      JSON.stringify({ include: ['jest.config.ts', 'src/**/*.ts'] }),
+    );
   }
 }
 
@@ -685,6 +689,14 @@ describe('executePlan', () => {
         'utf8',
       ),
     ).toContain("module.exports = {");
+    expect(
+      JSON.parse(
+        await readFile(
+          resolve(plan.options.destination, 'apps/api-e2e/tsconfig.json'),
+          'utf8',
+        ),
+      ).include,
+    ).toEqual(['src/**/*.ts']);
   });
 
   it('commits a staged workspace over an empty destination', async () => {
