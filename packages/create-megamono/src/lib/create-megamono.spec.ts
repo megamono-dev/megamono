@@ -307,6 +307,13 @@ describe('createPlan', () => {
 
     expect(rendered).toContain('@nx/eslint@23.1.1');
     expect(rendered).toContain('@nx/jest@23.1.1');
+    expect(rendered).toContain('@swc/jest@0.2.38');
+    expect(rendered).toContain('@types/jest@30.0.0');
+    expect(rendered).toContain('jest@30.3.0');
+    expect(rendered).toContain('jest-environment-node@30.3.0');
+    expect(rendered).toContain('jest-util@30.3.0');
+    expect(rendered).toContain('ts-jest@29.4.7');
+    expect(rendered).toContain('ts-node@10.9.1');
     expect(rendered).toContain('--linter=eslint');
     expect(rendered).toContain('--unitTestRunner=none');
     expect(rendered).toContain('--e2eTestRunner=jest');
@@ -657,6 +664,9 @@ describe('executePlan', () => {
         ),
       ).toContain('43016');
     }
+    expect(
+      await readFile(resolve(plan.options.destination, 'jest.preset.js'), 'utf8'),
+    ).toContain("require('@nx/jest/preset').default");
   });
 
   it('commits a staged workspace over an empty destination', async () => {

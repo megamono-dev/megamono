@@ -492,7 +492,20 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
   for (const app of options.apps) {
     const plugin = appPlugin[app];
     if (plugin) plugins.add(plugin);
-    if (app === 'api') plugins.add('@nx/jest');
+    if (app === 'api') {
+      for (const dependency of [
+        '@nx/jest',
+        '@swc/jest',
+        '@types/jest',
+        'jest',
+        'jest-environment-node',
+        'jest-util',
+        'ts-jest',
+        'ts-node',
+      ]) {
+        plugins.add(dependency);
+      }
+    }
     if (app === 'api' || app === 'site' || app === 'web') {
       plugins.add('@nx/eslint');
     }
@@ -1338,6 +1351,14 @@ async function configureE2ePackage(
 
   const port = scaffoldPort(plan.options, app);
   if (app === 'api') {
+    await writeFile(
+      resolve(plan.options.stagingDirectory, 'jest.preset.js'),
+      `const nxPreset = require('@nx/jest/preset').default;
+
+module.exports = { ...nxPreset };
+`,
+      'utf8',
+    );
     const replacements = [
       [
         resolve(plan.options.stagingDirectory, 'apps/api/src/main.ts'),
