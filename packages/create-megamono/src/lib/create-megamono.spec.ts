@@ -31,7 +31,7 @@ function options(cwd: string, overrides: Record<string, unknown> = {}) {
 
 async function writeInferredAppPackage(
   stagingDirectory: string,
-  app: 'mobile' | 'site' | 'web',
+  app: 'api' | 'mobile' | 'site' | 'web',
 ): Promise<void> {
   const root = resolve(stagingDirectory, `apps/${app}`);
   await mkdir(root, { recursive: true });
@@ -41,6 +41,24 @@ async function writeInferredAppPackage(
   await writeFile(
     resolve(root, 'package.json'),
     JSON.stringify({ nx: { name: `acme-tools-${app}` } }),
+  );
+  if (app === 'api' || app === 'site' || app === 'web') {
+    await writeInferredE2ePackage(stagingDirectory, app);
+  }
+}
+
+async function writeInferredE2ePackage(
+  stagingDirectory: string,
+  app: 'api' | 'site' | 'web',
+): Promise<void> {
+  const root = resolve(stagingDirectory, `apps/${app}-e2e`);
+  await mkdir(root, { recursive: true });
+  await writeFile(
+    resolve(root, 'package.json'),
+    JSON.stringify({
+      name: `generated-${app}-e2e`,
+      nx: { name: `acme-tools-${app}-e2e` },
+    }),
   );
 }
 
@@ -539,13 +557,17 @@ describe('executePlan', () => {
     let initialized = false;
     const runner: CommandRunner = async ({ command, args }) => {
       invocations.push([command, ...args].join(' '));
-      if (initialized) return;
-      initialized = true;
-      await mkdir(plan.options.stagingDirectory, { recursive: true });
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'package.json'),
-        '{}',
-      );
+      if (!initialized) {
+        initialized = true;
+        await mkdir(plan.options.stagingDirectory, { recursive: true });
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'package.json'),
+          '{}',
+        );
+      }
+      if (args.includes('@nx/nest:application')) {
+        await writeInferredAppPackage(plan.options.stagingDirectory, 'api');
+      }
     };
     await executePlan(plan, runner, undefined, async () => store);
 
@@ -567,6 +589,25 @@ describe('executePlan', () => {
         ),
       ),
     ).toEqual({ packageManager: 'npm@11.17.0' });
+    expect(
+      JSON.parse(
+        await readFile(
+          resolve(plan.options.destination, 'apps/api-e2e/package.json'),
+          'utf8',
+        ),
+      ),
+    ).toMatchObject({
+      name: '@acme-tools/api-e2e',
+      nx: {
+        projectType: 'application',
+        tags: [
+          'platform:node',
+          'scope:acme-tools',
+          'type:app',
+          'visibility:internal',
+        ],
+      },
+    });
   });
 
   it('commits a staged workspace over an empty destination', async () => {
@@ -593,6 +634,7 @@ describe('executePlan', () => {
           }),
         );
         await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
+        await writeInferredAppPackage(plan.options.stagingDirectory, 'api');
       }
       if (args.includes('@nx/js:library')) {
         await writeInferredThemePackage(plan.options.stagingDirectory);
@@ -949,6 +991,9 @@ describe('executePlan', () => {
               nx: { name: `acme-tools-${app}`, tags: ['platform:web'] },
             }),
           );
+          if (app === 'site' || app === 'web') {
+            await writeInferredE2ePackage(plan.options.stagingDirectory, app);
+          }
         }
         await writeFile(
           resolve(plan.options.stagingDirectory, 'apps/mobile/src/app/App.tsx'),
@@ -1008,6 +1053,25 @@ describe('executePlan', () => {
         expect(e2e).toContain(
           `${app === 'site' ? 'Marketing site' : 'Web app'}`,
         );
+        expect(
+          JSON.parse(
+            await readFile(
+              resolve(plan.options.destination, `apps/${app}-e2e/package.json`),
+              'utf8',
+            ),
+          ),
+        ).toMatchObject({
+          name: `@acme-tools/${app}-e2e`,
+          nx: {
+            projectType: 'application',
+            tags: [
+              'platform:web',
+              'scope:acme-tools',
+              'type:app',
+              'visibility:internal',
+            ],
+          },
+        });
       }
       expect(renderPlan(plan)).toContain(
         `normalize apps/${app} as an application project`,
@@ -1099,6 +1163,7 @@ describe('executePlan', () => {
           JSON.stringify({ version: 1 }),
         );
         await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
+        await writeInferredAppPackage(plan.options.stagingDirectory, 'api');
       }
       if (args.includes('@nx/js:library')) {
         await writeInferredThemePackage(plan.options.stagingDirectory);
@@ -1155,6 +1220,7 @@ describe('executePlan', () => {
             JSON.stringify({ version: 1 }),
           );
           await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
+          await writeInferredAppPackage(plan.options.stagingDirectory, 'api');
         }
         if (args.includes('@nx/js:library')) {
           await writeInferredThemePackage(plan.options.stagingDirectory);

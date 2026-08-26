@@ -95,6 +95,7 @@ export type PlanStep =
       kind: 'configure';
       id:
         | 'configure-package-manager'
+        | 'configure-api'
         | 'configure-desktop'
         | 'configure-mobile'
         | 'configure-theme'
@@ -629,6 +630,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         'staging',
       ),
     );
+    if (app === 'api') steps.push({ kind: 'configure', id: 'configure-api' });
     if (app === 'mobile')
       steps.push({ kind: 'configure', id: 'configure-mobile' });
     if (app === 'site') steps.push({ kind: 'configure', id: 'configure-site' });
@@ -892,6 +894,7 @@ export function renderPlan(plan: CreationPlan): string {
           return `${index + 1}. [staging] configure the shared Chakra UI system`;
         if (
           step.id === 'configure-mobile' ||
+          step.id === 'configure-api' ||
           step.id === 'configure-site' ||
           step.id === 'configure-web'
         ) {
@@ -1196,7 +1199,7 @@ async function configureDesktop(plan: CreationPlan): Promise<void> {
 
 async function configurePackageApplication(
   plan: CreationPlan,
-  app: 'mobile' | 'site' | 'web',
+  app: 'api' | 'mobile' | 'site' | 'web',
 ): Promise<void> {
   const packagePath = resolve(
     plan.options.stagingDirectory,
@@ -1241,6 +1244,20 @@ async function configurePackageApplication(
   }
 
   if (app === 'site' || app === 'web') {
+    await rm(
+      resolve(
+        plan.options.stagingDirectory,
+        `apps/${app}/src/pages/index.module.none`,
+      ),
+      { force: true },
+    );
+    await rm(
+      resolve(
+        plan.options.stagingDirectory,
+        `apps/${app}/src/pages/styles.css`,
+      ),
+      { force: true },
+    );
     await writeFile(
       resolve(plan.options.stagingDirectory, `apps/${app}/src/pages/_app.tsx`),
       `import { ChakraProvider } from '@chakra-ui/react';
@@ -1273,6 +1290,37 @@ export default function App({ Component, pageProps }: AppProps) {
       'utf8',
     );
   }
+  if (app === 'api' || app === 'site' || app === 'web') {
+    await configureE2ePackage(plan, app);
+  }
+}
+
+async function configureE2ePackage(
+  plan: CreationPlan,
+  app: 'api' | 'site' | 'web',
+): Promise<void> {
+  const packagePath = resolve(
+    plan.options.stagingDirectory,
+    `apps/${app}-e2e/package.json`,
+  );
+  const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as {
+    name?: string;
+    nx?: Record<string, unknown>;
+  };
+  packageJson.name = `@${plan.options.scope}/${app}-e2e`;
+  packageJson.nx ??= {};
+  packageJson.nx.projectType = 'application';
+  packageJson.nx.tags = [
+    `platform:${app === 'api' ? 'node' : 'web'}`,
+    `scope:${plan.options.scope}`,
+    'type:app',
+    'visibility:internal',
+  ];
+  await writeFile(
+    packagePath,
+    `${JSON.stringify(packageJson, null, 2)}\n`,
+    'utf8',
+  );
 }
 
 const appLabels: Record<AppId, string> = {
@@ -1696,6 +1744,8 @@ export async function executePlan(
           await configurePackageManager(plan);
         else if (step.id === 'configure-desktop') await configureDesktop(plan);
         else if (step.id === 'configure-theme') await configureTheme(plan);
+        else if (step.id === 'configure-api')
+          await configurePackageApplication(plan, 'api');
         else if (step.id === 'configure-mobile')
           await configurePackageApplication(plan, 'mobile');
         else if (step.id === 'configure-site')
