@@ -137,7 +137,14 @@ describe('createPlan', () => {
         expect.objectContaining({
           id: 'install-plugins',
           command: 'pnpm',
-          args: expect.arrayContaining(['add', '--save-dev', '--save-exact']),
+          args: expect.arrayContaining([
+            'add',
+            '--save-dev',
+            '--save-exact',
+            '@nx/eslint@23.1.1',
+            '@nx/next@23.1.1',
+            '@nx/playwright@23.1.1',
+          ]),
         }),
         expect.objectContaining({
           id: 'generate-desktop',
@@ -152,11 +159,30 @@ describe('createPlan', () => {
         expect.objectContaining({
           id: 'generate-web',
           command: 'pnpm',
-          args: expect.arrayContaining(['exec', 'nx', 'generate']),
+          args: expect.arrayContaining([
+            'exec',
+            'nx',
+            'generate',
+            '--appDir=false',
+            '--src=true',
+            '--style=none',
+            '--linter=eslint',
+            '--unitTestRunner=none',
+            '--e2eTestRunner=playwright',
+          ]),
         }),
         expect.objectContaining({
           id: 'verify-generated-projects',
           command: 'pnpm',
+        }),
+        expect.objectContaining({
+          id: 'verify-generated-e2e',
+          command: 'pnpm',
+          args: expect.arrayContaining([
+            '--targets=e2e',
+            '--projects=acme-tools-web-e2e',
+            '--parallel=1',
+          ]),
         }),
       ]),
     );
@@ -182,12 +208,19 @@ describe('createPlan', () => {
       'check-structure',
       'build-project-graph',
       'verify-generated-projects',
+      'verify-generated-e2e',
       'commit-workspace',
     ]);
     expect(rendered).toContain('create-nx-workspace@23.1.1');
     expect(rendered).toContain('@megamono/plugin@0.0.1');
     expect(rendered).toContain('@nx/next@23.1.1');
+    expect(rendered).toContain('@nx/eslint@23.1.1');
+    expect(rendered).toContain('@nx/playwright@23.1.1');
     expect(rendered).toContain('--appDir=false');
+    expect(rendered).toContain('--src=true');
+    expect(rendered).toContain('--style=none');
+    expect(rendered).toContain('--linter=eslint');
+    expect(rendered).toContain('--e2eTestRunner=playwright');
     expect(rendered).toContain(
       '--only=docs,agents,ci,lint,skills,health,inference',
     );
@@ -199,6 +232,19 @@ describe('createPlan', () => {
     expect(rendered).not.toContain('--router=pages');
     expect(rendered).toContain('format:write');
     expect(rendered).not.toContain('@latest');
+  });
+
+  it('uses the maintained ESLint and Jest e2e preset for Nest apps', () => {
+    const rendered = renderPlan(
+      createPlan(options('/workspace', { apps: ['api'], verify: 'build' })),
+    );
+
+    expect(rendered).toContain('@nx/eslint@23.1.1');
+    expect(rendered).toContain('@nx/jest@23.1.1');
+    expect(rendered).toContain('--linter=eslint');
+    expect(rendered).toContain('--unitTestRunner=none');
+    expect(rendered).toContain('--e2eTestRunner=jest');
+    expect(rendered).toContain('--projects=acme-tools-api-e2e');
   });
 
   it('ships the same compatibility registry as the workspace plugin', async () => {
@@ -483,7 +529,7 @@ describe('executePlan', () => {
     expect(invocations.slice(0, 4)).toEqual([
       expect.stringContaining('create-nx-workspace@23.1.1'),
       expect.stringContaining(
-        'npm install --save-dev --save-exact @nx/nest@23.1.1',
+        'npm install --save-dev --save-exact @nx/eslint@23.1.1 @nx/jest@23.1.1 @nx/nest@23.1.1',
       ),
       'yalc add @megamono/plugin@0.0.1 --dev --no-pure',
       'npm install',

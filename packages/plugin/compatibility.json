@@ -24,10 +24,13 @@
   ],
   "scaffoldPackages": {
     "create-nx-workspace": "23.1.1",
+    "@nx/eslint": "23.1.1",
+    "@nx/jest": "23.1.1",
     "@nx/js": "23.1.1",
     "@nx/vitest": "23.1.1",
     "@nx/next": "23.1.1",
     "@nx/nest": "23.1.1",
+    "@nx/playwright": "23.1.1",
     "@nx/expo": "23.1.1",
     "create-tauri-app": "4.6.2",
     "@tauri-apps/api": "2.11.1",

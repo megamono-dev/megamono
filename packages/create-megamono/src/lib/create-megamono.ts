@@ -172,12 +172,25 @@ const appGenerator: Record<
   web: {
     plugin: '@nx/next',
     generator: 'application',
-    extra: ['--directory=apps/web', '--appDir=false', '--e2eTestRunner=none'],
+    extra: [
+      '--directory=apps/web',
+      '--appDir=false',
+      '--src=true',
+      '--style=none',
+      '--linter=eslint',
+      '--unitTestRunner=none',
+      '--e2eTestRunner=playwright',
+    ],
   },
   api: {
     plugin: '@nx/nest',
     generator: 'application',
-    extra: ['--directory=apps/api', '--e2eTestRunner=none'],
+    extra: [
+      '--directory=apps/api',
+      '--linter=eslint',
+      '--unitTestRunner=none',
+      '--e2eTestRunner=jest',
+    ],
   },
   worker: {
     plugin: '@megamono/nx-cloudflare',
@@ -197,7 +210,15 @@ const appGenerator: Record<
   site: {
     plugin: '@nx/next',
     generator: 'application',
-    extra: ['--directory=apps/site', '--appDir=false', '--e2eTestRunner=none'],
+    extra: [
+      '--directory=apps/site',
+      '--appDir=false',
+      '--src=true',
+      '--style=none',
+      '--linter=eslint',
+      '--unitTestRunner=none',
+      '--e2eTestRunner=playwright',
+    ],
   },
 };
 
@@ -409,6 +430,12 @@ function requestedPlatforms(options: NormalizedCreateOptions): string[] {
   ].sort();
 }
 
+function generatedE2eProjects(options: NormalizedCreateOptions): string[] {
+  return options.apps
+    .filter((app) => app === 'api' || app === 'site' || app === 'web')
+    .map((app) => `${options.scope}-${app}-e2e`);
+}
+
 function requestedServiceRequirements(
   options: NormalizedCreateOptions,
 ): Record<string, string> {
@@ -451,6 +478,11 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
   for (const app of options.apps) {
     const plugin = appPlugin[app];
     if (plugin) plugins.add(plugin);
+    if (app === 'api') plugins.add('@nx/jest');
+    if (app === 'api' || app === 'site' || app === 'web') {
+      plugins.add('@nx/eslint');
+    }
+    if (app === 'site' || app === 'web') plugins.add('@nx/playwright');
     if (app === 'worker') {
       plugins.add('wrangler');
     }
@@ -640,6 +672,22 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         'staging',
       ),
     );
+    const e2eProjects = generatedE2eProjects(options);
+    if (e2eProjects.length > 0) {
+      steps.push(
+        commandStep(
+          'verify-generated-e2e',
+          options.packageManager,
+          nxArgs(options.packageManager, [
+            'run-many',
+            '--targets=e2e',
+            `--projects=${e2eProjects.join(',')}`,
+            '--parallel=1',
+          ]),
+          'staging',
+        ),
+      );
+    }
   }
   steps.push({ kind: 'commit', id: 'commit-workspace' });
   if (options.serviceRunner === 'springbar') {
