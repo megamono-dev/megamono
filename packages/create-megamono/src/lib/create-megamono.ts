@@ -97,6 +97,7 @@ export type PlanStep =
         | 'configure-package-manager'
         | 'configure-desktop'
         | 'configure-mobile'
+        | 'configure-theme'
         | 'configure-site'
         | 'configure-web';
     }
@@ -482,7 +483,10 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     if (app === 'api' || app === 'site' || app === 'web') {
       plugins.add('@nx/eslint');
     }
-    if (app === 'site' || app === 'web') plugins.add('@nx/playwright');
+    if (app === 'site' || app === 'web') {
+      plugins.add('@nx/js');
+      plugins.add('@nx/playwright');
+    }
     if (app === 'worker') {
       plugins.add('wrangler');
     }
@@ -526,6 +530,31 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         ),
       );
     }
+  }
+
+  if (options.apps.includes('site') || options.apps.includes('web')) {
+    steps.push(
+      commandStep(
+        'generate-theme',
+        options.packageManager,
+        nxArgs(options.packageManager, [
+          'generate',
+          '@nx/js:library',
+          `--name=${options.scope}-theme`,
+          '--directory=packages/theme',
+          '--bundler=none',
+          '--linter=eslint',
+          '--unitTestRunner=none',
+          '--strict=true',
+          '--minimal=true',
+          '--tags=platform:web,scope:shared,type:ui',
+          '--interactive=false',
+          '--skipFormat',
+        ]),
+        'staging',
+      ),
+      { kind: 'configure', id: 'configure-theme' },
+    );
   }
 
   for (const app of options.apps) {
@@ -859,6 +888,8 @@ export function renderPlan(plan: CreationPlan): string {
           return `${index + 1}. [staging] record ${plan.options.packageManager} and configure package-manager policy`;
         if (step.id === 'configure-desktop')
           return `${index + 1}. [staging] normalize apps/desktop and register @megamono/nx-cargo`;
+        if (step.id === 'configure-theme')
+          return `${index + 1}. [staging] configure the shared Chakra UI system`;
         if (
           step.id === 'configure-mobile' ||
           step.id === 'configure-site' ||
@@ -1172,10 +1203,21 @@ async function configurePackageApplication(
     `apps/${app}/package.json`,
   );
   const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as {
+    name?: string;
+    dependencies?: Record<string, string>;
     nx?: Record<string, unknown>;
   };
+  packageJson.name = `@${plan.options.scope}/${app}`;
   packageJson.nx ??= {};
   packageJson.nx.projectType = 'application';
+  if (app === 'site' || app === 'web') {
+    packageJson.dependencies = {
+      ...packageJson.dependencies,
+      '@chakra-ui/react': requiredScaffoldVersion('@chakra-ui/react'),
+      [`@${plan.options.scope}/theme`]:
+        plan.options.packageManager === 'pnpm' ? 'workspace:*' : '*',
+    };
+  }
   await writeFile(
     packagePath,
     `${JSON.stringify(packageJson, null, 2)}\n`,
@@ -1197,6 +1239,97 @@ async function configurePackageApplication(
       'utf8',
     );
   }
+
+  if (app === 'site' || app === 'web') {
+    await writeFile(
+      resolve(
+        plan.options.stagingDirectory,
+        `apps/${app}/src/pages/_app.tsx`,
+      ),
+      `import { ChakraProvider } from '@chakra-ui/react';
+import { megamonoSystem } from '@${plan.options.scope}/theme';
+import type { AppProps } from 'next/app';
+
+export default function App({ Component, pageProps }: AppProps) {
+  return (
+    <ChakraProvider value={megamonoSystem}>
+      <Component {...pageProps} />
+    </ChakraProvider>
+  );
+}
+`,
+      'utf8',
+    );
+  }
+}
+
+async function configureTheme(plan: CreationPlan): Promise<void> {
+  const packagePath = resolve(
+    plan.options.stagingDirectory,
+    'packages/theme/package.json',
+  );
+  const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as {
+    name?: string;
+    private?: boolean;
+    dependencies?: Record<string, string>;
+    nx?: Record<string, unknown>;
+  };
+  packageJson.name = `@${plan.options.scope}/theme`;
+  packageJson.private = true;
+  packageJson.dependencies = {
+    ...packageJson.dependencies,
+    '@chakra-ui/react': requiredScaffoldVersion('@chakra-ui/react'),
+    '@emotion/react': requiredScaffoldVersion('@emotion/react'),
+  };
+  packageJson.nx ??= {};
+  packageJson.nx.projectType = 'library';
+  await writeFile(
+    packagePath,
+    `${JSON.stringify(packageJson, null, 2)}\n`,
+    'utf8',
+  );
+
+  await writeFile(
+    resolve(plan.options.stagingDirectory, 'packages/theme/src/index.ts'),
+    "export { megamonoSystem } from './lib/system.js';\n",
+    'utf8',
+  );
+  await writeFile(
+    resolve(
+      plan.options.stagingDirectory,
+      'packages/theme/src/lib/system.ts',
+    ),
+    `import { createSystem, defaultConfig, defineConfig } from '@chakra-ui/react';
+
+const config = defineConfig({
+  globalCss: {
+    html: {
+      bg: '{colors.gray.950}',
+      colorPalette: 'yellow',
+    },
+    body: {
+      bg: '{colors.gray.950}',
+      color: '{colors.gray.50}',
+    },
+    '::selection': {
+      bg: '{colors.yellow.300}',
+      color: '{colors.gray.950}',
+    },
+  },
+  theme: {
+    semanticTokens: {
+      colors: {
+        accent: { value: '{colors.yellow.300}' },
+        panel: { value: '{colors.gray.900}' },
+      },
+    },
+  },
+});
+
+export const megamonoSystem = createSystem(defaultConfig, config);
+`,
+    'utf8',
+  );
 }
 
 async function writeRecovery(
@@ -1258,6 +1391,7 @@ export async function executePlan(
         if (step.id === 'configure-package-manager')
           await configurePackageManager(plan);
         else if (step.id === 'configure-desktop') await configureDesktop(plan);
+        else if (step.id === 'configure-theme') await configureTheme(plan);
         else if (step.id === 'configure-mobile')
           await configurePackageApplication(plan, 'mobile');
         else if (step.id === 'configure-site')

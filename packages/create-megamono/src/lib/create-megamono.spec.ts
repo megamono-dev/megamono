@@ -35,10 +35,29 @@ async function writeInferredAppPackage(
 ): Promise<void> {
   const root = resolve(stagingDirectory, `apps/${app}`);
   await mkdir(root, { recursive: true });
+  if (app === 'site' || app === 'web') {
+    await mkdir(resolve(root, 'src/pages'), { recursive: true });
+  }
   await writeFile(
     resolve(root, 'package.json'),
     JSON.stringify({ nx: { name: `acme-tools-${app}` } }),
   );
+}
+
+async function writeInferredThemePackage(
+  stagingDirectory: string,
+): Promise<void> {
+  const root = resolve(stagingDirectory, 'packages/theme');
+  await mkdir(resolve(root, 'src/lib'), { recursive: true });
+  await writeFile(
+    resolve(root, 'package.json'),
+    JSON.stringify({
+      name: 'generated-theme',
+      nx: { name: 'acme-tools-theme', tags: ['platform:web'] },
+    }),
+  );
+  await writeFile(resolve(root, 'src/index.ts'), 'export {};\n');
+  await writeFile(resolve(root, 'src/lib/system.ts'), 'export {};\n');
 }
 
 async function writeYalcStore(
@@ -198,6 +217,8 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
+      'generate-theme',
+      'configure-theme',
       'generate-site',
       'configure-site',
       'generate-web',
@@ -216,6 +237,8 @@ describe('createPlan', () => {
     expect(rendered).toContain('@nx/next@23.1.1');
     expect(rendered).toContain('@nx/eslint@23.1.1');
     expect(rendered).toContain('@nx/playwright@23.1.1');
+    expect(rendered).toContain('@nx/js:library');
+    expect(rendered).toContain('--directory=packages/theme');
     expect(rendered).toContain('--appDir=false');
     expect(rendered).toContain('--src=true');
     expect(rendered).toContain('--style=none');
@@ -553,27 +576,27 @@ describe('executePlan', () => {
     );
     await mkdir(plan.options.destination);
     let first = true;
-    const runner: CommandRunner = async () => {
-      if (!first) return;
-      first = false;
-      await mkdir(plan.options.stagingDirectory);
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'package.json'),
-        '{}',
-      );
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'package.json'),
-        '{}',
-      );
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'megamono.json'),
-        JSON.stringify({
-          version: 1,
-          platforms: ['node', 'web'],
-          services: { runner: 'none', requirements: { postgres: '17' } },
-        }),
-      );
-      await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
+    const runner: CommandRunner = async ({ args }) => {
+      if (first) {
+        first = false;
+        await mkdir(plan.options.stagingDirectory);
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'package.json'),
+          '{}',
+        );
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'megamono.json'),
+          JSON.stringify({
+            version: 1,
+            platforms: ['node', 'web'],
+            services: { runner: 'none', requirements: { postgres: '17' } },
+          }),
+        );
+        await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
+      }
+      if (args.includes('@nx/js:library')) {
+        await writeInferredThemePackage(plan.options.stagingDirectory);
+      }
     };
     await executePlan(plan, runner);
     expect(
@@ -886,40 +909,55 @@ describe('executePlan', () => {
     const apps = ['mobile', 'site', 'web'] as const;
     const plan = createPlan(options(cwd, { apps, verify: 'none' }));
     let initialized = false;
-    const runner: CommandRunner = async () => {
-      if (initialized) return;
-      initialized = true;
-      for (const app of apps) {
-        await mkdir(resolve(plan.options.stagingDirectory, `apps/${app}`), {
-          recursive: true,
-        });
-      }
-      await mkdir(
-        resolve(plan.options.stagingDirectory, 'apps/mobile/src/app'),
-        { recursive: true },
-      );
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'package.json'),
-        '{}',
-      );
-      await writeFile(resolve(plan.options.stagingDirectory, 'nx.json'), '{}');
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'megamono.json'),
-        JSON.stringify({ version: 1 }),
-      );
-      for (const app of apps) {
+    const runner: CommandRunner = async ({ args }) => {
+      if (!initialized) {
+        initialized = true;
+        for (const app of apps) {
+          await mkdir(resolve(plan.options.stagingDirectory, `apps/${app}`), {
+            recursive: true,
+          });
+        }
+        await mkdir(
+          resolve(plan.options.stagingDirectory, 'apps/mobile/src/app'),
+          { recursive: true },
+        );
+        await mkdir(
+          resolve(plan.options.stagingDirectory, 'apps/site/src/pages'),
+          { recursive: true },
+        );
+        await mkdir(
+          resolve(plan.options.stagingDirectory, 'apps/web/src/pages'),
+          { recursive: true },
+        );
         await writeFile(
-          resolve(plan.options.stagingDirectory, `apps/${app}/package.json`),
-          JSON.stringify({
-            name: `@acme-tools/${app}`,
-            nx: { name: `acme-tools-${app}`, tags: ['platform:web'] },
-          }),
+          resolve(plan.options.stagingDirectory, 'package.json'),
+          '{}',
+        );
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'nx.json'),
+          '{}',
+        );
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'megamono.json'),
+          JSON.stringify({ version: 1 }),
+        );
+        for (const app of apps) {
+          await writeFile(
+            resolve(plan.options.stagingDirectory, `apps/${app}/package.json`),
+            JSON.stringify({
+              name: `@acme-tools/${app}`,
+              nx: { name: `acme-tools-${app}`, tags: ['platform:web'] },
+            }),
+          );
+        }
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'apps/mobile/src/app/App.tsx'),
+          '/* eslint-disable jsx-a11y/accessible-emoji */\nexport const App = () => null;\n',
         );
       }
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'apps/mobile/src/app/App.tsx'),
-        '/* eslint-disable jsx-a11y/accessible-emoji */\nexport const App = () => null;\n',
-      );
+      if (args.includes('@nx/js:library')) {
+        await writeInferredThemePackage(plan.options.stagingDirectory);
+      }
     };
 
     await executePlan(plan, runner);
@@ -936,10 +974,47 @@ describe('executePlan', () => {
         projectType: 'application',
         tags: ['platform:web'],
       });
+      expect(packageJson.name).toBe(`@acme-tools/${app}`);
+      if (app === 'site' || app === 'web') {
+        expect(packageJson.dependencies).toMatchObject({
+          '@chakra-ui/react': '3.36.1',
+          '@acme-tools/theme': '*',
+        });
+        expect(
+          await readFile(
+            resolve(
+              plan.options.destination,
+              `apps/${app}/src/pages/_app.tsx`,
+            ),
+            'utf8',
+          ),
+        ).toContain('<ChakraProvider value={megamonoSystem}>');
+      }
       expect(renderPlan(plan)).toContain(
         `normalize apps/${app} as an application project`,
       );
     }
+    const themePackage = JSON.parse(
+      await readFile(
+        resolve(plan.options.destination, 'packages/theme/package.json'),
+        'utf8',
+      ),
+    );
+    expect(themePackage).toMatchObject({
+      name: '@acme-tools/theme',
+      private: true,
+      dependencies: {
+        '@chakra-ui/react': '3.36.1',
+        '@emotion/react': '11.14.0',
+      },
+      nx: { projectType: 'library' },
+    });
+    expect(
+      await readFile(
+        resolve(plan.options.destination, 'packages/theme/src/lib/system.ts'),
+        'utf8',
+      ),
+    ).toContain('createSystem(defaultConfig, config)');
     expect(
       await readFile(
         resolve(plan.options.destination, 'apps/mobile/src/app/App.tsx'),
@@ -993,18 +1068,22 @@ describe('executePlan', () => {
         );
         return;
       }
-      if (!first) return;
-      first = false;
-      await mkdir(plan.options.stagingDirectory);
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'package.json'),
-        '{}',
-      );
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'megamono.json'),
-        JSON.stringify({ version: 1 }),
-      );
-      await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
+      if (first) {
+        first = false;
+        await mkdir(plan.options.stagingDirectory);
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'package.json'),
+          '{}',
+        );
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'megamono.json'),
+          JSON.stringify({ version: 1 }),
+        );
+        await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
+      }
+      if (args.includes('@nx/js:library')) {
+        await writeInferredThemePackage(plan.options.stagingDirectory);
+      }
     };
     await executePlan(plan, runner, async (intent) => {
       expect(
@@ -1045,18 +1124,22 @@ describe('executePlan', () => {
           );
           return;
         }
-        if (!first) return;
-        first = false;
-        await mkdir(plan.options.stagingDirectory);
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'package.json'),
-          '{}',
-        );
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'megamono.json'),
-          JSON.stringify({ version: 1 }),
-        );
-        await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
+        if (first) {
+          first = false;
+          await mkdir(plan.options.stagingDirectory);
+          await writeFile(
+            resolve(plan.options.stagingDirectory, 'package.json'),
+            '{}',
+          );
+          await writeFile(
+            resolve(plan.options.stagingDirectory, 'megamono.json'),
+            JSON.stringify({ version: 1 }),
+          );
+          await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
+        }
+        if (args.includes('@nx/js:library')) {
+          await writeInferredThemePackage(plan.options.stagingDirectory);
+        }
       },
       async () => {
         throw new Error('springbar-mcp ENOENT');
