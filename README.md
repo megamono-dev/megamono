@@ -29,10 +29,10 @@ npm exec nx -- graph
 
 ## Local package validation
 
-Build and publish the packages under test to yalc, then run the local CLI from this checkout:
+Build and publish every Megamono package to yalc, then run the local CLI from this checkout:
 
 ```bash
-npm exec nx -- run create-megamono:build
+npm run yalc:publish
 npm exec -- create-megamono <name> \
   --directory=../<name> \
   --local-packages=yalc
