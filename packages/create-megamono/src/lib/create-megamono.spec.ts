@@ -1101,6 +1101,12 @@ describe('executePlan', () => {
     });
     expect(
       await readFile(
+        resolve(plan.options.destination, 'packages/theme/src/index.ts'),
+        'utf8',
+      ),
+    ).toBe("export { megamonoSystem } from './lib/system';\n");
+    expect(
+      await readFile(
         resolve(plan.options.destination, 'packages/theme/src/lib/system.ts'),
         'utf8',
       ),

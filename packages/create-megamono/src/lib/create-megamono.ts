@@ -1653,7 +1653,7 @@ async function configureTheme(plan: CreationPlan): Promise<void> {
 
   await writeFile(
     resolve(plan.options.stagingDirectory, 'packages/theme/src/index.ts'),
-    "export { megamonoSystem } from './lib/system.js';\n",
+    "export { megamonoSystem } from './lib/system';\n",
     'utf8',
   );
   await writeFile(
