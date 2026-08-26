@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { isMainModule } from './cli.js';
+import { isMainModule, main } from './cli.js';
 
 describe('CLI entrypoint', () => {
   it('recognizes an npm-style symlink to the executable module', async () => {
@@ -17,5 +17,25 @@ describe('CLI entrypoint', () => {
     expect(isMainModule(pathToFileURL(modulePath).href, executablePath)).toBe(
       true,
     );
+  });
+
+  it('accepts the package manager option and renders its dry-run commands', async () => {
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    try {
+      await expect(
+        main([
+          'cli-package-manager-fixture',
+          '--apps=web',
+          '--interactive=false',
+          '--package-manager=pnpm',
+          '--dry-run',
+        ]),
+      ).resolves.toBe(0);
+      expect(output).toHaveBeenCalledWith(
+        expect.stringContaining('"pnpm" "dlx" "create-nx-workspace@23.1.1"'),
+      );
+    } finally {
+      output.mockRestore();
+    }
   });
 });

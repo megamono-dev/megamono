@@ -38,12 +38,14 @@ export const SERVICE_IDS = [
 export const VERIFY_MODES = ['none', 'config', 'build'] as const;
 export const SERVICE_RUNNERS = ['none', 'springbar'] as const;
 export const LOCAL_PACKAGE_SOURCES = ['registry', 'yalc'] as const;
+export const PACKAGE_MANAGERS = ['pnpm', 'npm'] as const;
 
 export type AppId = (typeof APP_IDS)[number];
 export type ServiceId = (typeof SERVICE_IDS)[number];
 export type VerifyMode = (typeof VERIFY_MODES)[number];
 export type ServiceRunner = (typeof SERVICE_RUNNERS)[number];
 export type LocalPackageSource = (typeof LOCAL_PACKAGE_SOURCES)[number];
+export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
 
 export interface CreateMegamonoInput {
   name?: string;
@@ -58,6 +60,7 @@ export interface CreateMegamonoInput {
   cleanupOnFailure?: boolean;
   dryRun?: boolean;
   localPackages?: string;
+  packageManager?: string;
   cwd?: string;
   platform?: NodeJS.Platform;
 }
@@ -76,6 +79,7 @@ export interface NormalizedCreateOptions {
   cleanupOnFailure: boolean;
   dryRun: boolean;
   localPackages: LocalPackageSource;
+  packageManager: PackageManager;
   platform: NodeJS.Platform;
 }
 
@@ -148,6 +152,7 @@ const SERVICE_SET = new Set<string>(SERVICE_IDS);
 const RUNNER_SET = new Set<string>(SERVICE_RUNNERS);
 const VERIFY_SET = new Set<string>(VERIFY_MODES);
 const LOCAL_PACKAGE_SOURCE_SET = new Set<string>(LOCAL_PACKAGE_SOURCES);
+const PACKAGE_MANAGER_SET = new Set<string>(PACKAGE_MANAGERS);
 
 const appPlugin: Partial<Record<AppId, string>> = {
   web: '@nx/next',
@@ -326,6 +331,11 @@ export function normalizeCreateOptions(
       input.localPackages ?? 'registry',
       LOCAL_PACKAGE_SOURCE_SET,
     ),
+    packageManager: requireEnum<PackageManager>(
+      'package manager',
+      input.packageManager ?? 'pnpm',
+      PACKAGE_MANAGER_SET,
+    ),
     platform,
   };
 }
@@ -348,6 +358,38 @@ function commandStep(
   cwd: 'parent' | 'staging',
 ): PlanStep {
   return { kind: 'command', id, command, args, cwd };
+}
+
+function nxArgs(
+  packageManager: PackageManager,
+  args: readonly string[],
+): string[] {
+  return packageManager === 'pnpm'
+    ? ['exec', 'nx', ...args]
+    : ['exec', 'nx', '--', ...args];
+}
+
+function packageInstallArgs(
+  packageManager: PackageManager,
+  packages: readonly string[] = [],
+): string[] {
+  return packageManager === 'pnpm'
+    ? packages.length > 0
+      ? ['add', '--save-dev', '--save-exact', ...packages]
+      : ['install']
+    : packages.length > 0
+      ? ['install', '--save-dev', '--save-exact', ...packages]
+      : ['install'];
+}
+
+function scaffoldArgs(
+  packageManager: PackageManager,
+  packageName: string,
+  args: readonly string[],
+): string[] {
+  return packageManager === 'pnpm'
+    ? ['dlx', packageName, ...args]
+    : ['exec', '--yes', packageName, '--', ...args];
 }
 
 function requestedPlatforms(options: NormalizedCreateOptions): string[] {
@@ -386,21 +428,17 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
   const steps: PlanStep[] = [
     commandStep(
       'create-nx-workspace',
-      'npm',
-      [
-        'exec',
-        '--yes',
-        packagePin('create-nx-workspace'),
-        '--',
+      options.packageManager,
+      scaffoldArgs(options.packageManager, packagePin('create-nx-workspace'), [
         basename(options.stagingDirectory),
         '--preset=ts',
         '--workspaceType=integrated',
-        '--packageManager=npm',
+        `--packageManager=${options.packageManager}`,
         '--interactive=false',
         '--nxCloud=skip',
         '--skipGit',
         `--skipInstall=${String(!options.install)}`,
-      ],
+      ]),
       'parent',
     ),
   ];
@@ -426,8 +464,8 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     steps.push(
       commandStep(
         'install-plugins',
-        'npm',
-        ['install', '--save-dev', '--save-exact', ...packages],
+        options.packageManager,
+        packageInstallArgs(options.packageManager, packages),
         'staging',
       ),
     );
@@ -444,7 +482,12 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
           ],
           'staging',
         ),
-        commandStep('hydrate-local-packages', 'npm', ['install'], 'staging'),
+        commandStep(
+          'hydrate-local-packages',
+          options.packageManager,
+          packageInstallArgs(options.packageManager),
+          'staging',
+        ),
       );
     }
   }
@@ -454,15 +497,11 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       steps.push(
         commandStep(
           'generate-desktop',
-          'npm',
-          [
-            'exec',
-            '--yes',
-            packagePin('create-tauri-app'),
-            '--',
+          options.packageManager,
+          scaffoldArgs(options.packageManager, packagePin('create-tauri-app'), [
             'apps/desktop',
             '--manager',
-            'npm',
+            options.packageManager,
             '--template',
             'vanilla-ts',
             '--identifier',
@@ -470,7 +509,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
             '--tauri-version',
             '2',
             '--yes',
-          ],
+          ]),
           'staging',
         ),
       );
@@ -479,8 +518,8 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         steps.push(
           commandStep(
             'install-desktop-dependencies',
-            'npm',
-            ['install'],
+            options.packageManager,
+            packageInstallArgs(options.packageManager),
             'staging',
           ),
         );
@@ -511,11 +550,8 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     steps.push(
       commandStep(
         `generate-${app}`,
-        'npm',
-        [
-          'exec',
-          'nx',
-          '--',
+        options.packageManager,
+        nxArgs(options.packageManager, [
           'generate',
           `${definition.plugin}:${definition.generator}`,
           `--name=${options.scope}-${app}`,
@@ -524,7 +560,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
           `--tags=platform:${platform},scope:${options.scope},type:app,visibility:internal`,
           '--interactive=false',
           '--skipFormat',
-        ],
+        ]),
         'staging',
       ),
     );
@@ -537,11 +573,8 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
   steps.push(
     commandStep(
       'initialize-megamono',
-      'npm',
-      [
-        'exec',
-        'nx',
-        '--',
+      options.packageManager,
+      nxArgs(options.packageManager, [
         'generate',
         '@megamono/plugin:workspace-init',
         `--defaultScope=${options.scope}`,
@@ -553,7 +586,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         `--serviceRunner=${options.serviceRunner}`,
         `--serviceRequirements=${JSON.stringify(requestedServiceRequirements(options))}`,
         '--interactive=false',
-      ],
+      ]),
       'staging',
     ),
   );
@@ -562,26 +595,29 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     steps.push(
       commandStep(
         'format',
-        'npm',
-        ['exec', 'nx', '--', 'format:write'],
+        options.packageManager,
+        nxArgs(options.packageManager, ['format:write']),
         'staging',
       ),
       commandStep(
         'validate-docs',
-        'npm',
-        ['exec', 'nx', '--', 'run', 'megamono-docs:validate'],
+        options.packageManager,
+        nxArgs(options.packageManager, ['run', 'megamono-docs:validate']),
         'staging',
       ),
       commandStep(
         'check-structure',
-        'npm',
-        ['exec', 'nx', '--', 'run', 'megamono:check'],
+        options.packageManager,
+        nxArgs(options.packageManager, ['run', 'megamono:check']),
         'staging',
       ),
       commandStep(
         'build-project-graph',
-        'npm',
-        ['exec', 'nx', '--', 'graph', '--file=.megamono/graph.json'],
+        options.packageManager,
+        nxArgs(options.packageManager, [
+          'graph',
+          '--file=.megamono/graph.json',
+        ]),
         'staging',
       ),
     );
@@ -590,15 +626,12 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     steps.push(
       commandStep(
         'verify-generated-projects',
-        'npm',
-        [
-          'exec',
-          'nx',
-          '--',
+        options.packageManager,
+        nxArgs(options.packageManager, [
           'run-many',
           '--targets=build,test,lint',
           `--projects=${options.apps.map((app) => `${options.scope}-${app}`).join(',')}`,
-        ],
+        ]),
         'staging',
       ),
     );
@@ -826,6 +859,42 @@ function replaceRequired(
   return source.replace(pattern, replacement);
 }
 
+async function registerPnpmWorkspace(
+  stagingDirectory: string,
+  workspacePattern: string,
+): Promise<void> {
+  const workspacePath = resolve(stagingDirectory, 'pnpm-workspace.yaml');
+  const source = await readFile(workspacePath, 'utf8');
+  const escapedPattern = workspacePattern.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    '\\$&',
+  );
+  const existingPattern = new RegExp(
+    `^\\s*-\\s*['"]?${escapedPattern}['"]?\\s*(?:#.*)?$`,
+    'm',
+  );
+  if (existingPattern.test(source)) return;
+
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.split(/\r?\n/);
+  const packagesIndex = lines.findIndex((line) => /^packages:\s*$/.test(line));
+  if (packagesIndex === -1) {
+    throw new CreateMegamonoError(
+      'The generated pnpm workspace is missing a supported packages list.',
+      3,
+    );
+  }
+  let insertionIndex = packagesIndex + 1;
+  while (
+    insertionIndex < lines.length &&
+    /^\s+\S/.test(lines[insertionIndex])
+  ) {
+    insertionIndex += 1;
+  }
+  lines.splice(insertionIndex, 0, `  - '${workspacePattern}'`);
+  await writeFile(workspacePath, lines.join(newline), 'utf8');
+}
+
 async function configureDesktop(plan: CreationPlan): Promise<void> {
   const desktopRoot = resolve(plan.options.stagingDirectory, 'apps/desktop');
   const projectName = `${plan.options.scope}-desktop`;
@@ -940,18 +1009,22 @@ async function configureDesktop(plan: CreationPlan): Promise<void> {
     workspaces?: unknown;
     devDependencies?: Record<string, string>;
   };
-  if (
-    rootPackage.workspaces !== undefined &&
-    !Array.isArray(rootPackage.workspaces)
-  ) {
-    throw new CreateMegamonoError(
-      'The generated workspace uses an unsupported non-array npm workspaces configuration.',
-      3,
-    );
+  if (plan.options.packageManager === 'npm') {
+    if (
+      rootPackage.workspaces !== undefined &&
+      !Array.isArray(rootPackage.workspaces)
+    ) {
+      throw new CreateMegamonoError(
+        'The generated workspace uses an unsupported non-array npm workspaces configuration.',
+        3,
+      );
+    }
+    rootPackage.workspaces = [
+      ...new Set([...(rootPackage.workspaces ?? []), 'apps/*']),
+    ].sort();
+  } else {
+    await registerPnpmWorkspace(plan.options.stagingDirectory, 'apps/*');
   }
-  rootPackage.workspaces = [
-    ...new Set([...(rootPackage.workspaces ?? []), 'apps/*']),
-  ].sort();
   rootPackage.devDependencies = {
     ...rootPackage.devDependencies,
     vite: requiredScaffoldVersion('vite'),

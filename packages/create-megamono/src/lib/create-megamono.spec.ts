@@ -24,6 +24,7 @@ function options(cwd: string, overrides: Record<string, unknown> = {}) {
     apps: ['web', 'api'],
     cwd,
     platform: 'darwin',
+    packageManager: 'npm',
     ...overrides,
   });
 }
@@ -66,11 +67,23 @@ describe('normalizeCreateOptions', () => {
       install: true,
       verify: 'config',
       localPackages: 'registry',
+      packageManager: 'npm',
     });
     expect(normalized.destination).toBe('/workspace/acme-tools');
     expect(normalized.stagingDirectory).toBe(
       '/workspace/megamono-acme-tools-staging',
     );
+  });
+
+  it('defaults new workspaces to pnpm', () => {
+    expect(
+      normalizeCreateOptions({
+        name: 'Acme Tools',
+        apps: ['web'],
+        cwd: '/workspace',
+        platform: 'darwin',
+      }).packageManager,
+    ).toBe('pnpm');
   });
 
   it.each([
@@ -82,6 +95,7 @@ describe('normalizeCreateOptions', () => {
     [{ apps: ['apple'], platform: 'linux' }, 3, 'requires macOS'],
     [{ install: false }, 3, 'no-install generation path'],
     [{ localPackages: 'unknown' }, 2, 'local package source'],
+    [{ packageManager: 'yarn' }, 2, 'package manager'],
     [{ platform: 'win32' }, 3, 'supports macOS and Linux'],
   ])('returns a stable diagnostic for %j', (overrides, exitCode, message) => {
     expect(() => options('/workspace', overrides)).toThrowError(
@@ -94,6 +108,61 @@ describe('normalizeCreateOptions', () => {
 });
 
 describe('createPlan', () => {
+  it('uses pnpm for workspace creation, installs, generators, and checks', () => {
+    const plan = createPlan(
+      options('/workspace', {
+        apps: ['desktop', 'web'],
+        packageManager: 'pnpm',
+        verify: 'build',
+      }),
+    );
+    const commands = plan.steps.filter(
+      (
+        step,
+      ): step is Extract<(typeof plan.steps)[number], { kind: 'command' }> =>
+        step.kind === 'command',
+    );
+
+    expect(commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'create-nx-workspace',
+          command: 'pnpm',
+          args: expect.arrayContaining([
+            'dlx',
+            'create-nx-workspace@23.1.1',
+            '--packageManager=pnpm',
+          ]),
+        }),
+        expect.objectContaining({
+          id: 'install-plugins',
+          command: 'pnpm',
+          args: expect.arrayContaining(['add', '--save-dev', '--save-exact']),
+        }),
+        expect.objectContaining({
+          id: 'generate-desktop',
+          command: 'pnpm',
+          args: expect.arrayContaining([
+            'dlx',
+            'create-tauri-app@4.6.2',
+            '--manager',
+            'pnpm',
+          ]),
+        }),
+        expect.objectContaining({
+          id: 'generate-web',
+          command: 'pnpm',
+          args: expect.arrayContaining(['exec', 'nx', 'generate']),
+        }),
+        expect.objectContaining({
+          id: 'verify-generated-projects',
+          command: 'pnpm',
+        }),
+      ]),
+    );
+    expect(renderPlan(plan)).not.toContain('npm exec');
+  });
+
   it('uses exact package versions and a deterministic ordered plan', () => {
     const plan = createPlan(
       options('/workspace', { apps: ['site', 'web'], verify: 'build' }),
@@ -462,144 +531,166 @@ describe('executePlan', () => {
     });
   });
 
-  it('normalizes the generated Desktop app and registers Cargo inference', async () => {
-    const cwd = await fixture();
-    const plan = createPlan(
-      options(cwd, { apps: ['desktop'], verify: 'none' }),
-    );
-    let initialized = false;
-    const runner: CommandRunner = async ({ args }) => {
-      if (args.includes('@megamono/plugin:workspace-init')) {
+  it.each(['npm', 'pnpm'] as const)(
+    'normalizes the generated Desktop app and registers Cargo inference with %s',
+    async (packageManager) => {
+      const cwd = await fixture();
+      const plan = createPlan(
+        options(cwd, { apps: ['desktop'], packageManager, verify: 'none' }),
+      );
+      let initialized = false;
+      const runner: CommandRunner = async ({ args }) => {
+        if (args.includes('@megamono/plugin:workspace-init')) {
+          await writeFile(
+            resolve(plan.options.stagingDirectory, 'megamono.json'),
+            JSON.stringify({
+              version: 1,
+              platforms: ['rust'],
+              services: { runner: 'none', requirements: {} },
+            }),
+          );
+          return;
+        }
+        if (initialized) return;
+        initialized = true;
+        await mkdir(
+          resolve(plan.options.stagingDirectory, 'apps/desktop/src-tauri/src'),
+          { recursive: true },
+        );
         await writeFile(
-          resolve(plan.options.stagingDirectory, 'megamono.json'),
+          resolve(plan.options.stagingDirectory, 'package.json'),
           JSON.stringify({
-            version: 1,
-            platforms: ['rust'],
-            services: { runner: 'none', requirements: {} },
+            name: 'root',
+            private: true,
+            ...(packageManager === 'npm' ? { workspaces: ['packages/*'] } : {}),
           }),
         );
-        return;
-      }
-      if (initialized) return;
-      initialized = true;
-      await mkdir(
-        resolve(plan.options.stagingDirectory, 'apps/desktop/src-tauri/src'),
-        { recursive: true },
-      );
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'package.json'),
-        JSON.stringify({
-          name: 'root',
-          private: true,
-          workspaces: ['packages/*'],
-        }),
-      );
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'nx.json'),
-        JSON.stringify({ plugins: ['@nx/js/typescript'] }),
-      );
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'megamono.json'),
-        JSON.stringify({ version: 1 }),
-      );
-      await writeFile(
-        resolve(plan.options.stagingDirectory, 'apps/desktop/package.json'),
-        JSON.stringify({
-          name: 'appsdesktop',
-          private: true,
-          dependencies: {
-            '@tauri-apps/api': '^2',
-            '@tauri-apps/plugin-opener': '^2',
-          },
-          devDependencies: {
-            '@tauri-apps/cli': '^2',
-            typescript: '~5.6.2',
-            vite: '^6.0.3',
-          },
-        }),
-      );
-      await writeFile(
-        resolve(
-          plan.options.stagingDirectory,
-          'apps/desktop/src-tauri/Cargo.toml',
-        ),
-        `[package]\nname = "appsdesktop"\n\n[lib]\nname = "appsdesktop_lib"\n\n[build-dependencies]\ntauri-build = { version = "2", features = [] }\n\n[dependencies]\ntauri = { version = "2", features = [] }\ntauri-plugin-opener = "2"\nserde = { version = "1", features = ["derive"] }\nserde_json = "1"\n`,
-      );
-      await writeFile(
-        resolve(
-          plan.options.stagingDirectory,
-          'apps/desktop/src-tauri/src/main.rs',
-        ),
-        'fn main() {\n    appsdesktop_lib::run()\n}\n',
-      );
-      await writeFile(
-        resolve(
-          plan.options.stagingDirectory,
-          'apps/desktop/src-tauri/tauri.conf.json',
-        ),
-        JSON.stringify({
-          productName: 'appsdesktop',
-          identifier: 'com.appsdesktop.app',
-          app: { windows: [{ title: 'appsdesktop' }] },
-        }),
-      );
-    };
-    await executePlan(plan, runner);
+        if (packageManager === 'pnpm') {
+          await writeFile(
+            resolve(plan.options.stagingDirectory, 'pnpm-workspace.yaml'),
+            "packages:\n  - 'packages/*'\n",
+          );
+        }
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'nx.json'),
+          JSON.stringify({ plugins: ['@nx/js/typescript'] }),
+        );
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'megamono.json'),
+          JSON.stringify({ version: 1 }),
+        );
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'apps/desktop/package.json'),
+          JSON.stringify({
+            name: 'appsdesktop',
+            private: true,
+            dependencies: {
+              '@tauri-apps/api': '^2',
+              '@tauri-apps/plugin-opener': '^2',
+            },
+            devDependencies: {
+              '@tauri-apps/cli': '^2',
+              typescript: '~5.6.2',
+              vite: '^6.0.3',
+            },
+          }),
+        );
+        await writeFile(
+          resolve(
+            plan.options.stagingDirectory,
+            'apps/desktop/src-tauri/Cargo.toml',
+          ),
+          `[package]\nname = "appsdesktop"\n\n[lib]\nname = "appsdesktop_lib"\n\n[build-dependencies]\ntauri-build = { version = "2", features = [] }\n\n[dependencies]\ntauri = { version = "2", features = [] }\ntauri-plugin-opener = "2"\nserde = { version = "1", features = ["derive"] }\nserde_json = "1"\n`,
+        );
+        await writeFile(
+          resolve(
+            plan.options.stagingDirectory,
+            'apps/desktop/src-tauri/src/main.rs',
+          ),
+          'fn main() {\n    appsdesktop_lib::run()\n}\n',
+        );
+        await writeFile(
+          resolve(
+            plan.options.stagingDirectory,
+            'apps/desktop/src-tauri/tauri.conf.json',
+          ),
+          JSON.stringify({
+            productName: 'appsdesktop',
+            identifier: 'com.appsdesktop.app',
+            app: { windows: [{ title: 'appsdesktop' }] },
+          }),
+        );
+      };
+      await executePlan(plan, runner);
 
-    const rootPackage = JSON.parse(
-      await readFile(resolve(plan.options.destination, 'package.json'), 'utf8'),
-    );
-    expect(rootPackage.workspaces).toEqual(['apps/*', 'packages/*']);
-    expect(rootPackage.devDependencies).toMatchObject({ vite: '8.1.4' });
-    const desktopPackage = JSON.parse(
-      await readFile(
-        resolve(plan.options.destination, 'apps/desktop/package.json'),
+      const rootPackage = JSON.parse(
+        await readFile(
+          resolve(plan.options.destination, 'package.json'),
+          'utf8',
+        ),
+      );
+      if (packageManager === 'npm') {
+        expect(rootPackage.workspaces).toEqual(['apps/*', 'packages/*']);
+      } else {
+        expect(rootPackage.workspaces).toBeUndefined();
+        expect(
+          await readFile(
+            resolve(plan.options.destination, 'pnpm-workspace.yaml'),
+            'utf8',
+          ),
+        ).toBe("packages:\n  - 'packages/*'\n  - 'apps/*'\n");
+      }
+      expect(rootPackage.devDependencies).toMatchObject({ vite: '8.1.4' });
+      const desktopPackage = JSON.parse(
+        await readFile(
+          resolve(plan.options.destination, 'apps/desktop/package.json'),
+          'utf8',
+        ),
+      );
+      expect(desktopPackage).toMatchObject({
+        name: 'acme-tools-desktop',
+        dependencies: {
+          '@tauri-apps/api': '2.11.1',
+          '@tauri-apps/plugin-opener': '2.5.4',
+        },
+        devDependencies: {
+          '@tauri-apps/cli': '2.11.4',
+          typescript: '6.0.3',
+          vite: '8.1.4',
+        },
+      });
+      const cargo = await readFile(
+        resolve(plan.options.destination, 'apps/desktop/src-tauri/Cargo.toml'),
         'utf8',
-      ),
-    );
-    expect(desktopPackage).toMatchObject({
-      name: 'acme-tools-desktop',
-      dependencies: {
-        '@tauri-apps/api': '2.11.1',
-        '@tauri-apps/plugin-opener': '2.5.4',
-      },
-      devDependencies: {
-        '@tauri-apps/cli': '2.11.4',
-        typescript: '6.0.3',
-        vite: '8.1.4',
-      },
-    });
-    const cargo = await readFile(
-      resolve(plan.options.destination, 'apps/desktop/src-tauri/Cargo.toml'),
-      'utf8',
-    );
-    expect(cargo).toContain('name = "acme-tools-desktop"');
-    expect(cargo).toContain('version = "=2.11.5"');
-    expect(cargo).not.toMatch(/version\s*=\s*"2"/);
-    const main = await readFile(
-      resolve(plan.options.destination, 'apps/desktop/src-tauri/src/main.rs'),
-      'utf8',
-    );
-    expect(main).toContain('acme_tools_desktop_lib::run()');
-    expect(main).not.toContain('appsdesktop_lib::run()');
-    const nxJson = JSON.parse(
-      await readFile(resolve(plan.options.destination, 'nx.json'), 'utf8'),
-    );
-    expect(nxJson.plugins).toContainEqual({
-      plugin: '@megamono/nx-cargo',
-      options: {
-        scope: 'acme-tools',
-        tauriTargetName: 'tauri-build',
-      },
-    });
-    const megamono = JSON.parse(
-      await readFile(
-        resolve(plan.options.destination, 'megamono.json'),
+      );
+      expect(cargo).toContain('name = "acme-tools-desktop"');
+      expect(cargo).toContain('version = "=2.11.5"');
+      expect(cargo).not.toMatch(/version\s*=\s*"2"/);
+      const main = await readFile(
+        resolve(plan.options.destination, 'apps/desktop/src-tauri/src/main.rs'),
         'utf8',
-      ),
-    );
-    expect(megamono.platforms).toEqual(['rust']);
-  });
+      );
+      expect(main).toContain('acme_tools_desktop_lib::run()');
+      expect(main).not.toContain('appsdesktop_lib::run()');
+      const nxJson = JSON.parse(
+        await readFile(resolve(plan.options.destination, 'nx.json'), 'utf8'),
+      );
+      expect(nxJson.plugins).toContainEqual({
+        plugin: '@megamono/nx-cargo',
+        options: {
+          scope: 'acme-tools',
+          tauriTargetName: 'tauri-build',
+        },
+      });
+      const megamono = JSON.parse(
+        await readFile(
+          resolve(plan.options.destination, 'megamono.json'),
+          'utf8',
+        ),
+      );
+      expect(megamono.platforms).toEqual(['rust']);
+    },
+  );
 
   it('preserves the nx-cloudflare Worker generator output through commit', async () => {
     const cwd = await fixture();

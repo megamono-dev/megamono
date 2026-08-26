@@ -69,6 +69,7 @@ export async function main(
         install: { type: 'string' },
         verify: { type: 'string' },
         'local-packages': { type: 'string' },
+        'package-manager': { type: 'string' },
         'cleanup-on-failure': { type: 'boolean', default: false },
         'dry-run': { type: 'boolean', default: false },
       },
@@ -92,6 +93,7 @@ export async function main(
       install: booleanValue('--install', parsed.values.install, true),
       verify: parsed.values.verify,
       localPackages: parsed.values['local-packages'],
+      packageManager: parsed.values['package-manager'],
       cleanupOnFailure: parsed.values['cleanup-on-failure'],
       dryRun: parsed.values['dry-run'],
     });
