@@ -38,6 +38,13 @@ async function writeInferredAppPackage(
   if (app === 'site' || app === 'web') {
     await mkdir(resolve(root, 'src/pages'), { recursive: true });
   }
+  if (app === 'api') {
+    await mkdir(resolve(root, 'src'), { recursive: true });
+    await writeFile(
+      resolve(root, 'src/main.ts'),
+      'const port = process.env.PORT || 3000;\n',
+    );
+  }
   await writeFile(
     resolve(root, 'package.json'),
     JSON.stringify({ nx: { name: `acme-tools-${app}` } }),
@@ -60,6 +67,22 @@ async function writeInferredE2ePackage(
       nx: { name: `acme-tools-${app}-e2e` },
     }),
   );
+  if (app === 'api') {
+    const support = resolve(root, 'src/support');
+    await mkdir(support, { recursive: true });
+    await writeFile(
+      resolve(support, 'test-setup.ts'),
+      "const port = process.env.PORT ?? '3000';\n",
+    );
+    await writeFile(
+      resolve(support, 'global-setup.ts'),
+      'const port = process.env.PORT ? Number(process.env.PORT) : 3000;\n',
+    );
+    await writeFile(
+      resolve(support, 'global-teardown.ts'),
+      'const port = process.env.PORT ? Number(process.env.PORT) : 3000;\n',
+    );
+  }
 }
 
 async function writeInferredThemePackage(
@@ -613,6 +636,27 @@ describe('executePlan', () => {
         ],
       },
     });
+    expect(
+      await readFile(
+        resolve(plan.options.destination, 'apps/api/src/main.ts'),
+        'utf8',
+      ),
+    ).toContain('process.env.PORT || 3333');
+    for (const supportFile of [
+      'test-setup.ts',
+      'global-setup.ts',
+      'global-teardown.ts',
+    ]) {
+      expect(
+        await readFile(
+          resolve(
+            plan.options.destination,
+            `apps/api-e2e/src/support/${supportFile}`,
+          ),
+          'utf8',
+        ),
+      ).toContain('3333');
+    }
   });
 
   it('commits a staged workspace over an empty destination', async () => {
@@ -1059,6 +1103,20 @@ describe('executePlan', () => {
         expect(e2e).toContain(
           `${app === 'site' ? 'Marketing site' : 'Web app'}`,
         );
+        const playwright = await readFile(
+          resolve(
+            plan.options.destination,
+            `apps/${app}-e2e/playwright.config.mts`,
+          ),
+          'utf8',
+        );
+        expect(playwright).toContain(
+          `process.env['PORT'] || '${app === 'site' ? '4200' : '4201'}'`,
+        );
+        expect(playwright).toContain(
+          `npm exec nx -- run acme-tools-${app}:dev --port=${app === 'site' ? '4200' : '4201'}`,
+        );
+        expect(playwright).toContain('reuseExistingServer: false');
         expect(
           JSON.parse(
             await readFile(

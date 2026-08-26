@@ -1323,6 +1323,83 @@ async function configureE2ePackage(
     `${JSON.stringify(packageJson, null, 2)}\n`,
     'utf8',
   );
+
+  const port = { api: 3333, site: 4200, web: 4201 }[app];
+  if (app === 'api') {
+    const replacements = [
+      [
+        resolve(plan.options.stagingDirectory, 'apps/api/src/main.ts'),
+        'process.env.PORT || 3000',
+        `process.env.PORT || ${port}`,
+      ],
+      [
+        resolve(
+          plan.options.stagingDirectory,
+          'apps/api-e2e/src/support/test-setup.ts',
+        ),
+        "process.env.PORT ?? '3000'",
+        `process.env.PORT ?? '${port}'`,
+      ],
+      [
+        resolve(
+          plan.options.stagingDirectory,
+          'apps/api-e2e/src/support/global-setup.ts',
+        ),
+        ': 3000',
+        `: ${port}`,
+      ],
+      [
+        resolve(
+          plan.options.stagingDirectory,
+          'apps/api-e2e/src/support/global-teardown.ts',
+        ),
+        ': 3000',
+        `: ${port}`,
+      ],
+    ] as const;
+    for (const [path, current, replacement] of replacements) {
+      if (!(await pathExists(path))) continue;
+      const source = await readFile(path, 'utf8');
+      await writeFile(path, source.replace(current, replacement), 'utf8');
+    }
+    return;
+  }
+
+  const nx =
+    plan.options.packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
+  await writeFile(
+    resolve(
+      plan.options.stagingDirectory,
+      `apps/${app}-e2e/playwright.config.mts`,
+    ),
+    `import { defineConfig, devices } from '@playwright/test';
+import { workspaceRoot } from '@nx/devkit';
+import { nxE2EPreset } from '@nx/playwright/preset';
+
+const port = process.env['PORT'] || '${port}';
+const baseURL = process.env['BASE_URL'] || \`http://localhost:\${port}\`;
+
+export default defineConfig({
+  ...nxE2EPreset(import.meta.dirname, { testDir: './src' }),
+  use: {
+    baseURL,
+    trace: 'on-first-retry',
+  },
+  webServer: {
+    command: '${nx} run ${plan.options.scope}-${app}:dev --port=${port}',
+    url: baseURL,
+    reuseExistingServer: false,
+    cwd: workspaceRoot,
+  },
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  ],
+});
+`,
+    'utf8',
+  );
 }
 
 const appLabels: Record<AppId, string> = {

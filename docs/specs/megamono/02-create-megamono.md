@@ -108,6 +108,8 @@ The Nx placeholder page is replaced by a repository-owned onboarding billboard. 
 
 New Nest applications explicitly enable ESLint and emit their Jest/Supertest e2e project. Greenfield lint violations are errors. Existing-workspace adoption and conversion retain their separate warning-first migration contract.
 
+Generated servers use non-overlapping development defaults so their e2e suites cannot connect to the wrong application: API uses `3333`, site uses `4200`, and web uses `4201`. Every e2e command owns its server lifecycle, refuses to reuse an unknown process on that port, and runs as a separate verification step so Nx tears it down before starting the next suite. `PORT` and `BASE_URL` remain supported overrides where applicable.
+
 Desktop scaffolding invokes the exact `create-tauri-app` version in `@megamono/plugin/compatibility.json` with the selected package manager, `vanilla-ts` template, and Tauri 2. The bootstrap then normalizes the upstream output to `apps/desktop`: the JavaScript package, Cargo package, Tauri product, and inferred Nx project are all named `<repo>-desktop`; the application identifier is `com.<repo>.desktop`; `apps/*` is registered in the selected workspace format; and `@megamono/nx-cargo` is added to `nx.json` with `scope:<repo>` and `tauriTargetName:tauri-build`. The distinct target name preserves the upstream `tauri` script without colliding with the cacheable inferred Tauri build. Every JavaScript and Rust dependency emitted by the upstream template is replaced with its exact tested compatibility pin before installation or graph construction.
 
 ### CLI contract
