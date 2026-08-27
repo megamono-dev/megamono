@@ -94,6 +94,17 @@
           "command": "node packages/plugin/e2e/collections-local-registry.e2e.mjs",
           "cwd": "."
         }
+      },
+      "e2e-playstack-yalc": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/playstack-yalc.e2e.mjs",
+          "cwd": "."
+        }
       }
     },
     "tags": [

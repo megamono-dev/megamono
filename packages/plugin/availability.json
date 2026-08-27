@@ -112,18 +112,16 @@
       "gate": "The external mail package and local-preview fixture contract is unavailable."
     },
     "playstack-lint": {
-      "status": "gated",
+      "status": "available",
       "factory": "./dist/generators/playstack-lint/playstack-lint",
       "schema": "./dist/generators/playstack-lint/schema.json",
-      "description": "Add Playstack API lint rules in warning mode",
-      "gate": "The packed @playstack/lint Free-tier cross-repository fixture contract has not passed."
+      "description": "Add Playstack API lint rules in warning mode"
     },
     "playstack-skills": {
-      "status": "gated",
+      "status": "available",
       "factory": "./dist/generators/playstack-skills/playstack-skills",
       "schema": "./dist/generators/playstack-skills/schema.json",
-      "description": "Install and synchronize Playstack product skills",
-      "gate": "The packed @playstack/cli and @playstack/skills cross-repository fixture contract has not passed."
+      "description": "Install and synchronize Playstack product skills"
     },
     "integration-fathom": {
       "status": "reserved",

@@ -133,7 +133,7 @@
       "dependencyType": "development",
       "requiredTier": "free",
       "compatibleVersion": "0.1.0-beta.1",
-      "availability": "gated"
+      "availability": "available"
     },
     {
       "package": "@playstack/lint",
@@ -142,7 +142,7 @@
       "dependencyType": "development",
       "requiredTier": "free",
       "compatibleVersion": "0.1.0-beta.1",
-      "availability": "gated"
+      "availability": "available"
     },
     {
       "package": "@playstack/skills",
@@ -151,7 +151,7 @@
       "dependencyType": "development",
       "requiredTier": "free",
       "compatibleVersion": "0.1.0-beta.1",
-      "availability": "gated"
+      "availability": "available"
     },
     {
       "package": "@playstack/admin",

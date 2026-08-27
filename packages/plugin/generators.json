@@ -49,6 +49,16 @@
       "factory": "./dist/generators/docs-audit/docs-audit",
       "schema": "./dist/generators/docs-audit/schema.json",
       "description": "Create an audit skeleton against a named specification"
+    },
+    "playstack-lint": {
+      "factory": "./dist/generators/playstack-lint/playstack-lint",
+      "schema": "./dist/generators/playstack-lint/schema.json",
+      "description": "Add Playstack API lint rules in warning mode"
+    },
+    "playstack-skills": {
+      "factory": "./dist/generators/playstack-skills/playstack-skills",
+      "schema": "./dist/generators/playstack-skills/schema.json",
+      "description": "Install and synchronize Playstack product skills"
     }
   }
 }
