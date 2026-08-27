@@ -12,7 +12,7 @@ describe('Cloudflare compatibility', () => {
   it('stays aligned with the canonical compatibility registry', () => {
     const registry = JSON.parse(
       readFileSync(
-        resolve(import.meta.dirname, '../../../plugin/compatibility.json'),
+        resolve(__dirname, '../../../plugin/compatibility.json'),
         'utf8',
       ),
     ) as {
