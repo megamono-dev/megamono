@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -15,6 +15,9 @@ import {
 } from './repository-import-execution';
 
 const executeFile = promisify(execFile);
+const filterRepoAvailable =
+  spawnSync('git', ['filter-repo', '--version'], { stdio: 'ignore' }).status ===
+  0;
 
 async function run(root: string, command: string, args: readonly string[]) {
   return executeFile(command, [...args], { cwd: root, encoding: 'utf8' });
@@ -432,20 +435,14 @@ describe('repository import subtree execution', { timeout: 20_000 }, () => {
         ])
       ).stdout,
     ).toBe('2\n');
-    const subjects = (
-      await run(targetRoot, 'git', ['log', '--format=%s'])
-    ).stdout;
+    const subjects = (await run(targetRoot, 'git', ['log', '--format=%s']))
+      .stdout;
     expect(subjects).not.toContain('source seed');
     expect(subjects).not.toContain('source follow-up');
     expect(subjects).toContain('graft imported-app squash');
     expect(subjects).toContain('import imported-app');
     const decision = (
-      await run(targetRoot, 'git', [
-        'show',
-        '--format=',
-        '--name-only',
-        'HEAD',
-      ])
+      await run(targetRoot, 'git', ['show', '--format=', '--name-only', 'HEAD'])
     ).stdout
       .split('\n')
       .find((path) => path.startsWith('docs/decisions/'));
@@ -461,6 +458,85 @@ describe('repository import subtree execution', { timeout: 20_000 }, () => {
       (await run(sourceRoot, 'git', ['status', '--porcelain=v1'])).stdout,
     ).toBe('');
   });
+
+  it.runIf(filterRepoAvailable)(
+    'rewrites preserved source history beneath the destination prefix for filter-repo',
+    async () => {
+      const baseSha = (
+        await run(targetRoot, 'git', ['rev-parse', 'HEAD'])
+      ).stdout.trim();
+      const options = {
+        source: sourceRoot,
+        name: 'imported-app',
+        expectedSourceSha: sourceSha,
+        history: 'filter-repo',
+        verify: 'none',
+        execute: true,
+        resolutions: {
+          aliases: { '@fixture/shared/*': '@imported/shared/*' },
+          environment: { SHARED_TOKEN: 'IMPORTED_SHARED_TOKEN' },
+        },
+      } as const;
+
+      const result = await executeRepositoryImport(
+        targetRoot,
+        await analyzeRepositoryImport({ workspaceRoot: targetRoot, options }),
+        options,
+        async () => undefined,
+      );
+
+      expect(result.marker.history).toBe('filter-repo');
+      expect(
+        (
+          await run(targetRoot, 'git', [
+            'rev-list',
+            '--count',
+            `${baseSha}..HEAD`,
+          ])
+        ).stdout,
+      ).toBe('4\n');
+      const subjects = (await run(targetRoot, 'git', ['log', '--format=%s']))
+        .stdout;
+      expect(subjects).toContain('source seed');
+      expect(subjects).toContain('source follow-up');
+      expect(subjects).toContain('graft imported-app filter-repo history');
+      expect(subjects).toContain('import imported-app');
+      await expect(
+        run(targetRoot, 'git', ['cat-file', '-e', `${sourceSha}^{commit}`]),
+      ).rejects.toMatchObject({ code: 128 });
+      const rewrittenPaths = (
+        await run(targetRoot, 'git', [
+          'ls-tree',
+          '-r',
+          '--name-only',
+          `${result.graftCommit}^2`,
+        ])
+      ).stdout
+        .trim()
+        .split('\n');
+      expect(rewrittenPaths.length).toBeGreaterThan(0);
+      expect(
+        rewrittenPaths.every((path) => path.startsWith('apps/imported-app/')),
+      ).toBe(true);
+      expect(
+        (
+          await run(targetRoot, 'git', [
+            'log',
+            '--follow',
+            '--format=%s',
+            '--',
+            'apps/imported-app/src/index.mjs',
+          ])
+        ).stdout,
+      ).toContain('source seed');
+      expect(
+        (await run(targetRoot, 'git', ['status', '--porcelain=v1'])).stdout,
+      ).toBe('');
+      expect(
+        (await run(sourceRoot, 'git', ['status', '--porcelain=v1'])).stdout,
+      ).toBe('');
+    },
+  );
 
   it('treats a completed import with a different history strategy as a conflict', async () => {
     const options = {

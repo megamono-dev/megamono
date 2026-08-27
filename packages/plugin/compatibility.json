@@ -75,5 +75,7 @@
     "serde": "1.0.229",
     "serde_json": "1.0.151"
   },
-  "externalTools": {}
+  "externalTools": {
+    "git-filter-repo": ">=2.47 <3"
+  }
 }

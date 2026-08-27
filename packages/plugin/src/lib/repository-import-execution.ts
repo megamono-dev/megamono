@@ -2,11 +2,13 @@ import { execFile, spawn } from 'node:child_process';
 import {
   access,
   mkdir,
+  mkdtemp,
   readFile,
   rename,
   rm,
   writeFile,
 } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import { promisify } from 'node:util';
 import matter = require('gray-matter');
@@ -162,6 +164,49 @@ async function runFile(
     maxBuffer: 10 * 1024 * 1024,
   });
   return result.stdout.trim();
+}
+
+async function prepareFilterRepoHistory(
+  analysis: RepositoryImportAnalysis,
+  staging: string,
+): Promise<string> {
+  try {
+    await runFile(tmpdir(), 'git', ['filter-repo', '--version']);
+  } catch (error) {
+    throw new ImportPreflightError(
+      'import-filter-repo-missing',
+      'The filter-repo strategy requires a compatible git-filter-repo executable on PATH.',
+      { cause: error },
+    );
+  }
+
+  const root = await mkdtemp(join(tmpdir(), 'megamono-filter-repo-'));
+  try {
+    await runFile(root, 'git', ['init', '--initial-branch=import-root']);
+    await runFile(root, 'git', [
+      'fetch',
+      '--no-tags',
+      analysis.source,
+      analysis.sourceSha,
+    ]);
+    await runFile(root, 'git', ['checkout', '-B', 'import-root', 'FETCH_HEAD']);
+    await runFile(root, 'git', [
+      'filter-repo',
+      '--force',
+      '--refs',
+      'refs/heads/import-root',
+      '--to-subdirectory-filter',
+      staging,
+    ]);
+    return root;
+  } catch (error) {
+    await rm(root, { recursive: true, force: true });
+    throw new ImportPreflightError(
+      'import-filter-repo-incompatible',
+      'The installed git-filter-repo could not rewrite the approved source history with the required flags.',
+      { cause: error },
+    );
+  }
 }
 
 function markerPath(name: string): string {
@@ -587,13 +632,13 @@ function importDecision(
     history === 'subtree'
       ? 'Subtree preserves the source commit graph and creates a legible graft point without rewriting source commit SHAs.'
       : history === 'filter-repo'
-        ? 'Filter-repo preserves the source commit graph beneath the staging prefix and improves path-following continuity, while acknowledging that every imported commit receives a new SHA.'
+        ? 'Filter-repo preserves the source commit graph beneath the final destination prefix and improves path-following continuity, while acknowledging that every imported commit receives a new SHA.'
         : 'Squash records the source at its approved immutable SHA as one snapshot commit; the source commit graph is intentionally not carried into the target repository.';
   const historyConsequence =
     history === 'subtree'
       ? 'History before the graft remains reachable, but path-following across the staging-prefix integration move may degrade.'
       : history === 'filter-repo'
-        ? 'Imported history remains reachable with rewritten staging-prefixed paths, but its commit SHAs differ from the source repository.'
+        ? 'Imported history remains reachable with rewritten destination-prefixed paths, but its commit SHAs differ from the source repository.'
         : 'Only the approved source snapshot is represented in target history; earlier source commits are not ancestors of the imported project.';
   return {
     path: `decisions/${compactDate}-${slug}.md`,
@@ -760,12 +805,6 @@ export async function executeRepositoryImport(
       'Execution requires an explicit history strategy.',
     );
   }
-  if (history === 'filter-repo') {
-    throw new ImportPreflightError(
-      'import-history-strategy-gated',
-      'Filter-repo execution remains fixture-gated.',
-    );
-  }
   if (!options.expectedSourceSha) {
     throw new ImportDecisionError(
       'import-expected-source-sha-required',
@@ -807,6 +846,10 @@ export async function executeRepositoryImport(
   }
 
   const staging = `.megamono-import/${analysis.name}`;
+  const filteredRepository =
+    history === 'filter-repo'
+      ? await prepareFilterRepoHistory(analysis, analysis.destination)
+      : undefined;
   let phase = 'history';
   let graftCommit: string | undefined;
   let failedCommand: string | undefined;
@@ -826,7 +869,7 @@ export async function executeRepositoryImport(
         '-m',
         `graft ${analysis.name} history at ${analysis.sourceSha.slice(0, 12)}`,
       ]);
-    } else {
+    } else if (history === 'squash') {
       failedCommand = `git fetch --no-tags ${analysis.source} ${analysis.sourceSha}`;
       await runFile(workspaceRoot, 'git', [
         'fetch',
@@ -847,6 +890,30 @@ export async function executeRepositoryImport(
         '-m',
         `graft ${analysis.name} squash at ${analysis.sourceSha.slice(0, 12)}`,
       ]);
+    } else {
+      if (!filteredRepository) {
+        throw new ImportPreflightError(
+          'import-filter-repo-incompatible',
+          'The rewritten source repository was not prepared.',
+        );
+      }
+      failedCommand = `git fetch --no-tags ${filteredRepository} refs/heads/import-root`;
+      await runFile(workspaceRoot, 'git', [
+        'fetch',
+        '--no-tags',
+        filteredRepository,
+        'refs/heads/import-root',
+      ]);
+      failedCommand =
+        'git merge --allow-unrelated-histories --no-ff FETCH_HEAD';
+      await runFile(workspaceRoot, 'git', [
+        'merge',
+        '--allow-unrelated-histories',
+        '--no-ff',
+        '-m',
+        `graft ${analysis.name} filter-repo history at ${analysis.sourceSha.slice(0, 12)}`,
+        'FETCH_HEAD',
+      ]);
     }
     graftCommit = await runFile(workspaceRoot, 'git', ['rev-parse', 'HEAD']);
 
@@ -854,7 +921,9 @@ export async function executeRepositoryImport(
     failedCommand = undefined;
     const destination = join(workspaceRoot, analysis.destination);
     await mkdir(dirname(destination), { recursive: true });
-    await rename(join(workspaceRoot, staging), destination);
+    if (history !== 'filter-repo') {
+      await rename(join(workspaceRoot, staging), destination);
+    }
     await integratePackageManifests(workspaceRoot, analysis);
     await migrateRepositoryRoutes(workspaceRoot, analysis);
     await applyCollisionRewrites(workspaceRoot, analysis);
@@ -946,6 +1015,10 @@ export async function executeRepositoryImport(
     );
     if (error instanceof ImportExecutionError) throw error;
     throw new ImportExecutionError(phase, failedCommand, { cause: error });
+  } finally {
+    if (filteredRepository) {
+      await rm(filteredRepository, { recursive: true, force: true });
+    }
   }
 }
 

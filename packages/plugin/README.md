@@ -99,8 +99,11 @@ app-owned files retain their topology under the destination. Imports into source
 documentation or repository infrastructure that will be routed elsewhere are
 blocked before the graft. Imports of packages already owned by target Nx
 projects become an explicit graph contract that is checked after installation
-and recorded in the completion marker. The `filter-repo` and `squash` strategies
-remain gated pending their dedicated fixtures.
+and recorded in the completion marker. Subtree preserves the source graph with
+its original SHAs, filter-repo rewrites the graph beneath the staging prefix,
+and squash carries only the approved snapshot. Filter-repo requires a compatible
+`git-filter-repo` executable on `PATH`; squash additionally requires
+`--allow-history-loss`.
 
 ## Validate a workspace
 
