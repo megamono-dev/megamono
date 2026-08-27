@@ -1,0 +1,280 @@
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  runMegamonoCli,
+  type CommandResult,
+  type MegamonoCliIo,
+} from './cli.js';
+
+interface Invocation {
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly cwd: string;
+  readonly capture: boolean;
+}
+
+const fixtures: string[] = [];
+
+async function json(path: string, value: unknown): Promise<void> {
+  await mkdir(join(path, '..'), { recursive: true });
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function workspace(
+  manager: 'npm' | 'pnpm',
+  packages: readonly string[] = ['nx', '@megamono/plugin'],
+): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'megamono-cli-'));
+  fixtures.push(root);
+  await json(join(root, 'package.json'), {
+    name: 'fixture',
+    private: true,
+    devDependencies: Object.fromEntries(
+      packages.map((name) => [name, '0.0.1']),
+    ),
+  });
+  await json(join(root, 'nx.json'), {});
+  await writeFile(
+    join(root, manager === 'pnpm' ? 'pnpm-lock.yaml' : 'package-lock.json'),
+    manager === 'pnpm' ? 'lockfileVersion: 9\n' : '{"lockfileVersion":3}\n',
+  );
+  for (const packageName of packages) {
+    await json(
+      join(root, 'node_modules', ...packageName.split('/'), 'package.json'),
+      { name: packageName, version: '0.0.1' },
+    );
+  }
+  return root;
+}
+
+function io(
+  cwd: string,
+  responder?: (invocation: Invocation) => CommandResult,
+): {
+  readonly value: MegamonoCliIo;
+  readonly invocations: Invocation[];
+  readonly stdout: string[];
+  readonly stderr: string[];
+} {
+  const invocations: Invocation[] = [];
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  return {
+    invocations,
+    stdout,
+    stderr,
+    value: {
+      cwd,
+      version: '0.0.1-test',
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message),
+      runCommand: async (command, args, options) => {
+        const invocation = {
+          command,
+          args: [...args],
+          cwd: options.cwd,
+          capture: options.capture ?? false,
+        };
+        invocations.push(invocation);
+        return responder?.(invocation) ?? { exitCode: 0 };
+      },
+    },
+  };
+}
+
+afterEach(async () => {
+  await Promise.all(
+    fixtures
+      .splice(0)
+      .map((fixture) => rm(fixture, { recursive: true, force: true })),
+  );
+});
+
+describe('@megamono/cli', () => {
+  it('delegates pnpm init options unchanged to the local generator', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(join(root, 'apps', 'web'));
+    await mkdir(harness.value.cwd, { recursive: true });
+
+    const result = await runMegamonoCli(
+      ['init', '--survey', '--only=docs,agents'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(harness.invocations).toEqual([
+      {
+        command: 'pnpm',
+        args: [
+          'exec',
+          'nx',
+          'generate',
+          '@megamono/plugin:workspace-init',
+          '--survey',
+          '--only=docs,agents',
+        ],
+        cwd: root,
+        capture: false,
+      },
+    ]);
+  });
+
+  it('uses the npm command family and propagates delegated failures', async () => {
+    const root = await workspace('npm');
+    const harness = io(root, () => ({ exitCode: 4 }));
+
+    const result = await runMegamonoCli(
+      ['init', '--interactive=false', '--yes'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(4);
+    expect(harness.invocations[0]).toMatchObject({
+      command: 'npm',
+      args: [
+        'exec',
+        'nx',
+        '--',
+        'generate',
+        '@megamono/plugin:workspace-init',
+        '--interactive=false',
+        '--yes',
+      ],
+    });
+  });
+
+  it('installs requested Playstack packages from yalc after Megamono init', async () => {
+    const root = await workspace('pnpm');
+    const store = await mkdtemp(join(tmpdir(), 'megamono-cli-yalc-'));
+    fixtures.push(store);
+    for (const packageName of ['@playstack/cli', '@playstack/auth']) {
+      await json(
+        join(
+          store,
+          'packages',
+          ...packageName.split('/'),
+          '0.1.0',
+          'package.json',
+        ),
+        { name: packageName, version: '0.1.0' },
+      );
+    }
+    const harness = io(root, (invocation) =>
+      invocation.command === 'yalc' && invocation.args[0] === 'dir'
+        ? { exitCode: 0, stdout: store }
+        : { exitCode: 0 },
+    );
+
+    const result = await runMegamonoCli(
+      [
+        'init',
+        '--playstack-packages=@playstack/auth',
+        '--local-packages=yalc',
+        '--only=docs',
+      ],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(harness.invocations).toEqual([
+      {
+        command: 'yalc',
+        args: ['dir'],
+        cwd: root,
+        capture: true,
+      },
+      {
+        command: 'pnpm',
+        args: [
+          'exec',
+          'nx',
+          'generate',
+          '@megamono/plugin:workspace-init',
+          '--only=docs',
+        ],
+        cwd: root,
+        capture: false,
+      },
+      {
+        command: 'yalc',
+        args: ['add', '@playstack/cli', '--dev', '--no-pure'],
+        cwd: root,
+        capture: false,
+      },
+      {
+        command: 'yalc',
+        args: ['add', '@playstack/auth', '--no-pure'],
+        cwd: root,
+        capture: false,
+      },
+      {
+        command: 'pnpm',
+        args: ['install'],
+        cwd: root,
+        capture: false,
+      },
+      {
+        command: 'pnpm',
+        args: ['exec', 'playstack', 'init'],
+        cwd: root,
+        capture: false,
+      },
+    ]);
+  });
+
+  it('keeps a combined Playstack survey write-free when its CLI is absent', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+
+    const result = await runMegamonoCli(
+      ['init', '--survey', '--playstack'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(harness.invocations).toHaveLength(1);
+    expect(harness.invocations[0]?.args).toContain('--survey');
+    expect(harness.stdout.join('\n')).toContain('Playstack survey deferred');
+  });
+
+  it('explains how to install a missing local plugin without mutating', async () => {
+    const root = await workspace('pnpm', ['nx']);
+    const harness = io(root);
+
+    const result = await runMegamonoCli(['init'], harness.value);
+
+    expect(result.exitCode).toBe(3);
+    expect(harness.invocations).toEqual([]);
+    expect(harness.stderr.join('\n')).toContain(
+      'pnpm add --save-dev @megamono/plugin',
+    );
+  });
+
+  it('rejects invalid Playstack package names as CLI usage errors', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+
+    const result = await runMegamonoCli(
+      ['init', '--playstack-packages=left-pad'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(2);
+    expect(harness.invocations).toEqual([]);
+  });
+
+  it('prints help and version without requiring a workspace', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-cli-empty-'));
+    fixtures.push(root);
+    const harness = io(root);
+
+    expect((await runMegamonoCli(['--version'], harness.value)).exitCode).toBe(
+      0,
+    );
+    expect((await runMegamonoCli([], harness.value)).exitCode).toBe(0);
+    expect(harness.stdout[0]).toBe('0.0.1-test');
+    expect(harness.stdout[1]).toContain('Usage: megamono');
+  });
+});

@@ -1,0 +1,64 @@
+{
+  "name": "@megamono/cli",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "megamono": "./dist/bin.js"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@megamono/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo",
+    "README.md"
+  ],
+  "nx": {
+    "targets": {
+      "build": {
+        "executor": "@nx/js:tsc",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "outputPath": "packages/cli/dist",
+          "main": "packages/cli/src/index.ts",
+          "tsConfig": "packages/cli/tsconfig.lib.json",
+          "rootDir": "packages/cli/src",
+          "generatePackageJson": false
+        }
+      }
+    },
+    "tags": [
+      "platform:node",
+      "scope:shared",
+      "type:util"
+    ]
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=11 <12",
+    "npm": ">=11 <12"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/megamono-dev/megamono.git"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "restricted"
+  }
+}
