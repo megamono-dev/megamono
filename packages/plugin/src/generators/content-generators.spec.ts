@@ -92,7 +92,7 @@ describe('content collection generators', () => {
     ).toContain("from '@playstack/content'");
     expect(
       tree.read('packages/editorial-content/build-content.mjs', 'utf8'),
-    ).toContain("configName: \"content-editorial-content\"");
+    ).toContain('configName: "content-editorial-content"');
     expect(readJson(tree, 'tsconfig.base.json')).toMatchObject({
       compilerOptions: {
         paths: {
@@ -105,6 +105,26 @@ describe('content collection generators', () => {
     expect(tree.read('.gitignore', 'utf8')).toContain(
       'packages/editorial-content/.content-collections/',
     );
+  });
+
+  it('rebases a root yalc package address into the generated package', async () => {
+    const tree = fixture();
+    writeJson(tree, 'package.json', {
+      name: '@acme/source',
+      private: true,
+      workspaces: ['packages/*'],
+      dependencies: {
+        '@playstack/content': 'file:.yalc/@playstack/content',
+      },
+    });
+
+    await contentLibGenerator(tree, { name: 'articles' });
+
+    expect(readJson(tree, 'packages/articles/package.json')).toMatchObject({
+      dependencies: {
+        '@playstack/content': 'file:../../.yalc/@playstack/content',
+      },
+    });
   });
 
   it('adds deterministic schema-backed types and reruns as a no-op', async () => {
@@ -123,7 +143,7 @@ describe('content collection generators', () => {
     expect(config.indexOf('const article =')).toBeLessThan(
       config.indexOf('const blogPost ='),
     );
-    expect(config).toContain("directory: \"content/blog-post\"");
+    expect(config).toContain('directory: "content/blog-post"');
     expect(config).toContain('playstackContentTransforms.normalizeDate');
     expect(config).toContain('playstackContentTransforms.readingTime');
     expect(config).toContain('playstackContentTransforms.extractToc');
@@ -189,9 +209,9 @@ export const blogPostSchema = z.object({
         name: 'post',
       }),
     ).rejects.toThrow(/already exists/);
-    expect(
-      treeTypes(typeCollision, 'packages/articles/package.json'),
-    ).toEqual([]);
+    expect(treeTypes(typeCollision, 'packages/articles/package.json')).toEqual(
+      [],
+    );
 
     const changedConfig = fixture();
     await contentLibGenerator(changedConfig, { name: 'articles' });

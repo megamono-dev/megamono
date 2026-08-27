@@ -25,9 +25,34 @@ export interface ContentCollectionMarker {
 
 interface ContentPackageManifest {
   readonly name?: string;
+  readonly dependencies?: Readonly<Record<string, unknown>>;
+  readonly devDependencies?: Readonly<Record<string, unknown>>;
+  readonly optionalDependencies?: Readonly<Record<string, unknown>>;
   readonly megamono?: {
     readonly contentCollection?: ContentCollectionMarker;
   };
+}
+
+function playstackContentDependencyVersion(
+  tree: Tree,
+  targetRoot: string,
+): string {
+  const manifest = readJsonValue<ContentPackageManifest>(tree, 'package.json');
+  const current = [
+    manifest.dependencies?.['@playstack/content'],
+    manifest.devDependencies?.['@playstack/content'],
+    manifest.optionalDependencies?.['@playstack/content'],
+  ].find((value): value is string => typeof value === 'string');
+  if (!current || !/^(?:file:|link:|workspace:)/.test(current)) {
+    return playstackContentVersion;
+  }
+  if (current.startsWith('workspace:')) return current;
+  const separator = current.indexOf(':') + 1;
+  const protocol = current.slice(0, separator);
+  const address = current.slice(separator);
+  if (posix.isAbsolute(address)) return current;
+  const relative = posix.relative(targetRoot, address);
+  return `${protocol}${relative.startsWith('.') ? relative : `./${relative}`}`;
 }
 
 export interface ContentCollection {
@@ -264,7 +289,9 @@ export function createContentCollection(
       );
     }
     const expectedConfig = renderContentConfig(marker.types);
-    if (tree.read(`${root}/content-collections.ts`, 'utf8') !== expectedConfig) {
+    if (
+      tree.read(`${root}/content-collections.ts`, 'utf8') !== expectedConfig
+    ) {
       throw new Error(
         `Content library ${projectName} configuration differs from its Megamono marker; reconcile it before rerunning content-lib.`,
       );
@@ -308,7 +335,7 @@ export function createContentCollection(
           },
         },
         dependencies: {
-          '@playstack/content': playstackContentVersion,
+          '@playstack/content': playstackContentDependencyVersion(tree, root),
         },
         devDependencies: {
           '@content-collections/core': contentCollectionsVersion,
