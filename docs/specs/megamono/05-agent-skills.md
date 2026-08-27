@@ -216,7 +216,7 @@ Megamono's skills govern the repo and are installed into it. Playstack's travels
 
 **The format is the shared thing.** Repository-governance skills are installed into the repository; Playstack product skills may be distributed through a dedicated `@playstack/skills` package and synchronized by `@playstack/cli`. Ownership of the corpus determines distribution.
 
-`@megamono/plugin:playstack-skills` may install and invoke that package-owned synchronization contract for a Megamono workspace, but the resulting Playstack skill files remain Playstack-owned. They are not registered in `.megamono/artifacts.json`, and Megamono does not copy the sync, update, merge, or ejection logic. The generator remains fixture-gated until the Playstack packages publish a stable command and a non-conflicting qualified spec ID.
+`@megamono/plugin:playstack-skills` installs and invokes that package-owned synchronization contract for a Megamono workspace, but the resulting Playstack skill files remain Playstack-owned. They are not registered in `.megamono/artifacts.json`, and Megamono does not copy the sync, update, merge, or ejection logic. The published generator is backed by the stable `playstack skills sync` command and a packed npm/pnpm fixture that consumes the Playstack packages through yalc.
 
 ### Prior art
 

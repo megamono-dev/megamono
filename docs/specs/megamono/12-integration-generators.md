@@ -123,7 +123,7 @@ The lint generator begins in warning mode so first-time wiring does not fail CI 
 
 The skills generator delegates destination, provenance, drift, and ejection behavior to the Playstack CLI. Megamono supplies only the repository root and package-manager-aware invocation. A missing CLI, unsupported package-contract version, destination conflict, or nonzero sync result is reported using the common recovery report after file preflight; Megamono does not fall back to copying bundled skill templates.
 
-Both generator names remain excluded from the published collection until `@playstack/lint`, `@playstack/skills`, and the applicable `@playstack/cli` command publish Free-tier compatibility contracts and fixtures under non-conflicting qualified spec IDs.
+Both generator names are included in the published collection because `@playstack/lint`, `@playstack/skills`, and the applicable `@playstack/cli` command now have compatible Free-tier contracts. The acceptance fixture installs packed Megamono output, consumes Playstack packages from yalc, and exercises npm and pnpm workspaces.
 
 ### Ordering note
 
@@ -168,7 +168,7 @@ Generators emit secret **names**, never values:
 
 - Wave 1 implements `integration-sentry` for Next.js Pages Router, Nest, Expo, and Cloudflare Worker projects. A surface combination without a maintained fixture is refused rather than partially configured.
 - Fathom, Postmark, and Stripe names and option contracts are reserved for later waves. They do not appear in the published generator collection until their templates and referenced Playstack fixtures pass the same acceptance suite.
-- Playstack lint and skills wiring are reserved behind their external package fixtures. They remain independently runnable and are never an implicit side effect of another generator.
+- Playstack lint and skills wiring are published after passing their external package fixtures. They remain independently runnable and are never an implicit side effect of another generator.
 - Templates version with `@megamono/plugin`; every template also declares an independent template revision and compatible SDK range. A template change requires a plugin release, avoiding a second distribution channel.
 - Playstack's package-owned update workflow never rewrites Megamono integration templates. Template drift remains diagnosis-only until a maintainer releases and explicitly runs an updated Megamono generator.
 - On-demand diagnosis uses `npm exec nx run megamono-docs:health -- --checks=integration-template-drift --no-issue`. It shares the scheduled health implementation and never mutates integrations.

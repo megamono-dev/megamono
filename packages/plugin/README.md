@@ -36,12 +36,17 @@ transforms, and deterministic schema-backed document types. Their descriptors
 remain fixture-gated until the packed Free-tier `@playstack/content` contract is
 available; implementation presence alone does not publish the generator names.
 
-The `playstack-lint` and `playstack-skills` implementations follow the same
-availability rule. Lint adds the selected Playstack preset in warning mode;
+The published `playstack-lint` and `playstack-skills` generators follow the
+same ownership rule. Lint adds the selected Playstack preset in warning mode;
 skills installs the compatible CLI and corpus packages, then delegates all
-file ownership, drift, and synchronization to `playstack skills sync`. Neither
-name enters the published collection until its packed cross-repository fixture
-passes.
+file ownership, drift, and synchronization to `playstack skills sync`. Their
+packed cross-repository fixture consumes Playstack through yalc and verifies
+local-reference preservation, real lint and skill execution, ownership
+separation, and stable reruns with npm and pnpm:
+
+```sh
+npm exec nx -- run @megamono/plugin:e2e-playstack-yalc
+```
 
 ## Convert an existing application repository
 

@@ -97,9 +97,9 @@ That distinction is what keeps the direction rule true in practice rather than o
 | `@playstack/notifications` | `@megamono/plugin:emails`               | Typed delivery request and recipient locale | Free          | Gated on external fixture contract                   |
 | `@playstack/validation`    | `@megamono/plugin:emails`               | Runtime props validation                    | Free          | Gated on external fixture contract                   |
 | `@playstack/i18n`          | `@megamono/plugin:emails`               | Recipient-locale catalog rendering          | Free          | Gated on external fixture contract                   |
-| `@playstack/cli`           | Playstack-wiring generators             | Package-owned artifact sync and merge       | Free          | Gated on external CLI fixture contract               |
-| `@playstack/lint`          | `@megamono/plugin:playstack-lint`       | Playstack-specific ESLint presets           | Free          | Gated on external fixture contract                   |
-| `@playstack/skills`        | `@megamono/plugin:playstack-skills`     | Playstack product guidance                  | Free          | Gated on external fixture contract                   |
+| `@playstack/cli`           | Playstack-wiring generators             | Package-owned artifact sync and merge       | Free          | Available for verified skills sync; other uses gated |
+| `@playstack/lint`          | `@megamono/plugin:playstack-lint`       | Playstack-specific ESLint presets           | Free          | Available; packed npm/pnpm yalc fixture passed       |
+| `@playstack/skills`        | `@megamono/plugin:playstack-skills`     | Playstack product guidance                  | Free          | Available; packed npm/pnpm yalc fixture passed       |
 | `@playstack/admin`         | Reserved `playstack-admin` generator    | Headless admin runtime                      | Free          | Not published in v1                                  |
 | `@playstack/admin-ui`      | `playstack-admin --ui=chakra`           | Optional compositions                       | Pro allowed   | Not published in v1                                  |
 | `@playstack/queues`        | Reserved `playstack-queues` generator   | Queue runtime                               | Free          | No accepted external package contract; not published |
