@@ -20,7 +20,8 @@
     "less",
     "nx",
     "sharp",
-    "unrs-resolver"
+    "unrs-resolver",
+    "workerd"
   ],
   "scaffoldPackages": {
     "create-nx-workspace": "23.1.1",

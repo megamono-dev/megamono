@@ -36,6 +36,12 @@ const matrixCases = [
   ...allApps.map((app) => ({ id: app, apps: [app], packageManager: 'pnpm' })),
   { id: 'all', apps: allApps, packageManager: 'pnpm' },
   { id: 'web-npm', apps: ['web'], packageManager: 'npm' },
+  {
+    id: 'web-no-install',
+    apps: ['web'],
+    packageManager: 'npm',
+    install: false,
+  },
 ];
 const requestedCases = new Set(
   (process.env.MEGAMONO_MATRIX_CASES ?? '')
@@ -132,15 +138,6 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function createInvocation(packageManager, args) {
-  return packageManager === 'pnpm'
-    ? { command: 'pnpm', args: ['dlx', 'create-megamono@0.0.1', ...args] }
-    : {
-        command: 'npm',
-        args: ['exec', '--yes', 'create-megamono@0.0.1', '--', ...args],
-      };
-}
-
 function nxInvocation(packageManager, args) {
   return packageManager === 'pnpm'
     ? { command: 'pnpm', args: ['exec', 'nx', ...args] }
@@ -156,7 +153,7 @@ async function exists(path) {
   }
 }
 
-async function verifyCase(root, testCase, environment) {
+async function verifyCase(root, testCase, environment, createCliPath) {
   const scope = `matrix-${testCase.id}`;
   const destination = resolve(root, scope);
   const staging = resolve(root, `megamono-${scope}-staging`);
@@ -166,18 +163,23 @@ async function verifyCase(root, testCase, environment) {
   process.stdout.write(
     `create-megamono selection matrix: ${testCase.id} (${testCase.apps.join(',')})\n`,
   );
-  const creation = createInvocation(packageManager, [
-    `Matrix ${testCase.id}`,
-    `--directory=${scope}`,
-    `--apps=${testCase.apps.join(',')}`,
-    `--package-manager=${packageManager}`,
-    '--interactive=false',
-    `--verify=${verifyMode}`,
-  ]);
-  const created = await run(creation.command, creation.args, {
-    cwd: root,
-    env: caseEnvironment,
-  });
+  const created = await run(
+    process.execPath,
+    [
+      createCliPath,
+      `Matrix ${testCase.id}`,
+      `--directory=${scope}`,
+      `--apps=${testCase.apps.join(',')}`,
+      `--package-manager=${packageManager}`,
+      `--install=${String(testCase.install ?? true)}`,
+      '--interactive=false',
+      `--verify=${verifyMode}`,
+    ],
+    {
+      cwd: root,
+      env: caseEnvironment,
+    },
+  );
   assert(
     created.stdout.includes('megamono:check'),
     `${testCase.id}: packed CLI did not execute config verification.`,
@@ -187,6 +189,20 @@ async function verifyCase(root, testCase, environment) {
     !(await exists(staging)),
     `${testCase.id}: staging remained after atomic commit.`,
   );
+  if (testCase.install === false) {
+    assert(
+      !(await exists(resolve(destination, 'node_modules'))),
+      `${testCase.id}: no-install destination retained node_modules.`,
+    );
+    const installInvocation =
+      packageManager === 'pnpm'
+        ? { command: 'pnpm', args: ['install', '--frozen-lockfile'] }
+        : { command: 'npm', args: ['ci'] };
+    await run(installInvocation.command, installInvocation.args, {
+      cwd: destination,
+      env: caseEnvironment,
+    });
+  }
 
   const megamono = JSON.parse(
     await readFile(resolve(destination, 'megamono.json'), 'utf8'),
@@ -414,7 +430,7 @@ await writeFile(
     {
       storage: resolve(temporaryRoot, 'registry-storage'),
       uplinks: {
-        npmjs: { url: 'https://registry.npmjs.org/', cache: false },
+        npmjs: { url: 'https://registry.npmjs.org/' },
       },
       packages: {
         '**': {
@@ -482,10 +498,33 @@ try {
       { env: { ...environment, npm_config_cache: publishCache } },
     );
   }
+  const launcher = resolve(temporaryRoot, 'launcher');
+  await mkdir(launcher);
+  await writeFile(
+    resolve(launcher, 'package.json'),
+    '{"name":"create-megamono-matrix-launcher","private":true}\n',
+    'utf8',
+  );
+  await run(
+    'npm',
+    [
+      'install',
+      '--save-exact',
+      'create-megamono@0.0.1',
+      '--registry',
+      registry,
+    ],
+    { cwd: launcher, env: { ...environment, npm_config_cache: publishCache } },
+  );
+  const createCliPath = resolve(
+    launcher,
+    'node_modules/create-megamono/dist/cli.js',
+  );
+  assert(await exists(createCliPath), 'Packed create-megamono CLI is missing.');
   await rm(publishCache, { recursive: true, force: true });
 
   for (const testCase of cases) {
-    await verifyCase(temporaryRoot, testCase, environment);
+    await verifyCase(temporaryRoot, testCase, environment, createCliPath);
   }
   succeeded = true;
   process.stdout.write(

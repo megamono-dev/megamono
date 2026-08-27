@@ -100,7 +100,8 @@ export type PlanStep =
         | 'configure-mobile'
         | 'configure-theme'
         | 'configure-site'
-        | 'configure-web';
+        | 'configure-web'
+        | 'dehydrate-workspace';
     }
   | { kind: 'commit'; id: 'commit-workspace' }
   | { kind: 'springbar'; id: 'configure-springbar' };
@@ -301,12 +302,6 @@ export function normalizeCreateOptions(
   if (apps.includes('apple') && platform !== 'darwin') {
     throw new CreateMegamonoError('The apple app selection requires macOS.', 3);
   }
-  if (input.install === false) {
-    throw new CreateMegamonoError(
-      '--install=false is reserved until the bundled no-install generation path passes fixtures.',
-      3,
-    );
-  }
   const integrations = normalizedList(input.integrations);
   if (integrations.length > 0) {
     throw new CreateMegamonoError(
@@ -471,7 +466,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         '--interactive=false',
         '--nxCloud=skip',
         '--skipGit',
-        `--skipInstall=${String(!options.install)}`,
+        '--skipInstall=false',
       ]),
       'parent',
     ),
@@ -509,43 +504,41 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     if (app === 'desktop') plugins.add('@megamono/nx-cargo');
     if (app === 'apple') plugins.add('@megamono/nx-apple');
   }
-  if (options.install) {
-    const localPackages = new Set(
-      options.localPackages === 'yalc' ? requiredMegamonoPackages(options) : [],
-    );
-    const packages = [...plugins]
-      .filter((name) => !localPackages.has(name))
-      .sort()
-      .map(packagePin);
+  const localPackages = new Set(
+    options.localPackages === 'yalc' ? requiredMegamonoPackages(options) : [],
+  );
+  const packages = [...plugins]
+    .filter((name) => !localPackages.has(name))
+    .sort()
+    .map(packagePin);
+  steps.push(
+    commandStep(
+      'install-plugins',
+      options.packageManager,
+      packageInstallArgs(options.packageManager, packages),
+      'staging',
+    ),
+  );
+  if (localPackages.size > 0) {
     steps.push(
       commandStep(
-        'install-plugins',
+        'install-local-packages',
+        'yalc',
+        [
+          'add',
+          ...[...localPackages].sort().map(packagePin),
+          '--dev',
+          '--no-pure',
+        ],
+        'staging',
+      ),
+      commandStep(
+        'hydrate-local-packages',
         options.packageManager,
-        packageInstallArgs(options.packageManager, packages),
+        packageInstallArgs(options.packageManager),
         'staging',
       ),
     );
-    if (localPackages.size > 0) {
-      steps.push(
-        commandStep(
-          'install-local-packages',
-          'yalc',
-          [
-            'add',
-            ...[...localPackages].sort().map(packagePin),
-            '--dev',
-            '--no-pure',
-          ],
-          'staging',
-        ),
-        commandStep(
-          'hydrate-local-packages',
-          options.packageManager,
-          packageInstallArgs(options.packageManager),
-          'staging',
-        ),
-      );
-    }
   }
 
   if (options.apps.includes('site') || options.apps.includes('web')) {
@@ -595,16 +588,14 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         ),
       );
       steps.push({ kind: 'configure', id: 'configure-desktop' });
-      if (options.install) {
-        steps.push(
-          commandStep(
-            'install-desktop-dependencies',
-            options.packageManager,
-            packageInstallArgs(options.packageManager),
-            'staging',
-          ),
-        );
-      }
+      steps.push(
+        commandStep(
+          'install-desktop-dependencies',
+          options.packageManager,
+          packageInstallArgs(options.packageManager),
+          'staging',
+        ),
+      );
       continue;
     }
     const definition = appGenerator[app];
@@ -735,6 +726,9 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         ),
       );
     }
+  }
+  if (!options.install) {
+    steps.push({ kind: 'configure', id: 'dehydrate-workspace' });
   }
   steps.push({ kind: 'commit', id: 'commit-workspace' });
   if (options.serviceRunner === 'springbar') {
@@ -904,6 +898,8 @@ export function renderPlan(plan: CreationPlan): string {
       if (step.kind === 'configure') {
         if (step.id === 'configure-package-manager')
           return `${index + 1}. [staging] record ${plan.options.packageManager} and configure package-manager policy`;
+        if (step.id === 'dehydrate-workspace')
+          return `${index + 1}. [staging] remove bootstrap node_modules for an install-free destination`;
         if (step.id === 'configure-desktop')
           return `${index + 1}. [staging] normalize apps/desktop and register @megamono/nx-cargo`;
         if (step.id === 'configure-theme')
@@ -1882,6 +1878,18 @@ async function commitWorkspace(plan: CreationPlan): Promise<void> {
   }
 }
 
+async function removeInstalledDependencies(directory: string): Promise<void> {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const path = resolve(directory, entry.name);
+    if (entry.name === 'node_modules') {
+      await rm(path, { recursive: true, force: true });
+    } else if (entry.name !== '.git') {
+      await removeInstalledDependencies(path);
+    }
+  }
+}
+
 export async function executePlan(
   plan: CreationPlan,
   runner: CommandRunner = runCommand,
@@ -1897,6 +1905,8 @@ export async function executePlan(
       else if (step.kind === 'configure') {
         if (step.id === 'configure-package-manager')
           await configurePackageManager(plan);
+        else if (step.id === 'dehydrate-workspace')
+          await removeInstalledDependencies(plan.options.stagingDirectory);
         else if (step.id === 'configure-desktop') await configureDesktop(plan);
         else if (step.id === 'configure-theme') await configureTheme(plan);
         else if (step.id === 'configure-api')

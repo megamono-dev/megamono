@@ -167,7 +167,6 @@ describe('normalizeCreateOptions', () => {
     [{ apps: ['unknown'] }, 2, 'Unknown app'],
     [{ integrations: ['sentry'] }, 3, 'fixture gate'],
     [{ apps: ['apple'], platform: 'linux' }, 3, 'requires macOS'],
-    [{ install: false }, 3, 'no-install generation path'],
     [{ localPackages: 'unknown' }, 2, 'local package source'],
     [{ packageManager: 'yarn' }, 2, 'package manager'],
     [{ platform: 'win32' }, 3, 'supports macOS and Linux'],
@@ -182,6 +181,29 @@ describe('normalizeCreateOptions', () => {
 });
 
 describe('createPlan', () => {
+  it('uses a temporary hydrated bootstrap and dehydrates before commit when install is false', () => {
+    const plan = createPlan(
+      options('/workspace', { install: false, verify: 'none' }),
+    );
+    const ids = plan.steps.map((step) => step.id);
+    const createWorkspace = plan.steps.find(
+      (step) => step.kind === 'command' && step.id === 'create-nx-workspace',
+    );
+
+    expect(createWorkspace).toEqual(
+      expect.objectContaining({
+        args: expect.arrayContaining(['--skipInstall=false']),
+      }),
+    );
+    expect(ids).toContain('install-plugins');
+    expect(ids.indexOf('dehydrate-workspace')).toBe(
+      ids.indexOf('commit-workspace') - 1,
+    );
+    expect(renderPlan(plan)).toContain(
+      'remove bootstrap node_modules for an install-free destination',
+    );
+  });
+
   it('projects every supported service through tested Springbar pins', () => {
     const plan = createPlan(
       options('/workspace', {
@@ -568,6 +590,59 @@ describe('executePlan', () => {
     );
   });
 
+  it('commits an install-free workspace with its manifests and lockfile intact', async () => {
+    const cwd = await fixture();
+    const plan = createPlan(
+      options(cwd, {
+        apps: ['worker'],
+        install: false,
+        verify: 'none',
+      }),
+    );
+    let initialized = false;
+    const runner: CommandRunner = async () => {
+      if (initialized) return;
+      initialized = true;
+      await mkdir(resolve(plan.options.stagingDirectory, 'node_modules/pkg'), {
+        recursive: true,
+      });
+      await mkdir(
+        resolve(plan.options.stagingDirectory, 'apps/worker/node_modules/pkg'),
+        { recursive: true },
+      );
+      await writeFile(
+        resolve(plan.options.stagingDirectory, 'package.json'),
+        JSON.stringify({ private: true }),
+      );
+      await writeFile(
+        resolve(plan.options.stagingDirectory, 'package-lock.json'),
+        '{}',
+      );
+    };
+
+    await executePlan(plan, runner);
+
+    expect(
+      JSON.parse(
+        await readFile(
+          resolve(plan.options.destination, 'package.json'),
+          'utf8',
+        ),
+      ),
+    ).toMatchObject({ private: true, packageManager: 'npm@11.17.0' });
+    await expect(
+      readFile(resolve(plan.options.destination, 'package-lock.json'), 'utf8'),
+    ).resolves.toBe('{}');
+    await expect(
+      readFile(resolve(plan.options.destination, 'node_modules/pkg')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      readFile(
+        resolve(plan.options.destination, 'apps/worker/node_modules/pkg'),
+      ),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('refuses a non-empty destination before running commands', async () => {
     const cwd = await fixture();
     const plan = createPlan(options(cwd));
@@ -882,7 +957,7 @@ describe('executePlan', () => {
             'utf8',
           ),
         ).toBe(
-          'packages:\n  - "packages/*"\n  - \'apps/*\'\n\nautoInstallPeers: true\nallowBuilds:\n  "@parcel/watcher": true\n  "@swc/core": true\n  esbuild: true\n  less: true\n  nx: true\n  sharp: true\n  unrs-resolver: true\n',
+          'packages:\n  - "packages/*"\n  - \'apps/*\'\n\nautoInstallPeers: true\nallowBuilds:\n  "@parcel/watcher": true\n  "@swc/core": true\n  esbuild: true\n  less: true\n  nx: true\n  sharp: true\n  unrs-resolver: true\n  workerd: true\n',
         );
       }
       expect(rootPackage.packageManager).toBe(
