@@ -201,10 +201,10 @@ The optional Springbar MCP handoff runs only after that atomic commit because Sp
 The binary never initializes or modifies an existing workspace. Existing Nx workspaces use:
 
 ```text
-npm exec nx g @megamono/plugin:workspace-init
+megamono init
 ```
 
-Its survey, modular adoption, conflict, and recovery contract is normative in `spec-megamono-0014`.
+The direct `@megamono/plugin:workspace-init` generator remains the repository-local automation surface. The CLI may optionally follow it with Playstack's own init and use yalc-published packages, as defined by `spec-megamono-0000` and `spec-megamono-0014`. Its survey, modular adoption, conflict, and recovery contract is normative in `spec-megamono-0014`.
 
 That generator refuses a workspace already carrying `megamono.json` unless it is performing a schema migration.
 
@@ -212,7 +212,7 @@ That generator refuses a workspace already carrying `megamono.json` unless it is
 
 - pnpm and npm are supported. pnpm is the default; other or conflicting lockfiles fail preflight with an explicit compatibility message.
 - Selecting `apple` requires macOS. On Linux it exits `3` before staging; other selections remain supported.
-- The binary creates new workspaces only; `workspace-init` owns existing workspaces.
+- The `create-megamono` binary creates new workspaces only. The separate `megamono init` dispatcher and its delegated `workspace-init` generator own existing workspaces.
 - No analytics or first-party product integration is selected by default.
 - Generated code targets the compatibility ranges in `spec-megamono-0000`; it never resolves unbounded `latest` versions.
 - Upstream generators remain non-interactive. Maintained preset choices are explicit Megamono inputs; raw Nx prompt changes do not alter generated output.

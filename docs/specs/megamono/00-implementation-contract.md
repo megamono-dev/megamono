@@ -9,7 +9,7 @@ summary: Canonical package map, compatibility baseline, command contract, and de
 date: 2026-08-23
 supersedes: null
 references: [spec-megamono-0010, spec-megamono-0014, spec-megamono-0015]
-external_references: [playstack:08-data-and-prisma]
+external_references: [playstack:08-data-and-prisma, playstack:45-cli]
 ---
 
 # 00 — Megamono v1 Implementation Contract
@@ -39,6 +39,7 @@ The core packages declare these ranges in `engines` and `peerDependencies`. `cre
 | Package                   | Responsibility                                                                                      | Runtime dependency?                  |
 | ------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------ |
 | `create-megamono`         | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `pnpm dlx` / `npx` |
+| `@megamono/cli`           | Global `megamono` command that delegates existing-workspace operations to the local Nx plugin       | Global development tool              |
 | `@megamono/plugin`        | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                  |
 | `@megamono/nx-apple`      | Apple project inference, targets, and graph edges                                                   | Dev dependency only                  |
 | `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                  |
@@ -46,7 +47,7 @@ The core packages declare these ranges in `engines` and `peerDependencies`. `cre
 | `@megamono/nx-laravel`    | Composer/Laravel inference and generators; Wave 2                                                   | Dev dependency only                  |
 | `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators; Wave 3                            | Dev dependency only                  |
 
-The initial validation channel publishes `@megamono/plugin`, `@megamono/nx-apple`, and `@megamono/nx-cargo` as restricted packages on npm from `megamono-dev/megamono`. Their canonical names do not change when they graduate to public npm. The unscoped `create-megamono` entry package cannot be private on npm and remains in a separate release group until public promotion.
+The initial validation channel publishes `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, and `@megamono/nx-cargo` as restricted packages on npm from `megamono-dev/megamono`. Their canonical names do not change when they graduate to public npm. The unscoped `create-megamono` entry package cannot be private on npm and remains in a separate release group until public promotion.
 
 Later scoped packages, including `@megamono/nx-cloudflare`, enter the same restricted validation channel before public promotion. Adding a package to this map does not add it to the current release group until its accepted spec and packed-package fixture are complete.
 
@@ -96,6 +97,37 @@ These are stable names, not a promise that every generator ships in the first co
 | Reserved for later wave              | `integration-fathom`, `integration-stripe`, `playstack-admin`, `playstack-queues`                                                                                                                                                        |
 
 The published collection is generated from this availability registry. Requesting a reserved or gated generator returns a diagnostic naming the unsatisfied gate; it never falls through to a partial implementation.
+
+## Dedicated CLI contract
+
+Installing `@megamono/cli` globally exposes the `megamono` executable. V1 intentionally keeps it as a thin dispatcher rather than a second implementation of generators or executors:
+
+```text
+megamono init
+megamono init --survey
+megamono init --playstack --playstack-packages=@playstack/auth,@playstack/accounts
+megamono init --playstack --local-packages=yalc
+megamono help
+megamono --version
+```
+
+`megamono init [...options]` finds the workspace from the current directory, detects exactly one supported lockfile, verifies that the corresponding local package manager, Nx, and `@megamono/plugin` are installed, and delegates to the local `@megamono/plugin:workspace-init` generator. pnpm workspaces run `pnpm exec nx generate`; npm workspaces run `npm exec nx -- generate`. Every option after `init` is forwarded as its own argument without reinterpretation, including `--survey`, `--only`, `--interactive`, `--yes`, and generator options added by a compatible local plugin.
+
+The CLI consumes three init-only options before delegation:
+
+- `--playstack` runs package-owned `playstack init` after Megamono initialization succeeds.
+- `--playstack-packages=<comma-separated @playstack/* names>` installs those product packages before invoking Playstack init and implies `--playstack`.
+- `--local-packages=registry|yalc` selects the source for missing Megamono and Playstack packages; registry is the default.
+
+The local `@megamono/plugin` remains a prerequisite because installing it would dirty the worktree before the generator's safety check. When it is absent, the CLI exits `3` with the exact registry or yalc installation command, and the user commits that dependency change before retrying. `--local-packages=yalc` verifies all requested exact packages in the user-wide yalc store before running workspace-init, so a missing local Playstack artifact cannot leave a half-initialized repository.
+
+After workspace-init succeeds, Playstack setup installs a missing `@playstack/cli` as a dev dependency and requested product packages as application dependencies from the selected source, hydrates the lockfile with the recorded package manager, and invokes the repository-local `playstack init`. Yalc mode uses `yalc add --no-pure` followed by the local package manager's install; it never substitutes a registry version. Playstack owns `playstack.json`, package detection, artifact targets, and all later sync/update behavior.
+
+`--survey` remains write-free. With `--playstack`, it runs `playstack init --survey` only when the local Playstack CLI already exists; otherwise it reports the package additions and command that a real run would perform. It never installs from either source during a survey.
+
+The global CLI never upgrades the plugin, runs a global Nx or Playstack binary, bypasses generator preflight, or contains a copy of either product's init logic. Unknown commands, invalid CLI-only values, and invalid Playstack package names exit `2`. Preflight/source failures exit `3`. Otherwise the CLI returns the delegated process status, including signal failures, without translating generator diagnostics. A failure after workspace-init prints the completed steps and exact retry command; it does not roll back Megamono-owned files.
+
+This design deliberately allows the globally installed CLI and repository-local plugin to update independently. The local plugin and local Nx version remain authoritative for workspace behavior; the CLI owns only command discovery, package-manager selection, delegation, help, and version output.
 
 ## Canonical executor targets
 
@@ -174,6 +206,8 @@ A spec is build-ready when it has `status: accepted`, no unresolved decision tha
 - Packed packages enforce the supported Node, pnpm/npm, Nx, and TypeScript ranges and reject unsupported or ambiguous package managers and operating systems during preflight.
 - `workspace-eject` preserves artifact content, changes only Megamono ownership metadata or managed-section delimiters, and prevents later plugin upgrades from reclaiming the artifact.
 - Every public generator and executor name appears in this contract and resolves from a local-registry installation fixture.
+- A packed `@megamono/cli` installed globally delegates `megamono init --survey` through both pnpm and npm fixtures, refuses missing or ambiguous workspace prerequisites before spawn, forwards generator arguments unchanged, and propagates delegated exit status.
+- Registry and yalc Playstack fixtures prove init-only options are consumed rather than forwarded, requested product packages use the selected source, `@playstack/cli` remains a dev dependency, the local `playstack` binary performs configuration, survey writes nothing, and missing yalc artifacts fail before workspace-init.
 - Generator fixtures prove deterministic planning, dry-run parity, idempotency, conflict handling, stable exit codes, and absence of secret values.
 - Language-plugin fixtures prove current Nx 23 API exports, deterministic project discovery, and affected graph propagation.
 - Gated generators are absent from the published collection until their external contract fixtures pass.

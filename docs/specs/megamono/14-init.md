@@ -20,7 +20,7 @@ references:
     spec-megamono-0009,
     spec-megamono-0011,
   ]
-external_references: []
+external_references: [playstack:45-cli]
 ---
 
 # 14 — Init: Existing Nx Workspace → Megamono
@@ -39,8 +39,32 @@ external_references: []
 
 ```text
 npm install --save-dev @megamono/plugin
-npm exec nx g @megamono/plugin:workspace-init
+npm install --global @megamono/cli
+megamono init
 ```
+
+The direct generator invocation remains supported for repository-local automation:
+
+```text
+npm exec nx -- generate @megamono/plugin:workspace-init
+```
+
+`megamono init` is a thin global dispatcher. It requires the repository-local plugin, selects the local package manager from the lockfile, forwards all init options, and returns the local Nx process status. It does not install dependencies or weaken the preflight below.
+
+### Optional Playstack handoff
+
+Existing monorepos may adopt repository governance and then run Playstack's package-owned setup in one command:
+
+```text
+megamono init \
+  --playstack \
+  --playstack-packages=@playstack/auth,@playstack/accounts \
+  --local-packages=yalc
+```
+
+Megamono completes first. The dispatcher then installs only missing requested Playstack packages from the selected source and invokes the repository-local `playstack init`. It does not interpret Playstack artifacts or write `playstack.json`. Registry is the default source; yalc is an explicit all-local contract and fails preflight when any requested artifact is absent from the yalc store.
+
+For a survey, no packages are installed. An already-installed Playstack CLI contributes its own read-only survey; otherwise the Megamono report lists the deferred package and command plan.
 
 V1 requires the baseline from `spec-megamono-0000`: Node 24, npm 11, Nx 23.1, TypeScript 6.0, and macOS or Linux. A non-npm lockfile, unsupported Nx version, malformed project graph, dirty worktree, or execution on the default branch refuses before mutation. `--survey` is read-only and may run on a dirty or default-branch worktree.
 
@@ -124,7 +148,7 @@ Every run begins with the same deterministic survey:
 - every path or config key a selected module would add or modify.
 
 ```text
-npm exec nx g @megamono/plugin:workspace-init --survey
+megamono init --survey
 ```
 
 `--survey` prints the report and exits with zero writes, no dependency installation, no generated cache, and no Git operation. `--format=json` emits a stable machine-readable form for portfolio triage; the default is human-readable Markdown.
@@ -188,7 +212,7 @@ The completion summary lists modules adopted or skipped, paths added or modified
 
 ## V1 decisions
 
-- `workspace-init` is the only canonical generator name; `@megamono/workspace:init` is not an alias.
+- `workspace-init` is the only canonical generator name; `@megamono/workspace:init` is not an alias. `megamono init` delegates to that generator and is a CLI command, not a second generator alias.
 - Survey classification is conservative and proposal-only. Init never migrates existing docs.
 - Existing substantive agent files are preserved for explicit follow-up rather than merged by heuristic.
 - `ci` is an independent module and uses a dedicated managed workflow; init never takes ownership of an existing repository workflow.
