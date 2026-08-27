@@ -50,6 +50,16 @@
       "schema": "./dist/generators/docs-audit/schema.json",
       "description": "Create an audit skeleton against a named specification"
     },
+    "content-lib": {
+      "factory": "./dist/generators/content-lib/content-lib",
+      "schema": "./dist/generators/content-lib/schema.json",
+      "description": "Create a content collection library"
+    },
+    "content-type": {
+      "factory": "./dist/generators/content-type/content-type",
+      "schema": "./dist/generators/content-type/schema.json",
+      "description": "Add a document type to a content collection library"
+    },
     "playstack-lint": {
       "factory": "./dist/generators/playstack-lint/playstack-lint",
       "schema": "./dist/generators/playstack-lint/schema.json",

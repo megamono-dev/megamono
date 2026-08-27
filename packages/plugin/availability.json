@@ -62,18 +62,16 @@
       "description": "Create an audit skeleton against a named specification"
     },
     "content-lib": {
-      "status": "gated",
+      "status": "available",
       "factory": "./dist/generators/content-lib/content-lib",
       "schema": "./dist/generators/content-lib/schema.json",
-      "description": "Create a content collection library",
-      "gate": "The packed @playstack/content Free-tier fixture contract has not passed."
+      "description": "Create a content collection library"
     },
     "content-type": {
-      "status": "gated",
+      "status": "available",
       "factory": "./dist/generators/content-type/content-type",
       "schema": "./dist/generators/content-type/schema.json",
-      "description": "Add a document type to a content collection library",
-      "gate": "The packed @playstack/content Free-tier fixture contract has not passed."
+      "description": "Add a document type to a content collection library"
     },
     "playstack-auth": {
       "status": "gated",

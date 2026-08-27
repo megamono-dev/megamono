@@ -119,6 +119,25 @@ async function snapshot(fixtureRoot, manager) {
   );
 }
 
+async function contentSnapshot(fixtureRoot) {
+  const contentRoot = resolve(fixtureRoot, 'packages/editorial-content');
+  const paths = [
+    'project.json',
+    'package.json',
+    'content-collections.ts',
+    'build-content.mjs',
+    'schemas/article.ts',
+  ];
+  return Object.fromEntries(
+    await Promise.all(
+      paths.map(async (path) => [
+        path,
+        await digestPath(resolve(contentRoot, path)),
+      ]),
+    ),
+  );
+}
+
 function managerCommand(manager, executable, args) {
   return manager === 'npm'
     ? ['npm', ['exec', executable, '--', ...args]]
@@ -165,6 +184,7 @@ async function createFixture(
     private: true,
     type: 'module',
     packageManager: manager === 'npm' ? 'npm@11.17.0' : 'pnpm@11.24.0',
+    workspaces: ['packages/*'],
     dependencies: {},
     devDependencies: {
       '@megamono/plugin': `file:${pluginTarball}`,
@@ -176,6 +196,12 @@ async function createFixture(
   await writeJson(resolve(fixtureRoot, 'nx.json'), {
     $schema: './node_modules/nx/schemas/nx-schema.json',
     plugins: [],
+  });
+  await writeJson(resolve(fixtureRoot, 'tsconfig.base.json'), {
+    compilerOptions: {
+      baseUrl: '.',
+      paths: {},
+    },
   });
   await writeJson(resolve(fixtureRoot, 'megamono.json'), {
     $schema: './node_modules/@megamono/plugin/schemas/megamono.schema.json',
@@ -214,7 +240,7 @@ async function createFixture(
   if (manager === 'pnpm') {
     await writeFile(
       resolve(fixtureRoot, 'pnpm-workspace.yaml'),
-      'packages: []\n\nautoInstallPeers: true\nallowBuilds:\n  esbuild: true\n  nx: true\n  unrs-resolver: true\n',
+      'packages:\n  - "packages/*"\n\nautoInstallPeers: true\nallowBuilds:\n  esbuild: true\n  nx: true\n  unrs-resolver: true\n',
     );
   }
 
@@ -333,6 +359,78 @@ async function createFixture(
       JSON.stringify(stable),
     `${manager} Playstack generators were not stable on rerun.`,
   );
+
+  await invoke(
+    manager,
+    'nx',
+    [
+      'generate',
+      '@megamono/plugin:content-lib',
+      'editorial-content',
+      '--no-interactive',
+    ],
+    { cwd: fixtureRoot, env: environment },
+  );
+  await invoke(
+    manager,
+    'nx',
+    [
+      'generate',
+      '@megamono/plugin:content-type',
+      'editorial-content',
+      'article',
+      '--no-interactive',
+    ],
+    { cwd: fixtureRoot, env: environment },
+  );
+  const contentRoot = resolve(fixtureRoot, 'packages/editorial-content');
+  await run(manager, ['install'], { cwd: fixtureRoot, env: environment });
+  const contentManifest = JSON.parse(
+    await readFile(resolve(contentRoot, 'package.json'), 'utf8'),
+  );
+  assert(
+    contentManifest.dependencies['@playstack/content'] ===
+      'file:../../.yalc/@playstack/content',
+    `${manager} content library did not consume @playstack/content through yalc.`,
+  );
+  const contentProject = `@megamono-playstack-${manager}-fixture/editorial-content`;
+  await invoke(manager, 'nx', ['run', `${contentProject}:build`], {
+    cwd: fixtureRoot,
+    env: environment,
+  });
+  assert(
+    await exists(resolve(contentRoot, '.content-collections/index.js')),
+    `${manager} content library did not build its generated import.`,
+  );
+  const contentStable = await contentSnapshot(fixtureRoot);
+  await invoke(
+    manager,
+    'nx',
+    [
+      'generate',
+      '@megamono/plugin:content-lib',
+      'editorial-content',
+      '--no-interactive',
+    ],
+    { cwd: fixtureRoot, env: environment },
+  );
+  await invoke(
+    manager,
+    'nx',
+    [
+      'generate',
+      '@megamono/plugin:content-type',
+      'editorial-content',
+      'article',
+      '--no-interactive',
+    ],
+    { cwd: fixtureRoot, env: environment },
+  );
+  assert(
+    JSON.stringify(await contentSnapshot(fixtureRoot)) ===
+      JSON.stringify(contentStable),
+    `${manager} content generators were not stable on rerun.`,
+  );
 }
 
 const temporaryRoot = await mkdtemp(
@@ -372,7 +470,7 @@ try {
   }
   succeeded = true;
   process.stdout.write(
-    'Playstack yalc e2e passed: packed Megamono generators wired lint and synchronized skills idempotently with npm and pnpm.\n',
+    'Playstack yalc e2e passed: packed Megamono generators built content, wired lint, and synchronized skills idempotently with npm and pnpm.\n',
   );
 } finally {
   if (succeeded || process.env.MEGAMONO_E2E_KEEP !== 'true') {

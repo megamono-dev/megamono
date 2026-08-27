@@ -18,7 +18,7 @@
       "dependencyType": "runtime",
       "requiredTier": "free",
       "compatibleVersion": "0.1.0-beta.1",
-      "availability": "gated"
+      "availability": "available"
     },
     {
       "package": "@playstack/observability",
