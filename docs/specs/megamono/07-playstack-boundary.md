@@ -124,7 +124,7 @@ A generator that requires a package-owned artifact remains outside the published
 
 This is a real constraint on Playstack's tiering decisions, not a preference. Moving `@playstack/content` to Plus would silently break every scaffolded content library.
 
-**This table is the enforcement point.** A generator cannot enter the published collection until its row is present, its external fixture contract passes, and every default dependency is available without authentication or payment.
+**This table and its packaged projection in `@megamono/plugin/emissions.json` are the enforcement point.** A generator cannot enter the published collection until its row is present, its external fixture contract passes, and every default dependency is available without authentication or payment. The packaged registry is authoritative for tooling; this table explains the same contract to maintainers.
 
 ### The admin generator is the case to watch
 

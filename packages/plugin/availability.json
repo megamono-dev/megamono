@@ -100,12 +100,24 @@
       "gate": "The Sentry integration fixture contract has not passed."
     },
     "integration-postmark": {
+      "status": "reserved",
+      "gate": "Postmark integration generation is reserved for a later wave."
+    },
+    "theme": {
       "status": "gated",
-      "gate": "The Postmark integration fixture contract has not passed."
+      "gate": "The packed @playstack/chakra Free-tier fixture contract has not passed."
     },
     "emails": {
       "status": "gated",
       "gate": "The external mail package and local-preview fixture contract is unavailable."
+    },
+    "playstack-lint": {
+      "status": "gated",
+      "gate": "The @playstack/lint Free-tier compatibility contract and fixtures are unavailable."
+    },
+    "playstack-skills": {
+      "status": "gated",
+      "gate": "The @playstack/skills sync command contract and fixtures are unavailable."
     },
     "integration-fathom": {
       "status": "reserved",

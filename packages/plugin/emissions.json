@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemaVersion": 1,
+  "emissions": [
+    {
+      "package": "@playstack/chakra",
+      "generators": ["theme"],
+      "purpose": "Semantic tokens and Chakra composition API",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": null,
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/content",
+      "generators": ["content-lib", "content-type"],
+      "purpose": "Content transforms and schemas",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": "0.1.0-beta.1",
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/observability",
+      "generators": ["integration-sentry"],
+      "purpose": "Shared Sentry conventions",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": null,
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/extension",
+      "generators": ["@megamono/nx-extension"],
+      "purpose": "Extension auth handoff, messaging, and storage",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": null,
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/auth",
+      "generators": ["playstack-auth"],
+      "purpose": "Identity runtime and Prisma fragment",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": "0.1.0-beta.1",
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/accounts",
+      "generators": ["playstack-accounts"],
+      "purpose": "Tenancy runtime and Prisma fragment",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": "0.1.0-beta.1",
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/webhooks",
+      "generators": ["playstack-webhooks"],
+      "purpose": "Webhook receipt runtime and Prisma fragment",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": "0.1.0-beta.1",
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/cache",
+      "generators": ["playstack-cache"],
+      "purpose": "Cache provider wiring",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": "0.1.0-beta.1",
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/media",
+      "generators": ["playstack-media"],
+      "purpose": "Media runtime and Prisma fragment",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": null,
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/mail",
+      "generators": ["integration-postmark"],
+      "purpose": "Postmark mail driver wiring",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": "0.1.0-beta.1",
+      "availability": "reserved"
+    },
+    {
+      "package": "@playstack/notifications",
+      "generators": ["emails"],
+      "purpose": "Typed delivery requests and recipient locale",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": null,
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/validation",
+      "generators": ["emails"],
+      "purpose": "Runtime email-props validation",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": "0.1.0-beta.1",
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/i18n",
+      "generators": ["emails"],
+      "purpose": "Recipient-locale catalog rendering",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": null,
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/cli",
+      "generators": [
+        "playstack-auth",
+        "playstack-accounts",
+        "playstack-webhooks",
+        "playstack-cache",
+        "playstack-media",
+        "playstack-skills"
+      ],
+      "purpose": "Package-owned artifact synchronization",
+      "dependencyType": "development",
+      "requiredTier": "free",
+      "compatibleVersion": "0.1.0-beta.1",
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/lint",
+      "generators": ["playstack-lint"],
+      "purpose": "Playstack-specific ESLint presets",
+      "dependencyType": "development",
+      "requiredTier": "free",
+      "compatibleVersion": null,
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/skills",
+      "generators": ["playstack-skills"],
+      "purpose": "Playstack product guidance",
+      "dependencyType": "development",
+      "requiredTier": "free",
+      "compatibleVersion": null,
+      "availability": "gated"
+    },
+    {
+      "package": "@playstack/admin",
+      "generators": ["playstack-admin"],
+      "purpose": "Headless admin runtime",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": null,
+      "availability": "reserved"
+    },
+    {
+      "package": "@playstack/admin-ui",
+      "generators": ["playstack-admin"],
+      "purpose": "Optional Chakra admin compositions",
+      "dependencyType": "runtime",
+      "requiredTier": "pro-optional",
+      "compatibleVersion": null,
+      "availability": "reserved"
+    },
+    {
+      "package": "@playstack/queues",
+      "generators": ["playstack-queues"],
+      "purpose": "Queue runtime",
+      "dependencyType": "runtime",
+      "requiredTier": "free",
+      "compatibleVersion": "0.1.0-beta.1",
+      "availability": "reserved"
+    }
+  ]
+}

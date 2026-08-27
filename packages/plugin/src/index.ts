@@ -79,6 +79,15 @@ export {
   type GeneratorAvailabilityStatus,
 } from './lib/availability';
 export {
+  PLAYSTACK_EMISSIONS,
+  compatiblePlaystackPackageVersion,
+  getPlaystackEmission,
+  type EmissionAvailability,
+  type EmissionDependencyType,
+  type EmissionTier,
+  type PlaystackEmission,
+} from './lib/emissions';
+export {
   ADOPTION_MODULES,
   BUILT_IN_TOPICS,
   DEFAULT_MEGAMONO_CONFIG,

@@ -47,9 +47,9 @@ The core packages declare these ranges in `engines` and `peerDependencies`. `cre
 | `@megamono/nx-laravel`    | Composer/Laravel inference and generators; Wave 2                                                   | Dev dependency only                  |
 | `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators; Wave 3                            | Dev dependency only                  |
 
-The initial validation channel publishes `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, and `@megamono/nx-cargo` as restricted packages on npm from `megamono-dev/megamono`. Their canonical names do not change when they graduate to public npm. The unscoped `create-megamono` entry package cannot be private on npm and remains in a separate release group until public promotion.
+The initial validation channel publishes `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, `@megamono/nx-cargo`, and `@megamono/nx-cloudflare` as restricted packages on npm from `megamono-dev/megamono`. Their canonical names do not change when they graduate to public npm. The unscoped `create-megamono` entry package cannot be private on npm and remains in a separate release group until public promotion.
 
-Later scoped packages, including `@megamono/nx-cloudflare`, enter the same restricted validation channel before public promotion. Adding a package to this map does not add it to the current release group until its accepted spec and packed-package fixture are complete.
+Later scoped packages enter the same restricted validation channel before public promotion. Adding a package to this map does not add it to the current release group until its accepted spec and packed-package fixture are complete.
 
 `docs`, `skills`, `conventions`, `content`, `integrations`, `playstack`, and `generators` are internal modules of `@megamono/plugin`, not separately published packages in v1. This avoids version skew between repo-shaping capabilities that must agree on one `megamono.json` schema.
 
@@ -93,10 +93,12 @@ These are stable names, not a promise that every generator ships in the first co
 | Availability                         | Generators                                                                                                                                                                                                                               |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Unconditional core                   | `workspace-init`, `workspace-eject`, `convert`, `skill-eject`, `docs-init`, `docs-spec`, `docs-decision`, `docs-plan`, `docs-research`, `docs-audit`                                                                                     |
-| Conditional on external fixture gate | `content-lib`, `content-type`, `playstack-auth`, `playstack-accounts`, `playstack-webhooks`, `playstack-cache`, `playstack-media`, `playstack-lint`, `playstack-skills`, `integration-sentry`, `integration-postmark`, `theme`, `emails` |
-| Reserved for later wave              | `integration-fathom`, `integration-stripe`, `playstack-admin`, `playstack-queues`                                                                                                                                                        |
+| Conditional on external fixture gate | `content-lib`, `content-type`, `playstack-auth`, `playstack-accounts`, `playstack-webhooks`, `playstack-cache`, `playstack-media`, `playstack-lint`, `playstack-skills`, `integration-sentry`, `theme`, `emails`                                |
+| Reserved for later wave              | `integration-fathom`, `integration-postmark`, `integration-stripe`, `playstack-admin`, `playstack-queues`                                                                                                                                 |
 
 The published collection is generated from this availability registry. Requesting a reserved or gated generator returns a diagnostic naming the unsatisfied gate; it never falls through to a partial implementation.
+
+`@megamono/plugin/emissions.json` is the machine-readable enforcement point for every `@playstack/*` package a generator may place in a consumer. Each record names its owning generator, dependency class, required tier, compatible version when one has passed fixtures, and current availability. Generator source and packed-output fixtures fail when they encounter an unregistered package. A null compatible version keeps the owning generator gated; generators never embed a substitute version in template code.
 
 ## Dedicated CLI contract
 

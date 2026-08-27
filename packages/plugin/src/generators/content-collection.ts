@@ -7,11 +7,15 @@ import {
 } from '@nx/devkit';
 import { posix } from 'node:path';
 import { isSafeWorkspaceRelativePath } from '../lib/config';
+import { compatiblePlaystackPackageVersion } from '../lib/emissions';
 import { normalizeSlug, readDocsGeneratorConfig } from './docs-record';
 
 const contentCollectionVersion = 1;
 const contentCollectionsVersion = '0.15.2';
-const playstackContentVersion = '0.1.0-beta.1';
+const playstackContentVersion = compatiblePlaystackPackageVersion(
+  'content-lib',
+  '@playstack/content',
+);
 
 export interface ContentCollectionMarker {
   readonly version: number;

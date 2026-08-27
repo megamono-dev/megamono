@@ -10,6 +10,7 @@
     "./package.json": "./package.json",
     "./availability.json": "./availability.json",
     "./compatibility.json": "./compatibility.json",
+    "./emissions.json": "./emissions.json",
     "./schemas/megamono.schema.json": "./schemas/megamono.schema.json",
     "./schemas/artifacts.schema.json": "./schemas/artifacts.schema.json",
     "./eslint": {
@@ -28,6 +29,7 @@
     "!**/*.tsbuildinfo",
     "availability.json",
     "compatibility.json",
+    "emissions.json",
     "schemas",
     "executors.json",
     "generators.json"
