@@ -8,7 +8,13 @@ topics: [generators, email, testing, playstack]
 summary: Defines the typed email-library generator, local preview, seed templates, send-time rendering, and compatibility checks.
 date: 2026-08-23
 supersedes: null
-references: [spec-megamono-0000, spec-megamono-0007]
+references:
+  [
+    spec-megamono-0000,
+    spec-megamono-0003,
+    spec-megamono-0006,
+    spec-megamono-0007,
+  ]
 external_references:
   [
     playstack:02-auth,
@@ -24,7 +30,7 @@ external_references:
 
 # 13 — Email Library Generator
 
-> **Cross-corpus dependency.** `playstack:05-provider-abstractions` and `playstack:21-notifications` currently state that templates stay provider-native. This Megamono spec cannot silently reverse an external contract. The generator remains gated until those contracts publish a code-rendered delivery mode and fixture, as required by `spec-megamono-0000`.
+> **Cross-corpus dependency.** `playstack:05-provider-abstractions` and `playstack:21-notifications` now accept code-rendered delivery as the default while retaining provider-native templates. The generator remains gated until those packages publish the compatible fixtures required by `spec-megamono-0000`; the architecture decision itself is no longer unresolved.
 
 ## What it does
 
@@ -134,7 +140,7 @@ npm exec nx g @megamono/plugin:emails \
   --dry-run
 ```
 
-`--project`, `--directory`, and at least one locale are required in non-interactive mode. `--theme-project` is inferred only when exactly one tagged `type:design-system` library exists; otherwise the generator emits an email-local token file. A supplied theme project must expose the documented token export and may not import an application.
+`--project`, `--directory`, and at least one locale are required in non-interactive mode. `--theme-project` is inferred only when exactly one `type:util`, `capability:theme-tokens` library exists; otherwise the generator emits an email-local token file. A supplied theme project must carry those tags, expose the documented platform-neutral token export, and may not import an application or either web theme system.
 
 V1 renders at send time inside the queue worker. This supports recipient-specific props and the recipient's stored locale without a template publication step. Build-time publication to provider templates and hybrid synchronization are deferred; their drift and credential model need a separate accepted contract.
 
@@ -145,7 +151,7 @@ Every template module exports a typed props schema, subject function, and render
 - Preview is colocated and local-only.
 - Rendering is send-time only.
 - Templates render per locale inside the queue worker using the recipient's stored locale. Catalogs use ICU MessageFormat and email strings have their own namespace, per `playstack:39-i18n`.
-- Code-rendered mode is the generator default only after the Playstack mail and notification contracts accept it; until then the generator is reserved but excluded from the published collection.
+- Code-rendered mode is the accepted generator default. The generator remains excluded from the published collection only until the Playstack mail and notification fixture gate passes.
 
 ## Acceptance criteria
 

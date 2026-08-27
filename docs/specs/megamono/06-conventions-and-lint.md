@@ -52,10 +52,10 @@ scope:<product>
 platform:web | platform:node | platform:worker | platform:apple
 platform:rust | platform:php | platform:extension
 visibility:public | visibility:internal # apps only
-capability:stateful                # optional libraries only
+capability:theme-tokens            # optional platform-neutral util library
 ```
 
-Every project has exactly one `type:` and one `scope:` tag. Executable projects have exactly one `platform:` tag; libraries have zero or one, where zero means platform-neutral. Every app has exactly one visibility tag; non-app projects have none. `capability:stateful` is allowed only on libraries whose public behavior persists state.
+Every project has exactly one `type:` and one `scope:` tag. Executable projects have exactly one `platform:` tag; libraries have zero or one, where zero means platform-neutral. Every app has exactly one visibility tag; non-app projects have none. `capability:theme-tokens` is allowed only on a platform-neutral `type:util` library and must be unique when present.
 
 Dependency direction is fixed:
 
@@ -66,21 +66,30 @@ Dependency direction is fixed:
 - `type:util` imports only `type:util`.
 - A platform-tagged project imports the same platform or a platform-neutral project. `worker` never imports `node`; `extension` never imports `node` unless code lives in a separate build-time project.
 
+When `structure-review` recommends extracting or moving a project, it must propose the complete tag change needed to preserve this matrix. A recommendation that would immediately fail deterministic checks without naming the required tag or dependency correction is incomplete.
+
+### Megamono versus Playstack rules
+
+The ownership sorting test is:
+
+> **Would this rule mean anything in a repository with zero Playstack packages installed?**
+
+Yes means Megamono owns it. No means the applicable Playstack lint package owns it. Megamono may generate the workspace wiring for a Playstack-owned preset, but it does not duplicate the rule or make Playstack depend on Megamono.
+
 ### Rules
 
-| Rule                       | Layer               | Severity                                | Enforces                                                          |
-| -------------------------- | ------------------- | --------------------------------------- | ----------------------------------------------------------------- |
-| `module-boundaries`        | ESLint + structural | Error                                   | Type/scope direction for source and inferred graph edges          |
-| `no-deep-relative-imports` | ESLint              | Error                                   | Cross-project imports use the path alias                          |
-| `require-tags`             | Structural          | Error                                   | Exact tag cardinality and allowed values                          |
-| `naming-convention`        | Structural          | Error                                   | Nest features match `@[repo]/nest-[feature]`                      |
-| `megamono-dev-only`        | Structural          | Error                                   | `@megamono/*` appears only in root `devDependencies`              |
-| `playstack-direction`      | Structural          | Error                                   | No `@playstack/*` manifest or graph edge depends on `@megamono/*` |
-| `platform-boundary`        | ESLint + structural | Error                                   | Platform capability rules above                                   |
-| `docs-*`                   | Docs validator      | Error except corpus direction           | Schema, lifecycle, vocabulary, reference, and visibility rules    |
-| `docs-corpus-direction`    | Docs validator      | Warning                                 | Content-level docs do not reference repo-level IDs or paths       |
-| `no-bare-jsx-strings`      | ESLint              | Warning                                 | User-facing strings go through `t()`                              |
-| `spec-bridge-section`      | Docs validator      | Error once package is tagged `stateful` | Stateful Playstack spec carries its external Bridge contract      |
+| Rule                       | Layer               | Severity                      | Enforces                                                          |
+| -------------------------- | ------------------- | ----------------------------- | ----------------------------------------------------------------- |
+| `module-boundaries`        | ESLint + structural | Error                         | Type/scope direction for source and inferred graph edges          |
+| `no-deep-relative-imports` | ESLint              | Error                         | Cross-project imports use the path alias                          |
+| `require-tags`             | Structural          | Error                         | Exact tag cardinality and allowed values                          |
+| `naming-convention`        | Structural          | Error                         | Nest features match `@[repo]/nest-[feature]`                      |
+| `megamono-dev-only`        | Structural          | Error                         | `@megamono/*` appears only in root `devDependencies`              |
+| `playstack-direction`      | Structural          | Error                         | No `@playstack/*` manifest or graph edge depends on `@megamono/*` |
+| `platform-boundary`        | ESLint + structural | Error                         | Platform capability rules above                                   |
+| `docs-*`                   | Docs validator      | Error except corpus direction | Schema, lifecycle, vocabulary, reference, and visibility rules    |
+| `docs-corpus-direction`    | Docs validator      | Warning                       | Content-level docs do not reference repo-level IDs or paths       |
+| `no-bare-jsx-strings`      | ESLint              | Warning                       | User-facing strings go through `t()`                              |
 
 The docs rules exist to keep retrieval working (`spec-megamono-0004`), and each addresses a failure that is silent rather than loud:
 
@@ -152,6 +161,8 @@ The private release group contains `@megamono/plugin`, `@megamono/nx-apple`, and
 GitHub Packages is not used for Megamono because its npm namespace would have to match the repository owner (`megamono-dev`), which would force a temporary `@megamono-dev/*` rename. A self-hosted registry remains unnecessary.
 
 The generator emits the release config, the tag strategy, and the CI job.
+
+Lint preset changes follow the same compatibility rule as other validation contracts: adding a warning-only diagnostic is a minor release; adding a default error, promoting a warning to an error, or tightening an existing error so previously valid code fails is a breaking release. Existing-workspace adoption may still introduce that diagnostic through the warning-and-ratchet contract below.
 
 ## `megamono.json`
 

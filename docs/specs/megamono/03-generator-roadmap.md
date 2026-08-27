@@ -5,7 +5,7 @@ status: accepted
 visibility: internal
 projects: [megamono]
 topics: [generators, nx, apple, cargo, graph]
-summary: Defines the language-plugin target contract, graph-edge requirements, wave sequencing, and acceptance surfaces.
+summary: Defines language-plugin graph contracts, first-party library generators, wave sequencing, and acceptance surfaces.
 date: 2026-08-23
 supersedes: null
 references:
@@ -13,6 +13,7 @@ references:
     spec-megamono-0000,
     spec-megamono-0006,
     spec-megamono-0007,
+    spec-megamono-0014,
     spec-megamono-0015,
   ]
 external_references: [playstack:26-extension]
@@ -92,6 +93,42 @@ Rust and Tauri.
 - Validation surface: four Tauri surfaces (Springbar, Prismark, Xtension, Promptvisor components).
 
 Cargo target options include `package`, `target`, `features`, `allFeatures`, `noDefaultFeatures`, `profile`, and `targetDir`. Inferred commands always pass `--package` so one Nx task does not accidentally rebuild the whole Cargo workspace.
+
+---
+
+## First-party TypeScript library generators
+
+These generators are distinct from language plugins. Nx already understands their source language, so they scaffold an accepted repository shape and its dependency direction rather than repairing project inference.
+
+### `@megamono/plugin:theme`
+
+The theme generator creates one repository-owned token contract and the selected Chakra system compositions:
+
+```text
+libs/theme-tokens  # palette, type scale, spacing, and radii values
+libs/theme-site    # optional site composition: generous type and wide measure
+libs/theme-app     # optional application composition: denser product UI
+```
+
+`theme-tokens` is tagged `type:util`, `scope:shared`, and `capability:theme-tokens`, with no platform tag. Each selected system library is tagged `type:ui`, `scope:shared`, and `platform:web`. A system may import `theme-tokens`; the token contract never imports a system, and the two systems never import one another. Each system owns its recipes so a marketing-site decision cannot silently alter application UI.
+
+The generator emits `createSystem` composition through `@playstack/chakra`, project metadata, path aliases, build/test/lint targets, and neutral seed values intended to be replaced by the repository. Playstack owns semantic token names and the composition API; Megamono owns the project layout, tags, aliases, and consumer wiring. The generator is excluded from the published collection until `@playstack/chakra` publishes a Free-tier compatibility contract and fixture under a non-conflicting qualified spec ID.
+
+```text
+npm exec nx g @megamono/plugin:theme \
+  --systems=site,app \
+  --directory=libs \
+  --site-project=<optional-project> \
+  --app-project=<optional-project> \
+  --interactive=true \
+  --dry-run
+```
+
+At least one value in `--systems=site,app` is required. A named consumer must exist, be a web application, and match the corresponding selected system. In interactive mode, a consumer is inferred only when exactly one eligible project exists; ambiguity exits `4` before mutation in non-interactive mode. Omitting a consumer creates the selected libraries and aliases without rewriting an application.
+
+The small Chakra module emitted by `create-megamono` remains valid starter composition. The theme generator replaces its imports only when the caller selects that generated application and the starter artifact remains pristine under `spec-megamono-0014`; a modified or repository-owned starter is preserved and receives an actionable migration diff. The generator never deletes an unowned theme module.
+
+This is an early library generator but not a Wave 1 language-plugin prerequisite. It follows the common generator execution contract in `spec-megamono-0000`, including deterministic planning, idempotency, dry-run parity, and conflict safety.
 
 ---
 
@@ -192,3 +229,10 @@ For both `nx-apple` and `nx-cargo`:
 - Missing external toolchains produce a preflight diagnostic; they do not cause an opaque module-load failure.
 - Renamed target options work, outputs remain non-overlapping, and two identical graph builds serialize byte-for-byte identically.
 - One real portfolio project completes every inferred target before the package receives a non-prerelease tag.
+
+For `@megamono/plugin:theme`:
+
+- Fixtures for site-only, app-only, and combined systems generate the exact tag and dependency matrix above and build without a paid package or registry credential.
+- A combined fixture proves site and app systems share only `theme-tokens` and never import one another.
+- Email-theme discovery finds the generated token project through `capability:theme-tokens` without depending on either web system.
+- Re-running is a no-op; dry-run matches execution; ambiguous consumers and modified starter artifacts fail before mutation with recovery guidance.

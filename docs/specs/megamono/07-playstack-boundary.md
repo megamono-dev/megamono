@@ -5,7 +5,7 @@ status: accepted
 visibility: internal
 projects: [megamono]
 topics: [architecture, playstack, dependencies, generators]
-summary: Defines the repo-shaping versus product-shaping boundary and the complete runtime-package emission registry.
+summary: Defines the repo-shaping versus product-shaping boundary and the complete package-emission registry.
 date: 2026-08-23
 supersedes: null
 references:
@@ -52,7 +52,9 @@ When code runs is incidental. Build-time schema fragments and transforms are Pla
 | Nx generators (all)                        | Megamono  | Shape repository files and graph configuration |
 | `create-megamono`                          | Megamono  | Bootstraps a repo                              |
 | Docs IA, skills, hooks                     | Megamono  | Governs the repo                               |
-| Lint rules, tag taxonomy                   | Megamono  | Governs the repo                               |
+| Repository lint rules, tag taxonomy        | Megamono  | Governs the repo                               |
+| Playstack-specific lint rules and skills   | Playstack | Govern Playstack product packages and usage    |
+| Wiring Playstack lint and skills           | Megamono  | Shapes repository configuration                |
 | CI workflow generation                     | Megamono  | Structural; makes `affected` pay off           |
 | Release / versioning / yalc                | Megamono  | Repo mechanics                                 |
 | `@playstack/auth` implementation           | Playstack | Runs in production                             |
@@ -82,6 +84,7 @@ That distinction is what keeps the direction rule true in practice rather than o
 
 | Playstack package          | Generator                               | Purpose                                     | Required tier | V1 state                                             |
 | -------------------------- | --------------------------------------- | ------------------------------------------- | ------------- | ---------------------------------------------------- |
+| `@playstack/chakra`        | `@megamono/plugin:theme`                | Semantic tokens and Chakra composition API  | Free          | Gated on external fixture contract                   |
 | `@playstack/content`       | `@megamono/plugin:content-lib`          | Content transforms                          | Free          | Gated on external fixture contract                   |
 | `@playstack/observability` | `@megamono/plugin:integration-sentry`   | Shared Sentry conventions                   | Free          | Gated on external fixture contract                   |
 | `@playstack/extension`     | `@megamono/nx-extension`                | Auth handoff, messaging, storage            | Free          | Gated on external fixture contract                   |
@@ -95,6 +98,8 @@ That distinction is what keeps the direction rule true in practice rather than o
 | `@playstack/validation`    | `@megamono/plugin:emails`               | Runtime props validation                    | Free          | Gated on external fixture contract                   |
 | `@playstack/i18n`          | `@megamono/plugin:emails`               | Recipient-locale catalog rendering          | Free          | Gated on external fixture contract                   |
 | `@playstack/cli`           | Playstack-wiring generators             | Package-owned artifact sync and merge       | Free          | Gated on external CLI fixture contract               |
+| `@playstack/lint`          | `@megamono/plugin:playstack-lint`       | Playstack-specific ESLint presets           | Free          | Gated on external fixture contract                   |
+| `@playstack/skills`        | `@megamono/plugin:playstack-skills`     | Playstack product guidance                  | Free          | Gated on external fixture contract                   |
 | `@playstack/admin`         | Reserved `playstack-admin` generator    | Headless admin runtime                      | Free          | Not published in v1                                  |
 | `@playstack/admin-ui`      | `playstack-admin --ui=chakra`           | Optional compositions                       | Pro allowed   | Not published in v1                                  |
 | `@playstack/queues`        | Reserved `playstack-queues` generator   | Queue runtime                               | Free          | No accepted external package contract; not published |
@@ -106,6 +111,8 @@ That distinction is what keeps the direction rule true in practice rather than o
 Megamono adds only the information the package CLI cannot know: it resolves the target project and conventional path from the Nx graph, records the explicit target in `playstack.json`, and wires Nx targets around the package operation. The CLI accepts those paths without reading Nx, `megamono.json`, or Megamono package state. This keeps the same package usable in a non-Nx application.
 
 Package-owned emissions remain entirely outside the Megamono artifact registry from `spec-megamono-0014`. Megamono never mirrors their hashes, bases, managed/ejected state, or update history into `.megamono/artifacts.json`; it treats the `@playstack/cli` result and exit classification as the authority.
+
+The same rule applies to Playstack lint and skill integrations. Megamono may install `@playstack/lint`, add its preset to repository ESLint configuration, or invoke `playstack skills sync`; Playstack owns the rules, skill corpus, sync output, and update behavior. Megamono owns only the deterministic workspace plan and surrounding Nx wiring.
 
 A generator that requires a package-owned artifact remains outside the published collection until `playstack:45-cli` supplies the installable package, compatible command contract, stable exit classifications, and fixture used by the Megamono acceptance suite. Gated generators must not carry a private copy of the missing mutation logic.
 
@@ -204,7 +211,7 @@ In each case the left side is thinner than it wants to be, and holding that line
 
 ## Acceptance criteria
 
-- The emitted-package registry contains every `@playstack/*` import or install produced by a template; a fixture scans generated output and fails on an unregistered package.
+- The emitted-package registry contains every `@playstack/*` import or install produced by a template, including dev-only lint and skill packages; a fixture scans generated output and fails on an unregistered package.
 - A generator with a default dependency above the Free tier is excluded from the published collection.
 - Every published Playstack generator passes against the package's external fixture contract and supported version range.
 - Package-owned artifacts are produced through `@playstack/cli`; Megamono adds graph-aware target selection and Nx wiring without duplicating package merge or update logic.

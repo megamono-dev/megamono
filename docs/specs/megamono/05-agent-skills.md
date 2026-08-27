@@ -15,6 +15,7 @@ references:
     spec-megamono-0006,
     spec-megamono-0008,
     spec-megamono-0011,
+    spec-megamono-0012,
     spec-megamono-0014,
   ]
 external_references: [playstack:01-overview, playstack:28-mcp]
@@ -48,6 +49,8 @@ Triggered when a library or app is added or moved.
 Checks placement against the repo's stated conventions, the naming pattern (`@[repo]/nest-[feature]` for Nest features), tag assignment, and whether the new boundary is justified or whether existing code should have absorbed it.
 
 Encodes the extraction rule explicitly: **extract to a shared layer only when a second consumer justifies it.** A library created for one consumer gets flagged, not blocked — with the "informed deferral" alternative offered (keep it local, reserve the scope, document the migration path).
+
+When extraction or relocation is appropriate, the recommendation includes the complete `type:`, `scope:`, `platform:`, and capability-tag changes required by `spec-megamono-0006`. A structural recommendation that would immediately fail deterministic boundaries without explaining the corresponding tag or dependency change is incomplete.
 
 ### `plan-sync`
 
@@ -207,11 +210,13 @@ Managed-skill findings use the existing `spec-drift` health check rather than ad
 
 ### Relationship to package-level skills
 
-Playstack may ship an agent skill too, teaching its eject and merge workflow. **Same format, different corpus, and deliberately not the same package.**
+Playstack may ship agent skills too, including guidance for its eject and merge workflow. **Same format, different corpus, and deliberately not the same package.**
 
 Megamono's skills govern the repo and are installed into it. Playstack's travels with the packages, because it must work for a consumer who has never heard of Megamono — the plain-Vite-app test from `playstack:01-overview` applies to skills as much as to code.
 
-**The format is the shared thing.** Repository-governance skills are installed into the repository; package-specific skills may travel with their package or plugin. Ownership of the corpus determines distribution.
+**The format is the shared thing.** Repository-governance skills are installed into the repository; Playstack product skills may be distributed through a dedicated `@playstack/skills` package and synchronized by `@playstack/cli`. Ownership of the corpus determines distribution.
+
+`@megamono/plugin:playstack-skills` may install and invoke that package-owned synchronization contract for a Megamono workspace, but the resulting Playstack skill files remain Playstack-owned. They are not registered in `.megamono/artifacts.json`, and Megamono does not copy the sync, update, merge, or ejection logic. The generator remains fixture-gated until the Playstack packages publish a stable command and a non-conflicting qualified spec ID.
 
 ### Prior art
 

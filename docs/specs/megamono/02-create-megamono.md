@@ -14,6 +14,7 @@ references:
     spec-megamono-0004,
     spec-megamono-0005,
     spec-megamono-0006,
+    spec-megamono-0007,
     spec-megamono-0012,
     spec-megamono-0014,
   ]

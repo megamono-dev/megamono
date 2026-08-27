@@ -4,14 +4,15 @@ type: spec
 status: accepted
 visibility: internal
 projects: [megamono]
-topics: [generators, integrations, observability, ci]
-summary: Defines versioned, idempotent third-party integration generators and their template-drift contract.
+topics: [generators, integrations, observability, lint, skills, ci]
+summary: Defines versioned third-party integrations and Playstack-owned lint and skill wiring.
 date: 2026-08-23
 supersedes: null
 references:
   [
     spec-megamono-0000,
     spec-megamono-0002,
+    spec-megamono-0006,
     spec-megamono-0007,
     spec-megamono-0008,
     spec-megamono-0009,
@@ -104,8 +105,25 @@ That list is the actual product. "Sets up Sentry" is not.
 | `integration-fathom --project=<app>`   | `react-fathom` setup, site ID into shared config                                           |
 | `integration-postmark --project=<app>` | Mail driver config per `playstack:05-provider-abstractions`                                |
 | `integration-stripe --project=<app>`   | Client, webhook endpoint per `playstack:06-webhooks`, CLI forwarding for local dev         |
+| `playstack-lint`                       | `@playstack/lint` installation and warning-first ESLint preset wiring                      |
+| `playstack-skills`                     | `@playstack/cli` invocation that synchronizes the `@playstack/skills` corpus               |
 
 Sentry first. It is on every deployable surface, so it has the most consumers and exercises the surface-detection problem hardest.
+
+### Playstack lint and skill wiring
+
+The two workspace-level Playstack integrations make the ownership boundary concrete:
+
+- `@megamono/plugin:playstack-lint` installs `@playstack/lint` as a root dev dependency and adds its consumer preset to the existing ESLint configuration. It never copies rules into `@megamono/plugin`.
+- `@megamono/plugin:playstack-skills` installs the compatible Playstack CLI/skills packages when required and delegates synchronization to `playstack skills sync`. It does not place Playstack-owned files in the Megamono artifact registry.
+
+Both generators require at least one installed `@playstack/*` product package other than the CLI, lint, or skills packages. If none exists, preflight exits `3` without mutation and explains that configuration for an unused product family is intentionally omitted. Each generator is explicit; `workspace-init`, `convert`, and an unrelated Playstack package generator never enable either integration silently.
+
+The lint generator begins in warning mode so first-time wiring does not fail CI on the installation commit. Its plan records the initial finding count and ratchet path under the same decision-backed override contract as `spec-megamono-0006`. Tightening severities remains an explicit repository decision after the Playstack rules are visible.
+
+The skills generator delegates destination, provenance, drift, and ejection behavior to the Playstack CLI. Megamono supplies only the repository root and package-manager-aware invocation. A missing CLI, unsupported package-contract version, destination conflict, or nonzero sync result is reported using the common recovery report after file preflight; Megamono does not fall back to copying bundled skill templates.
+
+Both generator names remain excluded from the published collection until `@playstack/lint`, `@playstack/skills`, and the applicable `@playstack/cli` command publish Free-tier compatibility contracts and fixtures under non-conflicting qualified spec IDs.
 
 ### Ordering note
 
@@ -120,7 +138,22 @@ These run against existing apps, which makes re-running a realistic scenario —
 - **Refuse on a dirty working tree**, same rule as `spec-megamono-0009`
 - Additive changes to shared config, never wholesale replacement
 
-All generators accept `--project`, `--surface`, `--config-project`, `--interactive`, `--dry-run`, and `--force`. `--surface` is inferred only when exactly one supported surface is present; an ambiguous or unknown project requires the option and exits `4` in non-interactive mode. `--force` applies only to files with a Megamono provenance record and still prints the diff; it never replaces an unowned file.
+Application integration generators accept `--project`, `--surface`, `--config-project`, `--interactive`, `--dry-run`, and `--force`. `--surface` is inferred only when exactly one supported surface is present; an ambiguous or unknown project requires the option and exits `4` in non-interactive mode. `--force` applies only to files with a Megamono provenance record and still prints the diff; it never replaces an unowned file.
+
+The workspace integrations instead expose:
+
+```text
+npm exec nx g @megamono/plugin:playstack-lint \
+  --preset=recommended|all \
+  --interactive=true \
+  --dry-run
+
+npm exec nx g @megamono/plugin:playstack-skills \
+  --interactive=true \
+  --dry-run
+```
+
+Lint wiring defaults to the package's `recommended` preset and warning mode; `all` is explicit. Workspace integrations do not accept Megamono `--force`: conflicts are either preserved by Megamono or delegated to the Playstack package's explicit ownership contract.
 
 Generators emit secret **names**, never values:
 
@@ -135,6 +168,7 @@ Generators emit secret **names**, never values:
 
 - Wave 1 implements `integration-sentry` for Next.js Pages Router, Nest, Expo, and Cloudflare Worker projects. A surface combination without a maintained fixture is refused rather than partially configured.
 - Fathom, Postmark, and Stripe names and option contracts are reserved for later waves. They do not appear in the published generator collection until their templates and referenced Playstack fixtures pass the same acceptance suite.
+- Playstack lint and skills wiring are reserved behind their external package fixtures. They remain independently runnable and are never an implicit side effect of another generator.
 - Templates version with `@megamono/plugin`; every template also declares an independent template revision and compatible SDK range. A template change requires a plugin release, avoiding a second distribution channel.
 - Playstack's package-owned update workflow never rewrites Megamono integration templates. Template drift remains diagnosis-only until a maintainer releases and explicitly runs an updated Megamono generator.
 - On-demand diagnosis uses `npm exec nx run megamono-docs:health -- --checks=integration-template-drift --no-issue`. It shares the scheduled health implementation and never mutates integrations.
@@ -148,3 +182,5 @@ Generators emit secret **names**, never values:
 - No secret value is accepted as an option, written to disk, included in a process argument, or captured in a snapshot.
 - The health check identifies fixtures whose installed SDK falls outside the template range and stays silent within the range.
 - Playstack artifact updates leave Megamono-owned integration files unchanged; only an explicit generator update can apply a newer template.
+- Lint wiring is warning-first, records its ratchet, scopes `recommended` to installed packages, and becomes a no-op when already configured.
+- Skills wiring invokes the package-owned sync command, leaves its output outside `.megamono/artifacts.json`, and fails rather than substituting Megamono-owned copies when the command contract is unavailable.

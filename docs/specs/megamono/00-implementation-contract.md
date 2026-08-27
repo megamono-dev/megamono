@@ -80,16 +80,20 @@ Later scoped packages, including `@megamono/nx-cloudflare`, enter the same restr
 @megamono/plugin:integration-postmark
 @megamono/plugin:integration-stripe
 
+@megamono/plugin:theme
 @megamono/plugin:emails
+
+@megamono/plugin:playstack-lint
+@megamono/plugin:playstack-skills
 ```
 
 These are stable names, not a promise that every generator ships in the first collection. V1 availability is explicit:
 
-| Availability                         | Generators                                                                                                                                           |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unconditional core                   | `workspace-init`, `workspace-eject`, `convert`, `skill-eject`, `docs-init`, `docs-spec`, `docs-decision`, `docs-plan`, `docs-research`, `docs-audit` |
-| Conditional on external fixture gate | `content-lib`, `content-type`, every `playstack-*` generator, `integration-sentry`, `integration-postmark`, `emails`                                 |
-| Reserved for later wave              | `integration-fathom`, `integration-stripe`, `playstack-admin`, `playstack-queues`                                                                    |
+| Availability                         | Generators                                                                                                                                                                                                                               |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unconditional core                   | `workspace-init`, `workspace-eject`, `convert`, `skill-eject`, `docs-init`, `docs-spec`, `docs-decision`, `docs-plan`, `docs-research`, `docs-audit`                                                                                     |
+| Conditional on external fixture gate | `content-lib`, `content-type`, `playstack-auth`, `playstack-accounts`, `playstack-webhooks`, `playstack-cache`, `playstack-media`, `playstack-lint`, `playstack-skills`, `integration-sentry`, `integration-postmark`, `theme`, `emails` |
+| Reserved for later wave              | `integration-fathom`, `integration-stripe`, `playstack-admin`, `playstack-queues`                                                                                                                                                        |
 
 The published collection is generated from this availability registry. Requesting a reserved or gated generator returns a diagnostic naming the unsatisfied gate; it never falls through to a partial implementation.
 
