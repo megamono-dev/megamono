@@ -37,6 +37,15 @@
           "rootDir": "packages/cli/src",
           "generatePackageJson": false
         }
+      },
+      "e2e-local-packages": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": ["build"],
+        "options": {
+          "command": "node packages/cli/e2e/local-packages.e2e.mjs",
+          "cwd": "."
+        }
       }
     },
     "tags": [
