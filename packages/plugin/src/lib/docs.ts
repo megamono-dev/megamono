@@ -1,5 +1,7 @@
+import { execFile } from 'node:child_process';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { promisify } from 'node:util';
 import matter = require('gray-matter');
 import { format } from 'prettier';
 import { z } from 'zod';
@@ -22,6 +24,14 @@ const DOCUMENT_DIRECTORIES = new Set([
 const EXCLUDED_NAMES = new Set(['README.md', 'OVERVIEW.md', 'INDEX.md']);
 const externalReferencePattern = /^[a-z][a-z0-9-]*:[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const slugPattern = '[a-z0-9]+(?:-[a-z0-9]+)*';
+const execFileAsync = promisify(execFile);
+const IGNORED_PACKAGE_DIRECTORIES = new Set([
+  '.content-collections',
+  '.git',
+  '.nx',
+  'dist',
+  'node_modules',
+]);
 
 const dateSchema = z.preprocess(
   (value) => (value instanceof Date ? value.toISOString().slice(0, 10) : value),
@@ -96,7 +106,16 @@ export interface RepositoryDocument {
   readonly relativePath: string;
   readonly archived: boolean;
   readonly content: string;
+  readonly source?: string;
   readonly data: z.infer<typeof repositoryDocumentSchema>;
+}
+
+interface ContentPackageManifest {
+  readonly megamono?: {
+    readonly contentCollection?: {
+      readonly version?: unknown;
+    };
+  };
 }
 
 export interface DocsValidationResult {
@@ -157,6 +176,160 @@ async function walkMarkdown(directory: string): Promise<string[]> {
     }
   }
   return paths;
+}
+
+async function walkContentCollectionRoots(
+  directory: string,
+): Promise<string[]> {
+  if (!(await exists(directory))) return [];
+  const entries = await readdir(directory, { withFileTypes: true });
+  const roots: string[] = [];
+  for (const entry of entries.sort((left, right) =>
+    left.name.localeCompare(right.name),
+  )) {
+    if (entry.isDirectory()) {
+      if (!IGNORED_PACKAGE_DIRECTORIES.has(entry.name)) {
+        roots.push(
+          ...(await walkContentCollectionRoots(join(directory, entry.name))),
+        );
+      }
+      continue;
+    }
+    if (!entry.isFile() || entry.name !== 'package.json') continue;
+    try {
+      const manifest = JSON.parse(
+        await readFile(join(directory, entry.name), 'utf8'),
+      ) as ContentPackageManifest;
+      if (manifest.megamono?.contentCollection) roots.push(directory);
+    } catch {
+      // Invalid manifests are owned by package-manager and workspace checks.
+    }
+  }
+  return roots;
+}
+
+async function validateCorpusDirection(
+  workspaceRoot: string,
+  docsRoot: string,
+  documents: readonly RepositoryDocument[],
+): Promise<Diagnostic[]> {
+  const diagnostics: Diagnostic[] = [];
+  const roots = await walkContentCollectionRoots(workspaceRoot);
+  const ids = documents.map((document) => document.data.id);
+  const normalizedDocsRoot = normalizePath(docsRoot).replace(/\/$/, '');
+  const corpusPathPattern = new RegExp(
+    `(?:^|[\\s("'\x60])${normalizedDocsRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/(?:archives/)?(?:specs|plans|decisions|audits|research|reports)/`,
+    'm',
+  );
+
+  for (const root of roots) {
+    for (const absolutePath of await walkMarkdown(join(root, 'content'))) {
+      const source = await readFile(absolutePath, 'utf8');
+      const referencedIds = ids.filter((id) => source.includes(id));
+      if (referencedIds.length === 0 && !corpusPathPattern.test(source))
+        continue;
+      const details = [
+        ...(referencedIds.length > 0
+          ? [`repository document IDs (${referencedIds.join(', ')})`]
+          : []),
+        ...(corpusPathPattern.test(source)
+          ? ['repository document paths']
+          : []),
+      ];
+      diagnostics.push({
+        severity: 'warning',
+        code: 'docs-corpus-direction',
+        message: `Content-level documents must not depend on ${details.join(' or ')}. Move shared facts into content-level sources or use an external reference.`,
+        path: normalizePath(relative(workspaceRoot, absolutePath)),
+      });
+    }
+  }
+  return diagnostics;
+}
+
+function sourceWithoutVisibilityReview(source: string): string {
+  return source.replace(/^visibility_reviewed_at:\s*[^\r\n]*(?:\r?\n|$)/m, '');
+}
+
+function frontMatterDateTime(value: unknown): number | undefined {
+  const date = value instanceof Date ? value : new Date(String(value));
+  const timestamp = date.getTime();
+  return Number.isNaN(timestamp) ? undefined : timestamp;
+}
+
+export function validatePublicVisibilityReviews(
+  documents: readonly RepositoryDocument[],
+  previousSources: ReadonlyMap<string, string>,
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  for (const document of documents) {
+    if (document.data.visibility !== 'public' || !document.source) continue;
+    const previousSource = previousSources.get(document.relativePath);
+    if (!previousSource || !matter.test(previousSource)) continue;
+    let previous: matter.GrayMatterFile<string>;
+    try {
+      previous = matter(previousSource);
+    } catch {
+      continue;
+    }
+    if (previous.data.visibility !== 'public') continue;
+    if (
+      sourceWithoutVisibilityReview(previousSource) ===
+      sourceWithoutVisibilityReview(document.source)
+    ) {
+      continue;
+    }
+    const previousReview = frontMatterDateTime(
+      previous.data.visibility_reviewed_at,
+    );
+    const currentReview = frontMatterDateTime(
+      document.data.visibility_reviewed_at,
+    );
+    if (
+      currentReview !== undefined &&
+      (previousReview === undefined || currentReview > previousReview)
+    ) {
+      continue;
+    }
+    diagnostics.push({
+      severity: 'error',
+      code: 'docs-public-review-stale',
+      message:
+        'Changed public content must advance visibility_reviewed_at beyond the base revision.',
+      path: document.relativePath,
+    });
+  }
+  return diagnostics;
+}
+
+export async function collectPreviousDocumentSources(
+  workspaceRoot: string,
+  documents: readonly RepositoryDocument[],
+  baseRef: string,
+): Promise<ReadonlyMap<string, string>> {
+  await execFileAsync('git', ['rev-parse', '--verify', `${baseRef}^{commit}`], {
+    cwd: workspaceRoot,
+  });
+  const entries = await Promise.all(
+    documents.map(
+      async (document): Promise<readonly [string, string] | undefined> => {
+        const workspacePath = normalizePath(
+          relative(workspaceRoot, document.absolutePath),
+        );
+        try {
+          const { stdout } = await execFileAsync(
+            'git',
+            ['show', `${baseRef}:${workspacePath}`],
+            { cwd: workspaceRoot, maxBuffer: 10 * 1024 * 1024 },
+          );
+          return [document.relativePath, stdout] as const;
+        } catch {
+          return undefined;
+        }
+      },
+    ),
+  );
+  return new Map(entries.filter((entry) => entry !== undefined));
 }
 
 function validateTypeSpecificFields(
@@ -454,6 +627,7 @@ export async function validateRepositoryDocs(
       relativePath,
       archived,
       content: parsed.content,
+      source,
       data: result.data,
     };
     validateTypeSpecificFields(document, diagnostics);
@@ -566,6 +740,14 @@ export async function validateRepositoryDocs(
       current = documentsById.get(current.data.supersedes);
     }
   }
+
+  diagnostics.push(
+    ...(await validateCorpusDirection(
+      workspaceRoot,
+      normalizePath(docsRoot),
+      documents,
+    )),
+  );
 
   return { documents, diagnostics };
 }

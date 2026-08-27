@@ -56,4 +56,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm exec nx -- run megamono-docs:validate --output-style=static
       - run: npm exec nx -- affected -t lint test build --exclude=tag:platform:apple --output-style=static

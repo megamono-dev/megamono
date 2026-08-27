@@ -3,7 +3,11 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { readMegamonoConfig } from '../../lib/config';
 import { formatDiagnostic, hasErrors } from '../../lib/diagnostics';
-import { validateRepositoryDocs } from '../../lib/docs';
+import {
+  collectPreviousDocumentSources,
+  validatePublicVisibilityReviews,
+  validateRepositoryDocs,
+} from '../../lib/docs';
 import type { DocsValidateExecutorSchema } from './schema';
 
 async function loadContentCollections(): Promise<
@@ -108,12 +112,23 @@ const runExecutor: PromiseExecutor<DocsValidateExecutorSchema> = async (
       config,
       options.docsRoot,
     );
-    for (const diagnostic of result.diagnostics) {
+    const previousSources = process.env.NX_BASE
+      ? await collectPreviousDocumentSources(
+          context.root,
+          result.documents,
+          process.env.NX_BASE,
+        )
+      : new Map<string, string>();
+    const diagnostics = [
+      ...result.diagnostics,
+      ...validatePublicVisibilityReviews(result.documents, previousSources),
+    ];
+    for (const diagnostic of diagnostics) {
       const message = formatDiagnostic(diagnostic);
       if (diagnostic.severity === 'error') logger.error(message);
       else logger.warn(message);
     }
-    if (hasErrors(result.diagnostics)) return { success: false };
+    if (hasErrors(diagnostics)) return { success: false };
     if (options.verbose) {
       logger.info(`Validated ${result.documents.length} repository documents.`);
     }

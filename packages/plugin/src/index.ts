@@ -113,6 +113,8 @@ export {
   repositoryContentCollectionSchema,
   repositoryArchitectureSchema,
   repositoryDocumentSchema,
+  collectPreviousDocumentSources,
+  validatePublicVisibilityReviews,
   validateRepositoryDocs,
   type DocsValidationResult,
   type ArchitectureDependency,
