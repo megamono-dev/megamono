@@ -62,7 +62,10 @@
     "nodeCompatibilityDefaultDate": "2026-08-04"
   },
   "services": {
-    "postgresql": "17"
+    "postgresql": "17",
+    "redis": "8",
+    "clickhouse": "25.8",
+    "typesense": "30.2"
   },
   "rustCrates": {
     "tauri": "2.11.5",

@@ -307,15 +307,6 @@ export function normalizeCreateOptions(
       3,
     );
   }
-  const unavailableServices = services.filter(
-    (service) => service !== 'postgres',
-  );
-  if (unavailableServices.length > 0) {
-    throw new CreateMegamonoError(
-      `No tested compatibility pin exists yet for: ${unavailableServices.join(', ')}.`,
-      3,
-    );
-  }
   const integrations = normalizedList(input.integrations);
   if (integrations.length > 0) {
     throw new CreateMegamonoError(
@@ -443,8 +434,7 @@ function scaffoldPort(
   app: 'api' | 'site' | 'web',
 ): number {
   const hash = [...options.scope].reduce(
-    (value, character) =>
-      (value * 31 + (character.codePointAt(0) ?? 0)) >>> 0,
+    (value, character) => (value * 31 + (character.codePointAt(0) ?? 0)) >>> 0,
     0,
   );
   return 40_000 + (hash % 8_000) + { api: 0, site: 1, web: 2 }[app];
@@ -1345,8 +1335,7 @@ async function configureE2ePackage(
   ];
   if (app === 'api') {
     const targets = packageJson.nx.targets as
-      | Record<string, { options?: Record<string, unknown> }>
-      | undefined;
+      Record<string, { options?: Record<string, unknown> }> | undefined;
     if (targets?.e2e?.options) {
       targets.e2e.options.jestConfig = 'apps/api-e2e/jest.config.cjs';
     }
@@ -1368,10 +1357,7 @@ module.exports = { ...nxPreset };
       'utf8',
     );
     await writeFile(
-      resolve(
-        plan.options.stagingDirectory,
-        'apps/api-e2e/jest.config.cjs',
-      ),
+      resolve(plan.options.stagingDirectory, 'apps/api-e2e/jest.config.cjs'),
       `const { readFileSync } = require('node:fs');
 
 const swcJestConfig = JSON.parse(

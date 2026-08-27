@@ -69,7 +69,9 @@ async function writeInferredE2ePackage(
         ...(app === 'api'
           ? {
               targets: {
-                e2e: { options: { jestConfig: 'apps/api-e2e/jest.config.cts' } },
+                e2e: {
+                  options: { jestConfig: 'apps/api-e2e/jest.config.cts' },
+                },
               },
             }
           : {}),
@@ -163,7 +165,6 @@ describe('normalizeCreateOptions', () => {
     [{ apps: [] }, 4, 'At least one app'],
     [{ name: undefined }, 4, 'workspace name'],
     [{ apps: ['unknown'] }, 2, 'Unknown app'],
-    [{ services: ['redis'] }, 3, 'compatibility pin'],
     [{ integrations: ['sentry'] }, 3, 'fixture gate'],
     [{ apps: ['apple'], platform: 'linux' }, 3, 'requires macOS'],
     [{ install: false }, 3, 'no-install generation path'],
@@ -181,6 +182,28 @@ describe('normalizeCreateOptions', () => {
 });
 
 describe('createPlan', () => {
+  it('projects every supported service through tested Springbar pins', () => {
+    const plan = createPlan(
+      options('/workspace', {
+        services: ['postgres', 'redis', 'clickhouse', 'typesense'],
+        serviceRunner: 'springbar',
+        verify: 'none',
+      }),
+    );
+    const initialize = plan.steps.find(
+      (step) => step.kind === 'command' && step.id === 'initialize-megamono',
+    );
+
+    expect(initialize).toEqual(
+      expect.objectContaining({
+        args: expect.arrayContaining([
+          '--serviceRunner=springbar',
+          '--serviceRequirements={"clickhouse":"25.8","postgres":"17","redis":"8","typesense":"30.2"}',
+        ]),
+      }),
+    );
+  });
+
   it('uses pnpm for workspace creation, installs, generators, and checks', () => {
     const plan = createPlan(
       options('/workspace', {
@@ -251,10 +274,7 @@ describe('createPlan', () => {
         expect.objectContaining({
           id: 'verify-acme-tools-web-e2e',
           command: 'pnpm',
-          args: expect.arrayContaining([
-            'run',
-            'acme-tools-web-e2e:e2e',
-          ]),
+          args: expect.arrayContaining(['run', 'acme-tools-web-e2e:e2e']),
         }),
       ]),
     );
@@ -681,14 +701,17 @@ describe('executePlan', () => {
       ).toContain('43016');
     }
     expect(
-      await readFile(resolve(plan.options.destination, 'jest.preset.js'), 'utf8'),
+      await readFile(
+        resolve(plan.options.destination, 'jest.preset.js'),
+        'utf8',
+      ),
     ).toContain("require('@nx/jest/preset').default");
     expect(
       await readFile(
         resolve(plan.options.destination, 'apps/api-e2e/jest.config.cjs'),
         'utf8',
       ),
-    ).toContain("module.exports = {");
+    ).toContain('module.exports = {');
     expect(
       JSON.parse(
         await readFile(

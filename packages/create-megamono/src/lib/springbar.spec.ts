@@ -18,6 +18,25 @@ function options(apps: string[], services: string[] = ['postgres']) {
 }
 
 describe('createSpringbarIntent', () => {
+  it('maps every supported service to its tested catalog version', () => {
+    expect(
+      createSpringbarIntent(
+        options(['api'], ['postgres', 'redis', 'clickhouse', 'typesense']),
+        {
+          postgresql: '17',
+          redis: '8',
+          clickhouse: '25.8',
+          typesense: '30.2',
+        },
+      ).services,
+    ).toEqual([
+      { service: 'clickhouse', version: '25.8', dependentApps: ['api'] },
+      { service: 'postgres', version: '17', dependentApps: ['api'] },
+      { service: 'redis', version: '8', dependentApps: ['api'] },
+      { service: 'typesense', version: '30.2', dependentApps: ['api'] },
+    ]);
+  });
+
   it('binds services to API and worker backends when present', () => {
     expect(
       createSpringbarIntent(options(['web', 'worker', 'api']), {
