@@ -21,6 +21,8 @@ const platformTags = [
   'platform:extension',
 ];
 const visibilityTags = ['visibility:public', 'visibility:internal'];
+const capabilityTags = ['capability:theme-tokens'];
+const scopeTagPattern = /^scope:[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function tagsInFamily(
   tags: readonly string[],
@@ -45,12 +47,14 @@ function validateTagCardinality(
   graph: ProjectGraph,
   diagnostics: Diagnostic[],
 ): void {
+  const themeTokenProjects: string[] = [];
   for (const [name, node] of Object.entries(graph.nodes)) {
     const tags = node.data.tags ?? [];
     const types = tagsInFamily(tags, typeTags);
     const scopes = tags.filter((tag) => tag.startsWith('scope:'));
     const platforms = tagsInFamily(tags, platformTags);
     const visibility = tagsInFamily(tags, visibilityTags);
+    const capabilities = tags.filter((tag) => tag.startsWith('capability:'));
     const isApplication = node.type === 'app' || node.type === 'e2e';
 
     if (types.length !== 1) {
@@ -68,6 +72,14 @@ function validateTagCardinality(
           'require-tags',
           name,
           `Expected exactly one scope tag; found ${scopes.length}.`,
+        ),
+      );
+    } else if (!scopeTagPattern.test(scopes[0])) {
+      diagnostics.push(
+        projectDiagnostic(
+          'require-tags',
+          name,
+          `Invalid scope tag ${scopes[0]}; expected scope:<lowercase-hyphenated-name>.`,
         ),
       );
     }
@@ -107,12 +119,46 @@ function validateTagCardinality(
         ),
       );
     }
-    if (tags.includes('capability:stateful') && isApplication) {
+    for (const capability of capabilities.filter(
+      (tag) => !capabilityTags.includes(tag),
+    )) {
       diagnostics.push(
         projectDiagnostic(
           'require-tags',
           name,
-          'capability:stateful is allowed only on libraries.',
+          `Unknown capability tag ${capability}.`,
+        ),
+      );
+    }
+    if (tags.filter((tag) => tag === 'capability:theme-tokens').length > 1) {
+      diagnostics.push(
+        projectDiagnostic(
+          'require-tags',
+          name,
+          'capability:theme-tokens may appear only once on a project.',
+        ),
+      );
+    }
+    if (tags.includes('capability:theme-tokens')) {
+      themeTokenProjects.push(name);
+      if (types[0] !== 'type:util' || platforms.length > 0 || isApplication) {
+        diagnostics.push(
+          projectDiagnostic(
+            'require-tags',
+            name,
+            'capability:theme-tokens requires a platform-neutral type:util library.',
+          ),
+        );
+      }
+    }
+  }
+  if (themeTokenProjects.length > 1) {
+    for (const name of themeTokenProjects) {
+      diagnostics.push(
+        projectDiagnostic(
+          'require-tags',
+          name,
+          `capability:theme-tokens must be unique; found ${themeTokenProjects.sort().join(', ')}.`,
         ),
       );
     }
@@ -176,11 +222,7 @@ function validateDependencies(
           ),
         );
       }
-      if (
-        sourcePlatform &&
-        targetPlatform &&
-        sourcePlatform !== targetPlatform
-      ) {
+      if (targetPlatform && sourcePlatform !== targetPlatform) {
         diagnostics.push(
           projectDiagnostic(
             'platform-boundary',

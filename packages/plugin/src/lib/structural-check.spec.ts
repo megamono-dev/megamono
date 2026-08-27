@@ -86,6 +86,169 @@ describe('workspace structural checks', () => {
     }
   });
 
+  it('covers every allowed and forbidden type dependency', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-check-'));
+    const allowed: Readonly<Record<string, readonly string[]>> = {
+      app: ['app', 'feature', 'ui', 'data', 'util'],
+      feature: ['ui', 'data', 'util'],
+      ui: ['util'],
+      data: ['util'],
+      util: ['util'],
+    };
+    const types = Object.keys(allowed);
+    try {
+      await writeFile(join(root, 'package.json'), '{}');
+      for (const sourceType of types) {
+        for (const targetType of types) {
+          const sourceIsApp = sourceType === 'app';
+          const targetIsApp = targetType === 'app';
+          const matrix: ProjectGraph = {
+            nodes: {
+              source: {
+                name: 'source',
+                type: sourceIsApp ? 'app' : 'lib',
+                data: {
+                  root: 'source',
+                  tags: [
+                    `type:${sourceType}`,
+                    'scope:product',
+                    ...(sourceIsApp ? ['visibility:internal'] : []),
+                    'platform:web',
+                  ],
+                },
+              },
+              target: {
+                name: 'target',
+                type: targetIsApp ? 'app' : 'lib',
+                data: {
+                  root: 'target',
+                  tags: [
+                    `type:${targetType}`,
+                    'scope:product',
+                    ...(targetIsApp ? ['visibility:internal'] : []),
+                    'platform:web',
+                  ],
+                },
+              },
+            },
+            dependencies: {
+              source: [{ source: 'source', target: 'target', type: 'static' }],
+              target: [],
+            },
+          };
+          const diagnostics = await checkWorkspaceStructure(
+            root,
+            matrix,
+            DEFAULT_MEGAMONO_CONFIG,
+          );
+          expect(
+            diagnostics.some(
+              (diagnostic) => diagnostic.code === 'module-boundaries',
+            ),
+            `${sourceType} -> ${targetType}`,
+          ).toBe(!allowed[sourceType].includes(targetType));
+        }
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('enforces the complete scope and platform direction', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-check-'));
+    try {
+      await writeFile(join(root, 'package.json'), '{}');
+      const cases = [
+        ['scope:product', 'scope:product', 'platform:web', 'platform:web', false],
+        ['scope:product', 'scope:shared', 'platform:web', undefined, false],
+        ['scope:product', 'scope:other', 'platform:web', 'platform:web', true],
+        ['scope:shared', 'scope:product', 'platform:web', 'platform:web', true],
+        ['scope:product', 'scope:product', 'platform:web', 'platform:node', true],
+        ['scope:product', 'scope:product', undefined, 'platform:web', true],
+      ] as const;
+      for (const [sourceScope, targetScope, sourcePlatform, targetPlatform, invalid] of cases) {
+        const matrix: ProjectGraph = {
+          nodes: {
+            source: {
+              name: 'source',
+              type: 'lib',
+              data: {
+                root: 'source',
+                tags: ['type:util', sourceScope, ...(sourcePlatform ? [sourcePlatform] : [])],
+              },
+            },
+            target: {
+              name: 'target',
+              type: 'lib',
+              data: {
+                root: 'target',
+                tags: ['type:util', targetScope, ...(targetPlatform ? [targetPlatform] : [])],
+              },
+            },
+          },
+          dependencies: {
+            source: [{ source: 'source', target: 'target', type: 'static' }],
+            target: [],
+          },
+        };
+        const diagnostics = await checkWorkspaceStructure(
+          root,
+          matrix,
+          DEFAULT_MEGAMONO_CONFIG,
+        );
+        expect(
+          diagnostics.some((diagnostic) =>
+            ['module-boundaries', 'platform-boundary'].includes(diagnostic.code),
+          ),
+          `${sourceScope}/${sourcePlatform ?? 'neutral'} -> ${targetScope}/${targetPlatform ?? 'neutral'}`,
+        ).toBe(invalid);
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('requires one well-formed platform-neutral theme token capability', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-check-'));
+    try {
+      await writeFile(join(root, 'package.json'), '{}');
+      const matrix = graph();
+      matrix.nodes['shared-util'].data.tags = [
+        'type:util',
+        'scope:shared',
+        'capability:theme-tokens',
+      ];
+      expect(
+        await checkWorkspaceStructure(root, matrix, DEFAULT_MEGAMONO_CONFIG),
+      ).toEqual([]);
+
+      matrix.nodes['other-feature'].data.tags = [
+        'type:feature',
+        'scope:Other Product',
+        'platform:web',
+        'capability:theme-tokens',
+        'capability:unknown',
+      ];
+      const diagnostics = await checkWorkspaceStructure(
+        root,
+        matrix,
+        DEFAULT_MEGAMONO_CONFIG,
+      );
+      expect(
+        diagnostics.filter((diagnostic) => diagnostic.code === 'require-tags'),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ message: expect.stringContaining('Invalid scope') }),
+          expect.objectContaining({ message: expect.stringContaining('Unknown capability') }),
+          expect.objectContaining({ message: expect.stringContaining('platform-neutral type:util') }),
+          expect.objectContaining({ message: expect.stringContaining('must be unique') }),
+        ]),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('requires disabled structural rules to resolve accepted decisions', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-check-'));
     try {
