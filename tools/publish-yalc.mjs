@@ -8,6 +8,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const yalc = process.platform === 'win32' ? 'yalc.cmd' : 'yalc';
 const packages = [
+  { project: '@megamono/cli', directory: 'packages/cli' },
   { project: '@megamono/plugin', directory: 'packages/plugin' },
   { project: 'nx-apple', directory: 'packages/nx-apple' },
   { project: 'nx-cargo', directory: 'packages/nx-cargo' },

@@ -9,8 +9,24 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const yalc = process.platform === 'win32' ? 'yalc.cmd' : 'yalc';
-const executable =
-  process.platform === 'win32' ? 'create-megamono.cmd' : 'create-megamono';
+const globalPackages = [
+  {
+    directory: 'packages/create-megamono',
+    executable: 'create-megamono',
+    smoke: [
+      'global-install-check',
+      '--apps=web',
+      '--interactive=false',
+      '--verify=none',
+      '--dry-run',
+    ],
+  },
+  {
+    directory: 'packages/cli',
+    executable: 'megamono',
+    smoke: ['--version'],
+  },
+];
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -48,49 +64,53 @@ let packDirectory;
 try {
   await run(process.execPath, [join(root, 'tools/publish-yalc.mjs')]);
 
-  const packageJson = JSON.parse(
-    await readFile(join(root, 'packages/create-megamono/package.json'), 'utf8'),
-  );
   const yalcDirectory = await run(yalc, ['dir'], { capture: true });
-  const packageDirectory = join(
-    yalcDirectory,
-    'packages',
-    packageJson.name,
-    packageJson.version,
-  );
-  await access(join(packageDirectory, 'package.json'));
-
-  packDirectory = await mkdtemp(join(tmpdir(), 'create-megamono-global-'));
-  const packResult = JSON.parse(
-    await run(
-      npm,
-      ['pack', packageDirectory, '--pack-destination', packDirectory, '--json'],
-      { capture: true },
-    ),
-  );
-  const tarball = join(packDirectory, packResult[0].filename);
-  await run(npm, ['install', '--global', tarball]);
+  packDirectory = await mkdtemp(join(tmpdir(), 'megamono-global-clis-'));
 
   const globalPrefix = await run(npm, ['prefix', '--global'], {
     capture: true,
   });
-  const executablePath = join(
-    globalPrefix,
-    process.platform === 'win32' ? '' : 'bin',
-    executable,
-  );
-  await run(executablePath, [
-    'global-install-check',
-    '--apps=web',
-    '--interactive=false',
-    '--verify=none',
-    '--dry-run',
-  ]);
-
+  for (const entry of globalPackages) {
+    const packageJson = JSON.parse(
+      await readFile(join(root, entry.directory, 'package.json'), 'utf8'),
+    );
+    const packageDirectory = join(
+      yalcDirectory,
+      'packages',
+      ...packageJson.name.split('/'),
+      packageJson.version,
+    );
+    await access(join(packageDirectory, 'package.json'));
+    const packResult = JSON.parse(
+      await run(
+        npm,
+        [
+          'pack',
+          packageDirectory,
+          '--pack-destination',
+          packDirectory,
+          '--json',
+        ],
+        { capture: true },
+      ),
+    );
+    const tarball = join(packDirectory, packResult[0].filename);
+    await run(npm, ['install', '--global', tarball]);
+    const executablePath = join(
+      globalPrefix,
+      process.platform === 'win32' ? '' : 'bin',
+      process.platform === 'win32'
+        ? `${entry.executable}.cmd`
+        : entry.executable,
+    );
+    await run(executablePath, entry.smoke);
+    process.stdout.write(
+      `\nInstalled ${packageJson.name}@${packageJson.version} globally from the yalc artifact.\n`,
+    );
+  }
   process.stdout.write(
-    `\nInstalled create-megamono@${packageJson.version} globally from the yalc artifact.\n`,
+    'Run create-megamono <name> for a new workspace or megamono init in an existing Nx workspace.\n',
   );
-  process.stdout.write('Run create-megamono <name> to create a workspace.\n');
 } catch (error) {
   process.stderr.write(
     `${error instanceof Error ? error.message : String(error)}\n`,

@@ -55,6 +55,7 @@
     "groups": {
       "megamono": {
         "projects": [
+          "@megamono/cli",
           "@megamono/plugin",
           "nx-apple",
           "nx-cargo",

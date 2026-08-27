@@ -156,7 +156,7 @@ Hard-won conventions, generated rather than rediscovered:
 
 The dogfooding strategy starts with restricted npm packages under the canonical `@megamono/*` names and the `next` dist-tag. The package manifests lock publication to restricted access, and the release workflow rejects policy drift before versioning or publishing. This keeps internal consumers on the same names they will use after graduation.
 
-The private release group contains `@megamono/plugin`, `@megamono/nx-apple`, and `@megamono/nx-cargo`. The unscoped `create-megamono` entry package cannot be restricted on npm and stays in a separate release group until public promotion. Graduation is a reviewed change from restricted to public access followed by a public prerelease; `latest` remains absent until that prerelease passes consumer fixtures.
+The private release group contains `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, and `@megamono/nx-cargo`. Later accepted scoped packages join that fixed group after their packed fixtures pass. The unscoped `create-megamono` entry package cannot be restricted on npm and stays in a separate release group until public promotion. Graduation is a reviewed change from restricted to public access followed by a public prerelease; `latest` remains absent until that prerelease passes consumer fixtures.
 
 GitHub Packages is not used for Megamono because its npm namespace would have to match the repository owner (`megamono-dev`), which would force a temporary `@megamono-dev/*` rename. A self-hosted registry remains unnecessary.
 

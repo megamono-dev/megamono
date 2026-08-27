@@ -5,12 +5,14 @@ import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const privatePackages = new Map([
+  ['@megamono/cli', 'packages/cli/package.json'],
   ['@megamono/plugin', 'packages/plugin/package.json'],
   ['@megamono/nx-apple', 'packages/nx-apple/package.json'],
   ['@megamono/nx-cargo', 'packages/nx-cargo/package.json'],
   ['@megamono/nx-cloudflare', 'packages/nx-cloudflare/package.json'],
 ]);
 const expectedProjects = [
+  '@megamono/cli',
   '@megamono/plugin',
   'nx-apple',
   'nx-cargo',
@@ -78,4 +80,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Private publish policy passed for 4 scoped @megamono packages.');
+console.log('Private publish policy passed for 5 scoped @megamono packages.');
