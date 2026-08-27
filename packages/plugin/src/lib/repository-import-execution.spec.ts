@@ -8,6 +8,7 @@ import { validateRepositoryDocs } from './docs';
 import { analyzeRepositoryImport } from './repository-import';
 import {
   completedRepositoryImport,
+  executeRepositoryImport,
   executeSubtreeRepositoryImport,
   ImportExecutionError,
   type ImportCommandRunner,
@@ -381,6 +382,113 @@ describe('repository import subtree execution', { timeout: 20_000 }, () => {
     expect(result.integrationCommit).toBe(
       (await run(targetRoot, 'git', ['rev-parse', 'HEAD'])).stdout.trim(),
     );
+  });
+
+  it('imports an approved snapshot without carrying source history for squash', async () => {
+    const baseSha = (
+      await run(targetRoot, 'git', ['rev-parse', 'HEAD'])
+    ).stdout.trim();
+    const options = {
+      source: sourceRoot,
+      name: 'imported-app',
+      expectedSourceSha: sourceSha,
+      history: 'squash',
+      allowHistoryLoss: true,
+      verify: 'none',
+      execute: true,
+      resolutions: {
+        aliases: { '@fixture/shared/*': '@imported/shared/*' },
+        environment: { SHARED_TOKEN: 'IMPORTED_SHARED_TOKEN' },
+      },
+    } as const;
+    const importAnalysis = await analyzeRepositoryImport({
+      workspaceRoot: targetRoot,
+      options,
+    });
+
+    const result = await executeRepositoryImport(
+      targetRoot,
+      importAnalysis,
+      options,
+      async () => undefined,
+    );
+
+    expect(result.marker.history).toBe('squash');
+    expect(await completedRepositoryImport(targetRoot, options)).toEqual(
+      result.marker,
+    );
+    expect(
+      await readFile(
+        join(targetRoot, 'apps/imported-app/source-history.txt'),
+        'utf8',
+      ),
+    ).toBe('second commit\n');
+    expect(
+      (
+        await run(targetRoot, 'git', [
+          'rev-list',
+          '--count',
+          `${baseSha}..HEAD`,
+        ])
+      ).stdout,
+    ).toBe('2\n');
+    const subjects = (
+      await run(targetRoot, 'git', ['log', '--format=%s'])
+    ).stdout;
+    expect(subjects).not.toContain('source seed');
+    expect(subjects).not.toContain('source follow-up');
+    expect(subjects).toContain('graft imported-app squash');
+    expect(subjects).toContain('import imported-app');
+    const decision = (
+      await run(targetRoot, 'git', [
+        'show',
+        '--format=',
+        '--name-only',
+        'HEAD',
+      ])
+    ).stdout
+      .split('\n')
+      .find((path) => path.startsWith('docs/decisions/'));
+    expect(decision).toBeDefined();
+    if (!decision) throw new Error('Import decision was not committed.');
+    expect(await readFile(join(targetRoot, decision), 'utf8')).toContain(
+      'using the squash strategy',
+    );
+    expect(
+      (await run(targetRoot, 'git', ['status', '--porcelain=v1'])).stdout,
+    ).toBe('');
+    expect(
+      (await run(sourceRoot, 'git', ['status', '--porcelain=v1'])).stdout,
+    ).toBe('');
+  });
+
+  it('treats a completed import with a different history strategy as a conflict', async () => {
+    const options = {
+      source: sourceRoot,
+      name: 'imported-app',
+      expectedSourceSha: sourceSha,
+      history: 'squash',
+      allowHistoryLoss: true,
+      verify: 'none',
+      execute: true,
+      resolutions: {
+        aliases: { '@fixture/shared/*': '@imported/shared/*' },
+        environment: { SHARED_TOKEN: 'IMPORTED_SHARED_TOKEN' },
+      },
+    } as const;
+    await executeRepositoryImport(
+      targetRoot,
+      await analyzeRepositoryImport({ workspaceRoot: targetRoot, options }),
+      options,
+      async () => undefined,
+    );
+
+    await expect(
+      completedRepositoryImport(targetRoot, {
+        ...options,
+        history: 'subtree',
+      }),
+    ).rejects.toMatchObject({ code: 'import-marker-conflict' });
   });
 
   it('integrates and verifies with the target pnpm command family', async () => {

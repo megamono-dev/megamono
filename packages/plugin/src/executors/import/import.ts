@@ -9,7 +9,7 @@ import {
 import {
   assertNoPartialRepositoryImport,
   completedRepositoryImport,
-  executeSubtreeRepositoryImport,
+  executeRepositoryImport,
   ImportExecutionError,
 } from '../../lib/repository-import-execution';
 import type { ImportExecutorSchema } from './schema';
@@ -29,12 +29,6 @@ const runExecutor: PromiseExecutor<ImportExecutorSchema> = async (
       throw new ImportDecisionError(
         'import-history-required',
         'Execution requires an explicit history strategy.',
-      );
-    }
-    if (options.execute && options.history !== 'subtree') {
-      throw new ImportPreflightError(
-        'import-history-strategy-gated',
-        'This build executes subtree imports only; filter-repo and squash remain fixture-gated.',
       );
     }
     if (options.execute) {
@@ -77,7 +71,7 @@ const runExecutor: PromiseExecutor<ImportExecutorSchema> = async (
         analysis.unresolved[0].message,
       );
     }
-    const result = await executeSubtreeRepositoryImport(
+    const result = await executeRepositoryImport(
       context.root,
       analysis,
       options,

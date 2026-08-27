@@ -19,6 +19,7 @@ import {
   rewriteAliasCollisionContent,
   rewriteEnvironmentCollisionContent,
   type RepositoryImportAnalysis,
+  type ImportHistoryStrategy,
   type ImportRepositoryRoute,
   type RepositoryImportOptions,
 } from './repository-import';
@@ -45,7 +46,7 @@ export interface RepositoryImportMarker {
   readonly source: string;
   readonly sourceSha: string;
   readonly destination: string;
-  readonly history: 'subtree';
+  readonly history: ImportHistoryStrategy;
   readonly baseSha?: string;
   readonly graftCommit: string;
   readonly repositoryRoutes?: readonly ImportRepositoryRoute[];
@@ -229,7 +230,7 @@ export async function readRepositoryImportMarker(
     typeof marker.source !== 'string' ||
     !/^[a-f0-9]{40}$/i.test(marker.sourceSha ?? '') ||
     typeof marker.destination !== 'string' ||
-    marker.history !== 'subtree' ||
+    !['subtree', 'filter-repo', 'squash'].includes(marker.history ?? '') ||
     !/^[a-f0-9]{40}$/i.test(marker.graftCommit ?? '') ||
     (marker.schemaVersion === 2 && !Array.isArray(marker.repositoryRoutes)) ||
     !collisionRewritesAreValid(marker.collisionRewrites) ||
@@ -266,6 +267,12 @@ export async function completedRepositoryImport(
     throw new ImportPreflightError(
       'import-marker-conflict',
       `Import ${options.name} already records a different source SHA.`,
+    );
+  }
+  if (options.history && marker.history !== options.history) {
+    throw new ImportPreflightError(
+      'import-marker-conflict',
+      `Import ${options.name} already records the ${marker.history} history strategy.`,
     );
   }
   return marker;
@@ -562,6 +569,7 @@ async function applyCollisionRewrites(
 
 function importDecision(
   analysis: RepositoryImportAnalysis,
+  history: ImportHistoryStrategy,
   generatedAt = new Date(),
 ): { readonly path: string; readonly content: string } {
   const isoDate = generatedAt.toISOString().slice(0, 10);
@@ -575,6 +583,18 @@ function importDecision(
     ({ reason }) => reason === 'infrastructure',
   ).length;
   const collisionRewrites = plannedCollisionRewrites(analysis);
+  const historyRationale =
+    history === 'subtree'
+      ? 'Subtree preserves the source commit graph and creates a legible graft point without rewriting source commit SHAs.'
+      : history === 'filter-repo'
+        ? 'Filter-repo preserves the source commit graph beneath the staging prefix and improves path-following continuity, while acknowledging that every imported commit receives a new SHA.'
+        : 'Squash records the source at its approved immutable SHA as one snapshot commit; the source commit graph is intentionally not carried into the target repository.';
+  const historyConsequence =
+    history === 'subtree'
+      ? 'History before the graft remains reachable, but path-following across the staging-prefix integration move may degrade.'
+      : history === 'filter-repo'
+        ? 'Imported history remains reachable with rewritten staging-prefixed paths, but its commit SHAs differ from the source repository.'
+        : 'Only the approved source snapshot is represented in target history; earlier source commits are not ancestors of the imported project.';
   return {
     path: `decisions/${compactDate}-${slug}.md`,
     content: `---
@@ -584,26 +604,26 @@ status: "accepted"
 visibility: "internal"
 projects: ${JSON.stringify([analysis.name])}
 topics: ["import", "migration"]
-summary: ${JSON.stringify(`Import ${analysis.name} with subtree history`)}
+summary: ${JSON.stringify(`Import ${analysis.name} with ${history} history`)}
 date: ${JSON.stringify(isoDate)}
 supersedes: null
 references: []
 external_references: []
 ---
 
-# Import ${analysis.name} with subtree history
+# Import ${analysis.name} with ${history} history
 
 ## Decision
 
-Import ${analysis.source} at immutable commit \`${analysis.sourceSha}\` into \`${analysis.destination}\` using the subtree strategy.
+Import ${analysis.source} at immutable commit \`${analysis.sourceSha}\` into \`${analysis.destination}\` using the ${history} strategy.
 
 ## Why
 
-Subtree preserves the source commit graph and creates a legible graft point without rewriting source commit SHAs.
+${historyRationale}
 
 ## Consequences
 
-History before the graft remains reachable, but path-following across the staging-prefix integration move may degrade. ${documentationRoutes} source documentation record(s) were migrated into the host corpus and ${archivedInfrastructure} repository-infrastructure file(s) were preserved under the import record without becoming active. ${collisionRewrites.length} approved alias/environment collision rewrite(s) changed ${new Set(collisionRewrites.flatMap(({ affectedFiles }) => affectedFiles)).size} source-owned file(s). ${analysis.expectedGraphDependencies.length} target-project dependency edge(s) were required during verification. The source repository remains unchanged and is not archived or redirected by this operation.
+${historyConsequence} ${documentationRoutes} source documentation record(s) were migrated into the host corpus and ${archivedInfrastructure} repository-infrastructure file(s) were preserved under the import record without becoming active. ${collisionRewrites.length} approved alias/environment collision rewrite(s) changed ${new Set(collisionRewrites.flatMap(({ affectedFiles }) => affectedFiles)).size} source-owned file(s). ${analysis.expectedGraphDependencies.length} target-project dependency edge(s) were required during verification. The source repository remains unchanged and is not archived or redirected by this operation.
 `,
   };
 }
@@ -707,6 +727,7 @@ function assertExpectedGraphDependencies(
 
 export function renderRepositoryImportRecovery(
   analysis: RepositoryImportAnalysis,
+  history: ImportHistoryStrategy,
   phase: string,
   graftCommit?: string,
   command?: string,
@@ -719,23 +740,30 @@ Import of \`${analysis.name}\` stopped during the \`${phase}\` phase.
 - Source: \`${analysis.source}\`
 - Source SHA: \`${analysis.sourceSha}\`
 - Destination: \`${analysis.destination}\`
-- History strategy: \`subtree\`
+- History strategy: \`${history}\`
 - Graft commit: \`${graftCommit ?? 'not created'}\`
 ${command ? `- Failed command: \`${command}\`\n- Retry command: \`${command}\`\n` : ''}
 Inspect the branch and working tree before retrying. Megamono did not reset, revert, push, modify the source repository, or create the final integration commit.
 `;
 }
 
-export async function executeSubtreeRepositoryImport(
+export async function executeRepositoryImport(
   workspaceRoot: string,
   analysis: RepositoryImportAnalysis,
   options: RepositoryImportOptions,
   runner: ImportCommandRunner = runImportCommand,
 ): Promise<RepositoryImportExecutionResult> {
-  if (options.history !== 'subtree') {
+  const history = options.history;
+  if (!history) {
+    throw new ImportDecisionError(
+      'import-history-required',
+      'Execution requires an explicit history strategy.',
+    );
+  }
+  if (history === 'filter-repo') {
     throw new ImportPreflightError(
       'import-history-strategy-gated',
-      'This build executes subtree imports only; filter-repo and squash remain fixture-gated.',
+      'Filter-repo execution remains fixture-gated.',
     );
   }
   if (!options.expectedSourceSha) {
@@ -764,7 +792,7 @@ export async function executeSubtreeRepositoryImport(
       { cause: error },
     );
   }
-  const decision = importDecision(analysis);
+  const decision = importDecision(analysis, history);
   const decisionPath = posix.join(docsRoot, decision.path);
   if (
     (await exists(join(workspaceRoot, decisionPath))) ||
@@ -783,20 +811,43 @@ export async function executeSubtreeRepositoryImport(
   let graftCommit: string | undefined;
   let failedCommand: string | undefined;
   try {
-    failedCommand = `git subtree add --prefix=${staging} ${analysis.source} ${analysis.sourceSha}`;
-    await runFile(workspaceRoot, 'git', [
-      'subtree',
-      'add',
-      `--prefix=${staging}`,
-      analysis.source,
-      analysis.sourceSha,
-    ]);
-    await runFile(workspaceRoot, 'git', [
-      'commit',
-      '--amend',
-      '-m',
-      `graft ${analysis.name} history at ${analysis.sourceSha.slice(0, 12)}`,
-    ]);
+    if (history === 'subtree') {
+      failedCommand = `git subtree add --prefix=${staging} ${analysis.source} ${analysis.sourceSha}`;
+      await runFile(workspaceRoot, 'git', [
+        'subtree',
+        'add',
+        `--prefix=${staging}`,
+        analysis.source,
+        analysis.sourceSha,
+      ]);
+      await runFile(workspaceRoot, 'git', [
+        'commit',
+        '--amend',
+        '-m',
+        `graft ${analysis.name} history at ${analysis.sourceSha.slice(0, 12)}`,
+      ]);
+    } else {
+      failedCommand = `git fetch --no-tags ${analysis.source} ${analysis.sourceSha}`;
+      await runFile(workspaceRoot, 'git', [
+        'fetch',
+        '--no-tags',
+        analysis.source,
+        analysis.sourceSha,
+      ]);
+      failedCommand = `git read-tree --prefix=${staging}/ -u ${analysis.sourceSha}^{tree}`;
+      await runFile(workspaceRoot, 'git', [
+        'read-tree',
+        `--prefix=${staging}/`,
+        '-u',
+        `${analysis.sourceSha}^{tree}`,
+      ]);
+      failedCommand = 'git commit';
+      await runFile(workspaceRoot, 'git', [
+        'commit',
+        '-m',
+        `graft ${analysis.name} squash at ${analysis.sourceSha.slice(0, 12)}`,
+      ]);
+    }
     graftCommit = await runFile(workspaceRoot, 'git', ['rev-parse', 'HEAD']);
 
     phase = 'integration';
@@ -826,7 +877,7 @@ export async function executeSubtreeRepositoryImport(
       source: analysis.source,
       sourceSha: analysis.sourceSha,
       destination: analysis.destination,
-      history: 'subtree',
+      history,
       ...(analysis.targetGit.baseSha
         ? { baseSha: analysis.targetGit.baseSha }
         : {}),
@@ -886,6 +937,7 @@ export async function executeSubtreeRepositoryImport(
       join(workspaceRoot, 'MEGAMONO-RECOVERY.md'),
       renderRepositoryImportRecovery(
         analysis,
+        history,
         phase,
         graftCommit,
         failedCommand,
@@ -896,3 +948,6 @@ export async function executeSubtreeRepositoryImport(
     throw new ImportExecutionError(phase, failedCommand, { cause: error });
   }
 }
+
+/** @deprecated Use executeRepositoryImport, which supports every executable history strategy. */
+export const executeSubtreeRepositoryImport = executeRepositoryImport;

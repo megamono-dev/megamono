@@ -168,6 +168,7 @@ export {
 export {
   assertNoPartialRepositoryImport,
   completedRepositoryImport,
+  executeRepositoryImport,
   executeSubtreeRepositoryImport,
   ImportExecutionError,
   readRepositoryImportMarker,
