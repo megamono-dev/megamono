@@ -154,6 +154,8 @@ Generators own record shape at creation time, not record content afterward. Once
 
 The emitted config imports transforms from `@playstack/content` (slug, reading time, TOC, date normalization). **This is the allowed direction:** Megamono generates, Playstack provides. A generator emitting a runtime import is not a violation; the reverse — Playstack importing anything Megamono — remains prohibited (`spec-megamono-0007`).
 
+The published generators are acceptance-tested from packed Megamono output against the Free-tier `@playstack/content` yalc artifact. The npm and pnpm fixtures build the generated library, preserve local package addresses, and verify that unchanged generator reruns are stable.
+
 The graph edge falls out naturally. Touching content marks consuming apps affected.
 
 ## Archiving

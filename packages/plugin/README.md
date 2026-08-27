@@ -30,11 +30,11 @@ Only entries marked `available` are emitted. Programmatic callers can use
 `getGeneratorAvailability` or `assertGeneratorAvailable` to return the stable
 gate diagnostic for a gated or reserved name.
 
-The `content-lib` and `content-type` implementations scaffold an internal
+The published `content-lib` and `content-type` generators scaffold an internal
 content-data project, generated-import path, cached build target, Playstack
-transforms, and deterministic schema-backed document types. Their descriptors
-remain fixture-gated until the packed Free-tier `@playstack/content` contract is
-available; implementation presence alone does not publish the generator names.
+transforms, and deterministic schema-backed document types. Their packed
+Free-tier fixture consumes `@playstack/content` through yalc, builds the
+generated project under npm and pnpm, and verifies stable reruns.
 
 The published `playstack-lint` and `playstack-skills` generators follow the
 same ownership rule. Lint adds the selected Playstack preset in warning mode;

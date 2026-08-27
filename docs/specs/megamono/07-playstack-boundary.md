@@ -85,7 +85,7 @@ That distinction is what keeps the direction rule true in practice rather than o
 | Playstack package          | Generator                               | Purpose                                     | Required tier | V1 state                                             |
 | -------------------------- | --------------------------------------- | ------------------------------------------- | ------------- | ---------------------------------------------------- |
 | `@playstack/chakra`        | `@megamono/plugin:theme`                | Semantic tokens and Chakra composition API  | Free          | Gated on external fixture contract                   |
-| `@playstack/content`       | `@megamono/plugin:content-lib`          | Content transforms                          | Free          | Gated on external fixture contract                   |
+| `@playstack/content`       | `@megamono/plugin:content-lib`          | Content transforms                          | Free          | Available; packed npm/pnpm yalc fixture passed       |
 | `@playstack/observability` | `@megamono/plugin:integration-sentry`   | Shared Sentry conventions                   | Free          | Gated on external fixture contract                   |
 | `@playstack/extension`     | `@megamono/nx-extension`                | Auth handoff, messaging, storage            | Free          | Gated on external fixture contract                   |
 | `@playstack/auth`          | `@megamono/plugin:playstack-auth`       | Identity runtime and Prisma fragment        | Free          | Gated on external fixture contract                   |
