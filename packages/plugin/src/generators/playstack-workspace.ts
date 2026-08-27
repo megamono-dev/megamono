@@ -18,7 +18,7 @@ export class PlaystackWorkspaceIntegrationError extends Error {
   readonly diagnosticCode = 'playstack-integration-preflight';
 }
 
-export function assertInitializedMegamonoWorkspace(tree: Tree): void {
+export function readInitializedMegamonoWorkspace(tree: Tree) {
   const source = tree.read('megamono.json', 'utf8');
   if (!source) {
     throw new PlaystackWorkspaceIntegrationError(
@@ -26,13 +26,17 @@ export function assertInitializedMegamonoWorkspace(tree: Tree): void {
     );
   }
   try {
-    megamonoConfigSchema.parse(JSON.parse(source));
+    return megamonoConfigSchema.parse(JSON.parse(source));
   } catch (cause) {
     throw new PlaystackWorkspaceIntegrationError(
       'megamono.json must be valid before wiring a Playstack integration.',
       { cause },
     );
   }
+}
+
+export function assertInitializedMegamonoWorkspace(tree: Tree): void {
+  readInitializedMegamonoWorkspace(tree);
 }
 
 function dependencyNames(manifest: PackageManifest): string[] {

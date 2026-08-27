@@ -60,5 +60,14 @@ describe('Playstack emission registry', () => {
     expect(
       compatiblePlaystackPackageVersion('playstack-lint', '@playstack/lint'),
     ).toBe('0.1.0-beta.1');
+    expect(
+      compatiblePlaystackPackageVersion('playstack-skills', '@playstack/cli'),
+    ).toBe('0.1.0-beta.1');
+    expect(
+      compatiblePlaystackPackageVersion(
+        'playstack-skills',
+        '@playstack/skills',
+      ),
+    ).toBe('0.1.0-beta.1');
   });
 });

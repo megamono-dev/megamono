@@ -36,6 +36,13 @@ transforms, and deterministic schema-backed document types. Their descriptors
 remain fixture-gated until the packed Free-tier `@playstack/content` contract is
 available; implementation presence alone does not publish the generator names.
 
+The `playstack-lint` and `playstack-skills` implementations follow the same
+availability rule. Lint adds the selected Playstack preset in warning mode;
+skills installs the compatible CLI and corpus packages, then delegates all
+file ownership, drift, and synchronization to `playstack skills sync`. Neither
+name enters the published collection until its packed cross-repository fixture
+passes.
+
 ## Convert an existing application repository
 
 After committing `nx init` on a non-default conversion branch, preview the
