@@ -1,5 +1,13 @@
 import { spawn } from 'node:child_process';
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  access,
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -25,8 +33,9 @@ const appPlatforms = {
 };
 const allApps = Object.keys(appRoots).sort();
 const matrixCases = [
-  ...allApps.map((app) => ({ id: app, apps: [app] })),
-  { id: 'all', apps: allApps },
+  ...allApps.map((app) => ({ id: app, apps: [app], packageManager: 'pnpm' })),
+  { id: 'all', apps: allApps, packageManager: 'pnpm' },
+  { id: 'web-npm', apps: ['web'], packageManager: 'npm' },
 ];
 const requestedCases = new Set(
   (process.env.MEGAMONO_MATRIX_CASES ?? '')
@@ -123,6 +132,21 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function createInvocation(packageManager, args) {
+  return packageManager === 'pnpm'
+    ? { command: 'pnpm', args: ['dlx', 'create-megamono@0.0.1', ...args] }
+    : {
+        command: 'npm',
+        args: ['exec', '--yes', 'create-megamono@0.0.1', '--', ...args],
+      };
+}
+
+function nxInvocation(packageManager, args) {
+  return packageManager === 'pnpm'
+    ? { command: 'pnpm', args: ['exec', 'nx', ...args] }
+    : { command: 'npm', args: ['exec', 'nx', '--', ...args] };
+}
+
 async function exists(path) {
   try {
     await access(path);
@@ -138,24 +162,22 @@ async function verifyCase(root, testCase, environment) {
   const staging = resolve(root, `megamono-${scope}-staging`);
   const npmCache = resolve(root, `npm-cache-${testCase.id}`);
   const caseEnvironment = { ...environment, npm_config_cache: npmCache };
+  const packageManager = testCase.packageManager;
   process.stdout.write(
     `create-megamono selection matrix: ${testCase.id} (${testCase.apps.join(',')})\n`,
   );
-  const created = await run(
-    'npm',
-    [
-      'exec',
-      '--yes',
-      'create-megamono@0.0.1',
-      '--',
-      `Matrix ${testCase.id}`,
-      `--directory=${scope}`,
-      `--apps=${testCase.apps.join(',')}`,
-      '--interactive=false',
-      `--verify=${verifyMode}`,
-    ],
-    { cwd: root, env: caseEnvironment },
-  );
+  const creation = createInvocation(packageManager, [
+    `Matrix ${testCase.id}`,
+    `--directory=${scope}`,
+    `--apps=${testCase.apps.join(',')}`,
+    `--package-manager=${packageManager}`,
+    '--interactive=false',
+    `--verify=${verifyMode}`,
+  ]);
+  const created = await run(creation.command, creation.args, {
+    cwd: root,
+    env: caseEnvironment,
+  });
   assert(
     created.stdout.includes('megamono:check'),
     `${testCase.id}: packed CLI did not execute config verification.`,
@@ -177,24 +199,35 @@ async function verifyCase(root, testCase, environment) {
     `${testCase.id}: expected platforms ${expectedPlatforms.join(',')}, received ${JSON.stringify(megamono.platforms)}.`,
   );
 
-  await run(
-    'npm',
-    [
-      'exec',
-      'nx',
-      '--',
-      'run',
-      'megamono-docs:health',
-      '--output-style=static',
-    ],
-    { cwd: destination, env: caseEnvironment },
-  );
+  const healthInvocation = nxInvocation(packageManager, [
+    'run',
+    'megamono-docs:health',
+    '--output-style=static',
+  ]);
+  await run(healthInvocation.command, healthInvocation.args, {
+    cwd: destination,
+    env: caseEnvironment,
+  });
   const health = JSON.parse(
     await readFile(resolve(destination, '.megamono/health.json'), 'utf8'),
   );
   assert(
     health.schemaVersion === 1 && Array.isArray(health.findings),
     `${testCase.id}: packed health executor did not emit a valid report.`,
+  );
+  const packageManifest = JSON.parse(
+    await readFile(resolve(destination, 'package.json'), 'utf8'),
+  );
+  assert(
+    packageManifest.packageManager.startsWith(`${packageManager}@`),
+    `${testCase.id}: packageManager does not record ${packageManager}.`,
+  );
+  assert(
+    (await exists(resolve(destination, 'pnpm-lock.yaml'))) ===
+      (packageManager === 'pnpm') &&
+      (await exists(resolve(destination, 'package-lock.json'))) ===
+        (packageManager === 'npm'),
+    `${testCase.id}: generated lockfile does not match ${packageManager}.`,
   );
   const healthWorkflow = await readFile(
     resolve(destination, '.github/workflows/megamono-health.yml'),
@@ -216,7 +249,11 @@ async function verifyCase(root, testCase, environment) {
     ciWorkflow.includes('actions/checkout@v7') &&
       ciWorkflow.includes('fetch-depth: 0') &&
       ciWorkflow.includes('nrwl/nx-set-shas@v5') &&
-      ciWorkflow.includes('npm exec nx -- affected -t lint test build') &&
+      ciWorkflow.includes(
+        packageManager === 'pnpm'
+          ? 'pnpm exec nx affected -t lint test build'
+          : 'npm exec nx -- affected -t lint test build',
+      ) &&
       !ciWorkflow.includes('contents: write'),
     `${testCase.id}: generated CI workflow does not match the affected contract.`,
   );
@@ -247,13 +284,18 @@ async function verifyCase(root, testCase, environment) {
 
   for (const app of testCase.apps) {
     const projectName = `${scope}-${app}`;
+    const showProject = nxInvocation(packageManager, [
+      'show',
+      'project',
+      projectName,
+      '--json',
+    ]);
     const project = JSON.parse(
       (
-        await run(
-          'npm',
-          ['exec', 'nx', '--', 'show', 'project', projectName, '--json'],
-          { cwd: destination, env: caseEnvironment },
-        )
+        await run(showProject.command, showProject.args, {
+          cwd: destination,
+          env: caseEnvironment,
+        })
       ).stdout,
     );
     assert(
@@ -273,18 +315,15 @@ async function verifyCase(root, testCase, environment) {
       `${testCase.id}: ${projectName} is not an application project.`,
     );
     if (project.targets?.lint) {
-      await run(
-        'npm',
-        [
-          'exec',
-          'nx',
-          '--',
-          'run',
-          `${projectName}:lint`,
-          '--output-style=static',
-        ],
-        { cwd: destination, env: caseEnvironment },
-      );
+      const lintInvocation = nxInvocation(packageManager, [
+        'run',
+        `${projectName}:lint`,
+        '--output-style=static',
+      ]);
+      await run(lintInvocation.command, lintInvocation.args, {
+        cwd: destination,
+        env: caseEnvironment,
+      });
     }
     if (app === 'site' || app === 'web') {
       assert(
@@ -353,6 +392,7 @@ const temporaryRoot = await mkdtemp(
 );
 const npmConfig = resolve(temporaryRoot, 'npmrc');
 const registryConfig = resolve(temporaryRoot, 'verdaccio.json');
+const commandBin = resolve(temporaryRoot, 'bin');
 const port = await availablePort();
 const registry = `http://127.0.0.1:${port}`;
 
@@ -361,6 +401,13 @@ await writeFile(
   `registry=${registry}\n//127.0.0.1:${port}/:_authToken=local-e2e-token\n`,
   'utf8',
 );
+await mkdir(commandBin);
+await writeFile(
+  resolve(commandBin, 'pnpm'),
+  '#!/bin/sh\nexec corepack pnpm@11.24.0 "$@"\n',
+  'utf8',
+);
+await chmod(resolve(commandBin, 'pnpm'), 0o755);
 await writeFile(
   registryConfig,
   `${JSON.stringify(
@@ -411,6 +458,7 @@ try {
   const environment = {
     NX_DAEMON: 'false',
     npm_config_userconfig: npmConfig,
+    PATH: `${commandBin}:${process.env.PATH ?? ''}`,
   };
   const publishCache = resolve(temporaryRoot, 'npm-cache-publish');
   for (const packagePath of [
@@ -443,7 +491,7 @@ try {
   process.stdout.write(
     requestedCases.size
       ? `create-megamono selection matrix passed requested cases: ${cases.map(({ id }) => id).join(',')}.\n`
-      : 'create-megamono selection matrix passed: every app independently and the all-app combination.\n',
+      : 'create-megamono selection matrix passed: every app independently, the all-app combination, and npm/pnpm generated outputs.\n',
   );
 } finally {
   verdaccio.kill('SIGTERM');
