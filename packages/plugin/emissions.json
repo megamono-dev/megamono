@@ -141,7 +141,7 @@
       "purpose": "Playstack-specific ESLint presets",
       "dependencyType": "development",
       "requiredTier": "free",
-      "compatibleVersion": null,
+      "compatibleVersion": "0.1.0-beta.1",
       "availability": "gated"
     },
     {

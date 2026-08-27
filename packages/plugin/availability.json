@@ -113,6 +113,9 @@
     },
     "playstack-lint": {
       "status": "gated",
+      "factory": "./dist/generators/playstack-lint/playstack-lint",
+      "schema": "./dist/generators/playstack-lint/schema.json",
+      "description": "Add Playstack API lint rules in warning mode",
       "gate": "The @playstack/lint Free-tier compatibility contract and fixtures are unavailable."
     },
     "playstack-skills": {

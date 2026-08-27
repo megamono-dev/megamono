@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "PlaystackLint",
+  "title": "Wire Playstack lint rules into a Megamono workspace",
+  "type": "object",
+  "properties": {
+    "preset": {
+      "type": "string",
+      "enum": ["recommended", "all"],
+      "default": "recommended",
+      "description": "Playstack lint preset to add in warning mode."
+    },
+    "interactive": {
+      "type": "boolean",
+      "default": true
+    },
+    "dryRun": {
+      "type": "boolean",
+      "default": false,
+      "description": "Print the deterministic plan without writing files."
+    }
+  },
+  "additionalProperties": false
+}

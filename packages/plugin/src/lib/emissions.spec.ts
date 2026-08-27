@@ -19,9 +19,9 @@ function sourceFiles(root: string): string[] {
 
 describe('Playstack emission registry', () => {
   it('uses unique packages and canonical generator names', () => {
-    expect(new Set(PLAYSTACK_EMISSIONS.map((entry) => entry.package)).size).toBe(
-      PLAYSTACK_EMISSIONS.length,
-    );
+    expect(
+      new Set(PLAYSTACK_EMISSIONS.map((entry) => entry.package)).size,
+    ).toBe(PLAYSTACK_EMISSIONS.length);
     for (const emission of PLAYSTACK_EMISSIONS) {
       expect(emission.generators.length, emission.package).toBeGreaterThan(0);
       for (const generator of emission.generators) {
@@ -57,5 +57,8 @@ describe('Playstack emission registry', () => {
     expect(() =>
       compatiblePlaystackPackageVersion('theme', '@playstack/chakra'),
     ).toThrow(/no compatible version/);
+    expect(
+      compatiblePlaystackPackageVersion('playstack-lint', '@playstack/lint'),
+    ).toBe('0.1.0-beta.1');
   });
 });
