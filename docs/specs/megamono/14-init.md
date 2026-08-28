@@ -58,11 +58,13 @@ Existing monorepos may adopt repository governance and then run Playstack's pack
 ```text
 megamono init \
   --playstack \
-  --playstack-packages=@playstack/auth,@playstack/accounts \
+  --playstack-packages=auth,accounts \
   --local-packages=yalc
 ```
 
-Megamono completes first. The dispatcher then installs only missing requested Playstack packages from the selected source and invokes the repository-local `playstack init`. It does not interpret Playstack artifacts or write `playstack.json`. Registry is the default source; yalc is an explicit all-local contract and fails preflight when any requested artifact is absent from the yalc store.
+Megamono completes first. The dispatcher normalizes concise product names and full `@playstack/*` package names to canonical package IDs, then installs only missing requested Playstack packages from the selected source and invokes the repository-local `playstack init`. It does not interpret Playstack artifacts or write `playstack.json`. Registry is the default source; yalc is an explicit all-local contract and fails preflight when any requested artifact is absent from the yalc store.
+
+When a terminal is interactive, a bare `--playstack-packages` opens a multiselect of supported Playstack products. The chosen short names enter the same normalization and preflight path as explicit values. Non-interactive callers must provide a comma-separated value; a valueless selector exits `2` instead of waiting for input.
 
 For a survey, no packages are installed. An already-installed Playstack CLI contributes its own read-only survey; otherwise the Megamono report lists the deferred package and command plan.
 

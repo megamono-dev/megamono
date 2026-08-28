@@ -114,7 +114,10 @@ writeFileSync(resolve(process.cwd(), '.fixture-playstack.json'), JSON.stringify(
 `;
 
 async function createPackage(root, manifest, executable, source) {
-  const directory = resolve(root, manifest.name.replace('@', '').replace('/', '-'));
+  const directory = resolve(
+    root,
+    manifest.name.replace('@', '').replace('/', '-'),
+  );
   await mkdir(directory, { recursive: true });
   await json(
     resolve(directory, 'package.json'),
@@ -326,11 +329,10 @@ try {
 
   const npmWorkspace = resolve(temporaryRoot, 'npm-workspace');
   await createWorkspace(npmWorkspace, 'npm', registry, environment);
-  await run(
-    megamono,
-    ['init', '--playstack-packages=@playstack/auth', '--only=docs'],
-    { cwd: npmWorkspace, env: environment },
-  );
+  await run(megamono, ['init', '--playstack-packages=auth', '--only=docs'], {
+    cwd: npmWorkspace,
+    env: environment,
+  });
   const registryManifest = JSON.parse(
     await readFile(resolve(npmWorkspace, 'package.json'), 'utf8'),
   );
@@ -361,12 +363,7 @@ try {
   for (const packageName of ['@playstack/cli', '@playstack/auth']) {
     await cp(
       packageDirectories.get(packageName),
-      resolve(
-        yalcStore,
-        'packages',
-        ...packageName.split('/'),
-        '0.1.0',
-      ),
+      resolve(yalcStore, 'packages', ...packageName.split('/'), '0.1.0'),
       { recursive: true },
     );
   }
@@ -380,7 +377,7 @@ try {
     megamono,
     [
       'init',
-      '--playstack-packages=@playstack/auth',
+      '--playstack-packages=auth',
       '--local-packages=yalc',
       '--interactive=false',
     ],
@@ -409,8 +406,12 @@ try {
   const surveyWorkspace = resolve(temporaryRoot, 'survey-workspace');
   await createWorkspace(surveyWorkspace, 'npm', registry, environment);
   await mkdir(resolve(surveyWorkspace, 'apps/nested'), { recursive: true });
-  const beforeManifest = await readFile(resolve(surveyWorkspace, 'package.json'));
-  const beforeLock = await readFile(resolve(surveyWorkspace, 'package-lock.json'));
+  const beforeManifest = await readFile(
+    resolve(surveyWorkspace, 'package.json'),
+  );
+  const beforeLock = await readFile(
+    resolve(surveyWorkspace, 'package-lock.json'),
+  );
   const survey = await run(megamono, ['init', '--survey', '--playstack'], {
     cwd: resolve(surveyWorkspace, 'apps/nested'),
     env: environment,
@@ -420,17 +421,22 @@ try {
     'Combined survey did not report its deferred Playstack plan.',
   );
   assert(
-    beforeManifest.equals(await readFile(resolve(surveyWorkspace, 'package.json'))) &&
-      beforeLock.equals(await readFile(resolve(surveyWorkspace, 'package-lock.json'))),
+    beforeManifest.equals(
+      await readFile(resolve(surveyWorkspace, 'package.json')),
+    ) &&
+      beforeLock.equals(
+        await readFile(resolve(surveyWorkspace, 'package-lock.json')),
+      ),
     'Combined survey changed package state.',
   );
 
   const missingStore = resolve(temporaryRoot, 'missing-yalc-store');
   await mkdir(missingStore, { recursive: true });
-  const beforeMissingInvocations = (await readInvocations(surveyWorkspace)).length;
+  const beforeMissingInvocations = (await readInvocations(surveyWorkspace))
+    .length;
   const missing = await run(
     megamono,
-    ['init', '--playstack-packages=@playstack/auth', '--local-packages=yalc'],
+    ['init', '--playstack-packages=auth', '--local-packages=yalc'],
     {
       cwd: surveyWorkspace,
       env: { ...yalcEnvironment, MEGAMONO_E2E_YALC_STORE: missingStore },
@@ -439,7 +445,8 @@ try {
   );
   assert(missing.code === 3, 'Missing yalc artifacts did not exit 3.');
   assert(
-    (await readInvocations(surveyWorkspace)).length === beforeMissingInvocations,
+    (await readInvocations(surveyWorkspace)).length ===
+      beforeMissingInvocations,
     'Missing yalc artifacts spawned workspace-init.',
   );
 
@@ -457,8 +464,12 @@ try {
     'The packed CLI did not propagate the delegated Nx exit status.',
   );
 
-  await writeFile(resolve(surveyWorkspace, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n');
-  const beforeAmbiguousInvocations = (await readInvocations(surveyWorkspace)).length;
+  await writeFile(
+    resolve(surveyWorkspace, 'pnpm-lock.yaml'),
+    'lockfileVersion: 9\n',
+  );
+  const beforeAmbiguousInvocations = (await readInvocations(surveyWorkspace))
+    .length;
   const ambiguous = await run(megamono, ['init', '--survey'], {
     cwd: surveyWorkspace,
     env: environment,

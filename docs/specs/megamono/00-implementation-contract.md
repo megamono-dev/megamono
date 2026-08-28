@@ -108,7 +108,7 @@ Installing `@megamono/cli` globally exposes the `megamono` executable. V1 intent
 ```text
 megamono init
 megamono init --survey
-megamono init --playstack --playstack-packages=@playstack/auth,@playstack/accounts
+megamono init --playstack --playstack-packages=auth,accounts
 megamono init --playstack --local-packages=yalc
 megamono help
 megamono --version
@@ -119,7 +119,7 @@ megamono --version
 The CLI consumes three init-only options before delegation:
 
 - `--playstack` runs package-owned `playstack init` after Megamono initialization succeeds.
-- `--playstack-packages=<comma-separated @playstack/* names>` installs those product packages before invoking Playstack init and implies `--playstack`.
+- `--playstack-packages=<comma-separated names>` accepts concise product names such as `auth,accounts` or full `@playstack/*` package names, normalizes them to canonical package IDs, installs them before invoking Playstack init, and implies `--playstack`. In an interactive terminal, a bare `--playstack-packages` opens the supported-product multiselect; without an interactive prompt, omitting the value is a usage error and never blocks automation.
 - `--local-packages=registry|yalc` selects the source for missing Megamono and Playstack packages; registry is the default.
 
 The local `@megamono/plugin` remains a prerequisite because installing it would dirty the worktree before the generator's safety check. When it is absent, the CLI exits `3` with the exact registry or yalc installation command, and the user commits that dependency change before retrying. `--local-packages=yalc` verifies all requested exact packages in the user-wide yalc store before running workspace-init, so a missing local Playstack artifact cannot leave a half-initialized repository.

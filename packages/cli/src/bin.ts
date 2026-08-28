@@ -2,7 +2,11 @@
 
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { stdin, stdout } from 'node:process';
+import enquirer from 'enquirer';
 import { runMegamonoCli, type CommandResult } from './lib/cli.js';
+
+const { prompt } = enquirer;
 
 async function runCommand(
   command: string,
@@ -51,6 +55,31 @@ const result = await runMegamonoCli(process.argv.slice(2), {
   version: packageJson.version,
   stdout: (message) => process.stdout.write(`${message}\n`),
   stderr: (message) => process.stderr.write(`${message}\n`),
+  ...(stdin.isTTY && stdout.isTTY
+    ? {
+        selectPlaystackPackages: async (
+          choices: readonly {
+            readonly name: string;
+            readonly message: string;
+          }[],
+        ) => {
+          const response = await prompt<{ products: string[] }>({
+            type: 'multiselect',
+            name: 'products',
+            message: 'Which Playstack products should this workspace use?',
+            choices: choices.map((choice) => ({
+              name: choice.name,
+              message: choice.message,
+            })),
+            validate: (value) =>
+              Array.isArray(value) && value.length > 0
+                ? true
+                : 'Select at least one Playstack product.',
+          });
+          return response.products;
+        },
+      }
+    : {}),
   runCommand,
 });
 

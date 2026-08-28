@@ -52,6 +52,7 @@ async function workspace(
 function io(
   cwd: string,
   responder?: (invocation: Invocation) => CommandResult,
+  selectedPlaystackPackages?: readonly string[],
 ): {
   readonly value: MegamonoCliIo;
   readonly invocations: Invocation[];
@@ -70,6 +71,11 @@ function io(
       version: '0.0.1-test',
       stdout: (message) => stdout.push(message),
       stderr: (message) => stderr.push(message),
+      ...(selectedPlaystackPackages
+        ? {
+            selectPlaystackPackages: async () => selectedPlaystackPackages,
+          }
+        : {}),
       runCommand: async (command, args, options) => {
         const invocation = {
           command,
@@ -170,7 +176,7 @@ describe('@megamono/cli', () => {
     const result = await runMegamonoCli(
       [
         'init',
-        '--playstack-packages=@playstack/auth',
+        '--playstack-packages=auth,@playstack/auth',
         '--local-packages=yalc',
         '--only=docs',
       ],
@@ -239,6 +245,77 @@ describe('@megamono/cli', () => {
     expect(harness.stdout.join('\n')).toContain('Playstack survey deferred');
   });
 
+  it('prompts for products when playstack-packages has no value', async () => {
+    const root = await workspace('npm');
+    const harness = io(root, undefined, ['auth', 'cache']);
+
+    const result = await runMegamonoCli(
+      ['init', '--playstack-packages'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(harness.invocations).toEqual([
+      {
+        command: 'npm',
+        args: [
+          'exec',
+          'nx',
+          '--',
+          'generate',
+          '@megamono/plugin:workspace-init',
+        ],
+        cwd: root,
+        capture: false,
+      },
+      {
+        command: 'npm',
+        args: ['install', '--save-dev', '@playstack/cli'],
+        cwd: root,
+        capture: false,
+      },
+      {
+        command: 'npm',
+        args: ['install', '@playstack/auth', '@playstack/cache'],
+        cwd: root,
+        capture: false,
+      },
+      {
+        command: 'npm',
+        args: ['exec', 'playstack', '--', 'init'],
+        cwd: root,
+        capture: false,
+      },
+    ]);
+  });
+
+  it('refuses a valueless package selector without an interactive prompt', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+
+    const result = await runMegamonoCli(
+      ['init', '--playstack-packages'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(2);
+    expect(harness.invocations).toEqual([]);
+    expect(harness.stderr.join('\n')).toContain('non-interactive');
+  });
+
+  it('honors explicit non-interactive mode even when a prompt is available', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root, undefined, ['auth']);
+
+    const result = await runMegamonoCli(
+      ['init', '--playstack-packages', '--interactive=false'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(2);
+    expect(harness.invocations).toEqual([]);
+  });
+
   it('explains how to install a missing local plugin without mutating', async () => {
     const root = await workspace('pnpm', ['nx']);
     const harness = io(root);
@@ -257,7 +334,7 @@ describe('@megamono/cli', () => {
     const harness = io(root);
 
     const result = await runMegamonoCli(
-      ['init', '--playstack-packages=left-pad'],
+      ['init', '--playstack-packages=@other/left-pad'],
       harness.value,
     );
 

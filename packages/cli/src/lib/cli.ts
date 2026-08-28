@@ -17,6 +17,9 @@ export interface MegamonoCliIo {
   readonly version: string;
   stdout(message: string): void;
   stderr(message: string): void;
+  selectPlaystackPackages?(
+    choices: readonly PlaystackProductChoice[],
+  ): Promise<readonly string[]>;
   runCommand(
     command: string,
     args: readonly string[],
@@ -33,8 +36,22 @@ interface InitOptions {
   readonly localPackages: LocalPackageSource;
   readonly playstack: boolean;
   readonly playstackPackages: readonly string[];
+  readonly selectPlaystackPackages: boolean;
   readonly survey: boolean;
 }
+
+export interface PlaystackProductChoice {
+  readonly name: string;
+  readonly message: string;
+}
+
+export const PLAYSTACK_PRODUCT_CHOICES: readonly PlaystackProductChoice[] = [
+  { name: 'accounts', message: 'Accounts — tenancy and membership' },
+  { name: 'auth', message: 'Auth — identity and sessions' },
+  { name: 'cache', message: 'Cache — provider-backed caching' },
+  { name: 'content', message: 'Content — transforms and schemas' },
+  { name: 'webhooks', message: 'Webhooks — durable webhook receipts' },
+];
 
 interface Workspace {
   readonly root: string;
@@ -62,8 +79,8 @@ Global options:
 
 Init-only options:
   --playstack          Run package-owned Playstack setup after Megamono
-  --playstack-packages=<names>
-                       Comma-separated @playstack/* product packages
+  --playstack-packages[=<names>]
+                       Select products, or pass comma-separated names
   --local-packages=registry|yalc
                        Package source for missing local packages
 
@@ -74,7 +91,7 @@ const INIT_HELP = `Usage: megamono init [generator options]
 Examples:
   megamono init --survey
   megamono init --only=docs,agents --interactive=false --yes
-  megamono init --playstack --playstack-packages=@playstack/auth
+  megamono init --playstack --playstack-packages=auth
   megamono init --playstack --local-packages=yalc
 
 The workspace must contain local nx and @megamono/plugin installations.`;
@@ -158,7 +175,7 @@ function optionValue(
 }
 
 function parsePlaystackPackages(value: string): readonly string[] {
-  const packages = [
+  const requested = [
     ...new Set(
       value
         .split(',')
@@ -166,24 +183,27 @@ function parsePlaystackPackages(value: string): readonly string[] {
         .filter(Boolean),
     ),
   ];
-  if (packages.length === 0) {
+  if (requested.length === 0) {
     throw new CliError(
       '--playstack-packages requires at least one package.',
       2,
     );
   }
+  const packages = requested.map((name) =>
+    /^@playstack\//.test(name) ? name : `@playstack/${name}`,
+  );
   for (const packageName of packages) {
     if (
       !/^@playstack\/[a-z0-9][a-z0-9._-]*$/.test(packageName) ||
       packageName === '@playstack/cli'
     ) {
       throw new CliError(
-        `Invalid Playstack product package ${packageName}; expected @playstack/<name>.`,
+        `Invalid Playstack product package ${packageName}; expected <name> or @playstack/<name>.`,
         2,
       );
     }
   }
-  return packages.sort();
+  return [...new Set(packages)].sort();
 }
 
 function parseInitOptions(args: readonly string[]): InitOptions {
@@ -191,6 +211,7 @@ function parseInitOptions(args: readonly string[]): InitOptions {
   let localPackages: LocalPackageSource = 'registry';
   let playstack = false;
   let playstackPackages: readonly string[] = [];
+  let selectPlaystackPackages = false;
   let passthrough = false;
   for (let index = 0; index < args.length;) {
     const argument = args[index];
@@ -219,6 +240,16 @@ function parseInitOptions(args: readonly string[]): InitOptions {
       index += 1;
       continue;
     }
+    if (
+      (argument === '--playstack-packages' &&
+        (!args[index + 1] || args[index + 1]?.startsWith('--'))) ||
+      argument === '--playstack-packages='
+    ) {
+      selectPlaystackPackages = true;
+      playstack = true;
+      index += 1;
+      continue;
+    }
     const source = optionValue(args, index, '--local-packages');
     if (source) {
       if (source.value !== 'registry' && source.value !== 'yalc') {
@@ -243,9 +274,45 @@ function parseInitOptions(args: readonly string[]): InitOptions {
     localPackages,
     playstack,
     playstackPackages,
+    selectPlaystackPackages,
     survey: forwarded.some(
       (argument) => argument === '--survey' || argument === '--survey=true',
     ),
+  };
+}
+
+async function resolvePlaystackPackageSelection(
+  io: MegamonoCliIo,
+  options: InitOptions,
+): Promise<InitOptions> {
+  if (!options.selectPlaystackPackages) return options;
+  const interactionDisabled = options.generatorArgs.some(
+    (argument, index, args) =>
+      argument === '--no-interactive' ||
+      argument === '--interactive=false' ||
+      (argument === '--interactive' && args[index + 1] === 'false'),
+  );
+  if (!io.selectPlaystackPackages || interactionDisabled) {
+    throw new CliError(
+      '--playstack-packages requires a comma-separated value when input is non-interactive.',
+      2,
+    );
+  }
+  let selected: readonly string[];
+  try {
+    selected = await io.selectPlaystackPackages(PLAYSTACK_PRODUCT_CHOICES);
+  } catch (cause) {
+    throw new CliError(
+      `Playstack package selection was cancelled: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+      2,
+    );
+  }
+  return {
+    ...options,
+    playstackPackages: parsePlaystackPackages(selected.join(',')),
+    selectPlaystackPackages: false,
   };
 }
 
@@ -466,7 +533,7 @@ async function runInit(
   args: readonly string[],
   io: MegamonoCliIo,
 ): Promise<MegamonoCliResult> {
-  const options = parseInitOptions(args);
+  const parsedOptions = parseInitOptions(args);
   const root = await findWorkspaceRoot(io.cwd);
   const workspace: Workspace = {
     root,
@@ -477,6 +544,7 @@ async function runInit(
   }
 
   const pluginAvailable = localPackageAvailable(root, '@megamono/plugin');
+  const options = await resolvePlaystackPackageSelection(io, parsedOptions);
   if (options.localPackages === 'yalc') {
     const yalcPackages = [
       ...(!pluginAvailable ? ['@megamono/plugin'] : []),
