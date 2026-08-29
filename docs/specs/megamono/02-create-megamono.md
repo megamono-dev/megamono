@@ -25,9 +25,9 @@ external_references: []
 
 ## Why this exists as a binary
 
-General rule for this project: **an Nx plugin already is the CLI.** `npm exec nx g @megamono/plugin:target` covers almost everything. Do not ship a separate binary unless something genuinely cannot be expressed as a generator or executor.
+The workspace-local Nx plugin remains the implementation authority. The dedicated `megamono` binary is the ergonomic dispatcher for those generators in an existing workspace, while `create-megamono` is the pre-Nx bootstrap entry point. Neither command owns a second copy of repository mutation behavior.
 
-`create-megamono` is the legitimate exception. Bootstrapping a _new_ repo cannot be an Nx generator, because Nx isn't installed yet. `create-nx-workspace` is the precedent.
+Bootstrapping a _new_ repo cannot begin as an Nx generator because Nx is not installed yet. `create-megamono` therefore establishes the minimal workspace and exact dependencies, then invokes the same `@megamono/plugin:app` and `workspace-init` primitives exposed by `megamono add` and `megamono init`.
 
 It is also the piece Nx structurally cannot take. `create-nx-workspace --preset` already scaffolds apps and libs. What it does not do — and has no opinion about — is the agent substrate: `AGENTS.md`, skills, the docs IA, `DESIGN.md`. That's the differentiated surface.
 
@@ -106,6 +106,8 @@ Megamono does not hand control to Nx's nested interactive prompts. It gathers Me
 The generated Next surfaces share a small repository-owned Chakra system module. That module is starter composition, not a Megamono component library and not a substitute for the Playstack-owned theme surface in `spec-megamono-0007`; repositories may replace or compose it through ordinary Chakra APIs.
 
 The Nx placeholder page is replaced by a repository-owned onboarding billboard. It names the generated workspace and requested surfaces, explains the Megamono workflow (apps as composition roots, feature libraries, tags and boundaries, docs as intent, generators for structure, and `megamono:check` before commit), links to the emitted documentation entry points, and introduces Commune's Megamono, Playstack, and Springbar development tools. It performs no telemetry or runtime calls, does not require a private Playstack package, uses no secret or machine-specific value, and is deliberately easy to replace. The generated Playwright test verifies its heading, onboarding guidance, and outbound tool links rather than Nx placeholder copy.
+
+The billboard, Chakra starter, Nest feature library, project tags, ports, linting, and test setup are assets and operations of `@megamono/plugin:app`; `create-megamono` only selects the maintained inputs. Creating a workspace with an app and adding the same app type to an initialized empty workspace must produce equivalent project contracts after normalization of workspace name and path.
 
 New Nest applications explicitly enable ESLint and emit their Jest/Supertest e2e project. Greenfield lint violations are errors. Existing-workspace adoption and conversion retain their separate warning-first migration contract.
 
@@ -208,6 +210,8 @@ megamono init
 
 The direct `@megamono/plugin:workspace-init` generator remains the repository-local automation surface. The CLI may optionally follow it with Playstack's own init and use yalc-published packages, as defined by `spec-megamono-0000` and `spec-megamono-0014`. Its survey, modular adoption, conflict, and recovery contract is normative in `spec-megamono-0014`.
 
+Application generation is likewise delegated to `@megamono/plugin:app`. `create-megamono` may batch several explicit app invocations in its transaction, but it may not maintain private framework flags, source templates, project rewrites, tag rules, or port allocation logic. The packed equivalence fixture fails when create and add diverge.
+
 That generator refuses a workspace already carrying `megamono.json` unless it is performing a schema migration.
 
 ## V1 decisions
@@ -215,6 +219,7 @@ That generator refuses a workspace already carrying `megamono.json` unless it is
 - pnpm and npm are supported. pnpm is the default; other or conflicting lockfiles fail preflight with an explicit compatibility message.
 - Selecting `apple` requires macOS. On Linux it exits `3` before staging; other selections remain supported.
 - The `create-megamono` binary creates new workspaces only. The separate `megamono init` dispatcher and its delegated `workspace-init` generator own existing workspaces.
+- Every application selected during creation is produced by the same canonical `app` generator used by `megamono add app`.
 - No analytics or first-party product integration is selected by default.
 - Generated code targets the compatibility ranges in `spec-megamono-0000`; it never resolves unbounded `latest` versions.
 - Upstream generators remain non-interactive. Maintained preset choices are explicit Megamono inputs; raw Nx prompt changes do not alter generated output.

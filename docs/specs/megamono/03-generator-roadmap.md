@@ -98,6 +98,22 @@ Cargo target options include `package`, `target`, `features`, `allFeatures`, `no
 
 ## First-party TypeScript library generators
 
+### `@megamono/plugin:app`
+
+The application generator is the canonical application-structure primitive for both new and existing workspaces:
+
+```text
+npm exec nx g @megamono/plugin:app --type=web --name=web --interactive=false --yes
+```
+
+V1 supports `web`, `site`, `api`, `worker`, `mobile`, `desktop`, and `apple`. It reads `megamono.json`, derives a conventional name and root when omitted interactively, and composes the maintained ecosystem generator with Megamono-owned post-processing. Web and site use the Pages Router, `src/`, Chakra UI, ESLint, and Playwright. API uses Nest plus a feature library rather than retaining substantive code in the application composition root. Worker, Apple, and desktop delegate to the corresponding Megamono language plugin or scaffold adapter. Every project receives the accepted `platform`, `scope`, `type`, and `visibility` tags.
+
+The generator inventories project names, roots, targets, ports, and required plugins before mutation. An equivalent existing project is a no-op; an occupied name or root with a different contract is a preflight conflict. The default project basename equals the app type, `--name` supports additional instances, and explicit `--directory` and `--port` values must be unique and workspace-safe. Automatic ports use the stable registry in `megamono.json`, so generation order does not change an existing assignment.
+
+Source templates are seeded and repository-owned after creation. Generator reruns validate their project contract but never replace modified application source. Project configuration and explicitly registered managed sections follow the ownership rules in `spec-megamono-0014`. The generator supports the common interactive, non-interactive, confirmation, dry-run, recovery, and idempotency contract from `spec-megamono-0000`.
+
+`create-megamono` installs prerequisites and calls this generator once per selected app. The dedicated CLI exposes the same primitive as `megamono add app <type>`. Packed equivalence fixtures compare project graph metadata, package manifests, lint/test targets, feature-library edges, starter files, and rerun stability across both entry points.
+
 These generators are distinct from language plugins. Nx already understands their source language, so they scaffold an accepted repository shape and its dependency direction rather than repairing project inference.
 
 ### `@megamono/plugin:theme`

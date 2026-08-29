@@ -51,6 +51,7 @@ When code runs is incidental. Build-time schema fragments and transforms are Pla
 | ------------------------------------------ | --------- | ---------------------------------------------- |
 | Nx generators (all)                        | Megamono  | Shape repository files and graph configuration |
 | `create-megamono`                          | Megamono  | Bootstraps a repo                              |
+| `megamono add app`                         | Megamono  | Adds an application composition root           |
 | Docs IA, skills, hooks                     | Megamono  | Governs the repo                               |
 | Repository lint rules, tag taxonomy        | Megamono  | Governs the repo                               |
 | Playstack-specific lint rules and skills   | Playstack | Govern Playstack product packages and usage    |
@@ -73,6 +74,8 @@ It was genuinely ambiguous. The `User` / `Account` / `AccountMember` pattern is 
 Resolution: **Megamono generates the wiring; Playstack provides the package it wires to.**
 
 Same for the Chakra theme, and same for Prisma.
+
+The command sequence makes this boundary visible: `megamono add app api` creates and governs the composition root; `playstack add auth` adds product behavior within it. The optional Playstack handoff retained by `megamono init` is a compatibility shortcut that delegates to the package-owned CLI after Megamono completes. It does not make Playstack capability installation part of the `app` generator.
 
 ## What Megamono actually emits
 

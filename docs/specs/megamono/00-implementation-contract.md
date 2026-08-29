@@ -69,6 +69,7 @@ Later scoped packages enter the same restricted validation channel before public
 ```text
 @megamono/plugin:workspace-init
 @megamono/plugin:workspace-eject
+@megamono/plugin:app
 @megamono/plugin:convert
 @megamono/plugin:skill-eject
 
@@ -103,7 +104,7 @@ These are stable names, not a promise that every generator ships in the first co
 
 | Availability                         | Generators                                                                                                                                           |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unconditional core                   | `workspace-init`, `workspace-eject`, `convert`, `skill-eject`, `docs-init`, `docs-spec`, `docs-decision`, `docs-plan`, `docs-research`, `docs-audit` |
+| Unconditional core                   | `workspace-init`, `workspace-eject`, `app`, `convert`, `skill-eject`, `docs-init`, `docs-spec`, `docs-decision`, `docs-plan`, `docs-research`, `docs-audit` |
 | Published after external fixtures    | `content-lib`, `content-type`, `playstack-lint`, `playstack-skills`                                                                                  |
 | Conditional on external fixture gate | `playstack-auth`, `playstack-accounts`, `playstack-webhooks`, `playstack-cache`, `playstack-media`, `integration-sentry`, `theme`, `emails`          |
 | Reserved for later wave              | `integration-fathom`, `integration-postmark`, `integration-stripe`, `playstack-admin`, `playstack-queues`                                            |
@@ -121,6 +122,9 @@ megamono init
 megamono init --survey
 megamono init --playstack --playstack-packages=auth,accounts
 megamono init --playstack --local-packages=yalc
+megamono add app web
+megamono add app api --name=admin-api
+megamono add docs|agents|ci|release|lint|skills|health|inference
 megamono generate <name> [...generator options]
 megamono help
 megamono --version
@@ -129,6 +133,12 @@ megamono --version
 `megamono init [...options]` finds the workspace from the current directory, detects exactly one supported lockfile, verifies that the corresponding local package manager, Nx, and `@megamono/plugin` are installed, and delegates to the local `@megamono/plugin:workspace-init` generator. pnpm workspaces run `pnpm exec nx generate`; npm workspaces run `npm exec nx -- generate`. Every option after `init` is forwarded as its own argument without reinterpretation, including `--survey`, `--only`, `--interactive`, `--yes`, and generator options added by a compatible local plugin.
 
 `megamono generate <name> [...options]` reads the workspace-local plugin availability registry before delegation. Available names run through the local Nx and package manager; gated and reserved names exit `3` with the registry's exact unsatisfied gate and never reach Nx. This preserves an available-only published collection while giving the dedicated CLI a stable diagnostic for canonical names that are not yet buildable.
+
+`megamono add app <type> [...options]` delegates to the local `@megamono/plugin:app` generator. The supported v1 types are `web`, `site`, `api`, `worker`, `mobile`, `desktop`, and `apple`. The type is also the default project basename; `--name` and `--directory` allow additional instances without changing the maintained preset. A valueless `megamono add app` opens the type selector in an interactive terminal and exits `4` without mutation in non-interactive mode. The generator owns application structure, project registration, conventional tags, stable port allocation, lint and test setup, Nest feature-library composition, Chakra starter composition, and the repository onboarding billboard where applicable.
+
+`megamono add docs|agents|ci|release|lint|skills|health|inference` is an ergonomic route to the corresponding independently selectable `workspace-init` module. It does not introduce a second generator or ownership implementation. Add commands require an initialized `megamono.json`; they never adopt the baseline implicitly. Repeating an already satisfied add command is a successful no-op.
+
+Every add command is interactive by default, accepts `--dry-run`, and accepts `--interactive=false --yes` for a fully explicit automation path. `--dry-run` performs discovery and prints the same ordered plan used by execution without installing dependencies, writing files, or warming workspace caches. `--yes` confirms a resolved plan but never supplies an ambiguous project name, occupied path, port, or missing app type. Required local or upstream plugins appear in the preview; an accepted execution installs exact compatibility-pinned packages before local generator delegation and records a recovery command if later work fails.
 
 The CLI consumes three init-only options before delegation:
 
@@ -144,7 +154,7 @@ After workspace-init succeeds, Playstack setup installs a missing `@playstack/cl
 
 The global CLI never upgrades the plugin, runs a global Nx or Playstack binary, bypasses generator preflight, or contains a copy of either product's init logic. Unknown commands, invalid CLI-only values, and invalid Playstack package names exit `2`. Preflight/source failures exit `3`. Otherwise the CLI returns the delegated process status, including signal failures, without translating generator diagnostics. A failure after workspace-init prints the completed steps and exact retry command; it does not roll back Megamono-owned files.
 
-This design deliberately allows the globally installed CLI and repository-local plugin to update independently. The local plugin and local Nx version remain authoritative for workspace behavior; the CLI owns only command discovery, package-manager selection, delegation, help, and version output.
+This design deliberately allows the globally installed CLI and repository-local plugin to update independently. The local plugin and local Nx version remain authoritative for workspace behavior; the CLI owns only command discovery, prompting, dependency preflight, package-manager selection, delegation, help, and version output. `create-megamono` invokes the same local `app` and `workspace-init` generators after it establishes the Nx workspace; it contains no second copy of an application preset or post-processing template.
 
 ## Canonical executor targets
 
@@ -228,6 +238,7 @@ A spec is build-ready when it has `status: accepted`, no unresolved decision tha
 - `workspace-eject` preserves artifact content, changes only Megamono ownership metadata or managed-section delimiters, and prevents later plugin upgrades from reclaiming the artifact.
 - Every public generator and executor name appears in this contract and resolves from a local-registry installation fixture.
 - A packed `@megamono/cli` installed globally delegates `megamono init --survey` through both pnpm and npm fixtures, refuses missing or ambiguous workspace prerequisites before spawn, forwards generator arguments unchanged, and propagates delegated exit status.
+- Packed npm and pnpm fixtures prove `megamono add app web` and `megamono add app api` produce the same project contracts as `create-megamono`, are stable on rerun, preview without writes, reject incompatible occupied roots, and support a second named instance.
 - Registry and yalc Playstack fixtures prove init-only options are consumed rather than forwarded, requested product packages use the selected source, `@playstack/cli` remains a dev dependency, the local `playstack` binary performs configuration, survey writes nothing, and missing yalc artifacts fail before workspace-init.
 - Generator fixtures prove deterministic planning, dry-run parity, idempotency, conflict handling, stable exit codes, and absence of secret values.
 - Language-plugin fixtures prove the Nx 18–23 API bridge, deterministic project discovery, and affected graph propagation.

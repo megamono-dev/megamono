@@ -176,6 +176,10 @@ Repo-level config recording the choices made at scaffold time, so generators add
     "nestFeatureLibraries": true,
     "docsLocation": "centralized",
     "packageManager": "pnpm",
+    "apps": {
+      "web": { "router": "pages", "src": true, "ui": "chakra", "e2e": "playwright" },
+      "api": { "framework": "nest", "featureLibraries": true, "e2e": "jest" }
+    },
     "rules": {
       "no-bare-jsx-strings": { "severity": "warning" },
     },
@@ -198,12 +202,15 @@ Repo-level config recording the choices made at scaffold time, so generators add
     "projects": ["prisma-main", "prisma-analytics"],
   },
   "services": { "runner": "springbar" },
+  "ports": { "web": 4200, "site": 4201, "api": 3000 },
 }
 ```
 
 Prisma's native multi-file schema support is the v1 contract and requires Prisma `>=6.7`. Each Playstack fragment is written as its own `.prisma` file; Megamono does not implement a compose step.
 
 This is what makes adaptive prompting possible (`spec-megamono-0002`): a generator reads `megamono.json`, and only asks when the config genuinely doesn't determine the answer.
+
+Application presets and assigned ports are repository conventions, not `create-megamono` state. `@megamono/plugin:app` records each accepted assignment before another app can claim it. A named additional instance receives the next deterministic free port in its platform range unless the caller supplies a unique explicit port. Existing valid assignments are never renumbered because a later app sorts earlier by name.
 
 ## Rule overrides
 
