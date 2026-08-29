@@ -89,7 +89,7 @@ Rust and Tauri.
 - `createNodes` runs `cargo metadata --format-version 1 --no-deps` once per Cargo workspace and creates one Nx project per workspace package; a virtual workspace root is not a project.
 - `createDependencies` maps workspace members and dependencies with a local `path` to static Nx edges, including target-specific and development dependencies.
 - Targets: `cargo build/test/clippy`, `tauri build`.
-- Prior art from `@monodon/rust` may be reused when license-compatible, but the accepted public contract is this package and the Nx 23 API in `spec-megamono-0000`.
+- Prior art from `@monodon/rust` may be reused when license-compatible, but the accepted public contract is this package and the Nx 18–23 API bridge in `spec-megamono-0000`.
 - Validation surface: four Tauri surfaces (Springbar, Prismark, Xtension, Promptvisor components).
 
 Cargo target options include `package`, `target`, `features`, `allFeatures`, `noDefaultFeatures`, `profile`, and `targetDir`. Inferred commands always pass `--package` so one Nx task does not accidentally rebuild the whole Cargo workspace.
@@ -221,7 +221,7 @@ You do not cross the language boundary — you respect it. A Laravel app cannot 
 
 For both `nx-apple` and `nx-cargo`:
 
-- A fresh Nx 23 fixture installs the packed plugin and shows the expected projects and target metadata through `npm exec nx show project --json`.
+- Packed fixtures spanning the declared Nx range install the plugin and show the expected projects and version-appropriate target metadata through `npm exec nx show project --json`.
 - Aggregate manifests do not create duplicate projects.
 - Local path dependencies produce static graph edges with the declaring manifest as `sourceFile`.
 - Editing a shared local dependency marks every direct and transitive consumer affected.

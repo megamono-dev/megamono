@@ -68,7 +68,7 @@ When a terminal is interactive, a bare `--playstack-packages` opens a multiselec
 
 For a survey, no packages are installed. An already-installed Playstack CLI contributes its own read-only survey; otherwise the Megamono report lists the deferred package and command plan.
 
-V1 requires the baseline from `spec-megamono-0000`: Node 24, npm 11, Nx 23.1, TypeScript 6.0, and macOS or Linux. A non-npm lockfile, unsupported Nx version, malformed project graph, dirty worktree, or execution on the default branch refuses before mutation. `--survey` is read-only and may run on a dirty or default-branch worktree.
+Existing-workspace adoption uses the adoption baseline from `spec-megamono-0000`: Node `>=18.18 <25`, npm `>=9 <12` or pnpm `>=8 <12`, Nx `>=17 <24`, TypeScript `>=5.2 <7`, and macOS or Linux. Inference plugins require Nx 18 or newer; an Nx 17 workspace can adopt the core modules and receives an explicit capability reduction for detected Apple, Cargo, or Cloudflare manifests. An unsupported or ambiguous lockfile, unsupported toolchain, malformed project graph, dirty worktree, or execution on the default branch refuses before mutation. `--survey` is read-only and may run on a dirty or default-branch worktree.
 
 ## Additive and modular
 
@@ -92,7 +92,7 @@ npm exec nx g @megamono/plugin:workspace-init --only=docs,agents
 
 `--only` accepts a comma-separated set of module names. Omitting it starts the guided flow. Selecting a module never silently selects another: when a capability is reduced because another module is absent, the preview names the reduction. For example, `health` without `docs` disables the spec-drift and stale-plan checks but can still run dependency-alignment and orphan checks.
 
-The `ci` module writes `.github/workflows/megamono-ci.yml`; it never replaces or inserts unbounded text into an existing general-purpose workflow. When the survey finds equivalent affected-CI coverage, it recommends skipping the module and reports the retained repository-owned workflow. An occupied `megamono-ci.yml` path is an owned-path conflict, not permission to overwrite it.
+The `ci` module writes `.github/workflows/megamono-ci.yml`; it never replaces or inserts unbounded text into an existing general-purpose workflow. The generated workflow inherits the workspace's committed Node version from `.node-version`, `.nvmrc`, or `engines.node`, and its package-manager version from `packageManager`. When Node is undeclared, init chooses the tested fallback for the installed Nx major. When the survey finds equivalent affected-CI coverage, it recommends skipping the module and reports the retained repository-owned workflow. An occupied `megamono-ci.yml` path is an owned-path conflict, not permission to overwrite it.
 
 ## Artifact ownership and provenance
 
@@ -198,6 +198,8 @@ The `docs` module owns its repository-docs loader/configuration plumbing only wh
 
 Fresh `create-megamono` workspaces use the default severities from `spec-megamono-0006`. An existing workspace may adopt newly enabled structural rules at warning severity so the adoption commit does not fail on pre-existing violations.
 
+Flat ESLint configuration receives the Megamono plugin wiring. A workspace using `.eslintrc*` keeps that configuration byte-for-byte and records an `eslint-rule-wiring` capability reduction with migration guidance; project tags, `megamono:check`, and other structural validation remain available. Init never performs an implicit ESLint flat-config migration.
+
 The adoption decision records the affected rules, initial counts, and the intended ratchet. The health report keeps the temporary warning overrides visible until each becomes an error or receives a separate accepted decision. Stylistic warnings remain warnings.
 
 ## Health and external commands
@@ -221,6 +223,9 @@ The completion summary lists modules adopted or skipped, paths added or modified
 - Init offers but does not run repository health after adoption.
 - Existing Nest libraries are never renamed by init.
 - Partial module adoption is supported and recorded in `megamono.json`.
+- Core adoption supports Nx 17–23 without forcing a repository upgrade; async language inference begins at Nx 18.
+- Unsupported target metadata is omitted by installed-Nx capability, and generated workflows inherit repository toolchain declarations.
+- Legacy `.eslintrc*` configuration is retained with an explicit capability reduction.
 - `.megamono/artifacts.json` is the sole authority for Megamono workspace-artifact ownership. Playstack artifact state remains external.
 - `workspace-eject` is the only general ownership transition in V1; there is no implicit re-adoption or force-reclaim path.
 

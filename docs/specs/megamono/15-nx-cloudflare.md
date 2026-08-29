@@ -44,7 +44,7 @@ Inference and graph repair are the product. Scaffolding is deliberately secondar
 
 ## Compatibility and discovery
 
-The package follows the Node, pnpm/npm, Nx, and TypeScript ranges in `spec-megamono-0000`. Its tested Wrangler range, pinned scaffold version, and pinned scaffold `compatibility_date` live in `@megamono/plugin/compatibility.json`; no generator resolves `latest` or chooses a date from the wall clock.
+The package follows the adoption Node and pnpm/npm ranges in `spec-megamono-0000` and supports Nx `>=18 <24`. Nx 17 remains supported by the core plugin but cannot host this package's async config discovery. Its tested Wrangler range, pinned scaffold version, and pinned scaffold `compatibility_date` live in `@megamono/plugin/compatibility.json`; no generator resolves `latest` or chooses a date from the wall clock.
 
 `createNodes` discovers the standard Wrangler configuration names:
 
@@ -62,11 +62,13 @@ Unknown configuration keys are preserved in raw parsing and ignored by inference
 
 The Wrangler `name` is the Worker binding identity. The Nx project name continues to come from repository/project conventions. These namespaces are separate. Duplicate top-level Worker names omit ambiguous edges and produce a preflight error rather than choosing a project by path order.
 
-The package exports the Nx 23 APIs under the names required by `spec-megamono-0000`:
+The package exports the Nx 18–23 bridge required by `spec-megamono-0000`:
 
-- `createNodes` discovers projects, targets, and metadata.
+- `createNodes` discovers projects, targets, and metadata through either the Nx 18/19 single-file callback or the Nx 20+ batched callback.
+- `createNodesV2` aliases the same implementation for the Nx 19/21 transition.
 - `createDependencies` resolves local binding references and emits validated static edges.
-- `createNodesV2` is not exported.
+
+The inferred `dev` target includes `continuous: true` only on Nx 21 and newer. Older supported versions retain the command without metadata their project schema cannot represent.
 
 ## Binding and edge model
 
@@ -163,7 +165,7 @@ The package is build-ready when:
 - an affected fixture proves changing a dependency marks its Worker consumers affected;
 - target snapshots prove cache, continuous, input, output, override, and environment-configuration behavior;
 - current and out-of-range Wrangler fixtures prove the compatibility gate and type generation;
-- packed local-registry fixtures install the published tarball into clean Node 24/pnpm 11/Nx 23 and Node 24/npm 11/Nx 23 workspaces and repeat graph, target, generator, and affected checks;
+- packed consumer fixtures cover every supported Nx major from 18 through 23, including the single-file, transitional `createNodesV2`, and finalized batched discovery contracts; the pinned scaffold baseline additionally repeats graph, target, generator, and affected checks through pnpm and npm;
 - Springbar is absent from the package manifest and generated files, while normalized vendor metadata remains available to any graph consumer.
 
 ## Cross-references

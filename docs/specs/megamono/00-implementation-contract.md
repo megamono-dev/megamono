@@ -16,23 +16,26 @@ external_references: [playstack:08-data-and-prisma, playstack:45-cli]
 
 This document is normative. When another spec uses an older package name, command name, or Nx API, this contract wins.
 
-## Supported baseline
+## Supported baselines
 
-Megamono v1 targets one deliberately narrow toolchain:
+Megamono distinguishes a pinned scaffold baseline from a broader adoption range. A new workspace is deterministic and moves forward as one tested stack; initializing an existing workspace does not require an otherwise unnecessary Nx upgrade.
 
-| Surface                            | Supported in v1                                              |
-| ---------------------------------- | ------------------------------------------------------------ |
-| Node.js                            | `>=24 <25`                                                   |
-| pnpm                               | `>=11 <12`; default for new workspaces                       |
-| npm                                | `>=11 <12`; supported compatibility option                   |
-| Nx                                 | `>=23.1 <24`                                                 |
-| TypeScript                         | `>=6.0 <6.1`                                                 |
-| Operating systems for core tooling | macOS and Linux                                              |
-| Windows                            | Unsupported in v1; fail preflight with an actionable message |
+| Surface                            | New workspace scaffold                          | Existing-workspace adoption               |
+| ---------------------------------- | ----------------------------------------------- | ----------------------------------------- |
+| Node.js                            | `>=24 <25`                                      | `>=18.18 <25`                             |
+| pnpm                               | `>=11 <12`; default and exactly pinned          | `>=8 <12`; detected and preserved         |
+| npm                                | `>=11 <12`; exactly pinned compatibility option | `>=9 <12`; detected and preserved         |
+| Nx core adoption                   | `>=23.1 <24`                                    | `>=17 <24`                                |
+| TypeScript                         | `>=6.0 <6.1`                                    | `>=5.2 <7`                                |
+| Apple/Cargo/Cloudflare inference   | `>=23.1 <24`                                    | `>=18 <24`                                |
+| Operating systems for core tooling | macOS and Linux                                 | macOS and Linux                           |
+| Windows                            | Unsupported; actionable preflight refusal       | Unsupported; actionable preflight refusal |
 
-The core packages declare these ranges in `engines` and `peerDependencies`. `create-megamono` accepts `--package-manager=pnpm|npm`, defaults to pnpm, and records the selection in both the root `packageManager` field and `megamono.json`. Every generated install, execution, CI, verification, recovery, and local-package command uses that recorded manager. Existing-workspace adoption detects an unambiguous pnpm or npm lockfile and preserves it; conflicting or unsupported lockfiles fail preflight. Supporting another package manager or Nx major is a separate compatibility project, not an incidental bug fix.
+`create-megamono` accepts `--package-manager=pnpm|npm`, defaults to pnpm, and records the selection in both the root `packageManager` field and `megamono.json`. Every generated install, execution, CI, verification, recovery, and local-package command uses that recorded manager. Existing-workspace adoption detects an unambiguous pnpm or npm lockfile and preserves it; conflicting or unsupported lockfiles fail preflight.
 
-`@megamono/plugin/compatibility.json` is a public, versioned data export containing the exact scaffold defaults and tested ranges for application frameworks, service images, vendor SDKs, and optional external CLIs. Generators read that file rather than resolving `latest`. Changing an entry requires the affected fixture and snapshot suite in the same release.
+`@megamono/plugin` declares the adoption range in `engines` and `peerDependencies`. Each inference plugin declares its narrower Nx floor independently. Nx 17's plugin discovery callback is synchronous, so it can host core adoption but not the async Apple, Cargo, or Cloudflare discovery implementations. Adding an unsupported package manager, operating system, or Nx version remains an explicit compatibility project.
+
+`@megamono/plugin/compatibility.json` is a public, versioned data export containing the exact scaffold defaults, adoption ranges, per-package Nx ranges, stable test anchors, application frameworks, service images, vendor SDKs, and optional external CLIs. Generators read that file rather than resolving `latest`. Changing an entry requires the affected fixture and snapshot suite in the same release.
 
 ## Published package map
 
@@ -150,12 +153,14 @@ Repository maintenance also exposes `megamono:import`. Import is an executor rat
 
 ## Nx plugin API contract
 
-Language plugins export the Nx 23 v2 APIs under their current names:
+Language plugins bridge the Nx 18–23 discovery transition:
 
-- `createNodes` discovers projects and infers targets.
 - `createDependencies` parses local manifest dependencies and emits static project-graph edges.
-- `createNodesV2` is not exported in v1; it is a deprecated alias in Nx 23.
+- `createNodes` accepts Nx 18/19's async single-file callback and Nx 20+ batched files at runtime.
+- `createNodesV2` aliases the same implementation because Nx 19 prefers it and Nx 21 requires the transitional export; later Nx versions ignore the extra alias.
 - Every inferred target declares `inputs`, `outputs` when it writes files, `cache`, and enough metadata for `nx show project` to explain its source.
+
+Generated target metadata is capability-gated from the installed Nx version. `parallelism` is emitted from Nx 19.5 onward, and `continuous` is emitted from Nx 21 onward. Older workspaces retain the underlying commands without unsupported metadata.
 
 ## Generator execution contract
 
@@ -170,9 +175,9 @@ Every generator follows these rules:
 7. **Secrets by name only.** Workflows declare required secret names; generators never request or persist secret values.
 8. **Dry run.** Mutating generators support `--dry-run`, print the same ordered plan used for execution, and write nothing.
 
-Commands emitted by a generator are package-manager-aware. pnpm workspaces use `pnpm install`, `pnpm exec`, `pnpm run`, and `workspace:` dependency declarations. npm workspaces use `npm install`, `npm exec`, `npm run`, and npm-compatible local workspace declarations. A generator never mixes command families or infers a manager from executable availability after the workspace contract has been recorded.
+Commands emitted by a generator are package-manager-aware. pnpm workspaces use `pnpm install`, `pnpm exec`, `pnpm run`, and `workspace:` dependency declarations. npm workspaces use `npm install`, `npm exec`, `npm run`, and npm-compatible local workspace declarations. A generator never mixes command families or infers a manager from executable availability after the workspace contract has been recorded. Generated CI and health workflows inherit the workspace's committed Node and package-manager versions; when Node is undeclared, the fallback is selected from the installed Nx major rather than the scaffold baseline.
 
-Megamono error classifications are stable: `0` success/no-op, `1` validation or execution failure, `2` invalid options, `3` preflight refusal, and `4` unresolved user decision in non-interactive mode. Standalone CLIs and executors use those values as process exit codes. Nx 23's generator runner catches every thrown generator error and returns process status `1`, so `nx generate` exposes classifications `2`–`4` through the error object's `exitCode` and a stable diagnostic code rather than through the process status. Packed-generator fixtures assert status `1` plus that diagnostic code; direct tests assert the programmatic classification.
+Megamono error classifications are stable: `0` success/no-op, `1` validation or execution failure, `2` invalid options, `3` preflight refusal, and `4` unresolved user decision in non-interactive mode. Standalone CLIs and executors use those values as process exit codes. Supported Nx generator runners may normalize a thrown generator error to process status `1`, so `nx generate` also exposes classifications `2`–`4` through the error object's `exitCode` and a stable diagnostic code. Packed-generator fixtures assert the runner status plus that diagnostic code; direct tests assert the programmatic classification.
 
 ## Compatibility and fixture tests
 
@@ -182,9 +187,11 @@ Each published package must pass:
 - Snapshot tests for generated trees; snapshots include `package.json`, `nx.json`, and `megamono.json` changes.
 - Idempotency tests that run every generator twice.
 - Failure-injection tests proving no file mutation occurs before preflight completes.
-- An e2e test that publishes to the local registry, installs into a fresh Nx 23 workspace, and runs the generated targets.
+- An e2e test that packs the publishable package, installs it into a clean consumer workspace, and runs the generated targets.
 - For language plugins, fixtures for workspace roots, leaf projects, local dependencies, renamed targets, missing toolchains, malformed manifests, and cycles.
 - Graph assertions using `NX_DAEMON=false NX_CACHE_PROJECT_GRAPH=false nx graph --file=...` plus one `nx affected` assertion per dependency-edge kind.
+
+The compatibility suite installs packed output—not workspace source aliases—against stable anchors for every supported Nx major, 17 through 23. Nx 17 exercises `@megamono/plugin`; Nx 18 onward also exercise the inference plugins. Each fixture runs init twice, checks target metadata capability gates, compiles a consumer TypeScript import, and runs core graph/check behavior. A scheduled and manually dispatchable `nx@next` plus `typescript@next` canary is non-blocking until that future line enters the declared peer range.
 
 ## Cross-product contracts
 
@@ -212,6 +219,6 @@ A spec is build-ready when it has `status: accepted`, no unresolved decision tha
 - A packed `@megamono/cli` installed globally delegates `megamono init --survey` through both pnpm and npm fixtures, refuses missing or ambiguous workspace prerequisites before spawn, forwards generator arguments unchanged, and propagates delegated exit status.
 - Registry and yalc Playstack fixtures prove init-only options are consumed rather than forwarded, requested product packages use the selected source, `@playstack/cli` remains a dev dependency, the local `playstack` binary performs configuration, survey writes nothing, and missing yalc artifacts fail before workspace-init.
 - Generator fixtures prove deterministic planning, dry-run parity, idempotency, conflict handling, stable exit codes, and absence of secret values.
-- Language-plugin fixtures prove current Nx 23 API exports, deterministic project discovery, and affected graph propagation.
+- Language-plugin fixtures prove the Nx 18–23 API bridge, deterministic project discovery, and affected graph propagation.
 - Gated generators are absent from the published collection until their external contract fixtures pass.
 - No core package has a runtime dependency on Playstack, an application framework, or Nx Enterprise.

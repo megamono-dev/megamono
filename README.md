@@ -28,6 +28,15 @@ Inspect the project graph with:
 npm exec nx -- graph
 ```
 
+## Compatibility
+
+New workspaces use the pinned Node 24, package-manager 11, Nx 23.1, and
+TypeScript 6 scaffold. `megamono init` supports existing workspaces on Node
+18.18–24, npm 9–11 or pnpm 8–11, Nx 17–23, and TypeScript 5.2–6. Apple,
+Cargo, and Cloudflare inference plugins require Nx 18 or newer. CI verifies
+packed packages against every supported Nx major and monitors `nx@next` in a
+non-blocking canary.
+
 ## Local package validation
 
 Build and publish every Megamono package to yalc, then run the local CLI from this checkout:

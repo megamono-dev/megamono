@@ -155,8 +155,12 @@ npm exec nx g @megamono/plugin:docs-audit <target> --project=<project> --spec=<s
 Record generators default to internal visibility, validate controlled topics before
 writing, and are no-ops when rerun with identical inputs.
 
-The package requires Node.js 24, npm 11, Nx 23.1, and TypeScript 6.0. See
-[`compatibility.json`](./compatibility.json) for the machine-readable contract.
+New workspaces use the pinned Node 24, package-manager 11, Nx 23.1, and
+TypeScript 6 scaffold. Existing-workspace adoption supports Node 18.18–24,
+npm 9–11 or pnpm 8–11, Nx 17–23, and TypeScript 5.2–6. The optional Apple,
+Cargo, and Cloudflare inference plugins require Nx 18 or newer. See
+[`compatibility.json`](./compatibility.json) for the machine-readable contract
+and tested version anchors.
 
 ## Develop the plugin
 

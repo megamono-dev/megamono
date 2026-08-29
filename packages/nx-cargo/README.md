@@ -1,6 +1,6 @@
 # `@megamono/nx-cargo`
 
-Nx 23 project inference and dependency edges for Cargo workspaces and standalone Rust packages.
+Nx 18–23 project inference and dependency edges for Cargo workspaces and standalone Rust packages.
 
 ```json
 {
