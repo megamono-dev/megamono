@@ -19,6 +19,8 @@ megamono add docs
 megamono add ci --dry-run
 megamono add app web
 megamono add app api --name=admin-api --interactive=false --yes
+megamono add database events --adapter=drizzle
+megamono add database primary --adapter=prisma --interactive=false --yes
 ```
 
 A valueless `megamono add app` opens the application selector in an interactive
@@ -26,6 +28,12 @@ terminal. Add commands preview before confirmation, install only missing
 compatible framework adapters, and preserve the workspace's Nx major. Use
 `--local-packages=yalc` when a required `@megamono/*` application adapter is
 available only from the local yalc store.
+
+Database names are repository-defined slugs. A valueless `megamono add
+database` asks for the name with `primary` as a suggestion and then offers the
+Prisma and Drizzle adapters. The generator creates adapter-native schema
+configuration and a matching named Playstack artifact target, but never
+connects to a database or runs migrations.
 
 Playstack setup is optional and remains owned by `@playstack/cli`:
 

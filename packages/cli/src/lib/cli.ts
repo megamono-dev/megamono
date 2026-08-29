@@ -21,6 +21,10 @@ export interface MegamonoCliIo {
     choices: readonly PlaystackProductChoice[],
   ): Promise<readonly string[]>;
   selectAppType?(choices: readonly AppTypeChoice[]): Promise<string>;
+  inputDatabaseName?(initial: string): Promise<string>;
+  selectDatabaseAdapter?(
+    choices: readonly DatabaseAdapterChoice[],
+  ): Promise<string>;
   confirmAddPlan?(message: string): Promise<boolean>;
   runCommand(
     command: string,
@@ -52,6 +56,11 @@ export interface AppTypeChoice {
   readonly message: string;
 }
 
+export interface DatabaseAdapterChoice {
+  readonly name: string;
+  readonly message: string;
+}
+
 export const APP_TYPE_CHOICES: readonly AppTypeChoice[] = [
   { name: 'web', message: 'Web — Next Pages Router, Chakra, Playwright' },
   { name: 'site', message: 'Site — Next marketing surface' },
@@ -60,6 +69,11 @@ export const APP_TYPE_CHOICES: readonly AppTypeChoice[] = [
   { name: 'mobile', message: 'Mobile — Expo application' },
   { name: 'desktop', message: 'Desktop — Tauri application' },
   { name: 'apple', message: 'Apple — native SwiftUI application' },
+];
+
+export const DATABASE_ADAPTER_CHOICES: readonly DatabaseAdapterChoice[] = [
+  { name: 'prisma', message: 'Prisma (recommended)' },
+  { name: 'drizzle', message: 'Drizzle' },
 ];
 
 const ADD_MODULES = [
@@ -74,6 +88,9 @@ const ADD_MODULES = [
 ] as const;
 const ADD_MODULE_SET = new Set<string>(ADD_MODULES);
 const APP_TYPE_SET = new Set(APP_TYPE_CHOICES.map(({ name }) => name));
+const DATABASE_ADAPTER_SET = new Set(
+  DATABASE_ADAPTER_CHOICES.map(({ name }) => name),
+);
 
 export const PLAYSTACK_PRODUCT_CHOICES: readonly PlaystackProductChoice[] = [
   { name: 'accounts', message: 'Accounts — tenancy and membership' },
@@ -102,6 +119,7 @@ const HELP = `Usage: megamono <command> [options]
 Commands:
   init                 Adopt Megamono in an existing Nx workspace
   add app [type]       Add a convention-aligned application
+  add database [name]  Add a named Prisma or Drizzle database project
   add <module>         Add one repository-governance module
   generate <name>      Run an available local Megamono generator
   help                 Show this help
@@ -120,16 +138,20 @@ Init-only options:
 All other init options are forwarded to @megamono/plugin:workspace-init.`;
 
 const ADD_HELP = `Usage: megamono add app [type] [options]
+       megamono add database [name] [options]
        megamono add <module> [options]
 
 Examples:
   megamono add app web
   megamono add app api --name=admin-api --interactive=false --yes
   megamono add app web --dry-run
+  megamono add database events --adapter=drizzle
+  megamono add database primary --adapter=prisma --interactive=false --yes
   megamono add docs
   megamono add ci --dry-run
 
 Application types: ${APP_TYPE_CHOICES.map(({ name }) => name).join(', ')}
+Database adapters: ${DATABASE_ADAPTER_CHOICES.map(({ name }) => name).join(', ')}
 Modules: ${ADD_MODULES.join(', ')}
 
 Add commands require an initialized workspace with local nx and @megamono/plugin.`;
@@ -800,6 +822,72 @@ async function resolveAppType(
   return selected;
 }
 
+function explicitOption(
+  args: readonly string[],
+  name: string,
+): string | undefined {
+  for (let index = 0; index < args.length; index += 1) {
+    const option = optionValue(args, index, name);
+    if (option) return option.value;
+  }
+  return undefined;
+}
+
+function databaseName(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalized)) {
+    throw new CliError(
+      'Database name must be a normalized slug such as primary, events, or regional-us.',
+      2,
+    );
+  }
+  return normalized;
+}
+
+async function resolveDatabaseName(
+  io: MegamonoCliIo,
+  value: string | undefined,
+  options: AddOptions,
+): Promise<string> {
+  if (value && !value.startsWith('-')) return databaseName(value);
+  if (!options.interactive || !io.inputDatabaseName) {
+    throw new CliError('Database name is required in non-interactive mode.', 4);
+  }
+  return databaseName(await io.inputDatabaseName('primary'));
+}
+
+async function resolveDatabaseAdapter(
+  io: MegamonoCliIo,
+  args: readonly string[],
+  options: AddOptions,
+): Promise<string> {
+  const explicit = explicitOption(args, '--adapter');
+  if (explicit) {
+    if (!DATABASE_ADAPTER_SET.has(explicit)) {
+      throw new CliError(
+        `Unknown database adapter ${explicit}. Expected one of: ${[
+          ...DATABASE_ADAPTER_SET,
+        ].join(', ')}.`,
+        2,
+      );
+    }
+    return explicit;
+  }
+  if (!options.interactive || !io.selectDatabaseAdapter) {
+    throw new CliError(
+      `Database adapter is required in non-interactive mode. Expected one of: ${[
+        ...DATABASE_ADAPTER_SET,
+      ].join(', ')}.`,
+      4,
+    );
+  }
+  const selected = await io.selectDatabaseAdapter(DATABASE_ADAPTER_CHOICES);
+  if (!DATABASE_ADAPTER_SET.has(selected)) {
+    throw new CliError('Database adapter selection was cancelled.', 2);
+  }
+  return selected;
+}
+
 async function addWorkspace(io: MegamonoCliIo): Promise<Workspace> {
   const root = await findWorkspaceRoot(io.cwd);
   const workspace = { root, packageManager: await detectPackageManager(root) };
@@ -841,6 +929,32 @@ async function runAdd(
       cwd: workspace.root,
     });
     return { exitCode: result.exitCode };
+  }
+  if (subject === 'database') {
+    const hasPositionalName = Boolean(args[1] && !args[1]?.startsWith('-'));
+    const parsed = parseAddOptions(args.slice(hasPositionalName ? 2 : 1));
+    const name = await resolveDatabaseName(
+      io,
+      hasPositionalName ? args[1] : undefined,
+      parsed,
+    );
+    const adapter = await resolveDatabaseAdapter(io, parsed.args, parsed);
+    const generatorArgs = [
+      `--name=${name}`,
+      ...(!explicitOption(parsed.args, '--adapter')
+        ? [`--adapter=${adapter}`]
+        : []),
+      ...parsed.args,
+    ];
+    const [command, commandArgs] = nxInvocation(
+      workspace.packageManager,
+      generatorArgs,
+      'database',
+    );
+    const generated = await io.runCommand(command, commandArgs, {
+      cwd: workspace.root,
+    });
+    return { exitCode: generated.exitCode };
   }
   if (subject !== 'app') {
     throw new CliError(`Unknown add target ${subject}.\n\n${ADD_HELP}`, 2);

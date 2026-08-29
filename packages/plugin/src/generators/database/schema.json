@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoDatabase",
+  "title": "Add a named database project",
+  "description": "Create or adopt an adapter-specific database project and matching Playstack target.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Repository-defined logical database name."
+    },
+    "adapter": {
+      "type": "string",
+      "enum": ["prisma", "drizzle"],
+      "description": "Database schema and persistence adapter to scaffold."
+    },
+    "directory": {
+      "type": "string",
+      "description": "Workspace-relative project root; defaults to packages/database-<name>."
+    },
+    "project": {
+      "type": "string",
+      "description": "Nx project name; defaults to <scope>-database-<name>."
+    },
+    "target": {
+      "type": "string",
+      "description": "Workspace-relative Playstack schema artifact destination."
+    },
+    "scope": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "interactive": { "type": "boolean", "default": true },
+    "yes": { "type": "boolean", "default": false },
+    "dryRun": { "type": "boolean", "default": false },
+    "bootstrap": { "type": "boolean", "default": false }
+  },
+  "additionalProperties": false
+}

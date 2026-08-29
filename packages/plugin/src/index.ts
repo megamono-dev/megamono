@@ -3,10 +3,12 @@ export {
   AppGeneratorError,
   appGenerator,
 } from './generators/app/app';
-export type {
-  AppGeneratorSchema,
-  AppType,
-} from './generators/app/schema';
+export type { AppGeneratorSchema, AppType } from './generators/app/schema';
+export {
+  DatabaseGeneratorError,
+  databaseGenerator,
+} from './generators/database/database';
+export type { DatabaseGeneratorSchema } from './generators/database/schema';
 export {
   ARTIFACT_HASH_PATTERN,
   ARTIFACT_ID_PATTERN,
@@ -99,6 +101,7 @@ export {
 export {
   ADOPTION_MODULES,
   BUILT_IN_TOPICS,
+  DATABASE_ADAPTERS,
   DEFAULT_MEGAMONO_CONFIG,
   MEGAMONO_CONFIG_VERSION,
   assertSupportedMegamonoConfigVersion,
@@ -106,6 +109,7 @@ export {
   isSafeWorkspaceRelativePath,
   megamonoConfigSchema,
   readMegamonoConfig,
+  type DatabaseAdapter,
   type MegamonoConfig,
 } from './lib/config';
 export {

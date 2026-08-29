@@ -1,0 +1,164 @@
+import { readJson, writeJson } from '@nx/devkit';
+import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
+import { describe, expect, it } from 'vitest';
+import { DEFAULT_MEGAMONO_CONFIG } from '../../lib/config';
+import { databaseGenerator } from './database';
+
+function workspace(manager: 'npm' | 'pnpm' = 'pnpm') {
+  const tree = createTreeWithEmptyWorkspace();
+  writeJson(tree, 'package.json', {
+    name: '@fixture/workspace',
+    private: true,
+    ...(manager === 'npm' ? { workspaces: ['packages/*'] } : {}),
+  });
+  tree.write(
+    manager === 'pnpm' ? 'pnpm-lock.yaml' : 'package-lock.json',
+    manager === 'pnpm' ? 'lockfileVersion: 9\n' : '{"lockfileVersion":3}\n',
+  );
+  if (manager === 'pnpm') {
+    tree.write('pnpm-workspace.yaml', "packages:\n  - 'packages/*'\n");
+  }
+  writeJson(tree, 'megamono.json', {
+    ...DEFAULT_MEGAMONO_CONFIG,
+    conventions: {
+      ...DEFAULT_MEGAMONO_CONFIG.conventions,
+      packageManager: manager,
+    },
+  });
+  return tree;
+}
+
+describe('database generator', () => {
+  it('creates a user-named Prisma target and reruns without a diff', async () => {
+    const tree = workspace();
+    await databaseGenerator(tree, {
+      name: 'events',
+      adapter: 'prisma',
+      interactive: false,
+      yes: true,
+    });
+
+    expect(readJson(tree, 'megamono.json').databases).toEqual({
+      events: {
+        adapter: 'prisma',
+        project: 'fixture-workspace-database-events',
+      },
+    });
+    expect(readJson(tree, 'playstack.json').databases).toEqual({
+      events: {
+        adapter: 'prisma',
+        target: 'packages/database-events/prisma/models',
+        packages: {},
+      },
+    });
+    expect(
+      tree.read('packages/database-events/prisma/schema.prisma', 'utf8'),
+    ).toContain('provider = "prisma-client"');
+    expect(
+      readJson(tree, 'packages/database-events/project.json').targets.validate
+        .options.command,
+    ).toBe('pnpm exec prisma validate --schema prisma');
+
+    const before = tree
+      .listChanges()
+      .map(({ path, content }) => [path, content.toString()]);
+    await databaseGenerator(tree, {
+      name: 'events',
+      adapter: 'prisma',
+      interactive: false,
+      yes: true,
+    });
+    expect(
+      tree.listChanges().map(({ path, content }) => [path, content.toString()]),
+    ).toEqual(before);
+  });
+
+  it('creates a Drizzle target with npm-aware static validation', async () => {
+    const tree = workspace('npm');
+    await databaseGenerator(tree, {
+      name: 'analytics',
+      adapter: 'drizzle',
+      interactive: false,
+      yes: true,
+    });
+
+    expect(
+      tree.read('packages/database-analytics/drizzle.config.ts', 'utf8'),
+    ).toContain("schema: './src/schema'");
+    expect(
+      readJson(tree, 'packages/database-analytics/package.json').dependencies,
+    ).toEqual({ 'drizzle-orm': '0.45.2' });
+    expect(
+      readJson(tree, 'packages/database-analytics/project.json').targets
+        .validate.options.command,
+    ).toBe('npm exec tsc -- --noEmit -p tsconfig.json');
+  });
+
+  it('keeps dry-run mutation-free and rejects conflicting names', async () => {
+    const tree = workspace();
+    const before = tree
+      .listChanges()
+      .map(({ path, content }) => [path, content.toString()]);
+    await databaseGenerator(tree, {
+      name: 'primary',
+      adapter: 'prisma',
+      interactive: false,
+      yes: true,
+      dryRun: true,
+    });
+    expect(
+      tree.listChanges().map(({ path, content }) => [path, content.toString()]),
+    ).toEqual(before);
+
+    writeJson(tree, 'megamono.json', {
+      ...DEFAULT_MEGAMONO_CONFIG,
+      databases: {
+        primary: { adapter: 'prisma', project: 'database-primary' },
+      },
+    });
+    await expect(
+      databaseGenerator(tree, {
+        name: 'primary',
+        adapter: 'drizzle',
+        interactive: false,
+        yes: true,
+      }),
+    ).rejects.toThrow(/already configured as prisma/);
+  });
+
+  it('adopts an explicitly selected existing database project', async () => {
+    const tree = workspace();
+    writeJson(tree, 'packages/existing-db/project.json', {
+      name: 'existing-db',
+      root: 'packages/existing-db',
+      projectType: 'library',
+      tags: ['scope:fixture-workspace'],
+    });
+    tree.write(
+      'packages/existing-db/drizzle.config.ts',
+      "export default { schema: './src/schema' };\n",
+    );
+    tree.write('packages/existing-db/src/schema/index.ts', 'export {};\n');
+
+    await databaseGenerator(tree, {
+      name: 'events',
+      adapter: 'drizzle',
+      directory: 'packages/existing-db',
+      project: 'existing-db',
+      target: 'packages/existing-db/src/schema',
+      interactive: false,
+      yes: true,
+    });
+
+    expect(readJson(tree, 'megamono.json').databases.events).toEqual({
+      adapter: 'drizzle',
+      project: 'existing-db',
+    });
+    expect(readJson(tree, 'packages/existing-db/project.json').tags).toContain(
+      'type:database',
+    );
+    expect(tree.read('packages/existing-db/drizzle.config.ts', 'utf8')).toBe(
+      "export default { schema: './src/schema' };\n",
+    );
+  });
+});

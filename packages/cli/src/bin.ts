@@ -74,6 +74,32 @@ const result = await runMegamonoCli(process.argv.slice(2), {
           });
           return response.type;
         },
+        inputDatabaseName: async (initial: string) => {
+          const response = await prompt<{ name: string }>({
+            type: 'input',
+            name: 'name',
+            message: 'What should this database target be called?',
+            initial,
+          });
+          return response.name;
+        },
+        selectDatabaseAdapter: async (
+          choices: readonly {
+            readonly name: string;
+            readonly message: string;
+          }[],
+        ) => {
+          const response = await prompt<{ adapter: string }>({
+            type: 'select',
+            name: 'adapter',
+            message: 'Which database toolkit should be scaffolded?',
+            choices: choices.map((choice) => ({
+              name: choice.name,
+              message: choice.message,
+            })),
+          });
+          return response.adapter;
+        },
         confirmAddPlan: async (message: string) => {
           const response = await prompt<{ confirmed: boolean }>({
             type: 'confirm',

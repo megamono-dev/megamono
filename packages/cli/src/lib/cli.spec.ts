@@ -84,6 +84,10 @@ function io(
   selectedPlaystackPackages?: readonly string[],
   selectedAppType?: string,
   confirmedAddPlan?: boolean,
+  databaseSelection?: {
+    readonly name: string;
+    readonly adapter: string;
+  },
 ): {
   readonly value: MegamonoCliIo;
   readonly invocations: Invocation[];
@@ -109,6 +113,12 @@ function io(
         : {}),
       ...(selectedAppType
         ? { selectAppType: async () => selectedAppType }
+        : {}),
+      ...(databaseSelection
+        ? {
+            inputDatabaseName: async () => databaseSelection.name,
+            selectDatabaseAdapter: async () => databaseSelection.adapter,
+          }
         : {}),
       ...(confirmedAddPlan !== undefined
         ? { confirmAddPlan: async () => confirmedAddPlan }
@@ -194,6 +204,53 @@ describe('@megamono/cli', () => {
         capture: false,
       },
     ]);
+  });
+
+  it('delegates arbitrary database names and adapters', async () => {
+    const root = await workspace('pnpm');
+    const explicit = io(root);
+    expect(
+      (
+        await runMegamonoCli(
+          [
+            'add',
+            'database',
+            'events',
+            '--adapter=drizzle',
+            '--interactive=false',
+            '--yes',
+          ],
+          explicit.value,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(explicit.invocations).toEqual([
+      {
+        command: 'pnpm',
+        args: [
+          'exec',
+          'nx',
+          'generate',
+          '@megamono/plugin:database',
+          '--name=events',
+          '--adapter=drizzle',
+          '--interactive=false',
+          '--yes',
+        ],
+        cwd: root,
+        capture: false,
+      },
+    ]);
+
+    const prompted = io(root, undefined, undefined, undefined, undefined, {
+      name: 'identity',
+      adapter: 'prisma',
+    });
+    expect(
+      (await runMegamonoCli(['add', 'database'], prompted.value)).exitCode,
+    ).toBe(0);
+    expect(prompted.invocations[0]?.args).toContain('--name=identity');
+    expect(prompted.invocations[0]?.args).toContain('--adapter=prisma');
   });
 
   it('installs missing Nx adapters at the workspace Nx version', async () => {

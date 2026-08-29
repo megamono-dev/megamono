@@ -19,6 +19,12 @@
       "schema": "./dist/generators/app/schema.json",
       "description": "Add a convention-aligned application"
     },
+    "database": {
+      "status": "available",
+      "factory": "./dist/generators/database/database",
+      "schema": "./dist/generators/database/schema.json",
+      "description": "Create or adopt a named database project"
+    },
     "skill-eject": {
       "status": "available",
       "factory": "./dist/generators/skill-eject/skill-eject",

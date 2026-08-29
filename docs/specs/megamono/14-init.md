@@ -54,12 +54,13 @@ npm exec nx -- generate @megamono/plugin:workspace-init
 ```text
 megamono add app web
 megamono add app api --name=admin-api
+megamono add database events --adapter=drizzle
 megamono add docs
 megamono add ci
 megamono add skills
 ```
 
-Module add commands delegate to `workspace-init --only=<module>`. Application add delegates to the canonical `@megamono/plugin:app` generator from `spec-megamono-0003`. Add commands require the initialized baseline rather than silently running init, inherit the same clean-worktree and branch safety rules, preview by default, and support `--dry-run` plus fully explicit `--interactive=false --yes` automation.
+Module add commands delegate to `workspace-init --only=<module>`. Application add delegates to the canonical `@megamono/plugin:app` generator from `spec-megamono-0003`; database add delegates to `@megamono/plugin:database` with a user-defined logical name and explicit or prompted adapter. Add commands require the initialized baseline rather than silently running init, inherit the same clean-worktree and branch safety rules, preview by default, and support `--dry-run` plus fully explicit `--interactive=false --yes` automation.
 
 ### Optional Playstack handoff
 
@@ -228,7 +229,7 @@ The completion summary lists modules adopted or skipped, paths added or modified
 ## V1 decisions
 
 - `workspace-init` is the only canonical generator name; `@megamono/workspace:init` is not an alias. `megamono init` delegates to that generator and is a CLI command, not a second generator alias.
-- `megamono add <module>` is a CLI route into `workspace-init --only=<module>`, while `megamono add app <type>` routes into the canonical `app` generator; neither command owns mutation templates.
+- `megamono add <module>` is a CLI route into `workspace-init --only=<module>`, `megamono add app <type>` routes into the canonical `app` generator, and `megamono add database <name>` routes into the canonical database generator. The CLI owns no mutation templates.
 - Survey classification is conservative and proposal-only. Init never migrates existing docs.
 - Existing substantive agent files are preserved for explicit follow-up rather than merged by heuristic.
 - `ci` is an independent module and uses a dedicated managed workflow; init never takes ownership of an existing repository workflow.
