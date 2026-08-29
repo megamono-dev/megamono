@@ -345,9 +345,10 @@ function updatePackage(
   options: NormalizedAppOptions,
   dependencies: Record<string, string> = {},
 ): void {
+  const e2e = path.includes('-e2e/');
   const update = (value: Record<string, unknown>) => ({
     ...value,
-    name: path.includes('-e2e/') ? `${options.packageName}-e2e` : options.packageName,
+    name: e2e ? `${options.packageName}-e2e` : options.packageName,
     ...(Object.keys(dependencies).length
       ? {
           dependencies: {
@@ -358,8 +359,9 @@ function updatePackage(
       : {}),
     nx: {
       ...((value.nx as Record<string, unknown> | undefined) ?? {}),
+      ...(e2e ? { name: `${options.projectName}-e2e` } : {}),
       projectType: 'application',
-      ...(!path.includes('-e2e/') ? { tags: options.tags } : {}),
+      tags: options.tags,
     },
   });
   if (tree.exists(path)) updateJson(tree, path, update);
@@ -398,11 +400,15 @@ function billboardSource(options: NormalizedAppOptions): string {
   const surfaces = (options.requestedApps.length ? options.requestedApps : [options.type]).map(
     (type) => APP_LABELS[type],
   );
+  const services = options.requestedServices.map((service) =>
+    service === 'postgres' ? 'PostgreSQL' : service,
+  );
   return `import { Badge, Box, Code, Container, Heading, Link, SimpleGrid, Stack, Text } from '@chakra-ui/react';
 import Head from 'next/head';
 
 const commands = ${JSON.stringify([`${nx} show projects`, `${nx} graph`, `${nx} run megamono:check`])};
-const surfaces = ${JSON.stringify(surfaces)};
+const surfaces: string[] = ${JSON.stringify(surfaces)};
+const services: string[] = ${JSON.stringify(services)};
 const tools = [
   ['Megamono', 'https://megamono.com', 'Explore Megamono'],
   ['Playstack', 'https://playstack.dev', 'Explore Playstack'],
@@ -423,6 +429,10 @@ export default function Index() {
             <Heading as="h2">Generated surfaces</Heading>
             <SimpleGrid columns={{ base: 1, md: 2 }} gap="4">
               {surfaces.map((surface) => <Badge key={surface}>{surface}</Badge>)}
+            </SimpleGrid>
+            <Heading as="h2">Requested services</Heading>
+            <SimpleGrid columns={{ base: 1, md: 2 }} gap="4">
+              {(services.length ? services : ['None requested']).map((service) => <Badge key={service}>{service}</Badge>)}
             </SimpleGrid>
             <Heading as="h2">How to use Megamono</Heading>
             <Text>Keep applications thin composition roots, place reusable behavior in tagged libraries, and capture durable intent in docs.</Text>
@@ -458,6 +468,141 @@ test('introduces the workspace and Commune development tools', async ({ page }) 
   ] as const) await expect(page.getByRole('link', { name })).toHaveAttribute('href', href);
 });
 `;
+}
+
+function configureE2ePackage(
+  tree: Tree,
+  options: NormalizedAppOptions,
+): void {
+  const e2eRoot = `${options.directory}-e2e`;
+  const packagePath = `${e2eRoot}/package.json`;
+  const projectExists = [...getProjects(tree).values()].some(
+    (project) => project.root === e2eRoot,
+  );
+  if (!projectExists && tree.children(e2eRoot).length === 0) return;
+  updatePackage(tree, packagePath, options);
+
+  if (options.type === 'api') {
+    updateJson(tree, packagePath, (value: Record<string, unknown>) => {
+      const nx = (value.nx as Record<string, unknown> | undefined) ?? {};
+      const targets = (nx.targets as Record<string, unknown> | undefined) ?? {};
+      const e2e = (targets.e2e as Record<string, unknown> | undefined) ?? {};
+      return {
+        ...value,
+        nx: {
+          ...nx,
+          targets: {
+            ...targets,
+            e2e: {
+              ...e2e,
+              options: {
+                ...((e2e.options as Record<string, unknown> | undefined) ?? {}),
+                jestConfig: `${e2eRoot}/jest.config.cjs`,
+              },
+            },
+          },
+        },
+      };
+    });
+    tree.write(
+      'jest.preset.js',
+      "const nxPreset = require('@nx/jest/preset').default;\n\nmodule.exports = { ...nxPreset };\n",
+    );
+    const presetRoot = posix.relative(e2eRoot, '.') || '.';
+    tree.write(
+      `${e2eRoot}/jest.config.cjs`,
+      `const { readFileSync } = require('node:fs');
+
+const swcJestConfig = JSON.parse(
+  readFileSync(\`${'${__dirname}'}/.spec.swcrc\`, 'utf8'),
+);
+swcJestConfig.swcrc = false;
+
+module.exports = {
+  displayName: '${options.projectName}-e2e',
+  preset: '${presetRoot}/jest.preset.js',
+  globalSetup: '<rootDir>/src/support/global-setup.ts',
+  globalTeardown: '<rootDir>/src/support/global-teardown.ts',
+  setupFiles: ['<rootDir>/src/support/test-setup.ts'],
+  testEnvironment: 'node',
+  transform: { '^.+\\\\.[tj]s$': ['@swc/jest', swcJestConfig] },
+  moduleFileExtensions: ['ts', 'js', 'html'],
+  coverageDirectory: 'test-output/jest/coverage',
+};
+`,
+    );
+    tree.delete(`${e2eRoot}/jest.config.cts`);
+    if (tree.exists(`${e2eRoot}/tsconfig.json`)) {
+      updateJson(
+        tree,
+        `${e2eRoot}/tsconfig.json`,
+        (value: Record<string, unknown>) => ({
+          ...value,
+          include: ((value.include as string[] | undefined) ?? []).filter(
+            (entry) => !entry.startsWith('jest.config.'),
+          ),
+        }),
+      );
+    }
+    if (options.port) {
+      const replacements = [
+        [
+          `${e2eRoot}/src/support/test-setup.ts`,
+          "process.env.PORT ?? '3000'",
+          `process.env.PORT ?? '${options.port}'`,
+        ],
+        [
+          `${e2eRoot}/src/support/global-setup.ts`,
+          ': 3000',
+          `: ${options.port}`,
+        ],
+        [
+          `${e2eRoot}/src/support/global-teardown.ts`,
+          ': 3000',
+          `: ${options.port}`,
+        ],
+      ] as const;
+      for (const [path, current, replacement] of replacements) {
+        if (tree.exists(path)) {
+          tree.write(
+            path,
+            (tree.read(path, 'utf8') ?? '').replace(current, replacement),
+          );
+        }
+      }
+    }
+    return;
+  }
+
+  const nx =
+    options.packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
+  const port = options.port ?? DEFAULT_PORTS[options.type] ?? 4200;
+  tree.write(
+    `${e2eRoot}/playwright.config.mts`,
+    `import { defineConfig, devices } from '@playwright/test';
+import { workspaceRoot } from '@nx/devkit';
+import { nxE2EPreset } from '@nx/playwright/preset';
+
+const port = process.env['PORT'] || '${port}';
+const baseURL = process.env['BASE_URL'] || \`http://localhost:\${port}\`;
+
+export default defineConfig({
+  ...nxE2EPreset(import.meta.dirname, { testDir: './src' }),
+  use: { baseURL, trace: 'on-first-retry' },
+  webServer: {
+    command: \`${nx} run ${options.projectName}:dev --port=\${port}\`,
+    url: baseURL,
+    reuseExistingServer: false,
+    cwd: workspaceRoot,
+  },
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  ],
+});
+`,
+  );
 }
 
 async function ensureTheme(tree: Tree, options: NormalizedAppOptions): Promise<GeneratorCallback | void> {
@@ -531,6 +676,7 @@ async function createWebApp(
   );
   tree.write(`${options.directory}/src/pages/index.tsx`, billboardSource(options));
   tree.write(`${e2eRoot}/src/example.spec.ts`, billboardE2eSource(options));
+  configureE2ePackage(tree, options);
   return callbacks;
 }
 
@@ -602,8 +748,7 @@ async function createApiApp(
   if (options.port && tree.exists(mainPath)) {
     tree.write(mainPath, (tree.read(mainPath, 'utf8') ?? '').replace('process.env.PORT || 3000', `process.env.PORT || ${options.port}`));
   }
-  const e2ePackage = `${options.directory}-e2e/package.json`;
-  if (tree.exists(e2ePackage)) updatePackage(tree, e2ePackage, options);
+  configureE2ePackage(tree, options);
   return callbacks;
 }
 

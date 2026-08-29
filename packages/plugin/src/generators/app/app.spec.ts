@@ -45,6 +45,13 @@ describe('app generator', () => {
     expect(tree.read('apps/web/package.json', 'utf8')).toContain(
       '"@fixture/theme": "workspace:*"',
     );
+    expect(tree.children('apps')).toEqual(['web', 'web-e2e']);
+    expect(tree.read('apps/web-e2e/package.json', 'utf8')).toContain(
+      '"name": "fixture-web-e2e"',
+    );
+    expect(tree.read('apps/web-e2e/playwright.config.mts', 'utf8')).toContain(
+      'pnpm exec nx run fixture-web:dev --port=${port}',
+    );
 
     const first = snapshot(tree);
     await appGenerator(tree, {
@@ -72,6 +79,15 @@ describe('app generator', () => {
     expect(tree.exists('apps/api/src/app/app.controller.ts')).toBe(false);
     expect(tree.read('packages/nest-home/package.json', 'utf8')).toContain(
       '"type:feature"',
+    );
+    expect(tree.read('apps/api-e2e/package.json', 'utf8')).toContain(
+      'apps/api-e2e/jest.config.cjs',
+    );
+    expect(tree.read('apps/api-e2e/jest.config.cjs', 'utf8')).toContain(
+      "displayName: 'fixture-api-e2e'",
+    );
+    expect(tree.read('apps/api/src/main.ts', 'utf8')).toContain(
+      'process.env.PORT || 3000',
     );
   });
 
