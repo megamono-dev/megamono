@@ -67,6 +67,9 @@ export interface HealthGitState {
 
 interface PackageManifest {
   readonly name?: string;
+  readonly private?: boolean;
+  readonly bin?: string | Readonly<Record<string, string>>;
+  readonly publishConfig?: Readonly<Record<string, unknown>>;
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly devDependencies?: Readonly<Record<string, string>>;
   readonly peerDependencies?: Readonly<Record<string, string>>;
@@ -84,6 +87,8 @@ interface DependencyDeclaration {
   readonly name: string;
   readonly project: string;
   readonly range: string;
+  readonly kind?:
+    'dependency' | 'devDependency' | 'peerDependency' | 'optionalDependency';
 }
 
 interface IntegrationProvenance {
@@ -575,16 +580,18 @@ async function dependencyAlignmentFindings(
     const manifest = await readJson<PackageManifest>(
       join(workspaceRoot, root, 'package.json'),
     );
-    const all = {
-      ...manifest?.dependencies,
-      ...manifest?.devDependencies,
-      ...manifest?.peerDependencies,
-      ...manifest?.optionalDependencies,
-    };
-    for (const [name, range] of Object.entries(all).sort(([a], [b]) =>
-      a.localeCompare(b),
-    )) {
-      add(name, { ecosystem: 'npm', name, project, range });
+    const sections = [
+      ['dependency', manifest?.dependencies],
+      ['devDependency', manifest?.devDependencies],
+      ['peerDependency', manifest?.peerDependencies],
+      ['optionalDependency', manifest?.optionalDependencies],
+    ] as const;
+    for (const [kind, dependencies] of sections) {
+      for (const [name, range] of Object.entries(dependencies ?? {}).sort(
+        ([a], [b]) => a.localeCompare(b),
+      )) {
+        add(name, { ecosystem: 'npm', name, project, range, kind });
+      }
     }
 
     const expo = await readJson<ExpoConfig>(
@@ -674,6 +681,13 @@ async function dependencyAlignmentFindings(
   )) {
     const ranges = [...new Set(consumers.map(({ range }) => range))].sort();
     if (ranges.length < 2) continue;
+    const installedRanges = [
+      ...new Set(
+        consumers
+          .filter(({ kind }) => kind !== 'peerDependency')
+          .map(({ range }) => range),
+      ),
+    ];
     const bases = ranges.map(parsedBase);
     const supported = bases.every((value) => value !== undefined);
     const candidate = supported
@@ -682,6 +696,11 @@ async function dependencyAlignmentFindings(
     const alignable = Boolean(
       candidate && ranges.every((range) => satisfies(candidate, range)),
     );
+    // Peer dependencies describe a package's supported host versions; they do
+    // not install another copy. A single installed range that satisfies every
+    // peer contract is already aligned and should not produce remediation
+    // noise merely because the support envelope is written differently.
+    if (installedRanges.length === 1 && alignable) continue;
     const projects = consumers.map(({ project }) => project).sort();
     const { ecosystem, name } = consumers[0];
     const label = ecosystem === 'npm' ? name : `${ecosystem} ${name}`;
@@ -1006,24 +1025,40 @@ async function orphanFindings(
     }
   }
   const confidence = await graphConfidence(workspaceRoot, config);
-  return Object.entries(graph.nodes)
-    .filter(
-      ([name, node]) =>
-        node.type === 'lib' &&
-        name !== 'megamono-docs' &&
-        (inbound.get(name) ?? 0) === 0,
-    )
-    .map(([name, node]) => ({
-      check: 'orphaned-libraries' as const,
-      fingerprint: name,
-      state: 'orphaned',
-      confidence,
-      summary: `Library ${name} has no inbound project-graph edges.`,
-      evidence: [node.data.root],
-      ...(confidence === 'complete'
-        ? { recommendation: 'Confirm the library is still used or remove it.' }
-        : {}),
-    }));
+  const candidates: Array<readonly [string, (typeof graph.nodes)[string]]> = [];
+  for (const [name, node] of Object.entries(graph.nodes)) {
+    if (
+      node.type !== 'lib' ||
+      name === 'megamono-docs' ||
+      (inbound.get(name) ?? 0) !== 0
+    ) {
+      continue;
+    }
+    const manifest = await readJson<PackageManifest>(
+      join(workspaceRoot, node.data.root, 'package.json'),
+    );
+    // Published libraries and executable packages have consumers outside the
+    // local Nx graph. Treating their lack of internal inbound edges as proof
+    // of orphaning would be a false positive.
+    if (
+      manifest?.private !== true &&
+      (manifest?.publishConfig !== undefined || manifest?.bin !== undefined)
+    ) {
+      continue;
+    }
+    candidates.push([name, node]);
+  }
+  return candidates.map(([name, node]) => ({
+    check: 'orphaned-libraries' as const,
+    fingerprint: name,
+    state: 'orphaned',
+    confidence,
+    summary: `Library ${name} has no inbound project-graph edges.`,
+    evidence: [node.data.root],
+    ...(confidence === 'complete'
+      ? { recommendation: 'Confirm the library is still used or remove it.' }
+      : {}),
+  }));
 }
 
 async function integrationDriftFindings(

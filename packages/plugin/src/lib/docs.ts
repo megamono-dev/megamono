@@ -24,6 +24,7 @@ const DOCUMENT_DIRECTORIES = new Set([
 const EXCLUDED_NAMES = new Set(['README.md', 'OVERVIEW.md', 'INDEX.md']);
 const externalReferencePattern = /^[a-z][a-z0-9-]*:[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const slugPattern = '[a-z0-9]+(?:-[a-z0-9]+)*';
+const projectPattern = `(?:${slugPattern}|@${slugPattern}/${slugPattern})`;
 const execFileAsync = promisify(execFile);
 const IGNORED_PACKAGE_DIRECTORIES = new Set([
   '.content-collections',
@@ -44,8 +45,8 @@ const dateTimeSchema = z.preprocess(
 
 export const architectureDependencySchema = z
   .object({
-    from: z.string().regex(new RegExp(`^${slugPattern}$`)),
-    to: z.string().regex(new RegExp(`^${slugPattern}$`)),
+    from: z.string().regex(new RegExp(`^${projectPattern}$`)),
+    to: z.string().regex(new RegExp(`^${projectPattern}$`)),
   })
   .strict();
 
@@ -68,7 +69,9 @@ export const repositoryDocumentSchema = z
     status: z.string().min(1),
     visibility: z.enum(['internal', 'public']),
     visibility_reviewed_at: dateTimeSchema.optional(),
-    projects: z.array(z.string().regex(new RegExp(`^${slugPattern}$`))).min(1),
+    projects: z
+      .array(z.string().regex(new RegExp(`^${projectPattern}$`)))
+      .min(1),
     topics: z.array(z.string().regex(new RegExp(`^${slugPattern}$`))),
     summary: z.string().min(1),
     date: dateSchema,

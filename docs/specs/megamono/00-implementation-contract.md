@@ -3,7 +3,15 @@ id: spec-megamono-0000
 type: spec
 status: accepted
 visibility: internal
-projects: [megamono]
+projects:
+  - megamono
+  - '@megamono/workspace'
+  - '@megamono/cli'
+  - '@megamono/plugin'
+  - create-megamono
+  - nx-apple
+  - nx-cargo
+  - nx-cloudflare
 topics: [architecture, generators, nx, release]
 summary: Canonical package map, compatibility baseline, command contract, and definition of done for Megamono v1.
 date: 2026-08-23

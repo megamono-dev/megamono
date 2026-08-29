@@ -248,7 +248,7 @@ describe('repository health', () => {
     }
   });
 
-  it('recognizes overlap between comparator and exact npm ranges', async () => {
+  it('does not report compatible peer support ranges as dependency drift', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-health-'));
     try {
       await writeFile(
@@ -273,14 +273,7 @@ describe('repository health', () => {
         now: new Date('2026-08-23T00:00:00.000Z'),
       });
 
-      expect(report.findings).toContainEqual(
-        expect.objectContaining({
-          fingerprint: 'nx:app:root',
-          state: 'alignable',
-          confidence: 'complete',
-          recommendation: 'Align nx to 23.1.1.',
-        }),
-      );
+      expect(report.findings).toEqual([]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -400,6 +393,34 @@ describe('repository health', () => {
         }),
       );
       expect(report.findings[0]).not.toHaveProperty('recommendation');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not classify externally consumed packages as orphaned', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-health-'));
+    try {
+      await writeFile(join(root, 'package.json'), '{}');
+      await mkdir(join(root, 'packages/util'), { recursive: true });
+      await writeFile(
+        join(root, 'packages/util/package.json'),
+        JSON.stringify({
+          name: '@fixture/util',
+          publishConfig: { access: 'public' },
+        }),
+      );
+      await writeFile(join(root, 'nx.json'), '{}');
+
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph: projectGraph(),
+        config: DEFAULT_MEGAMONO_CONFIG,
+        documents: [],
+        checks: ['orphaned-libraries'],
+      });
+
+      expect(report.findings).toEqual([]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

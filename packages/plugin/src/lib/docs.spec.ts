@@ -35,6 +35,27 @@ async function fixture(): Promise<string> {
 }
 
 describe('repository documentation', () => {
+  it('accepts scoped package names as exact Nx project identifiers', async () => {
+    const root = await fixture();
+    try {
+      await writeFile(
+        join(root, 'docs', 'specs', 'test', '01-fixture.md'),
+        spec.replace('projects: [test]', 'projects: [test, "@scope/tool"]'),
+      );
+      const result = await validateRepositoryDocs(
+        root,
+        DEFAULT_MEGAMONO_CONFIG,
+      );
+      expect(result.diagnostics).toEqual([]);
+      expect(result.documents[0].data.projects).toEqual([
+        'test',
+        '@scope/tool',
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('validates metadata and generates byte-stable indexes', async () => {
     const root = await fixture();
     try {

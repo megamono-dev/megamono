@@ -42,6 +42,8 @@ The foundational distinction, and the one everything else hangs off:
 
 They overlap in format and share almost nothing else. Two schemas, not a shared base with extensions — the shared thing is the _pattern_, not the fields.
 
+`projects` and architecture edge endpoints use exact Nx project names. They accept either an unscoped kebab-case name (`web`) or a scoped package-style name (`@scope/package`); scoped values must be quoted in YAML flow collections.
+
 ### The direction rule
 
 > **A repo-level doc may reference a content-level doc. A content-level doc may never reference a repo-level one.**
