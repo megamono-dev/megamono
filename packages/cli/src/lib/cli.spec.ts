@@ -46,6 +46,25 @@ async function workspace(
       { name: packageName, version: '0.0.1' },
     );
   }
+  if (packages.includes('@megamono/plugin')) {
+    await json(
+      join(root, 'node_modules', '@megamono', 'plugin', 'availability.json'),
+      {
+        version: 1,
+        generators: {
+          'docs-spec': { status: 'available' },
+          'integration-sentry': {
+            status: 'gated',
+            gate: 'The Sentry integration fixture contract has not passed.',
+          },
+          'integration-postmark': {
+            status: 'reserved',
+            gate: 'Postmark integration generation is reserved for a later wave.',
+          },
+        },
+      },
+    );
+  }
   return root;
 }
 
@@ -99,6 +118,65 @@ afterEach(async () => {
 });
 
 describe('@megamono/cli', () => {
+  it('delegates available generators and diagnoses gated names', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+
+    expect(
+      (
+        await runMegamonoCli(
+          ['generate', 'docs-spec', 'workspace', '--title=Contract'],
+          harness.value,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(harness.invocations[0]).toMatchObject({
+      command: 'pnpm',
+      args: [
+        'exec',
+        'nx',
+        'generate',
+        '@megamono/plugin:docs-spec',
+        'workspace',
+        '--title=Contract',
+      ],
+    });
+
+    const gated = await runMegamonoCli(
+      ['generate', 'integration-sentry'],
+      harness.value,
+    );
+    expect(gated.exitCode).toBe(3);
+    expect(harness.stderr.at(-1)).toBe(
+      'Generator integration-sentry is gated: The Sentry integration fixture contract has not passed.',
+    );
+    expect(harness.invocations).toHaveLength(1);
+  });
+
+  it('diagnoses reserved and unknown generators before Nx delegation', async () => {
+    const root = await workspace('npm');
+    const harness = io(root);
+
+    expect(
+      (
+        await runMegamonoCli(
+          ['generate', 'integration-postmark'],
+          harness.value,
+        )
+      ).exitCode,
+    ).toBe(3);
+    expect(harness.stderr.at(-1)).toContain(
+      'Generator integration-postmark is reserved:',
+    );
+    expect(
+      (await runMegamonoCli(['generate', 'made-up'], harness.value)).exitCode,
+    ).toBe(3);
+    expect(harness.stderr.at(-1)).toBe(
+      'Generator made-up is reserved: No canonical Megamono generator uses this name.',
+    );
+    expect(harness.invocations).toEqual([]);
+  });
+
   it('delegates pnpm init options unchanged to the local generator', async () => {
     const root = await workspace('pnpm');
     const harness = io(join(root, 'apps', 'web'));

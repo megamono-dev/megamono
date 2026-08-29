@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { access, readdir } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
 import { dirname, join, parse, resolve } from 'node:path';
 
 export type PackageManager = 'npm' | 'pnpm';
@@ -71,6 +71,7 @@ const HELP = `Usage: megamono <command> [options]
 
 Commands:
   init                 Adopt Megamono in an existing Nx workspace
+  generate <name>      Run an available local Megamono generator
   help                 Show this help
 
 Global options:
@@ -319,6 +320,7 @@ async function resolvePlaystackPackageSelection(
 function nxInvocation(
   manager: PackageManager,
   generatorArgs: readonly string[],
+  generator = 'workspace-init',
 ): readonly [string, readonly string[]] {
   return manager === 'pnpm'
     ? [
@@ -327,7 +329,7 @@ function nxInvocation(
           'exec',
           'nx',
           'generate',
-          '@megamono/plugin:workspace-init',
+          `@megamono/plugin:${generator}`,
           ...generatorArgs,
         ],
       ]
@@ -338,10 +340,70 @@ function nxInvocation(
           'nx',
           '--',
           'generate',
-          '@megamono/plugin:workspace-init',
+          `@megamono/plugin:${generator}`,
           ...generatorArgs,
         ],
       ];
+}
+
+interface LocalGeneratorAvailability {
+  readonly status: 'available' | 'gated' | 'reserved';
+  readonly gate?: string;
+}
+
+async function localGeneratorAvailability(
+  root: string,
+  name: string,
+): Promise<LocalGeneratorAvailability | undefined> {
+  const packageJson = createRequire(join(root, 'package.json')).resolve(
+    '@megamono/plugin/package.json',
+  );
+  const registry = JSON.parse(
+    await readFile(join(dirname(packageJson), 'availability.json'), 'utf8'),
+  ) as {
+    generators?: Record<string, LocalGeneratorAvailability>;
+  };
+  return registry.generators?.[name];
+}
+
+async function runGenerate(
+  args: readonly string[],
+  io: MegamonoCliIo,
+): Promise<MegamonoCliResult> {
+  const name = args[0];
+  if (!name || name.startsWith('-')) {
+    throw new CliError(
+      'Usage: megamono generate <name> [generator options]',
+      2,
+    );
+  }
+  const root = await findWorkspaceRoot(io.cwd);
+  const manager = await detectPackageManager(root);
+  if (!localPackageAvailable(root, 'nx')) {
+    throw new CliError('The workspace-local nx package is not installed.', 3);
+  }
+  if (!localPackageAvailable(root, '@megamono/plugin')) {
+    throw new CliError(
+      `@megamono/plugin is not installed locally. Run: ${pluginInstallInstruction(manager, 'registry')}. Commit that dependency change, then rerun megamono generate ${name}.`,
+      3,
+    );
+  }
+  const availability = await localGeneratorAvailability(root, name);
+  if (!availability) {
+    throw new CliError(
+      `Generator ${name} is reserved: No canonical Megamono generator uses this name.`,
+      3,
+    );
+  }
+  if (availability.status !== 'available') {
+    throw new CliError(
+      `Generator ${name} is ${availability.status}: ${availability.gate}`,
+      3,
+    );
+  }
+  const [command, commandArgs] = nxInvocation(manager, args.slice(1), name);
+  const result = await io.runCommand(command, commandArgs, { cwd: root });
+  return { exitCode: result.exitCode };
 }
 
 function playstackInvocation(
@@ -631,6 +693,9 @@ export async function runMegamonoCli(
         return { exitCode: 0 };
       }
       return await runInit(args.slice(1), io);
+    }
+    if (args[0] === 'generate') {
+      return await runGenerate(args.slice(1), io);
     }
     throw new CliError(`Unknown command ${args[0]}.\n\n${HELP}`, 2);
   } catch (error) {

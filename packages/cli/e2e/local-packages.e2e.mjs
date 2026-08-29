@@ -324,6 +324,19 @@ try {
       }),
     ],
   ]);
+  await json(
+    resolve(packageDirectories.get('@megamono/plugin'), 'availability.json'),
+    {
+      version: 1,
+      generators: {
+        'docs-spec': { status: 'available' },
+        'integration-sentry': {
+          status: 'gated',
+          gate: 'The Sentry integration fixture contract has not passed.',
+        },
+      },
+    },
+  );
   for (const directory of packageDirectories.values())
     await publishPackage(directory, registry, environment);
 
@@ -355,6 +368,23 @@ try {
     npmNx[0].includes('--only=docs') &&
       !npmNx[0].some((value) => value.startsWith('--playstack')),
     'CLI-only options leaked into the Nx generator invocation.',
+  );
+  const beforeGatedInvocations = npmNx.length;
+  const gated = await run(megamono, ['generate', 'integration-sentry'], {
+    cwd: npmWorkspace,
+    env: environment,
+    allowFailure: true,
+  });
+  assert(
+    gated.code === 3 &&
+      gated.stderr.includes(
+        'Generator integration-sentry is gated: The Sentry integration fixture contract has not passed.',
+      ),
+    'The packed CLI did not report the gated generator diagnostic.',
+  );
+  assert(
+    (await readInvocations(npmWorkspace)).length === beforeGatedInvocations,
+    'A gated generator reached Nx delegation.',
   );
 
   const pnpmWorkspace = resolve(temporaryRoot, 'pnpm-workspace');
@@ -499,7 +529,7 @@ try {
   );
 
   process.stdout.write(
-    'Megamono packed CLI e2e passed: isolated global install, npm/pnpm delegation, registry/yalc Playstack setup, survey, exit propagation, and preflight verified.\n',
+    'Megamono packed CLI e2e passed: isolated global install, npm/pnpm delegation, gated generator diagnostics, registry/yalc Playstack setup, survey, exit propagation, and preflight verified.\n',
   );
   succeeded = true;
 } finally {

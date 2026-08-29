@@ -121,11 +121,14 @@ megamono init
 megamono init --survey
 megamono init --playstack --playstack-packages=auth,accounts
 megamono init --playstack --local-packages=yalc
+megamono generate <name> [...generator options]
 megamono help
 megamono --version
 ```
 
 `megamono init [...options]` finds the workspace from the current directory, detects exactly one supported lockfile, verifies that the corresponding local package manager, Nx, and `@megamono/plugin` are installed, and delegates to the local `@megamono/plugin:workspace-init` generator. pnpm workspaces run `pnpm exec nx generate`; npm workspaces run `npm exec nx -- generate`. Every option after `init` is forwarded as its own argument without reinterpretation, including `--survey`, `--only`, `--interactive`, `--yes`, and generator options added by a compatible local plugin.
+
+`megamono generate <name> [...options]` reads the workspace-local plugin availability registry before delegation. Available names run through the local Nx and package manager; gated and reserved names exit `3` with the registry's exact unsatisfied gate and never reach Nx. This preserves an available-only published collection while giving the dedicated CLI a stable diagnostic for canonical names that are not yet buildable.
 
 The CLI consumes three init-only options before delegation:
 
