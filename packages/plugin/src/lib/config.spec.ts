@@ -136,7 +136,11 @@ describe('Megamono configuration', () => {
       events: { adapter: 'drizzle', project: 'database-events' },
     });
 
-    const { databases: _databases, ...legacyDefault } = DEFAULT_MEGAMONO_CONFIG;
+    const legacyDefault = Object.fromEntries(
+      Object.entries(DEFAULT_MEGAMONO_CONFIG).filter(
+        ([key]) => key !== 'databases',
+      ),
+    );
     expect(
       megamonoConfigSchema.parse({
         ...legacyDefault,
