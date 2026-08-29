@@ -24,6 +24,8 @@ export {
   getLastCloudflareRecords,
   projectsFromWranglerConfigs,
 } from './lib/cloudflare';
+export { workerGenerator } from './generators/worker/worker';
+export type { WorkerGeneratorSchema } from './generators/worker/schema';
 export type {
   CloudflareEnvironmentMetadata,
   CloudflarePluginOptions,

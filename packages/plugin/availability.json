@@ -13,6 +13,12 @@
       "schema": "./dist/generators/workspace-eject/schema.json",
       "description": "Make a managed Megamono workspace artifact repository-owned"
     },
+    "app": {
+      "status": "available",
+      "factory": "./dist/generators/app/app",
+      "schema": "./dist/generators/app/schema.json",
+      "description": "Add a convention-aligned application"
+    },
     "skill-eject": {
       "status": "available",
       "factory": "./dist/generators/skill-eject/skill-eject",

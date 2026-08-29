@@ -1,4 +1,13 @@
 export {
+  APP_TYPES,
+  AppGeneratorError,
+  appGenerator,
+} from './generators/app/app';
+export type {
+  AppGeneratorSchema,
+  AppType,
+} from './generators/app/schema';
+export {
   ARTIFACT_HASH_PATTERN,
   ARTIFACT_ID_PATTERN,
   ARTIFACT_REGISTRY_PATH,

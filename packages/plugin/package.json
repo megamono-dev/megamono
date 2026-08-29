@@ -142,11 +142,27 @@
   },
   "peerDependencies": {
     "@nx/devkit": ">=17 <24",
+    "@nx/expo": ">=17 <24",
+    "@nx/js": ">=17 <24",
+    "@nx/nest": ">=17 <24",
+    "@nx/next": ">=17 <24",
     "eslint": ">=8 <11",
     "nx": ">=17 <24",
     "typescript": ">=5.2 <7"
   },
   "peerDependenciesMeta": {
+    "@nx/expo": {
+      "optional": true
+    },
+    "@nx/js": {
+      "optional": true
+    },
+    "@nx/nest": {
+      "optional": true
+    },
+    "@nx/next": {
+      "optional": true
+    },
     "eslint": {
       "optional": true
     }

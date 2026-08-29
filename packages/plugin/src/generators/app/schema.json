@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoApp",
+  "title": "Add a convention-aligned application",
+  "description": "Create an application through the same maintained preset used by create-megamono.",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["web", "site", "api", "worker", "mobile", "desktop", "apple"],
+      "description": "Application preset to create."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Application basename; defaults to the selected type."
+    },
+    "directory": {
+      "type": "string",
+      "description": "Workspace-relative application root; defaults to apps/<name>."
+    },
+    "scope": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Megamono scope tag and package scope."
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1024,
+      "maximum": 65535,
+      "description": "Explicit unique development port."
+    },
+    "interactive": {
+      "type": "boolean",
+      "default": true,
+      "description": "Allow unresolved choices and confirmation to be prompted."
+    },
+    "yes": {
+      "type": "boolean",
+      "default": false,
+      "description": "Apply a fully resolved plan without confirmation."
+    },
+    "dryRun": {
+      "type": "boolean",
+      "default": false,
+      "description": "Print the ordered plan and write nothing."
+    },
+    "bootstrap": {
+      "type": "boolean",
+      "default": false,
+      "description": "Trusted create-megamono invocation before workspace-init."
+    },
+    "workspaceName": { "type": "string" },
+    "requestedApps": { "type": "string" },
+    "requestedServices": { "type": "string" },
+    "serviceRunner": {
+      "type": "string",
+      "enum": ["none", "springbar"],
+      "default": "none"
+    }
+  },
+  "additionalProperties": false
+}

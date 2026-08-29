@@ -51,6 +51,31 @@
           "enum": ["pnpm", "npm"],
           "default": "pnpm"
         },
+        "apps": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "web": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "router": { "const": "pages" },
+                "src": { "const": true },
+                "ui": { "const": "chakra" },
+                "e2e": { "const": "playwright" }
+              }
+            },
+            "api": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "framework": { "const": "nest" },
+                "featureLibraries": { "const": true },
+                "e2e": { "const": "jest" }
+              }
+            }
+          }
+        },
         "rules": {
           "type": "object",
           "additionalProperties": false,
@@ -198,6 +223,15 @@
       "uniqueItems": true,
       "items": {
         "enum": ["web", "node", "worker", "apple", "rust", "php", "extension"]
+      }
+    },
+    "ports": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1024,
+        "maximum": 65535
       }
     },
     "topics": {

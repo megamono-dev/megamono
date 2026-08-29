@@ -18,3 +18,5 @@ export type {
   SwiftPackageDump,
   SwiftPackageDumpRunner,
 } from './lib/apple';
+export { appleApplicationGenerator } from './generators/application/application';
+export type { AppleApplicationGeneratorSchema } from './generators/application/schema';

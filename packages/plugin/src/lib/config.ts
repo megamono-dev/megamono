@@ -113,6 +113,31 @@ const conventionsSchema = z
     nestFeatureLibraries: z.boolean().default(true),
     docsLocation: z.literal('centralized').default('centralized'),
     packageManager: z.enum(PACKAGE_MANAGERS).default('pnpm'),
+    apps: z
+      .object({
+        web: z
+          .object({
+            router: z.literal('pages').default('pages'),
+            src: z.literal(true).default(true),
+            ui: z.literal('chakra').default('chakra'),
+            e2e: z.literal('playwright').default('playwright'),
+          })
+          .strict()
+          .default({ router: 'pages', src: true, ui: 'chakra', e2e: 'playwright' }),
+        api: z
+          .object({
+            framework: z.literal('nest').default('nest'),
+            featureLibraries: z.literal(true).default(true),
+            e2e: z.literal('jest').default('jest'),
+          })
+          .strict()
+          .default({ framework: 'nest', featureLibraries: true, e2e: 'jest' }),
+      })
+      .strict()
+      .default({
+        web: { router: 'pages', src: true, ui: 'chakra', e2e: 'playwright' },
+        api: { framework: 'nest', featureLibraries: true, e2e: 'jest' },
+      }),
     rules: z
       .partialRecord(z.enum(CONVENTION_RULES), ruleOverrideSchema)
       .default({}),
@@ -206,6 +231,7 @@ export const megamonoConfigSchema = z
         z.enum(['web', 'node', 'worker', 'apple', 'rust', 'php', 'extension']),
       )
       .default([]),
+    ports: z.record(z.string().regex(topicPattern), z.number().int().min(1024).max(65535)).default({}),
     topics: z
       .object({
         extend: z.array(z.string().regex(topicPattern)).default([]),
@@ -318,6 +344,10 @@ export const DEFAULT_MEGAMONO_CONFIG: MegamonoConfig =
       nestFeatureLibraries: true,
       docsLocation: 'centralized',
       packageManager: 'pnpm',
+      apps: {
+        web: { router: 'pages', src: true, ui: 'chakra', e2e: 'playwright' },
+        api: { framework: 'nest', featureLibraries: true, e2e: 'jest' },
+      },
       rules: {},
     },
     adoption: {
@@ -327,6 +357,7 @@ export const DEFAULT_MEGAMONO_CONFIG: MegamonoConfig =
       ratchets: [],
     },
     platforms: [],
+    ports: {},
     topics: { extend: [] },
     docs: { root: 'docs', reportRetentionDays: 84 },
     health: {
