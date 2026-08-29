@@ -122,6 +122,8 @@ npx create-megamono <name>
   --directory <path>
   --apps web,api,worker,mobile,desktop,apple,site
   --services postgres,redis,clickhouse,typesense
+  --database-adapter prisma|drizzle|none
+  --database-name <name>
   --service-runner none|springbar
   --integrations sentry
   --interactive true|false
@@ -133,7 +135,9 @@ npx create-megamono <name>
   --dry-run
 ```
 
-Defaults are `--service-runner=none`, no integrations, `--install=true`, `--package-manager=pnpm`, `--local-packages=registry`, and `--verify=config`. Non-interactive mode requires `name` and `apps`; all other omitted values use those defaults. `--verify=config` runs formatting, docs validation, `megamono:check`, and graph creation. `--verify=build` additionally runs affected build/test/lint targets for generated projects.
+Defaults are `--database-adapter=none`, `--service-runner=none`, no integrations, `--install=true`, `--package-manager=pnpm`, `--local-packages=registry`, and `--verify=config`. Interactive creation offers Prisma, Drizzle, and no database toolkit as genuine choices, with Prisma marked recommended while it remains the fully verified baseline. A requested PostgreSQL service does not silently select an ORM. Non-interactive mode requires `name` and `apps`; all other omitted values use those defaults. `--verify=config` runs formatting, docs validation, `megamono:check`, and graph creation. `--verify=build` additionally runs affected build/test/lint targets for generated projects.
+
+When a database adapter is selected, `create-megamono` invokes the same `@megamono/plugin:database` generator exposed by `megamono add database`. Database names are repository-defined normalized slugs, not a Megamono vocabulary: `primary` is only the interactive suggestion and non-interactive default when `--database-name` is omitted. Names such as `events`, `analytics`, and `identity` require no product change. Database scaffolding completes before the optional Playstack handoff so `playstack init` can bind package-owned `database-schema` artifacts to an existing named target. Service selection remains independent: the adapter owns repository tooling, while Springbar owns any requested database service.
 
 `--install=false` controls the committed destination state, not the private staging implementation. Generators require their exact tested toolchain, so creation hydrates and verifies the sibling staging workspace normally, removes every workspace `node_modules` directory, and then performs the atomic rename. Manifests, the selected package manager's lockfile, local yalc projections, and generated source remain intact, so the first install in the destination is reproducible. A no-install run never publishes a partially generated workspace merely to avoid temporary bootstrap dependencies.
 

@@ -19,6 +19,7 @@ describe('Megamono configuration', () => {
       ratchets: [],
     });
     expect(config.services.requirements).toEqual({});
+    expect(config.databases).toEqual({});
     expect(config.conventions.packageManager).toBe('pnpm');
     expect(getTopicVocabulary(config)).toContain('architecture');
   });
@@ -117,6 +118,61 @@ describe('Megamono configuration', () => {
       megamonoConfigSchema.safeParse({
         ...DEFAULT_MEGAMONO_CONFIG,
         services: { runner: 'none', requirements: { mysql: '9' } },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts named database adapters and normalizes legacy Prisma projects', () => {
+    expect(
+      megamonoConfigSchema.parse({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        databases: {
+          primary: { adapter: 'prisma', project: 'database-primary' },
+          events: { adapter: 'drizzle', project: 'database-events' },
+        },
+      }).databases,
+    ).toEqual({
+      primary: { adapter: 'prisma', project: 'database-primary' },
+      events: { adapter: 'drizzle', project: 'database-events' },
+    });
+
+    const { databases: _databases, ...legacyDefault } = DEFAULT_MEGAMONO_CONFIG;
+    expect(
+      megamonoConfigSchema.parse({
+        ...legacyDefault,
+        prisma: {
+          composition: 'native-multi-file',
+          projects: ['prisma-main', 'prisma-analytics'],
+        },
+      }).databases,
+    ).toEqual({
+      'prisma-main': { adapter: 'prisma', project: 'prisma-main' },
+      'prisma-analytics': {
+        adapter: 'prisma',
+        project: 'prisma-analytics',
+      },
+    });
+  });
+
+  it('rejects ambiguous and invalid database configuration', () => {
+    expect(
+      megamonoConfigSchema.safeParse({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        databases: {
+          primary: { adapter: 'prisma', project: 'database-primary' },
+        },
+        prisma: {
+          composition: 'native-multi-file',
+          projects: ['prisma-main'],
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      megamonoConfigSchema.safeParse({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        databases: {
+          primary: { adapter: 'typeorm', project: 'database-primary' },
+        },
       }).success,
     ).toBe(false);
   });

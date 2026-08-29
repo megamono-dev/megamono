@@ -57,6 +57,14 @@ Uniform names are what make affected commands work across a polyglot repo. A mis
 
 All targets declare explicit inputs. `build`, archive, package, and deploy targets declare outputs; read-only lint/test targets declare none. Build and test are cached; deploy is never cached. Continuous preview/dev targets set `continuous: true` and are never dependencies of CI targets.
 
+## Database project generator
+
+`@megamono/plugin:database` creates or adopts a named Nx database project independently of the database service that may run it. Its v1 adapters are Prisma and Drizzle. Each adapter owns an explicit compatibility record containing its packages, configuration files, static validation command, and migration-generation command for display only.
+
+The generator records `{ adapter, project }` under the user-supplied logical database name in `megamono.json`. Names are arbitrary normalized slugs; Megamono suggests `primary` but never enumerates database purposes. The same logical name keys the Playstack database target, whose exact schema destination remains authoritative in `playstack.json`. New projects use neutral names such as `database-<name>`; adopted projects keep their existing Nx name. Repeating the generator is a no-op when those contracts match and a preflight conflict when a path, project, adapter, or Playstack target disagrees.
+
+The generator exposes static `build` and `validate` targets and may expose an adapter-native `generate` target for generated clients or types. It never exposes an Nx target that implicitly runs a database migration. Migration generation and application remain explicit application-owned ORM commands.
+
 ### `affected` caveat to pin in docs
 
 Nx computes affected from a **git diff base**. On long-lived branches and squash-merged history this produces surprises — either over-reporting or silently under-reporting.

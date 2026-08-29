@@ -70,6 +70,7 @@ Later scoped packages enter the same restricted validation channel before public
 @megamono/plugin:workspace-init
 @megamono/plugin:workspace-eject
 @megamono/plugin:app
+@megamono/plugin:database
 @megamono/plugin:convert
 @megamono/plugin:skill-eject
 
@@ -102,12 +103,12 @@ Later scoped packages enter the same restricted validation channel before public
 
 These are stable names, not a promise that every generator ships in the first collection. V1 availability is explicit:
 
-| Availability                         | Generators                                                                                                                                           |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unconditional core                   | `workspace-init`, `workspace-eject`, `app`, `convert`, `skill-eject`, `docs-init`, `docs-spec`, `docs-decision`, `docs-plan`, `docs-research`, `docs-audit` |
-| Published after external fixtures    | `content-lib`, `content-type`, `playstack-lint`, `playstack-skills`                                                                                  |
-| Conditional on external fixture gate | `playstack-auth`, `playstack-accounts`, `playstack-webhooks`, `playstack-cache`, `playstack-media`, `integration-sentry`, `theme`, `emails`          |
-| Reserved for later wave              | `integration-fathom`, `integration-postmark`, `integration-stripe`, `playstack-admin`, `playstack-queues`                                            |
+| Availability                         | Generators                                                                                                                                                              |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unconditional core                   | `workspace-init`, `workspace-eject`, `app`, `database`, `convert`, `skill-eject`, `docs-init`, `docs-spec`, `docs-decision`, `docs-plan`, `docs-research`, `docs-audit` |
+| Published after external fixtures    | `content-lib`, `content-type`, `playstack-lint`, `playstack-skills`                                                                                                     |
+| Conditional on external fixture gate | `playstack-auth`, `playstack-accounts`, `playstack-webhooks`, `playstack-cache`, `playstack-media`, `integration-sentry`, `theme`, `emails`                             |
+| Reserved for later wave              | `integration-fathom`, `integration-postmark`, `integration-stripe`, `playstack-admin`, `playstack-queues`                                                               |
 
 The published collection is generated from this availability registry. Requesting a reserved or gated generator returns a diagnostic naming the unsatisfied gate; it never falls through to a partial implementation.
 
@@ -124,6 +125,8 @@ megamono init --playstack --playstack-packages=auth,accounts
 megamono init --playstack --local-packages=yalc
 megamono add app web
 megamono add app api --name=admin-api
+megamono add database primary --adapter=prisma
+megamono add database analytics --adapter=drizzle
 megamono add docs|agents|ci|release|lint|skills|health|inference
 megamono generate <name> [...generator options]
 megamono help
@@ -135,6 +138,8 @@ megamono --version
 `megamono generate <name> [...options]` reads the workspace-local plugin availability registry before delegation. Available names run through the local Nx and package manager; gated and reserved names exit `3` with the registry's exact unsatisfied gate and never reach Nx. This preserves an available-only published collection while giving the dedicated CLI a stable diagnostic for canonical names that are not yet buildable.
 
 `megamono add app <type> [...options]` delegates to the local `@megamono/plugin:app` generator. The supported v1 types are `web`, `site`, `api`, `worker`, `mobile`, `desktop`, and `apple`. The type is also the default project basename; `--name` and `--directory` allow additional instances without changing the maintained preset. A valueless `megamono add app` opens the type selector in an interactive terminal and exits `4` without mutation in non-interactive mode. The generator owns application structure, project registration, conventional tags, stable port allocation, lint and test setup, Nest feature-library composition, Chakra starter composition, and the repository onboarding billboard where applicable.
+
+`megamono add database <name> [...options]` delegates to `@megamono/plugin:database`. The adapter is selected with `--adapter=prisma|drizzle`, prompted when interactive, and required when automation cannot infer it from an existing named target. Megamono creates or adopts the Nx project, scaffolds the adapter's repository configuration at compatibility-pinned versions, records the project in `megamono.json`, and writes the corresponding named artifact destination into `playstack.json`. It never copies Playstack schema artifacts, connects to a database, generates a migration, or applies a migration.
 
 `megamono add docs|agents|ci|release|lint|skills|health|inference` is an ergonomic route to the corresponding independently selectable `workspace-init` module. It does not introduce a second generator or ownership implementation. Add commands require an initialized `megamono.json`; they never adopt the baseline implicitly. Repeating an already satisfied add command is a successful no-op.
 
@@ -223,7 +228,7 @@ A Playstack-wiring generator ships only when the referenced package publishes:
 - its install name and Free-tier availability,
 - its runtime/framework compatibility,
 - its configuration and environment contract,
-- its Prisma fragment, when applicable,
+- its database-schema artifact and declared format, when applicable,
 - and a fixture package usable by Megamono e2e tests.
 
 Until those artifacts exist, the generator name may be reserved but is not included in the published generator collection.

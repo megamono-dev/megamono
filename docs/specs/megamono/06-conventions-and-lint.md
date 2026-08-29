@@ -177,8 +177,13 @@ Repo-level config recording the choices made at scaffold time, so generators add
     "docsLocation": "centralized",
     "packageManager": "pnpm",
     "apps": {
-      "web": { "router": "pages", "src": true, "ui": "chakra", "e2e": "playwright" },
-      "api": { "framework": "nest", "featureLibraries": true, "e2e": "jest" }
+      "web": {
+        "router": "pages",
+        "src": true,
+        "ui": "chakra",
+        "e2e": "playwright",
+      },
+      "api": { "framework": "nest", "featureLibraries": true, "e2e": "jest" },
     },
     "rules": {
       "no-bare-jsx-strings": { "severity": "warning" },
@@ -197,16 +202,20 @@ Repo-level config recording the choices made at scaffold time, so generators add
       "integration-template-drift": true,
     },
   },
-  "prisma": {
-    "composition": "native-multi-file",
-    "projects": ["prisma-main", "prisma-analytics"],
+  "databases": {
+    "primary": { "adapter": "prisma", "project": "database-primary" },
+    "analytics": { "adapter": "drizzle", "project": "database-analytics" },
   },
   "services": { "runner": "springbar" },
   "ports": { "web": 4200, "site": 4201, "api": 3000 },
 }
 ```
 
-Prisma's native multi-file schema support is the v1 contract and requires Prisma `>=6.7`. Each Playstack fragment is written as its own `.prisma` file; Megamono does not implement a compose step.
+Database names are stable identifiers shared with the corresponding Playstack configuration. `megamono.json` owns the Nx project mapping; `playstack.json` owns the package-artifact target within that project. Megamono health rejects adapter disagreement or a Playstack target outside the selected project rather than guessing which configuration wins.
+
+Prisma uses native multi-file schema support and requires Prisma `>=6.7`; each Playstack fragment remains an independent `.prisma` file. Drizzle uses exported TypeScript schema modules under a configured schema directory. Megamono scaffolds those native formats and never implements a cross-ORM composition or translation layer.
+
+The deprecated `prisma.projects` input is accepted for one compatibility window only when `databases` is absent. It normalizes each project into a same-named Prisma database target. Configuring both shapes is an error, and every new write emits only `databases`.
 
 This is what makes adaptive prompting possible (`spec-megamono-0002`): a generator reads `megamono.json`, and only asks when the config genuinely doesn't determine the answer.
 

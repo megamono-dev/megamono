@@ -67,6 +67,8 @@ export const ADOPTION_MODULES = [
 ] as const;
 export const PACKAGE_MANAGERS = ['pnpm', 'npm'] as const;
 export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
+export const DATABASE_ADAPTERS = ['prisma', 'drizzle'] as const;
+export type DatabaseAdapter = (typeof DATABASE_ADAPTERS)[number];
 
 export const MEGAMONO_CONFIG_VERSION = 1 as const;
 
@@ -123,7 +125,12 @@ const conventionsSchema = z
             e2e: z.literal('playwright').default('playwright'),
           })
           .strict()
-          .default({ router: 'pages', src: true, ui: 'chakra', e2e: 'playwright' }),
+          .default({
+            router: 'pages',
+            src: true,
+            ui: 'chakra',
+            e2e: 'playwright',
+          }),
         api: z
           .object({
             framework: z.literal('nest').default('nest'),
@@ -220,6 +227,25 @@ const adoptionSchema = z
   .strict()
   .default({ modules: [], reductions: [], inference: {}, ratchets: [] });
 
+const databaseSchema = z
+  .object({
+    adapter: z.enum(DATABASE_ADAPTERS),
+    project: z.string().min(1),
+  })
+  .strict();
+
+const legacyPrismaSchema = z
+  .object({
+    composition: z.literal('native-multi-file'),
+    projects: z
+      .array(z.string().min(1))
+      .refine((projects) => new Set(projects).size === projects.length, {
+        message: 'Legacy Prisma projects must be unique.',
+      })
+      .default([]),
+  })
+  .strict();
+
 export const megamonoConfigSchema = z
   .object({
     $schema: z.string().optional(),
@@ -231,7 +257,12 @@ export const megamonoConfigSchema = z
         z.enum(['web', 'node', 'worker', 'apple', 'rust', 'php', 'extension']),
       )
       .default([]),
-    ports: z.record(z.string().regex(topicPattern), z.number().int().min(1024).max(65535)).default({}),
+    ports: z
+      .record(
+        z.string().regex(topicPattern),
+        z.number().int().min(1024).max(65535),
+      )
+      .default({}),
     topics: z
       .object({
         extend: z.array(z.string().regex(topicPattern)).default([]),
@@ -299,13 +330,11 @@ export const megamonoConfigSchema = z
         checks: {},
         suppressions: [],
       }),
-    prisma: z
-      .object({
-        composition: z.literal('native-multi-file'),
-        projects: z.array(z.string()).default([]),
-      })
-      .strict()
-      .optional(),
+    databases: z
+      .record(z.string().regex(topicPattern), databaseSchema)
+      .default({}),
+    /** @deprecated Read-only compatibility for pre-database-target workspaces. */
+    prisma: legacyPrismaSchema.optional(),
     services: z
       .object({
         runner: z.enum(['none', 'springbar']).default('none'),
@@ -321,6 +350,14 @@ export const megamonoConfigSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.prisma && Object.keys(value.databases).length > 0) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Legacy prisma and named databases configuration cannot be used together.',
+        path: ['databases'],
+      });
+    }
     const seen = new Set<string>(BUILT_IN_TOPICS);
     for (const [index, topic] of value.topics.extend.entries()) {
       if (seen.has(topic)) {
@@ -332,7 +369,19 @@ export const megamonoConfigSchema = z
       }
       seen.add(topic);
     }
-  });
+  })
+  .transform(({ prisma, ...value }) => ({
+    ...value,
+    databases:
+      prisma === undefined
+        ? value.databases
+        : Object.fromEntries(
+            prisma.projects.map((project) => [
+              project,
+              { adapter: 'prisma' as const, project },
+            ]),
+          ),
+  }));
 
 export type MegamonoConfig = z.infer<typeof megamonoConfigSchema>;
 
@@ -372,6 +421,7 @@ export const DEFAULT_MEGAMONO_CONFIG: MegamonoConfig =
       },
       suppressions: [],
     },
+    databases: {},
     services: { runner: 'none', requirements: {} },
   });
 

@@ -30,6 +30,13 @@
   },
   "type": "object",
   "additionalProperties": false,
+  "allOf": [
+    {
+      "not": {
+        "required": ["databases", "prisma"]
+      }
+    }
+  ],
   "required": ["version", "conventions"],
   "properties": {
     "$schema": { "type": "string" },
@@ -314,13 +321,35 @@
         }
       }
     },
+    "databases": {
+      "type": "object",
+      "default": {},
+      "propertyNames": {
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["adapter", "project"],
+        "properties": {
+          "adapter": { "enum": ["prisma", "drizzle"] },
+          "project": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "prisma": {
+      "deprecated": true,
+      "$comment": "Read-only compatibility. Use named databases instead.",
       "type": "object",
       "additionalProperties": false,
       "required": ["composition", "projects"],
       "properties": {
         "composition": { "const": "native-multi-file" },
-        "projects": { "type": "array", "items": { "type": "string" } }
+        "projects": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
       }
     },
     "services": {
