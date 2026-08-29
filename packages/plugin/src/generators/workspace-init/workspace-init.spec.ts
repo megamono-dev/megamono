@@ -32,7 +32,11 @@ describe('workspace-init generator', () => {
   it('prints a selected module plan without mutation in dry-run mode', async () => {
     const before = tree
       .listChanges()
-      .map(({ path, type, content }) => [path, type, content?.toString('utf8')]);
+      .map(({ path, type, content }) => [
+        path,
+        type,
+        content?.toString('utf8'),
+      ]);
     await workspaceInitGenerator(tree, {
       only: 'docs',
       interactive: false,
@@ -41,7 +45,11 @@ describe('workspace-init generator', () => {
     expect(
       tree
         .listChanges()
-        .map(({ path, type, content }) => [path, type, content?.toString('utf8')]),
+        .map(({ path, type, content }) => [
+          path,
+          type,
+          content?.toString('utf8'),
+        ]),
     ).toEqual(before);
   });
 
@@ -1106,12 +1114,14 @@ export default [
       only: 'docs,agents,ci,lint,skills,health,inference',
       yes: true,
       platforms: 'web,node',
+      ports: '{"api":43016,"web":43018}',
       serviceRunner: 'springbar',
       serviceRequirements: '{"postgres":"17"}',
     });
 
     expect(readJson(tree, 'megamono.json')).toMatchObject({
       platforms: ['node', 'web'],
+      ports: { api: 43016, web: 43018 },
       services: {
         runner: 'springbar',
         requirements: { postgres: '17' },

@@ -223,9 +223,9 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
-      'initialize-megamono',
       'generate-site',
       'generate-web',
+      'initialize-megamono',
       'sync-workspace',
       'format',
       'validate-docs',
@@ -306,8 +306,8 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
-      'initialize-megamono',
       'generate-desktop',
+      'initialize-megamono',
       'commit-workspace',
     ]);
     const rendered = renderPlan(plan);
@@ -327,8 +327,8 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
-      'initialize-megamono',
       'generate-apple',
+      'initialize-megamono',
       'sync-workspace',
       'format',
       'validate-docs',
@@ -354,8 +354,8 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
-      'initialize-megamono',
       'generate-worker',
+      'initialize-megamono',
       'sync-workspace',
       'format',
       'validate-docs',
@@ -384,10 +384,10 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
-      'initialize-megamono',
       'generate-desktop',
       'generate-mobile',
       'generate-worker',
+      'initialize-megamono',
       'commit-workspace',
     ]);
   });
@@ -615,9 +615,9 @@ describe('executePlan', () => {
       'yalc add @megamono/plugin@0.0.1 --dev --no-pure',
       'npm install',
     ]);
-    expect(invocations[4]).toContain('@megamono/plugin:workspace-init');
-    expect(invocations[5]).toContain('@megamono/plugin:app');
-    expect(invocations[5]).toContain('--type=api');
+    expect(invocations[4]).toContain('@megamono/plugin:app');
+    expect(invocations[4]).toContain('--type=api');
+    expect(invocations[5]).toContain('@megamono/plugin:workspace-init');
     expect(
       JSON.parse(
         await readFile(

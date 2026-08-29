@@ -140,7 +140,10 @@ describe('@megamono/cli', () => {
     const root = await workspace('pnpm');
     const harness = io(root);
 
-    expect((await runMegamonoCli(['add', 'docs', '--dry-run'], harness.value)).exitCode).toBe(0);
+    expect(
+      (await runMegamonoCli(['add', 'docs', '--dry-run'], harness.value))
+        .exitCode,
+    ).toBe(0);
     expect(harness.invocations).toEqual([
       {
         command: 'pnpm',
@@ -164,6 +167,8 @@ describe('@megamono/cli', () => {
       '@megamono/plugin',
       '@nx/next',
       '@nx/playwright',
+      '@nx/js',
+      '@nx/eslint',
     ]);
     const harness = io(root);
 
@@ -201,7 +206,13 @@ describe('@megamono/cli', () => {
     expect(result.exitCode).toBe(0);
     expect(harness.invocations[0]).toMatchObject({
       command: 'npm',
-      args: ['install', '--save-dev', '@nx/nest@0.0.1', '@nx/jest@0.0.1'],
+      args: [
+        'install',
+        '--save-dev',
+        '@nx/nest@0.0.1',
+        '@nx/jest@0.0.1',
+        '@nx/eslint@0.0.1',
+      ],
     });
     expect(harness.invocations[1]).toMatchObject({
       command: 'npm',
@@ -222,14 +233,12 @@ describe('@megamono/cli', () => {
     const root = await workspace('pnpm');
     const harness = io(root);
     expect(
-      (
-        await runMegamonoCli(
-          ['add', 'app', 'web', '--dry-run'],
-          harness.value,
-        )
-      ).exitCode,
+      (await runMegamonoCli(['add', 'app', 'web', '--dry-run'], harness.value))
+        .exitCode,
     ).toBe(0);
-    expect(harness.stdout[0]).toContain('@nx/next, @nx/playwright');
+    expect(harness.stdout[0]).toContain(
+      '@nx/next, @nx/playwright, @nx/js, @nx/eslint',
+    );
     expect(harness.invocations).toHaveLength(1);
     expect(harness.invocations[0].args).toContain('@megamono/plugin:app');
   });
@@ -240,9 +249,12 @@ describe('@megamono/cli', () => {
       '@megamono/plugin',
       '@nx/nest',
       '@nx/jest',
+      '@nx/eslint',
     ]);
     const harness = io(root, undefined, undefined, 'api', true);
-    expect((await runMegamonoCli(['add', 'app'], harness.value)).exitCode).toBe(0);
+    expect((await runMegamonoCli(['add', 'app'], harness.value)).exitCode).toBe(
+      0,
+    );
     expect(harness.invocations[0].args).toEqual([
       'exec',
       'nx',

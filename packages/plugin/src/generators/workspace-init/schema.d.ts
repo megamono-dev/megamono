@@ -8,6 +8,7 @@ export interface WorkspaceInitGeneratorSchema {
   readonly report?: string;
   readonly bootstrap?: boolean;
   readonly platforms?: string;
+  readonly ports?: string;
   readonly serviceRunner?: 'none' | 'springbar';
   readonly serviceRequirements?: string;
   readonly packageManager?: 'pnpm' | 'npm';

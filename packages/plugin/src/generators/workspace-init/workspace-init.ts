@@ -1029,6 +1029,38 @@ function parseConfiguredPlatforms(source?: string): readonly string[] {
   return platforms;
 }
 
+function parseConfiguredPorts(
+  source?: string,
+): Readonly<Record<string, number>> {
+  if (!source) return {};
+  let value: unknown;
+  try {
+    value = JSON.parse(source);
+  } catch (error) {
+    throw new Error('ports must be a valid JSON object.', { cause: error });
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('ports must be a JSON object.');
+  }
+  const ports = value as Record<string, unknown>;
+  const invalid = Object.entries(ports).filter(
+    ([name, port]) =>
+      !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) ||
+      !Number.isInteger(port) ||
+      (port as number) < 1024 ||
+      (port as number) > 65535,
+  );
+  if (
+    invalid.length > 0 ||
+    new Set(Object.values(ports)).size !== Object.keys(ports).length
+  ) {
+    throw new Error(
+      'ports must contain unique application ports from 1024 through 65535.',
+    );
+  }
+  return ports as Record<string, number>;
+}
+
 function parseServiceRequirements(
   source?: string,
 ): Readonly<Record<string, string>> {
@@ -1239,6 +1271,7 @@ export async function workspaceInitGenerator(
     ? releaseProjects(tree)
     : [];
   const requestedPlatforms = parseConfiguredPlatforms(options.platforms);
+  const configuredPorts = parseConfiguredPorts(options.ports);
   const serviceRequirements = parseServiceRequirements(
     options.serviceRequirements,
   );
@@ -1593,6 +1626,10 @@ export async function workspaceInitGenerator(
       },
     },
     platforms: [...configuredPlatforms].sort(),
+    ports:
+      options.ports !== undefined
+        ? configuredPorts
+        : (existingConfig?.ports ?? {}),
     docs: {
       ...(existingConfig?.docs ?? DEFAULT_MEGAMONO_CONFIG.docs),
       root: docsRoot,

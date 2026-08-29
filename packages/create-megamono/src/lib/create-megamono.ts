@@ -370,6 +370,19 @@ function scaffoldPort(
   return 40_000 + (hash % 8_000) + { api: 0, site: 1, web: 2 }[app];
 }
 
+function requestedPorts(
+  options: NormalizedCreateOptions,
+): Readonly<Record<string, number>> {
+  return Object.fromEntries(
+    options.apps
+      .filter(
+        (app): app is 'api' | 'site' | 'web' =>
+          app === 'api' || app === 'site' || app === 'web',
+      )
+      .map((app) => [app, scaffoldPort(options, app)]),
+  );
+}
+
 function requestedServiceRequirements(
   options: NormalizedCreateOptions,
 ): Record<string, string> {
@@ -476,28 +489,6 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     );
   }
 
-  steps.push(
-    commandStep(
-      'initialize-megamono',
-      options.packageManager,
-      nxArgs(options.packageManager, [
-        'generate',
-        '@megamono/plugin:workspace-init',
-        `--defaultScope=${options.scope}`,
-        ...(options.apps.includes('desktop') ? ['--defaultPlatform=rust'] : []),
-        '--only=docs,agents,ci,release,lint,skills,health,inference',
-        '--yes',
-        '--bootstrap',
-        `--platforms=${requestedPlatforms(options).join(',')}`,
-        `--serviceRunner=${options.serviceRunner}`,
-        `--serviceRequirements=${JSON.stringify(requestedServiceRequirements(options))}`,
-        `--packageManager=${options.packageManager}`,
-        '--interactive=false',
-      ]),
-      'staging',
-    ),
-  );
-
   for (const app of options.apps) {
     const port =
       app === 'api' || app === 'site' || app === 'web'
@@ -518,6 +509,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
           `--requestedServices=${options.services.join(',')}`,
           `--serviceRunner=${options.serviceRunner}`,
           ...port,
+          '--bootstrap',
           '--yes',
           '--interactive=false',
         ]),
@@ -525,6 +517,29 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       ),
     );
   }
+
+  steps.push(
+    commandStep(
+      'initialize-megamono',
+      options.packageManager,
+      nxArgs(options.packageManager, [
+        'generate',
+        '@megamono/plugin:workspace-init',
+        `--defaultScope=${options.scope}`,
+        ...(options.apps.includes('desktop') ? ['--defaultPlatform=rust'] : []),
+        '--only=docs,agents,ci,release,lint,skills,health,inference',
+        '--yes',
+        '--bootstrap',
+        `--platforms=${requestedPlatforms(options).join(',')}`,
+        `--ports=${JSON.stringify(requestedPorts(options))}`,
+        `--serviceRunner=${options.serviceRunner}`,
+        `--serviceRequirements=${JSON.stringify(requestedServiceRequirements(options))}`,
+        `--packageManager=${options.packageManager}`,
+        '--interactive=false',
+      ]),
+      'staging',
+    ),
+  );
 
   if (options.verify !== 'none') {
     steps.push(

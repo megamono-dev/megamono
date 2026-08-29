@@ -48,6 +48,10 @@
       "type": "string",
       "description": "Comma-separated platform vocabulary determined by a calling scaffolder."
     },
+    "ports": {
+      "type": "string",
+      "description": "JSON object of application names to assigned development ports."
+    },
     "serviceRunner": {
       "type": "string",
       "enum": ["none", "springbar"],

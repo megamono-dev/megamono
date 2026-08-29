@@ -663,7 +663,10 @@ function parseAddOptions(args: readonly string[]): AddOptions {
   };
 }
 
-async function localPackageVersion(root: string, name: string): Promise<string> {
+async function localPackageVersion(
+  root: string,
+  name: string,
+): Promise<string> {
   try {
     const manifest = createRequire(join(root, 'package.json')).resolve(
       `${name}/package.json`,
@@ -671,7 +674,8 @@ async function localPackageVersion(root: string, name: string): Promise<string> 
     const value = JSON.parse(await readFile(manifest, 'utf8')) as {
       version?: unknown;
     };
-    if (typeof value.version === 'string' && value.version) return value.version;
+    if (typeof value.version === 'string' && value.version)
+      return value.version;
   } catch {
     // The caller renders the package-specific compatibility failure below.
   }
@@ -691,8 +695,9 @@ async function pluginScaffoldVersions(
 }
 
 function requiredAppPlugins(type: string): readonly string[] {
-  if (type === 'web' || type === 'site') return ['@nx/next', '@nx/playwright'];
-  if (type === 'api') return ['@nx/nest', '@nx/jest'];
+  if (type === 'web' || type === 'site')
+    return ['@nx/next', '@nx/playwright', '@nx/js', '@nx/eslint'];
+  if (type === 'api') return ['@nx/nest', '@nx/jest', '@nx/eslint'];
   if (type === 'mobile') return ['@nx/expo'];
   if (type === 'worker') return ['@megamono/nx-cloudflare'];
   if (type === 'apple') return ['@megamono/nx-apple'];
@@ -795,9 +800,7 @@ async function resolveAppType(
   return selected;
 }
 
-async function addWorkspace(
-  io: MegamonoCliIo,
-): Promise<Workspace> {
+async function addWorkspace(io: MegamonoCliIo): Promise<Workspace> {
   const root = await findWorkspaceRoot(io.cwd);
   const workspace = { root, packageManager: await detectPackageManager(root) };
   if (!localPackageAvailable(root, 'nx')) {
@@ -845,14 +848,20 @@ async function runAdd(
 
   const hasPositionalType = Boolean(args[1] && !args[1]?.startsWith('-'));
   const parsed = parseAddOptions(args.slice(hasPositionalType ? 2 : 1));
-  const type = await resolveAppType(io, hasPositionalType ? args[1] : undefined, parsed);
+  const type = await resolveAppType(
+    io,
+    hasPositionalType ? args[1] : undefined,
+    parsed,
+  );
   const required = requiredAppPlugins(type);
   const missing = required.filter(
     (packageName) => !localPackageAvailable(workspace.root, packageName),
   );
   if (parsed.dryRun) {
     if (missing.length > 0) {
-      io.stdout(`Dry run prerequisite plan: add ${missing.join(', ')} as development dependencies.`);
+      io.stdout(
+        `Dry run prerequisite plan: add ${missing.join(', ')} as development dependencies.`,
+      );
     }
   } else if (!parsed.yes) {
     if (!parsed.interactive || !io.confirmAddPlan) {
@@ -868,12 +877,7 @@ async function runAdd(
   }
 
   if (!parsed.dryRun) {
-    await installAppPlugins(
-      io,
-      workspace,
-      required,
-      parsed.localPackages,
-    );
+    await installAppPlugins(io, workspace, required, parsed.localPackages);
   }
   const generatorArgs = [
     `--type=${type}`,
