@@ -29,6 +29,22 @@ describe('workspace-init generator', () => {
     tree = createTreeWithEmptyWorkspace();
   });
 
+  it('prints a selected module plan without mutation in dry-run mode', async () => {
+    const before = tree
+      .listChanges()
+      .map(({ path, type, content }) => [path, type, content?.toString('utf8')]);
+    await workspaceInitGenerator(tree, {
+      only: 'docs',
+      interactive: false,
+      dryRun: true,
+    });
+    expect(
+      tree
+        .listChanges()
+        .map(({ path, type, content }) => [path, type, content?.toString('utf8')]),
+    ).toEqual(before);
+  });
+
   it('should run successfully', async () => {
     await workspaceInitGenerator(tree, options);
     const config = readProjectConfiguration(tree, 'megamono');

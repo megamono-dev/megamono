@@ -36,6 +36,15 @@ async function workspace(
     ),
   });
   await json(join(root, 'nx.json'), {});
+  await json(join(root, 'megamono.json'), {
+    version: 1,
+    conventions: {
+      nestFeatureLibraries: true,
+      docsLocation: 'centralized',
+      packageManager: manager,
+      rules: {},
+    },
+  });
   await writeFile(
     join(root, manager === 'pnpm' ? 'pnpm-lock.yaml' : 'package-lock.json'),
     manager === 'pnpm' ? 'lockfileVersion: 9\n' : '{"lockfileVersion":3}\n',
@@ -52,6 +61,7 @@ async function workspace(
       {
         version: 1,
         generators: {
+          app: { status: 'available' },
           'docs-spec': { status: 'available' },
           'integration-sentry': {
             status: 'gated',
@@ -72,6 +82,8 @@ function io(
   cwd: string,
   responder?: (invocation: Invocation) => CommandResult,
   selectedPlaystackPackages?: readonly string[],
+  selectedAppType?: string,
+  confirmedAddPlan?: boolean,
 ): {
   readonly value: MegamonoCliIo;
   readonly invocations: Invocation[];
@@ -94,6 +106,12 @@ function io(
         ? {
             selectPlaystackPackages: async () => selectedPlaystackPackages,
           }
+        : {}),
+      ...(selectedAppType
+        ? { selectAppType: async () => selectedAppType }
+        : {}),
+      ...(confirmedAddPlan !== undefined
+        ? { confirmAddPlan: async () => confirmedAddPlan }
         : {}),
       runCommand: async (command, args, options) => {
         const invocation = {
@@ -118,6 +136,123 @@ afterEach(async () => {
 });
 
 describe('@megamono/cli', () => {
+  it('routes module additions through workspace-init', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+
+    expect((await runMegamonoCli(['add', 'docs', '--dry-run'], harness.value)).exitCode).toBe(0);
+    expect(harness.invocations).toEqual([
+      {
+        command: 'pnpm',
+        args: [
+          'exec',
+          'nx',
+          'generate',
+          '@megamono/plugin:workspace-init',
+          '--only=docs',
+          '--dry-run',
+        ],
+        cwd: root,
+        capture: false,
+      },
+    ]);
+  });
+
+  it('delegates an explicit application through the canonical generator', async () => {
+    const root = await workspace('pnpm', [
+      'nx',
+      '@megamono/plugin',
+      '@nx/next',
+      '@nx/playwright',
+    ]);
+    const harness = io(root);
+
+    const result = await runMegamonoCli(
+      ['add', 'app', 'web', '--name=admin', '--interactive=false', '--yes'],
+      harness.value,
+    );
+    expect(result.exitCode).toBe(0);
+    expect(harness.invocations).toEqual([
+      {
+        command: 'pnpm',
+        args: [
+          'exec',
+          'nx',
+          'generate',
+          '@megamono/plugin:app',
+          '--type=web',
+          '--name=admin',
+          '--interactive=false',
+          '--yes',
+        ],
+        cwd: root,
+        capture: false,
+      },
+    ]);
+  });
+
+  it('installs missing Nx adapters at the workspace Nx version', async () => {
+    const root = await workspace('npm');
+    const harness = io(root);
+    const result = await runMegamonoCli(
+      ['add', 'app', 'api', '--interactive=false', '--yes'],
+      harness.value,
+    );
+    expect(result.exitCode).toBe(0);
+    expect(harness.invocations[0]).toMatchObject({
+      command: 'npm',
+      args: ['install', '--save-dev', '@nx/nest@0.0.1', '@nx/jest@0.0.1'],
+    });
+    expect(harness.invocations[1]).toMatchObject({
+      command: 'npm',
+      args: [
+        'exec',
+        'nx',
+        '--',
+        'generate',
+        '@megamono/plugin:app',
+        '--type=api',
+        '--interactive=false',
+        '--yes',
+      ],
+    });
+  });
+
+  it('previews missing adapters without installation', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+    expect(
+      (
+        await runMegamonoCli(
+          ['add', 'app', 'web', '--dry-run'],
+          harness.value,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(harness.stdout[0]).toContain('@nx/next, @nx/playwright');
+    expect(harness.invocations).toHaveLength(1);
+    expect(harness.invocations[0].args).toContain('@megamono/plugin:app');
+  });
+
+  it('selects and confirms an application interactively', async () => {
+    const root = await workspace('pnpm', [
+      'nx',
+      '@megamono/plugin',
+      '@nx/nest',
+      '@nx/jest',
+    ]);
+    const harness = io(root, undefined, undefined, 'api', true);
+    expect((await runMegamonoCli(['add', 'app'], harness.value)).exitCode).toBe(0);
+    expect(harness.invocations[0].args).toEqual([
+      'exec',
+      'nx',
+      'generate',
+      '@megamono/plugin:app',
+      '--type=api',
+      '--yes',
+    ]);
+  });
+
   it('delegates available generators and diagnoses gated names', async () => {
     const root = await workspace('pnpm');
     const harness = io(root);

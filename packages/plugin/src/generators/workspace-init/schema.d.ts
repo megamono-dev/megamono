@@ -1,5 +1,6 @@
 export interface WorkspaceInitGeneratorSchema {
   readonly survey?: boolean;
+  readonly dryRun?: boolean;
   readonly format?: 'markdown' | 'json';
   readonly only?: string;
   readonly interactive?: boolean;

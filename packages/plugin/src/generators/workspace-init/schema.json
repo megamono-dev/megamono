@@ -10,6 +10,11 @@
       "default": false,
       "description": "Print the deterministic workspace survey and exit without mutation."
     },
+    "dryRun": {
+      "type": "boolean",
+      "default": false,
+      "description": "Print the selected module plan and exit without mutation."
+    },
     "format": {
       "type": "string",
       "enum": ["markdown", "json"],

@@ -57,6 +57,32 @@ const result = await runMegamonoCli(process.argv.slice(2), {
   stderr: (message) => process.stderr.write(`${message}\n`),
   ...(stdin.isTTY && stdout.isTTY
     ? {
+        selectAppType: async (
+          choices: readonly {
+            readonly name: string;
+            readonly message: string;
+          }[],
+        ) => {
+          const response = await prompt<{ type: string }>({
+            type: 'select',
+            name: 'type',
+            message: 'Which application preset should be added?',
+            choices: choices.map((choice) => ({
+              name: choice.name,
+              message: choice.message,
+            })),
+          });
+          return response.type;
+        },
+        confirmAddPlan: async (message: string) => {
+          const response = await prompt<{ confirmed: boolean }>({
+            type: 'confirm',
+            name: 'confirmed',
+            message,
+            initial: false,
+          });
+          return response.confirmed;
+        },
         selectPlaystackPackages: async (
           choices: readonly {
             readonly name: string;

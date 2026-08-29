@@ -1136,7 +1136,11 @@ export async function workspaceInitGenerator(
     logger.info(renderWorkspaceInitSurvey(initialSurvey, outputFormat));
     return () => undefined;
   }
-  if (tree.root !== '/virtual') {
+  if (
+    tree.root !== '/virtual' &&
+    !options.dryRun &&
+    process.env.NX_DRY_RUN !== 'true'
+  ) {
     assertWorkspaceInitPreflight(
       tree,
       await collectWorkspaceInitHostState(tree.root),
@@ -1217,6 +1221,9 @@ export async function workspaceInitGenerator(
   if (requestedModules.includes('lint') && lintCanWire)
     preflightEslintConfig(tree);
   logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
+  if (options.dryRun || process.env.NX_DRY_RUN === 'true') {
+    return () => undefined;
+  }
   if (!options.yes) {
     if (!canPrompt(options)) {
       throw new WorkspaceInitError(

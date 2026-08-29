@@ -20,6 +20,8 @@ export interface MegamonoCliIo {
   selectPlaystackPackages?(
     choices: readonly PlaystackProductChoice[],
   ): Promise<readonly string[]>;
+  selectAppType?(choices: readonly AppTypeChoice[]): Promise<string>;
+  confirmAddPlan?(message: string): Promise<boolean>;
   runCommand(
     command: string,
     args: readonly string[],
@@ -45,6 +47,34 @@ export interface PlaystackProductChoice {
   readonly message: string;
 }
 
+export interface AppTypeChoice {
+  readonly name: string;
+  readonly message: string;
+}
+
+export const APP_TYPE_CHOICES: readonly AppTypeChoice[] = [
+  { name: 'web', message: 'Web — Next Pages Router, Chakra, Playwright' },
+  { name: 'site', message: 'Site — Next marketing surface' },
+  { name: 'api', message: 'API — Nest composition root and feature library' },
+  { name: 'worker', message: 'Worker — Cloudflare Worker' },
+  { name: 'mobile', message: 'Mobile — Expo application' },
+  { name: 'desktop', message: 'Desktop — Tauri application' },
+  { name: 'apple', message: 'Apple — native SwiftUI application' },
+];
+
+const ADD_MODULES = [
+  'docs',
+  'agents',
+  'ci',
+  'release',
+  'lint',
+  'skills',
+  'health',
+  'inference',
+] as const;
+const ADD_MODULE_SET = new Set<string>(ADD_MODULES);
+const APP_TYPE_SET = new Set(APP_TYPE_CHOICES.map(({ name }) => name));
+
 export const PLAYSTACK_PRODUCT_CHOICES: readonly PlaystackProductChoice[] = [
   { name: 'accounts', message: 'Accounts — tenancy and membership' },
   { name: 'auth', message: 'Auth — identity and sessions' },
@@ -61,7 +91,7 @@ interface Workspace {
 class CliError extends Error {
   constructor(
     message: string,
-    readonly exitCode: 2 | 3,
+    readonly exitCode: 2 | 3 | 4,
   ) {
     super(message);
   }
@@ -71,6 +101,8 @@ const HELP = `Usage: megamono <command> [options]
 
 Commands:
   init                 Adopt Megamono in an existing Nx workspace
+  add app [type]       Add a convention-aligned application
+  add <module>         Add one repository-governance module
   generate <name>      Run an available local Megamono generator
   help                 Show this help
 
@@ -86,6 +118,21 @@ Init-only options:
                        Package source for missing local packages
 
 All other init options are forwarded to @megamono/plugin:workspace-init.`;
+
+const ADD_HELP = `Usage: megamono add app [type] [options]
+       megamono add <module> [options]
+
+Examples:
+  megamono add app web
+  megamono add app api --name=admin-api --interactive=false --yes
+  megamono add app web --dry-run
+  megamono add docs
+  megamono add ci --dry-run
+
+Application types: ${APP_TYPE_CHOICES.map(({ name }) => name).join(', ')}
+Modules: ${ADD_MODULES.join(', ')}
+
+Add commands require an initialized workspace with local nx and @megamono/plugin.`;
 
 const INIT_HELP = `Usage: megamono init [generator options]
 
@@ -574,6 +621,276 @@ async function installPlaystackPackages(
   }
 }
 
+interface AddOptions {
+  readonly args: readonly string[];
+  readonly localPackages: LocalPackageSource;
+  readonly dryRun: boolean;
+  readonly yes: boolean;
+  readonly interactive: boolean;
+}
+
+function parseAddOptions(args: readonly string[]): AddOptions {
+  const forwarded: string[] = [];
+  let localPackages: LocalPackageSource = 'registry';
+  for (let index = 0; index < args.length;) {
+    const source = optionValue(args, index, '--local-packages');
+    if (source) {
+      if (source.value !== 'registry' && source.value !== 'yalc') {
+        throw new CliError('--local-packages must be registry or yalc.', 2);
+      }
+      localPackages = source.value;
+      index += source.consumed;
+      continue;
+    }
+    forwarded.push(args[index]);
+    index += 1;
+  }
+  return {
+    args: forwarded,
+    localPackages,
+    dryRun: forwarded.some(
+      (argument) => argument === '--dry-run' || argument === '--dryRun=true',
+    ),
+    yes: forwarded.some(
+      (argument) => argument === '--yes' || argument === '--yes=true',
+    ),
+    interactive: !forwarded.some(
+      (argument, index) =>
+        argument === '--no-interactive' ||
+        argument === '--interactive=false' ||
+        (argument === '--interactive' && forwarded[index + 1] === 'false'),
+    ),
+  };
+}
+
+async function localPackageVersion(root: string, name: string): Promise<string> {
+  try {
+    const manifest = createRequire(join(root, 'package.json')).resolve(
+      `${name}/package.json`,
+    );
+    const value = JSON.parse(await readFile(manifest, 'utf8')) as {
+      version?: unknown;
+    };
+    if (typeof value.version === 'string' && value.version) return value.version;
+  } catch {
+    // The caller renders the package-specific compatibility failure below.
+  }
+  throw new CliError(`Unable to resolve the local ${name} package version.`, 3);
+}
+
+async function pluginScaffoldVersions(
+  root: string,
+): Promise<Record<string, string>> {
+  const manifest = createRequire(join(root, 'package.json')).resolve(
+    '@megamono/plugin/package.json',
+  );
+  const compatibility = JSON.parse(
+    await readFile(join(dirname(manifest), 'compatibility.json'), 'utf8'),
+  ) as { scaffoldPackages?: Record<string, string> };
+  return compatibility.scaffoldPackages ?? {};
+}
+
+function requiredAppPlugins(type: string): readonly string[] {
+  if (type === 'web' || type === 'site') return ['@nx/next', '@nx/playwright'];
+  if (type === 'api') return ['@nx/nest', '@nx/jest'];
+  if (type === 'mobile') return ['@nx/expo'];
+  if (type === 'worker') return ['@megamono/nx-cloudflare'];
+  if (type === 'apple') return ['@megamono/nx-apple'];
+  if (type === 'desktop') return ['@megamono/nx-cargo'];
+  return [];
+}
+
+async function runAddCommand(
+  io: MegamonoCliIo,
+  workspace: Workspace,
+  command: string,
+  args: readonly string[],
+): Promise<void> {
+  const result = await io.runCommand(command, args, { cwd: workspace.root });
+  if (result.exitCode !== 0) {
+    throw new CliError(
+      `Application dependency setup failed. Retry: ${command} ${args.join(' ')}`,
+      3,
+    );
+  }
+}
+
+async function installAppPlugins(
+  io: MegamonoCliIo,
+  workspace: Workspace,
+  packages: readonly string[],
+  source: LocalPackageSource,
+): Promise<void> {
+  const missing = packages.filter(
+    (packageName) => !localPackageAvailable(workspace.root, packageName),
+  );
+  if (missing.length === 0) return;
+  const local = missing.filter((name) => name.startsWith('@megamono/'));
+  const registry = missing.filter((name) => !name.startsWith('@megamono/'));
+  if (source === 'yalc' && local.length > 0) {
+    await preflightYalc(io, workspace, local);
+    await runAddCommand(io, workspace, 'yalc', [
+      'add',
+      ...local,
+      '--dev',
+      '--no-pure',
+    ]);
+  } else if (local.length > 0) {
+    const versions = await pluginScaffoldVersions(workspace.root);
+    const specs = local.map((name) => {
+      const version = versions[name];
+      if (!version) {
+        throw new CliError(
+          `No compatible application plugin version is registered for ${name}.`,
+          3,
+        );
+      }
+      return `${name}@${version}`;
+    });
+    const install = workspace.packageManager === 'pnpm' ? 'add' : 'install';
+    await runAddCommand(io, workspace, workspace.packageManager, [
+      install,
+      '--save-dev',
+      ...specs,
+    ]);
+  }
+  if (registry.length > 0) {
+    const nxVersion = await localPackageVersion(workspace.root, 'nx');
+    const install = workspace.packageManager === 'pnpm' ? 'add' : 'install';
+    await runAddCommand(io, workspace, workspace.packageManager, [
+      install,
+      '--save-dev',
+      ...registry.map((name) => `${name}@${nxVersion}`),
+    ]);
+  }
+  if (source === 'yalc' && local.length > 0) {
+    await runAddCommand(io, workspace, workspace.packageManager, ['install']);
+  }
+}
+
+async function resolveAppType(
+  io: MegamonoCliIo,
+  value: string | undefined,
+  options: AddOptions,
+): Promise<string> {
+  if (value && !value.startsWith('-')) {
+    if (!APP_TYPE_SET.has(value)) {
+      throw new CliError(
+        `Unknown application type ${value}. Expected one of: ${[...APP_TYPE_SET].join(', ')}.`,
+        2,
+      );
+    }
+    return value;
+  }
+  if (!options.interactive || !io.selectAppType) {
+    throw new CliError(
+      `Application type is required in non-interactive mode. Expected one of: ${[...APP_TYPE_SET].join(', ')}.`,
+      4,
+    );
+  }
+  const selected = await io.selectAppType(APP_TYPE_CHOICES);
+  if (!APP_TYPE_SET.has(selected)) {
+    throw new CliError('Application type selection was cancelled.', 2);
+  }
+  return selected;
+}
+
+async function addWorkspace(
+  io: MegamonoCliIo,
+): Promise<Workspace> {
+  const root = await findWorkspaceRoot(io.cwd);
+  const workspace = { root, packageManager: await detectPackageManager(root) };
+  if (!localPackageAvailable(root, 'nx')) {
+    throw new CliError('The workspace-local nx package is not installed.', 3);
+  }
+  if (!localPackageAvailable(root, '@megamono/plugin')) {
+    throw new CliError(
+      `@megamono/plugin is not installed locally. Run: ${pluginInstallInstruction(workspace.packageManager, 'registry')}.`,
+      3,
+    );
+  }
+  if (!(await exists(join(root, 'megamono.json')))) {
+    throw new CliError(
+      'This workspace is not initialized. Run megamono init before megamono add.',
+      3,
+    );
+  }
+  return workspace;
+}
+
+async function runAdd(
+  args: readonly string[],
+  io: MegamonoCliIo,
+): Promise<MegamonoCliResult> {
+  const subject = args[0];
+  if (!subject || subject.startsWith('-')) {
+    throw new CliError(ADD_HELP, 2);
+  }
+  const workspace = await addWorkspace(io);
+  if (ADD_MODULE_SET.has(subject)) {
+    const options = parseAddOptions(args.slice(1));
+    const [command, commandArgs] = nxInvocation(
+      workspace.packageManager,
+      [`--only=${subject}`, ...options.args],
+      'workspace-init',
+    );
+    const result = await io.runCommand(command, commandArgs, {
+      cwd: workspace.root,
+    });
+    return { exitCode: result.exitCode };
+  }
+  if (subject !== 'app') {
+    throw new CliError(`Unknown add target ${subject}.\n\n${ADD_HELP}`, 2);
+  }
+
+  const hasPositionalType = Boolean(args[1] && !args[1]?.startsWith('-'));
+  const parsed = parseAddOptions(args.slice(hasPositionalType ? 2 : 1));
+  const type = await resolveAppType(io, hasPositionalType ? args[1] : undefined, parsed);
+  const required = requiredAppPlugins(type);
+  const missing = required.filter(
+    (packageName) => !localPackageAvailable(workspace.root, packageName),
+  );
+  if (parsed.dryRun) {
+    if (missing.length > 0) {
+      io.stdout(`Dry run prerequisite plan: add ${missing.join(', ')} as development dependencies.`);
+    }
+  } else if (!parsed.yes) {
+    if (!parsed.interactive || !io.confirmAddPlan) {
+      throw new CliError(
+        'Application addition requires interactive confirmation or --interactive=false --yes.',
+        4,
+      );
+    }
+    const confirmed = await io.confirmAddPlan(
+      `Add the ${type} application${missing.length ? ` and install ${missing.join(', ')}` : ''}?`,
+    );
+    if (!confirmed) return { exitCode: 0 };
+  }
+
+  if (!parsed.dryRun) {
+    await installAppPlugins(
+      io,
+      workspace,
+      required,
+      parsed.localPackages,
+    );
+  }
+  const generatorArgs = [
+    `--type=${type}`,
+    ...parsed.args,
+    ...(!parsed.dryRun && !parsed.yes ? ['--yes'] : []),
+  ];
+  const [command, commandArgs] = nxInvocation(
+    workspace.packageManager,
+    generatorArgs,
+    'app',
+  );
+  const generated = await io.runCommand(command, commandArgs, {
+    cwd: workspace.root,
+  });
+  return { exitCode: generated.exitCode };
+}
+
 function renderPlaystackSurveyPlan(
   manager: PackageManager,
   options: InitOptions,
@@ -693,6 +1010,13 @@ export async function runMegamonoCli(
         return { exitCode: 0 };
       }
       return await runInit(args.slice(1), io);
+    }
+    if (args[0] === 'add') {
+      if (args[1] === '--help' || args[1] === '-h') {
+        io.stdout(ADD_HELP);
+        return { exitCode: 0 };
+      }
+      return await runAdd(args.slice(1), io);
     }
     if (args[0] === 'generate') {
       return await runGenerate(args.slice(1), io);
