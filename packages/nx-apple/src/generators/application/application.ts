@@ -75,8 +75,6 @@ function normalizeOptions(
     directory.split('/').some((part) => part === '..')
   )
     throw new Error('Apple application directory must be workspace-relative.');
-  if (tree.children(directory).length > 0)
-    throw new Error(`Apple application directory is not empty: ${directory}.`);
 
   const moduleName = names(projectName).className;
   const displayName = options.displayName?.trim() || projectName;
@@ -323,32 +321,46 @@ export async function appleApplicationGenerator(
     throw new Error('nx.json is required before generating an Apple app.');
   const options = normalizeOptions(tree, schema);
   const projectRoot = options.directory;
-  tree.write(
-    `${projectRoot}/${options.projectName}.xcodeproj/project.pbxproj`,
-    renderProject(options),
-  );
-  tree.write(
-    `${projectRoot}/${options.projectName}.xcodeproj/xcshareddata/xcschemes/${options.projectName}.xcscheme`,
-    renderScheme(options),
-  );
-  tree.write(
-    `${projectRoot}/App/${options.appTypeName}.swift`,
-    `import SwiftUI\n\n@main\nstruct ${options.appTypeName}: App {\n    var body: some Scene {\n        WindowGroup {\n            ContentView()\n        }\n    }\n}\n`,
-  );
-  tree.write(
-    `${projectRoot}/App/ContentView.swift`,
-    `import SwiftUI\n\nenum AppFeature {\n    static let title = ${JSON.stringify(options.displayName)}\n}\n\nstruct ContentView: View {\n    var body: some View {\n        VStack(spacing: 12) {\n            Image(systemName: "shippingbox")\n                .font(.system(size: 48))\n            Text(AppFeature.title)\n                .font(.title)\n        }\n        .padding(32)\n        .frame(minWidth: 420, minHeight: 280)\n    }\n}\n`,
-  );
-  tree.write(
-    `${projectRoot}/Tests/${options.moduleName}Tests.swift`,
-    `import XCTest\n@testable import ${options.moduleName}\n\nfinal class ${options.moduleName}Tests: XCTestCase {\n    func testApplicationTitleIsConfigured() {\n        XCTAssertFalse(AppFeature.title.isEmpty)\n    }\n}\n`,
-  );
-  writeJson(tree, `${projectRoot}/project.json`, {
+  const generatedFiles: Readonly<Record<string, string>> = {
+    [`${projectRoot}/${options.projectName}.xcodeproj/project.pbxproj`]:
+      renderProject(options),
+    [`${projectRoot}/${options.projectName}.xcodeproj/xcshareddata/xcschemes/${options.projectName}.xcscheme`]:
+      renderScheme(options),
+    [`${projectRoot}/App/${options.appTypeName}.swift`]: `import SwiftUI\n\n@main\nstruct ${options.appTypeName}: App {\n    var body: some Scene {\n        WindowGroup {\n            ContentView()\n        }\n    }\n}\n`,
+    [`${projectRoot}/App/ContentView.swift`]: `import SwiftUI\n\nenum AppFeature {\n    static let title = ${JSON.stringify(options.displayName)}\n}\n\nstruct ContentView: View {\n    var body: some View {\n        VStack(spacing: 12) {\n            Image(systemName: "shippingbox")\n                .font(.system(size: 48))\n            Text(AppFeature.title)\n                .font(.title)\n        }\n        .padding(32)\n        .frame(minWidth: 420, minHeight: 280)\n    }\n}\n`,
+    [`${projectRoot}/Tests/${options.moduleName}Tests.swift`]: `import XCTest\n@testable import ${options.moduleName}\n\nfinal class ${options.moduleName}Tests: XCTestCase {\n    func testApplicationTitleIsConfigured() {\n        XCTAssertFalse(AppFeature.title.isEmpty)\n    }\n}\n`,
+  };
+  const projectConfiguration = {
     name: options.projectName,
     projectType: 'application',
     sourceRoot: `${projectRoot}/App`,
     tags: options.tags,
-  });
+  };
+  if (tree.children(projectRoot).length > 0) {
+    const filesMatch = Object.entries(generatedFiles).every(
+      ([path, content]) => tree.read(path, 'utf8') === content,
+    );
+    let projectMatches: boolean;
+    try {
+      projectMatches =
+        JSON.stringify(
+          JSON.parse(tree.read(`${projectRoot}/project.json`, 'utf8') ?? ''),
+        ) === JSON.stringify(projectConfiguration);
+    } catch {
+      projectMatches = false;
+    }
+    if (!filesMatch || !projectMatches) {
+      throw new Error(
+        `Apple application directory is not empty: ${projectRoot}.`,
+      );
+    }
+    registerPlugin(tree, options.scope);
+    return;
+  }
+  for (const [path, content] of Object.entries(generatedFiles)) {
+    tree.write(path, content);
+  }
+  writeJson(tree, `${projectRoot}/project.json`, projectConfiguration);
   registerPlugin(tree, options.scope);
   if (!options.skipFormat) await formatFiles(tree);
 }

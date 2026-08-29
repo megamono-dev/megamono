@@ -31,6 +31,9 @@ describe('appleApplicationGenerator', () => {
     await appleApplicationGenerator(second, options);
 
     expect(generatedFiles(first)).toEqual(generatedFiles(second));
+    const beforeRerun = generatedFiles(first);
+    await appleApplicationGenerator(first, options);
+    expect(generatedFiles(first)).toEqual(beforeRerun);
     expect(
       first.exists('apps/apple/acme-tools-apple.xcodeproj/project.pbxproj'),
     ).toBe(true);
