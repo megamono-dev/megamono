@@ -51,6 +51,7 @@ describe('normalizeCreateOptions', () => {
       scope: 'acme-tools',
       apps: ['api', 'web'],
       services: [],
+      databaseAdapter: 'none',
       serviceRunner: 'none',
       install: true,
       verify: 'config',
@@ -82,6 +83,12 @@ describe('normalizeCreateOptions', () => {
     [{ apps: ['apple'], platform: 'linux' }, 3, 'requires macOS'],
     [{ localPackages: 'unknown' }, 2, 'local package source'],
     [{ packageManager: 'yarn' }, 2, 'package manager'],
+    [{ databaseAdapter: 'typeorm' }, 2, 'database adapter'],
+    [
+      { databaseAdapter: 'prisma', databaseName: 'Main Database' },
+      2,
+      'database name',
+    ],
     [{ platform: 'win32' }, 3, 'supports macOS and Linux'],
   ])('returns a stable diagnostic for %j', (overrides, exitCode, message) => {
     expect(() => options('/workspace', overrides)).toThrowError(
@@ -94,6 +101,41 @@ describe('normalizeCreateOptions', () => {
 });
 
 describe('createPlan', () => {
+  it('uses the canonical database generator with a user-defined name', () => {
+    const plan = createPlan(
+      options('/workspace', {
+        databaseAdapter: 'drizzle',
+        databaseName: 'events',
+        verify: 'config',
+      }),
+    );
+    const ids = plan.steps.map((step) => step.id);
+    expect(ids.indexOf('generate-database-events')).toBe(
+      ids.indexOf('initialize-megamono') + 1,
+    );
+    expect(plan.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'generate-database-events',
+          command: 'npm',
+          args: expect.arrayContaining([
+            '@megamono/plugin:database',
+            '--name=events',
+            '--adapter=drizzle',
+            '--scope=acme-tools',
+          ]),
+        }),
+        expect.objectContaining({
+          id: 'validate-database-events',
+          args: expect.arrayContaining([
+            'run',
+            'acme-tools-database-events:validate',
+          ]),
+        }),
+      ]),
+    );
+  });
+
   it('uses a temporary hydrated bootstrap and dehydrates before commit when install is false', () => {
     const plan = createPlan(
       options('/workspace', { install: false, verify: 'none' }),

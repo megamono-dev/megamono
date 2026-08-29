@@ -39,6 +39,7 @@ export const VERIFY_MODES = ['none', 'config', 'build'] as const;
 export const SERVICE_RUNNERS = ['none', 'springbar'] as const;
 export const LOCAL_PACKAGE_SOURCES = ['registry', 'yalc'] as const;
 export const PACKAGE_MANAGERS = ['pnpm', 'npm'] as const;
+export const DATABASE_ADAPTERS = ['none', 'prisma', 'drizzle'] as const;
 
 export type AppId = (typeof APP_IDS)[number];
 export type ServiceId = (typeof SERVICE_IDS)[number];
@@ -46,12 +47,15 @@ export type VerifyMode = (typeof VERIFY_MODES)[number];
 export type ServiceRunner = (typeof SERVICE_RUNNERS)[number];
 export type LocalPackageSource = (typeof LOCAL_PACKAGE_SOURCES)[number];
 export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
+export type DatabaseAdapter = (typeof DATABASE_ADAPTERS)[number];
 
 export interface CreateMegamonoInput {
   name?: string;
   directory?: string;
   apps?: readonly string[];
   services?: readonly string[];
+  databaseAdapter?: string;
+  databaseName?: string;
   serviceRunner?: string;
   integrations?: readonly string[];
   interactive?: boolean;
@@ -72,6 +76,8 @@ export interface NormalizedCreateOptions {
   stagingDirectory: string;
   apps: AppId[];
   services: ServiceId[];
+  databaseAdapter: DatabaseAdapter;
+  databaseName?: string;
   serviceRunner: ServiceRunner;
   integrations: string[];
   install: boolean;
@@ -151,6 +157,7 @@ const RUNNER_SET = new Set<string>(SERVICE_RUNNERS);
 const VERIFY_SET = new Set<string>(VERIFY_MODES);
 const LOCAL_PACKAGE_SOURCE_SET = new Set<string>(LOCAL_PACKAGE_SOURCES);
 const PACKAGE_MANAGER_SET = new Set<string>(PACKAGE_MANAGERS);
+const DATABASE_ADAPTER_SET = new Set<string>(DATABASE_ADAPTERS);
 
 const appPlugin: Partial<Record<AppId, string>> = {
   web: '@nx/next',
@@ -226,6 +233,24 @@ export function normalizeCreateOptions(
       2,
     );
   }
+  const databaseAdapter = requireEnum<DatabaseAdapter>(
+    'database adapter',
+    input.databaseAdapter ?? 'none',
+    DATABASE_ADAPTER_SET,
+  );
+  const databaseName =
+    databaseAdapter === 'none'
+      ? undefined
+      : (input.databaseName?.trim().toLowerCase() ?? 'primary');
+  if (
+    databaseName !== undefined &&
+    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(databaseName)
+  ) {
+    throw new CreateMegamonoError(
+      'The database name must be a normalized slug such as primary, events, or regional-us.',
+      2,
+    );
+  }
 
   const platform = input.platform ?? process.platform;
   if (platform !== 'darwin' && platform !== 'linux') {
@@ -259,6 +284,8 @@ export function normalizeCreateOptions(
     stagingDirectory,
     apps: apps as AppId[],
     services: services as ServiceId[],
+    databaseAdapter,
+    ...(databaseName ? { databaseName } : {}),
     serviceRunner: requireEnum<ServiceRunner>(
       'service runner',
       input.serviceRunner ?? 'none',
@@ -541,6 +568,25 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     ),
   );
 
+  if (options.databaseAdapter !== 'none' && options.databaseName) {
+    steps.push(
+      commandStep(
+        `generate-database-${options.databaseName}`,
+        options.packageManager,
+        nxArgs(options.packageManager, [
+          'generate',
+          '@megamono/plugin:database',
+          `--name=${options.databaseName}`,
+          `--adapter=${options.databaseAdapter}`,
+          `--scope=${options.scope}`,
+          '--yes',
+          '--interactive=false',
+        ]),
+        'staging',
+      ),
+    );
+  }
+
   if (options.verify !== 'none') {
     steps.push(
       commandStep(
@@ -577,6 +623,19 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         'staging',
       ),
     );
+    if (options.databaseAdapter !== 'none' && options.databaseName) {
+      steps.push(
+        commandStep(
+          `validate-database-${options.databaseName}`,
+          options.packageManager,
+          nxArgs(options.packageManager, [
+            'run',
+            `${options.scope}-database-${options.databaseName}:validate`,
+          ]),
+          'staging',
+        ),
+      );
+    }
   }
   if (options.verify === 'build') {
     steps.push(

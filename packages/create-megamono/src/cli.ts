@@ -8,6 +8,7 @@ import { stdin, stdout } from 'node:process';
 import {
   APP_IDS,
   CreateMegamonoError,
+  DATABASE_ADAPTERS,
   createMegamono,
   renderPlan,
   type CreateMegamonoInput,
@@ -34,7 +35,7 @@ function booleanValue(
 async function resolveInteractive(
   input: CreateMegamonoInput,
 ): Promise<CreateMegamonoInput> {
-  if (!input.interactive || (input.name && input.apps?.length)) return input;
+  if (!input.interactive) return input;
   const prompt = createInterface({ input: stdin, output: stdout });
   try {
     const name = input.name ?? (await prompt.question('Workspace name: '));
@@ -45,7 +46,19 @@ async function resolveInteractive(
             `Apps (${APP_IDS.join(', ')}; comma-separated): `,
           ),
         );
-    return { ...input, name, apps };
+    const databaseAdapter =
+      (input.databaseAdapter ??
+        (await prompt.question(
+          `Database adapter (${DATABASE_ADAPTERS.join(', ')}) [prisma]: `,
+        ))) ||
+      'prisma';
+    const databaseName =
+      databaseAdapter === 'none'
+        ? undefined
+        : (input.databaseName ??
+            (await prompt.question('Database name [primary]: '))) ||
+          'primary';
+    return { ...input, name, apps, databaseAdapter, databaseName };
   } finally {
     prompt.close();
   }
@@ -63,6 +76,8 @@ export async function main(
         directory: { type: 'string' },
         apps: { type: 'string' },
         services: { type: 'string' },
+        'database-adapter': { type: 'string' },
+        'database-name': { type: 'string' },
         'service-runner': { type: 'string' },
         integrations: { type: 'string' },
         interactive: { type: 'string' },
@@ -87,6 +102,8 @@ export async function main(
       directory: parsed.values.directory,
       apps: commaList(parsed.values.apps),
       services: commaList(parsed.values.services),
+      databaseAdapter: parsed.values['database-adapter'],
+      databaseName: parsed.values['database-name'],
       serviceRunner: parsed.values['service-runner'],
       integrations: commaList(parsed.values.integrations),
       interactive,

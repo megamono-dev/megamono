@@ -38,4 +38,28 @@ describe('CLI entrypoint', () => {
       output.mockRestore();
     }
   });
+
+  it('accepts an explicit database adapter and arbitrary database name', async () => {
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    try {
+      await expect(
+        main([
+          'cli-database-fixture',
+          '--apps=api',
+          '--database-adapter=drizzle',
+          '--database-name=events',
+          '--interactive=false',
+          '--dry-run',
+        ]),
+      ).resolves.toBe(0);
+      expect(output).toHaveBeenCalledWith(
+        expect.stringContaining('@megamono/plugin:database'),
+      );
+      expect(output).toHaveBeenCalledWith(
+        expect.stringContaining('--name=events'),
+      );
+    } finally {
+      output.mockRestore();
+    }
+  });
 });

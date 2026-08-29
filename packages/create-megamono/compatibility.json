@@ -9,6 +9,18 @@
     "typescript": ">=6.0 <6.1",
     "prisma": ">=6.7"
   },
+  "databaseAdapters": {
+    "prisma": {
+      "provider": "postgresql",
+      "runtimePackages": { "@prisma/client": "7.10.0" },
+      "developmentPackages": { "prisma": "7.10.0" }
+    },
+    "drizzle": {
+      "provider": "postgresql",
+      "runtimePackages": { "drizzle-orm": "0.45.2" },
+      "developmentPackages": { "drizzle-kit": "0.31.10" }
+    }
+  },
   "adoptionToolchains": {
     "node": ">=18.18 <25",
     "pnpm": ">=8 <12",
