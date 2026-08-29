@@ -29,93 +29,6 @@ function options(cwd: string, overrides: Record<string, unknown> = {}) {
   });
 }
 
-async function writeInferredAppPackage(
-  stagingDirectory: string,
-  app: 'api' | 'mobile' | 'site' | 'web',
-): Promise<void> {
-  const root = resolve(stagingDirectory, `apps/${app}`);
-  await mkdir(root, { recursive: true });
-  if (app === 'site' || app === 'web') {
-    await mkdir(resolve(root, 'src/pages'), { recursive: true });
-  }
-  if (app === 'api') {
-    await mkdir(resolve(root, 'src'), { recursive: true });
-    await writeFile(
-      resolve(root, 'src/main.ts'),
-      'const port = process.env.PORT || 3000;\n',
-    );
-  }
-  await writeFile(
-    resolve(root, 'package.json'),
-    JSON.stringify({ nx: { name: `acme-tools-${app}` } }),
-  );
-  if (app === 'api' || app === 'site' || app === 'web') {
-    await writeInferredE2ePackage(stagingDirectory, app);
-  }
-}
-
-async function writeInferredE2ePackage(
-  stagingDirectory: string,
-  app: 'api' | 'site' | 'web',
-): Promise<void> {
-  const root = resolve(stagingDirectory, `apps/${app}-e2e`);
-  await mkdir(root, { recursive: true });
-  await writeFile(
-    resolve(root, 'package.json'),
-    JSON.stringify({
-      name: `generated-${app}-e2e`,
-      nx: {
-        name: `acme-tools-${app}-e2e`,
-        ...(app === 'api'
-          ? {
-              targets: {
-                e2e: {
-                  options: { jestConfig: 'apps/api-e2e/jest.config.cts' },
-                },
-              },
-            }
-          : {}),
-      },
-    }),
-  );
-  if (app === 'api') {
-    const support = resolve(root, 'src/support');
-    await mkdir(support, { recursive: true });
-    await writeFile(
-      resolve(support, 'test-setup.ts'),
-      "const port = process.env.PORT ?? '3000';\n",
-    );
-    await writeFile(
-      resolve(support, 'global-setup.ts'),
-      'const port = process.env.PORT ? Number(process.env.PORT) : 3000;\n',
-    );
-    await writeFile(
-      resolve(support, 'global-teardown.ts'),
-      'const port = process.env.PORT ? Number(process.env.PORT) : 3000;\n',
-    );
-    await writeFile(
-      resolve(root, 'tsconfig.json'),
-      JSON.stringify({ include: ['jest.config.ts', 'src/**/*.ts'] }),
-    );
-  }
-}
-
-async function writeInferredThemePackage(
-  stagingDirectory: string,
-): Promise<void> {
-  const root = resolve(stagingDirectory, 'packages/theme');
-  await mkdir(resolve(root, 'src/lib'), { recursive: true });
-  await writeFile(
-    resolve(root, 'package.json'),
-    JSON.stringify({
-      name: 'generated-theme',
-      nx: { name: 'acme-tools-theme', tags: ['platform:web'] },
-    }),
-  );
-  await writeFile(resolve(root, 'src/index.ts'), 'export {};\n');
-  await writeFile(resolve(root, 'src/lib/system.ts'), 'export {};\n');
-}
-
 async function writeYalcStore(
   root: string,
   packages: readonly string[],
@@ -268,10 +181,11 @@ describe('createPlan', () => {
           id: 'generate-desktop',
           command: 'pnpm',
           args: expect.arrayContaining([
-            'dlx',
-            'create-tauri-app@4.6.2',
-            '--manager',
-            'pnpm',
+            'exec',
+            'nx',
+            'generate',
+            '@megamono/plugin:app',
+            '--type=desktop',
           ]),
         }),
         expect.objectContaining({
@@ -281,12 +195,9 @@ describe('createPlan', () => {
             'exec',
             'nx',
             'generate',
-            '--appDir=false',
-            '--src=true',
-            '--style=none',
-            '--linter=eslint',
-            '--unitTestRunner=none',
-            '--e2eTestRunner=playwright',
+            '@megamono/plugin:app',
+            '--type=web',
+            '--port=43018',
           ]),
         }),
         expect.objectContaining({
@@ -312,13 +223,9 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
-      'generate-theme',
-      'configure-theme',
-      'generate-site',
-      'configure-site',
-      'generate-web',
-      'configure-web',
       'initialize-megamono',
+      'generate-site',
+      'generate-web',
       'sync-workspace',
       'format',
       'validate-docs',
@@ -334,13 +241,12 @@ describe('createPlan', () => {
     expect(rendered).toContain('@nx/next@23.1.1');
     expect(rendered).toContain('@nx/eslint@23.1.1');
     expect(rendered).toContain('@nx/playwright@23.1.1');
-    expect(rendered).toContain('@nx/js:library');
-    expect(rendered).toContain('--directory=packages/theme');
-    expect(rendered).toContain('--appDir=false');
-    expect(rendered).toContain('--src=true');
-    expect(rendered).toContain('--style=none');
-    expect(rendered).toContain('--linter=eslint');
-    expect(rendered).toContain('--e2eTestRunner=playwright');
+    expect(rendered).toContain('@megamono/plugin:app');
+    expect(rendered).toContain('--type=site');
+    expect(rendered).toContain('--type=web');
+    expect(rendered).toContain('--requestedApps=site,web');
+    expect(rendered).toContain('--port=43017');
+    expect(rendered).toContain('--port=43018');
     expect(rendered).toContain(
       '--only=docs,agents,ci,release,lint,skills,health,inference',
     );
@@ -349,13 +255,12 @@ describe('createPlan', () => {
     expect(rendered).toContain('--platforms=web');
     expect(rendered).toContain('--serviceRunner=none');
     expect(rendered).toContain('--serviceRequirements={}');
-    expect(rendered).not.toContain('--router=pages');
     expect(rendered).toContain('"nx" "--" "sync"');
     expect(rendered).toContain('format:write');
     expect(rendered).not.toContain('@latest');
   });
 
-  it('uses the maintained ESLint and Jest e2e preset for Nest apps', () => {
+  it('delegates Nest composition and e2e setup to the shared app preset', () => {
     const rendered = renderPlan(
       createPlan(options('/workspace', { apps: ['api'], verify: 'build' })),
     );
@@ -368,17 +273,12 @@ describe('createPlan', () => {
     expect(rendered).toContain('jest-environment-node@30.3.0');
     expect(rendered).toContain('jest-util@30.3.0');
     expect(rendered).toContain('ts-jest@29.4.7');
-    expect(rendered).toContain('@nx/nest:library');
-    expect(rendered).toContain('--name=nest-home');
-    expect(rendered).toContain('--directory=packages/nest-home');
-    expect(rendered).toContain('--importPath=@acme-tools/nest-home');
-    expect(rendered).toContain(
-      '--tags=platform:node,scope:acme-tools,type:feature',
-    );
+    expect(rendered).toContain('@megamono/plugin:app');
+    expect(rendered).toContain('--type=api');
+    expect(rendered).toContain('--name=api');
+    expect(rendered).toContain('--scope=acme-tools');
+    expect(rendered).toContain('--port=43016');
     expect(rendered).toContain('ts-node@10.9.1');
-    expect(rendered).toContain('--linter=eslint');
-    expect(rendered).toContain('--unitTestRunner=none');
-    expect(rendered).toContain('--e2eTestRunner=jest');
     expect(rendered).toContain('acme-tools-api-e2e:e2e');
   });
 
@@ -398,7 +298,7 @@ describe('createPlan', () => {
     expect(bundled).toEqual(canonical);
   });
 
-  it('uses the pinned Tauri scaffold and normalizes it before initialization', () => {
+  it('delegates the Tauri scaffold to the shared app preset', () => {
     const plan = createPlan(
       options('/workspace', { apps: ['desktop'], verify: 'none' }),
     );
@@ -406,20 +306,17 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
-      'generate-desktop',
-      'configure-desktop',
-      'install-desktop-dependencies',
       'initialize-megamono',
+      'generate-desktop',
       'commit-workspace',
     ]);
     const rendered = renderPlan(plan);
-    expect(rendered).toContain('create-tauri-app@4.6.2');
-    expect(rendered).toContain('apps/desktop');
-    expect(rendered).toContain('com.acme-tools.desktop');
     expect(rendered).toContain('@megamono/nx-cargo@0.0.1');
+    expect(rendered).toContain('@megamono/plugin:app');
+    expect(rendered).toContain('--type=desktop');
     expect(rendered).toContain('--defaultScope=acme-tools');
     expect(rendered).toContain('--defaultPlatform=rust');
-    expect(rendered).not.toContain('@megamono/nx-cargo:application');
+    expect(rendered).not.toContain('create-tauri-app');
   });
 
   it('plans a build-ready Apple scaffold on macOS', () => {
@@ -430,8 +327,8 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
-      'generate-apple',
       'initialize-megamono',
+      'generate-apple',
       'sync-workspace',
       'format',
       'validate-docs',
@@ -442,14 +339,10 @@ describe('createPlan', () => {
     ]);
     const rendered = renderPlan(plan);
     expect(rendered).toContain('@megamono/nx-apple@0.0.1');
-    expect(rendered).toContain('@megamono/nx-apple:application');
-    expect(rendered).toContain('--directory=apps/apple');
-    expect(rendered).toContain('--displayName=Acme Tools');
-    expect(rendered).toContain('--bundleIdentifier=com.acme-tools.apple');
+    expect(rendered).toContain('@megamono/plugin:app');
+    expect(rendered).toContain('--type=apple');
+    expect(rendered).toContain('--workspaceName=Acme Tools');
     expect(rendered).toContain('--scope=acme-tools');
-    expect(rendered).toContain(
-      '--tags=platform:apple,scope:acme-tools,type:app,visibility:internal',
-    );
     expect(rendered).toContain('--projects=acme-tools-apple');
   });
 
@@ -461,8 +354,8 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
-      'generate-worker',
       'initialize-megamono',
+      'generate-worker',
       'sync-workspace',
       'format',
       'validate-docs',
@@ -474,14 +367,13 @@ describe('createPlan', () => {
     const rendered = renderPlan(plan);
     expect(rendered).toContain('@megamono/nx-cloudflare@0.0.1');
     expect(rendered).toContain('wrangler@4.125.0');
-    expect(rendered).toContain('@megamono/nx-cloudflare:worker');
-    expect(rendered).toContain('--directory=apps/worker');
+    expect(rendered).toContain('@megamono/plugin:app');
+    expect(rendered).toContain('--type=worker');
     expect(rendered).toContain('--scope=acme-tools');
-    expect(rendered).not.toContain('@nx/js:library');
     expect(rendered).not.toContain('@nx/vitest');
   });
 
-  it('installs the normalized Desktop workspace before later Nx generators', () => {
+  it('initializes governance once before composing each shared app preset', () => {
     const plan = createPlan(
       options('/workspace', {
         apps: ['worker', 'mobile', 'desktop'],
@@ -492,13 +384,10 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
-      'generate-desktop',
-      'configure-desktop',
-      'install-desktop-dependencies',
-      'generate-mobile',
-      'configure-mobile',
-      'generate-worker',
       'initialize-megamono',
+      'generate-desktop',
+      'generate-mobile',
+      'generate-worker',
       'commit-workspace',
     ]);
   });
@@ -691,7 +580,7 @@ describe('executePlan', () => {
     );
   });
 
-  it('executes the yalc add and hydration phases before generators', async () => {
+  it('hydrates yalc packages before invoking the shared app preset', async () => {
     const cwd = await fixture();
     const store = await fixture();
     const plan = createPlan(
@@ -714,10 +603,8 @@ describe('executePlan', () => {
           '{}',
         );
       }
-      if (args.includes('@nx/nest:application')) {
-        await writeInferredAppPackage(plan.options.stagingDirectory, 'api');
-      }
     };
+
     await executePlan(plan, runner, undefined, async () => store);
 
     expect(invocations.slice(0, 4)).toEqual([
@@ -728,9 +615,9 @@ describe('executePlan', () => {
       'yalc add @megamono/plugin@0.0.1 --dev --no-pure',
       'npm install',
     ]);
-    expect(invocations[4]).toContain('@nx/nest:application');
-    expect(invocations[5]).toContain('@nx/nest:library');
-    expect(invocations[6]).toContain('@megamono/plugin:workspace-init');
+    expect(invocations[4]).toContain('@megamono/plugin:workspace-init');
+    expect(invocations[5]).toContain('@megamono/plugin:app');
+    expect(invocations[5]).toContain('--type=api');
     expect(
       JSON.parse(
         await readFile(
@@ -739,100 +626,6 @@ describe('executePlan', () => {
         ),
       ),
     ).toEqual({ packageManager: 'npm@11.17.0' });
-    expect(
-      JSON.parse(
-        await readFile(
-          resolve(plan.options.destination, 'apps/api-e2e/package.json'),
-          'utf8',
-        ),
-      ),
-    ).toMatchObject({
-      name: '@acme-tools/api-e2e',
-      nx: {
-        name: 'acme-tools-api-e2e',
-        projectType: 'application',
-        targets: {
-          e2e: { options: { jestConfig: 'apps/api-e2e/jest.config.cjs' } },
-        },
-        tags: [
-          'platform:node',
-          'scope:acme-tools',
-          'type:app',
-          'visibility:internal',
-        ],
-      },
-    });
-    expect(
-      await readFile(
-        resolve(plan.options.destination, 'apps/api/src/main.ts'),
-        'utf8',
-      ),
-    ).toContain('process.env.PORT || 43016');
-    expect(
-      await readFile(
-        resolve(plan.options.destination, 'apps/api/src/app/app.module.ts'),
-        'utf8',
-      ),
-    ).toContain("from '@acme-tools/nest-home'");
-    expect(
-      JSON.parse(
-        await readFile(
-          resolve(plan.options.destination, 'packages/nest-home/package.json'),
-          'utf8',
-        ),
-      ),
-    ).toMatchObject({
-      name: '@acme-tools/nest-home',
-      private: true,
-      nx: {
-        projectType: 'library',
-        tags: ['platform:node', 'scope:acme-tools', 'type:feature'],
-      },
-    });
-    expect(
-      await readFile(
-        resolve(
-          plan.options.destination,
-          'packages/nest-home/src/lib/nest-home.controller.ts',
-        ),
-        'utf8',
-      ),
-    ).toContain('@Controller()');
-    for (const supportFile of [
-      'test-setup.ts',
-      'global-setup.ts',
-      'global-teardown.ts',
-    ]) {
-      expect(
-        await readFile(
-          resolve(
-            plan.options.destination,
-            `apps/api-e2e/src/support/${supportFile}`,
-          ),
-          'utf8',
-        ),
-      ).toContain('43016');
-    }
-    expect(
-      await readFile(
-        resolve(plan.options.destination, 'jest.preset.js'),
-        'utf8',
-      ),
-    ).toContain("require('@nx/jest/preset').default");
-    expect(
-      await readFile(
-        resolve(plan.options.destination, 'apps/api-e2e/jest.config.cjs'),
-        'utf8',
-      ),
-    ).toContain('module.exports = {');
-    expect(
-      JSON.parse(
-        await readFile(
-          resolve(plan.options.destination, 'apps/api-e2e/tsconfig.json'),
-          'utf8',
-        ),
-      ).include,
-    ).toEqual(['src/**/*.ts']);
   });
 
   it('commits a staged workspace over an empty destination', async () => {
@@ -842,7 +635,7 @@ describe('executePlan', () => {
     );
     await mkdir(plan.options.destination);
     let first = true;
-    const runner: CommandRunner = async ({ args }) => {
+    const runner: CommandRunner = async () => {
       if (first) {
         first = false;
         await mkdir(plan.options.stagingDirectory);
@@ -858,11 +651,6 @@ describe('executePlan', () => {
             services: { runner: 'none', requirements: { postgres: '17' } },
           }),
         );
-        await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
-        await writeInferredAppPackage(plan.options.stagingDirectory, 'api');
-      }
-      if (args.includes('@nx/js:library')) {
-        await writeInferredThemePackage(plan.options.stagingDirectory);
       }
     };
     await executePlan(plan, runner);
@@ -885,472 +673,6 @@ describe('executePlan', () => {
       platforms: ['node', 'web'],
       services: { runner: 'none', requirements: { postgres: '17' } },
     });
-  });
-
-  it.each(['npm', 'pnpm'] as const)(
-    'normalizes the generated Desktop app and registers Cargo inference with %s',
-    async (packageManager) => {
-      const cwd = await fixture();
-      const plan = createPlan(
-        options(cwd, { apps: ['desktop'], packageManager, verify: 'none' }),
-      );
-      let initialized = false;
-      const runner: CommandRunner = async ({ args }) => {
-        if (args.includes('@megamono/plugin:workspace-init')) {
-          await writeFile(
-            resolve(plan.options.stagingDirectory, 'megamono.json'),
-            JSON.stringify({
-              version: 1,
-              platforms: ['rust'],
-              services: { runner: 'none', requirements: {} },
-            }),
-          );
-          return;
-        }
-        if (initialized) return;
-        initialized = true;
-        await mkdir(
-          resolve(plan.options.stagingDirectory, 'apps/desktop/src-tauri/src'),
-          { recursive: true },
-        );
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'package.json'),
-          JSON.stringify({
-            name: 'root',
-            private: true,
-            ...(packageManager === 'npm' ? { workspaces: ['packages/*'] } : {}),
-          }),
-        );
-        if (packageManager === 'pnpm') {
-          await writeFile(
-            resolve(plan.options.stagingDirectory, 'pnpm-workspace.yaml'),
-            'packages:\n  - "packages/*"\n\nautoInstallPeers: true\nallowBuilds:\n  nx: true\n  unrs-resolver: set this to true or false\n',
-          );
-        }
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'nx.json'),
-          JSON.stringify({ plugins: ['@nx/js/typescript'] }),
-        );
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'megamono.json'),
-          JSON.stringify({ version: 1 }),
-        );
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'apps/desktop/package.json'),
-          JSON.stringify({
-            name: 'appsdesktop',
-            private: true,
-            dependencies: {
-              '@tauri-apps/api': '^2',
-              '@tauri-apps/plugin-opener': '^2',
-            },
-            devDependencies: {
-              '@tauri-apps/cli': '^2',
-              typescript: '~5.6.2',
-              vite: '^6.0.3',
-            },
-          }),
-        );
-        await writeFile(
-          resolve(
-            plan.options.stagingDirectory,
-            'apps/desktop/src-tauri/Cargo.toml',
-          ),
-          `[package]\nname = "appsdesktop"\n\n[lib]\nname = "appsdesktop_lib"\n\n[build-dependencies]\ntauri-build = { version = "2", features = [] }\n\n[dependencies]\ntauri = { version = "2", features = [] }\ntauri-plugin-opener = "2"\nserde = { version = "1", features = ["derive"] }\nserde_json = "1"\n`,
-        );
-        await writeFile(
-          resolve(
-            plan.options.stagingDirectory,
-            'apps/desktop/src-tauri/src/main.rs',
-          ),
-          'fn main() {\n    appsdesktop_lib::run()\n}\n',
-        );
-        await writeFile(
-          resolve(
-            plan.options.stagingDirectory,
-            'apps/desktop/src-tauri/tauri.conf.json',
-          ),
-          JSON.stringify({
-            productName: 'appsdesktop',
-            identifier: 'com.appsdesktop.app',
-            app: { windows: [{ title: 'appsdesktop' }] },
-          }),
-        );
-      };
-      await executePlan(plan, runner);
-
-      const rootPackage = JSON.parse(
-        await readFile(
-          resolve(plan.options.destination, 'package.json'),
-          'utf8',
-        ),
-      );
-      if (packageManager === 'npm') {
-        expect(rootPackage.workspaces).toEqual(['apps/*', 'packages/*']);
-      } else {
-        expect(rootPackage.workspaces).toBeUndefined();
-        expect(
-          await readFile(
-            resolve(plan.options.destination, 'pnpm-workspace.yaml'),
-            'utf8',
-          ),
-        ).toBe(
-          'packages:\n  - "packages/*"\n  - \'apps/*\'\n\nautoInstallPeers: true\nallowBuilds:\n  "@parcel/watcher": true\n  "@swc/core": true\n  esbuild: true\n  less: true\n  nx: true\n  sharp: true\n  unrs-resolver: true\n  workerd: true\n',
-        );
-      }
-      expect(rootPackage.packageManager).toBe(
-        `${packageManager}@${packageManager === 'pnpm' ? '11.24.0' : '11.17.0'}`,
-      );
-      expect(rootPackage.devDependencies).toMatchObject({ vite: '8.1.4' });
-      const desktopPackage = JSON.parse(
-        await readFile(
-          resolve(plan.options.destination, 'apps/desktop/package.json'),
-          'utf8',
-        ),
-      );
-      expect(desktopPackage).toMatchObject({
-        name: 'acme-tools-desktop',
-        dependencies: {
-          '@tauri-apps/api': '2.11.1',
-          '@tauri-apps/plugin-opener': '2.5.4',
-        },
-        devDependencies: {
-          '@tauri-apps/cli': '2.11.4',
-          typescript: '6.0.3',
-          vite: '8.1.4',
-        },
-      });
-      const cargo = await readFile(
-        resolve(plan.options.destination, 'apps/desktop/src-tauri/Cargo.toml'),
-        'utf8',
-      );
-      expect(cargo).toContain('name = "acme-tools-desktop"');
-      expect(cargo).toContain('version = "=2.11.5"');
-      expect(cargo).not.toMatch(/version\s*=\s*"2"/);
-      const main = await readFile(
-        resolve(plan.options.destination, 'apps/desktop/src-tauri/src/main.rs'),
-        'utf8',
-      );
-      expect(main).toContain('acme_tools_desktop_lib::run()');
-      expect(main).not.toContain('appsdesktop_lib::run()');
-      const nxJson = JSON.parse(
-        await readFile(resolve(plan.options.destination, 'nx.json'), 'utf8'),
-      );
-      expect(nxJson.plugins).toContainEqual({
-        plugin: '@megamono/nx-cargo',
-        options: {
-          scope: 'acme-tools',
-          tauriTargetName: 'tauri-build',
-        },
-      });
-      const megamono = JSON.parse(
-        await readFile(
-          resolve(plan.options.destination, 'megamono.json'),
-          'utf8',
-        ),
-      );
-      expect(megamono.platforms).toEqual(['rust']);
-    },
-  );
-
-  it('preserves the nx-cloudflare Worker generator output through commit', async () => {
-    const cwd = await fixture();
-    const plan = createPlan(options(cwd, { apps: ['worker'], verify: 'none' }));
-    let initialized = false;
-    const runner: CommandRunner = async ({ args }) => {
-      if (!initialized) {
-        initialized = true;
-        await mkdir(plan.options.stagingDirectory, { recursive: true });
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'package.json'),
-          JSON.stringify({
-            devDependencies: {
-              '@megamono/nx-cloudflare': '0.0.1',
-              wrangler: '4.125.0',
-            },
-          }),
-        );
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'nx.json'),
-          JSON.stringify({ plugins: [] }),
-        );
-      }
-      if (args.includes('@megamono/nx-cloudflare:worker')) {
-        const workerRoot = resolve(
-          plan.options.stagingDirectory,
-          'apps/worker',
-        );
-        await mkdir(resolve(workerRoot, 'src'), { recursive: true });
-        await writeFile(
-          resolve(workerRoot, 'project.json'),
-          JSON.stringify({
-            name: 'acme-tools-worker',
-            projectType: 'application',
-            sourceRoot: 'apps/worker/src',
-            tags: [
-              'platform:worker',
-              'scope:acme-tools',
-              'type:app',
-              'visibility:internal',
-            ],
-          }),
-        );
-        await writeFile(
-          resolve(workerRoot, 'src/index.ts'),
-          "export default { fetch: () => new Response('ok') };\n",
-        );
-        await writeFile(
-          resolve(workerRoot, 'tsconfig.json'),
-          JSON.stringify({
-            compilerOptions: { types: ['./worker-configuration.d.ts'] },
-          }),
-        );
-        await writeFile(
-          resolve(workerRoot, 'worker-configuration.d.ts'),
-          'interface Env {}\n',
-        );
-        await writeFile(
-          resolve(workerRoot, 'wrangler.jsonc'),
-          JSON.stringify({
-            $schema: '../../node_modules/wrangler/config-schema.json',
-            name: 'acme-tools-worker',
-            main: 'src/index.ts',
-            compatibility_date: '2026-08-23',
-          }),
-        );
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'nx.json'),
-          JSON.stringify({
-            plugins: [
-              {
-                plugin: '@megamono/nx-cloudflare',
-                options: { scope: 'acme-tools' },
-              },
-            ],
-          }),
-        );
-      }
-      if (args.includes('@megamono/plugin:workspace-init')) {
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'megamono.json'),
-          JSON.stringify({ version: 1, platforms: ['worker'] }),
-        );
-      }
-    };
-    await executePlan(plan, runner);
-
-    const workerRoot = resolve(plan.options.destination, 'apps/worker');
-    const project = JSON.parse(
-      await readFile(resolve(workerRoot, 'project.json'), 'utf8'),
-    );
-    expect(project).toMatchObject({
-      name: 'acme-tools-worker',
-      projectType: 'application',
-      tags: expect.arrayContaining(['platform:worker', 'scope:acme-tools']),
-    });
-    expect(
-      await readFile(resolve(workerRoot, 'src/index.ts'), 'utf8'),
-    ).toContain('export default');
-    const nxJson = JSON.parse(
-      await readFile(resolve(plan.options.destination, 'nx.json'), 'utf8'),
-    );
-    expect(nxJson.plugins).toContainEqual({
-      plugin: '@megamono/nx-cloudflare',
-      options: { scope: 'acme-tools' },
-    });
-    expect(
-      await readFile(resolve(workerRoot, 'worker-configuration.d.ts'), 'utf8'),
-    ).toContain('interface Env');
-    expect(
-      JSON.parse(await readFile(resolve(workerRoot, 'wrangler.jsonc'), 'utf8')),
-    ).toMatchObject({
-      name: 'acme-tools-worker',
-      main: 'src/index.ts',
-      compatibility_date: '2026-08-23',
-      $schema: '../../node_modules/wrangler/config-schema.json',
-    });
-  });
-
-  it('marks inferred package-manifest app projects as applications', async () => {
-    const cwd = await fixture();
-    const apps = ['mobile', 'site', 'web'] as const;
-    const plan = createPlan(options(cwd, { apps, verify: 'none' }));
-    let initialized = false;
-    const runner: CommandRunner = async ({ args }) => {
-      if (!initialized) {
-        initialized = true;
-        for (const app of apps) {
-          await mkdir(resolve(plan.options.stagingDirectory, `apps/${app}`), {
-            recursive: true,
-          });
-        }
-        await mkdir(
-          resolve(plan.options.stagingDirectory, 'apps/mobile/src/app'),
-          { recursive: true },
-        );
-        await mkdir(
-          resolve(plan.options.stagingDirectory, 'apps/site/src/pages'),
-          { recursive: true },
-        );
-        await mkdir(
-          resolve(plan.options.stagingDirectory, 'apps/web/src/pages'),
-          { recursive: true },
-        );
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'package.json'),
-          '{}',
-        );
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'nx.json'),
-          '{}',
-        );
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'megamono.json'),
-          JSON.stringify({ version: 1 }),
-        );
-        for (const app of apps) {
-          await writeFile(
-            resolve(plan.options.stagingDirectory, `apps/${app}/package.json`),
-            JSON.stringify({
-              name: `@acme-tools/${app}`,
-              nx: { name: `acme-tools-${app}`, tags: ['platform:web'] },
-            }),
-          );
-          if (app === 'site' || app === 'web') {
-            await writeInferredE2ePackage(plan.options.stagingDirectory, app);
-          }
-        }
-        await writeFile(
-          resolve(plan.options.stagingDirectory, 'apps/mobile/src/app/App.tsx'),
-          '/* eslint-disable jsx-a11y/accessible-emoji */\nexport const App = () => null;\n',
-        );
-      }
-      if (args.includes('@nx/js:library')) {
-        await writeInferredThemePackage(plan.options.stagingDirectory);
-      }
-    };
-
-    await executePlan(plan, runner);
-
-    for (const app of apps) {
-      const packageJson = JSON.parse(
-        await readFile(
-          resolve(plan.options.destination, `apps/${app}/package.json`),
-          'utf8',
-        ),
-      );
-      expect(packageJson.nx).toMatchObject({
-        name: `acme-tools-${app}`,
-        projectType: 'application',
-        tags: ['platform:web'],
-      });
-      expect(packageJson.name).toBe(`@acme-tools/${app}`);
-      if (app === 'site' || app === 'web') {
-        expect(packageJson.dependencies).toMatchObject({
-          '@chakra-ui/react': '3.36.1',
-          '@acme-tools/theme': '*',
-        });
-        expect(
-          await readFile(
-            resolve(plan.options.destination, `apps/${app}/src/pages/_app.tsx`),
-            'utf8',
-          ),
-        ).toContain('<ChakraProvider value={megamonoSystem}>');
-        const billboard = await readFile(
-          resolve(plan.options.destination, `apps/${app}/src/pages/index.tsx`),
-          'utf8',
-        );
-        expect(billboard).toContain('How to use Megamono');
-        expect(billboard).toContain('https://playstack.dev');
-        expect(billboard).toContain('https://springbar.app');
-        expect(billboard).toContain('https://www.commune.software');
-        expect(billboard).toContain('const services: string[] = [];');
-        expect(billboard).not.toContain('Welcome to Nx');
-        const e2e = await readFile(
-          resolve(
-            plan.options.destination,
-            `apps/${app}-e2e/src/example.spec.ts`,
-          ),
-          'utf8',
-        );
-        expect(e2e).toContain(
-          "test('introduces the workspace and Commune development tools'",
-        );
-        expect(e2e).toContain(
-          `${app === 'site' ? 'Marketing site' : 'Web app'}`,
-        );
-        const playwright = await readFile(
-          resolve(
-            plan.options.destination,
-            `apps/${app}-e2e/playwright.config.mts`,
-          ),
-          'utf8',
-        );
-        expect(playwright).toContain(
-          `process.env['PORT'] || '${app === 'site' ? '43017' : '43018'}'`,
-        );
-        expect(playwright).toContain(
-          `npm exec nx -- run acme-tools-${app}:dev --port=\${port}`,
-        );
-        expect(playwright).toContain('reuseExistingServer: false');
-        expect(
-          JSON.parse(
-            await readFile(
-              resolve(plan.options.destination, `apps/${app}-e2e/package.json`),
-              'utf8',
-            ),
-          ),
-        ).toMatchObject({
-          name: `@acme-tools/${app}-e2e`,
-          nx: {
-            name: `acme-tools-${app}-e2e`,
-            projectType: 'application',
-            tags: [
-              'platform:web',
-              'scope:acme-tools',
-              'type:app',
-              'visibility:internal',
-            ],
-          },
-        });
-      }
-      expect(renderPlan(plan)).toContain(
-        `normalize apps/${app} as an application project`,
-      );
-    }
-    const themePackage = JSON.parse(
-      await readFile(
-        resolve(plan.options.destination, 'packages/theme/package.json'),
-        'utf8',
-      ),
-    );
-    expect(themePackage).toMatchObject({
-      name: '@acme-tools/theme',
-      private: true,
-      dependencies: {
-        '@chakra-ui/react': '3.36.1',
-        '@emotion/react': '11.14.0',
-      },
-      nx: { projectType: 'library' },
-    });
-    expect(
-      await readFile(
-        resolve(plan.options.destination, 'packages/theme/src/index.ts'),
-        'utf8',
-      ),
-    ).toBe("export { megamonoSystem } from './lib/system';\n");
-    expect(
-      await readFile(
-        resolve(plan.options.destination, 'packages/theme/src/lib/system.ts'),
-        'utf8',
-      ),
-    ).toContain('createSystem(defaultConfig, config)');
-    expect(
-      await readFile(
-        resolve(plan.options.destination, 'apps/mobile/src/app/App.tsx'),
-        'utf8',
-      ),
-    ).not.toContain('jsx-a11y/accessible-emoji');
   });
 
   it('retains staging with recovery details after a forced failure', async () => {
@@ -1409,11 +731,6 @@ describe('executePlan', () => {
           resolve(plan.options.stagingDirectory, 'megamono.json'),
           JSON.stringify({ version: 1 }),
         );
-        await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
-        await writeInferredAppPackage(plan.options.stagingDirectory, 'api');
-      }
-      if (args.includes('@nx/js:library')) {
-        await writeInferredThemePackage(plan.options.stagingDirectory);
       }
     };
     await executePlan(plan, runner, async (intent) => {
@@ -1466,11 +783,6 @@ describe('executePlan', () => {
             resolve(plan.options.stagingDirectory, 'megamono.json'),
             JSON.stringify({ version: 1 }),
           );
-          await writeInferredAppPackage(plan.options.stagingDirectory, 'web');
-          await writeInferredAppPackage(plan.options.stagingDirectory, 'api');
-        }
-        if (args.includes('@nx/js:library')) {
-          await writeInferredThemePackage(plan.options.stagingDirectory);
         }
       },
       async () => {

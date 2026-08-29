@@ -87,7 +87,7 @@ describe('app generator', () => {
       "displayName: 'fixture-api-e2e'",
     );
     expect(tree.read('apps/api/src/main.ts', 'utf8')).toContain(
-      'process.env.PORT || 3000',
+      'process.env.PORT || 45449',
     );
   });
 
@@ -113,6 +113,37 @@ describe('app generator', () => {
       exitCode: 3,
       diagnosticCode: 'app-conflict',
     } satisfies Partial<AppGeneratorError>);
+  });
+
+  it('records scope-stable ports and allocates named instances without renumbering', async () => {
+    const tree = workspace();
+    await appGenerator(tree, {
+      type: 'web',
+      scope: 'fixture',
+      interactive: false,
+      yes: true,
+    });
+    await appGenerator(tree, {
+      type: 'web',
+      name: 'admin',
+      scope: 'fixture',
+      interactive: false,
+      yes: true,
+    });
+    expect(JSON.parse(tree.read('megamono.json', 'utf8') ?? '{}').ports).toEqual({
+      web: 45451,
+      admin: 45461,
+    });
+    await expect(
+      appGenerator(tree, {
+        type: 'api',
+        name: 'internal',
+        scope: 'fixture',
+        port: 45461,
+        interactive: false,
+        yes: true,
+      }),
+    ).rejects.toMatchObject({ diagnosticCode: 'app-port-conflict' });
   });
 
   it('requires initialization and explicit non-interactive choices', async () => {

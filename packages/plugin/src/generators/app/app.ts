@@ -38,12 +38,6 @@ const APP_LABELS: Record<AppType, string> = {
   desktop: 'Tauri desktop app',
   apple: 'Apple native app',
 };
-const DEFAULT_PORTS: Partial<Record<AppType, number>> = {
-  web: 4200,
-  site: 4201,
-  api: 3000,
-  worker: 8787,
-};
 const compatibility = JSON.parse(
   readFileSync(join(__dirname, '../../../compatibility.json'), 'utf8'),
 ) as {
@@ -185,6 +179,32 @@ function platform(type: AppType): NormalizedAppOptions['platform'] {
   return 'web';
 }
 
+function automaticPort(
+  type: AppType,
+  name: string,
+  scope: string,
+  configured: Readonly<Record<string, number>>,
+): number | undefined {
+  if (configured[name]) return configured[name];
+  if (type !== 'api' && type !== 'site' && type !== 'web' && type !== 'worker')
+    return undefined;
+  const hash = [...scope].reduce(
+    (value, character) =>
+      (value * 31 + (character.codePointAt(0) ?? 0)) >>> 0,
+    0,
+  );
+  const workspaceBase = 40_000 + (hash % 8_000);
+  const preferred =
+    type === 'worker'
+      ? 8787
+      : workspaceBase + { api: 0, site: 1, web: 2 }[type];
+  if (name === type) return preferred;
+  const assigned = new Set(Object.values(configured));
+  let candidate = preferred + 10;
+  while (assigned.has(candidate)) candidate += 1;
+  return candidate;
+}
+
 function csv<T extends string>(value: string | undefined, allowed?: ReadonlySet<string>): T[] {
   return [...new Set((value ?? '').split(',').map((entry) => entry.trim()).filter(Boolean))]
     .filter((entry) => !allowed || allowed.has(entry)) as T[];
@@ -220,7 +240,8 @@ async function normalizeOptions(
   const configuredPorts = !raw.bootstrap
     ? (readJson<{ ports?: Record<string, number> }>(tree, 'megamono.json').ports ?? {})
     : {};
-  const selectedPort = raw.port ?? configuredPorts[name] ?? DEFAULT_PORTS[type];
+  const selectedPort =
+    raw.port ?? automaticPort(type, name, scope, configuredPorts);
   if (
     selectedPort !== undefined &&
     Object.entries(configuredPorts).some(
@@ -576,7 +597,7 @@ module.exports = {
 
   const nx =
     options.packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
-  const port = options.port ?? DEFAULT_PORTS[options.type] ?? 4200;
+  const port = options.port ?? 4200;
   tree.write(
     `${e2eRoot}/playwright.config.mts`,
     `import { defineConfig, devices } from '@playwright/test';

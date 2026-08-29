@@ -142,7 +142,7 @@ npm exec nx g @megamono/plugin:theme \
 
 At least one value in `--systems=site,app` is required. A named consumer must exist, be a web application, and match the corresponding selected system. In interactive mode, a consumer is inferred only when exactly one eligible project exists; ambiguity exits `4` before mutation in non-interactive mode. Omitting a consumer creates the selected libraries and aliases without rewriting an application.
 
-The small Chakra module emitted by `create-megamono` remains valid starter composition. The theme generator replaces its imports only when the caller selects that generated application and the starter artifact remains pristine under `spec-megamono-0014`; a modified or repository-owned starter is preserved and receives an actionable migration diff. The generator never deletes an unowned theme module.
+The small Chakra module emitted by `@megamono/plugin:app` remains valid starter composition. The theme generator replaces its imports only when the caller selects that generated application and the starter artifact remains pristine under `spec-megamono-0014`; a modified or repository-owned starter is preserved and receives an actionable migration diff. The generator never deletes an unowned theme module.
 
 This is an early library generator but not a Wave 1 language-plugin prerequisite. It follows the common generator execution contract in `spec-megamono-0000`, including deterministic planning, idempotency, dry-run parity, and conflict safety.
 
