@@ -1,5 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +25,7 @@ const supportsTargetParallelism =
 const temporaryRoot = mkdtempSync(join(tmpdir(), 'megamono-nx-compatibility-'));
 const fixtureRoot = join(temporaryRoot, 'fixture');
 mkdirSync(fixtureRoot, { recursive: true });
+let fixtureToolPath;
 const packageRoots = {
   '@megamono/plugin': resolve(workspaceRoot, 'packages/plugin'),
   ...(supportsInferencePlugins
@@ -44,6 +51,9 @@ function run(command, args, cwd = fixtureRoot) {
       NX_INTERACTIVE: 'false',
       npm_config_cache:
         process.env.MEGAMONO_NPM_CACHE ?? join(temporaryRoot, 'npm-cache'),
+      ...(fixtureToolPath
+        ? { PATH: `${fixtureToolPath}:${process.env.PATH ?? ''}` }
+        : {}),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -168,6 +178,55 @@ try {
   run('npm', ['exec', 'nx', '--', 'run', 'megamono:check']);
 
   if (supportsInferencePlugins) {
+    mkdirSync(
+      join(fixtureRoot, 'apps/apple/Fixture.xcodeproj/xcshareddata/xcschemes'),
+      { recursive: true },
+    );
+    writeFileSync(
+      join(fixtureRoot, 'apps/apple/Fixture.xcodeproj/project.pbxproj'),
+      'isa = PBXProject;\n',
+    );
+    writeFileSync(
+      join(
+        fixtureRoot,
+        'apps/apple/Fixture.xcodeproj/xcshareddata/xcschemes/Fixture.xcscheme',
+      ),
+      '<Scheme />\n',
+    );
+    mkdirSync(join(fixtureRoot, 'crates/fixture-cargo/src'), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(fixtureRoot, 'crates/fixture-cargo/Cargo.toml'),
+      '[package]\nname = "fixture-cargo"\nversion = "0.1.0"\nedition = "2021"\n',
+    );
+    writeFileSync(
+      join(fixtureRoot, 'crates/fixture-cargo/src/lib.rs'),
+      'pub fn fixture() {}\n',
+    );
+    fixtureToolPath = join(temporaryRoot, 'fixture-tools');
+    mkdirSync(fixtureToolPath, { recursive: true });
+    const cargoManifest = join(fixtureRoot, 'crates/fixture-cargo/Cargo.toml');
+    const cargoRoot = join(fixtureRoot, 'crates/fixture-cargo');
+    const fakeCargoPath = join(fixtureToolPath, 'cargo');
+    writeFileSync(
+      fakeCargoPath,
+      `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({
+  packages: [{
+    id: 'fixture-cargo 0.1.0 (path+file://${cargoRoot})',
+    name: 'fixture-cargo',
+    manifest_path: ${JSON.stringify(cargoManifest)},
+    dependencies: [],
+    targets: [{ kind: ['lib'] }],
+  }],
+  workspace_members: ['fixture-cargo 0.1.0 (path+file://${cargoRoot})'],
+  workspace_root: ${JSON.stringify(cargoRoot)},
+  target_directory: ${JSON.stringify(join(cargoRoot, 'target'))},
+}));
+`,
+    );
+    chmodSync(fakeCargoPath, 0o755);
     mkdirSync(join(fixtureRoot, 'apps/worker/src'), { recursive: true });
     writeJson(join(fixtureRoot, 'apps/worker/wrangler.json'), {
       name: 'fixture-worker',
@@ -189,6 +248,38 @@ try {
     assert(
       inferredProjects.includes('worker'),
       `The packed Cloudflare plugin did not infer the Worker project. Projects:\n${inferredProjects}`,
+    );
+    assert(
+      inferredProjects.includes('Fixture'),
+      `The packed Apple plugin did not infer the Xcode project. Projects:\n${inferredProjects}`,
+    );
+    assert(
+      inferredProjects.includes('fixture-cargo'),
+      `The packed Cargo plugin did not infer the Rust project. Projects:\n${inferredProjects}`,
+    );
+    const apple = JSON.parse(
+      run('npm', ['exec', 'nx', '--', 'show', 'project', 'Fixture', '--json']),
+    );
+    assert(
+      apple.targets.build.cache === true &&
+        apple.metadata.technologies.includes('xcode'),
+      `Nx ${nxVersion} did not retain Apple target metadata.`,
+    );
+    const cargo = JSON.parse(
+      run('npm', [
+        'exec',
+        'nx',
+        '--',
+        'show',
+        'project',
+        'fixture-cargo',
+        '--json',
+      ]),
+    );
+    assert(
+      cargo.targets.build.cache === true &&
+        cargo.targets.build.options.command.includes("'cargo' 'build'"),
+      `Nx ${nxVersion} did not retain Cargo target metadata.`,
     );
     const worker = JSON.parse(
       run('npm', ['exec', 'nx', '--', 'show', 'project', 'worker', '--json']),
@@ -241,7 +332,27 @@ try {
 
   writeFileSync(
     join(fixtureRoot, 'consumer.ts'),
-    "import type { WorkspaceInitSurvey } from '@megamono/plugin';\nconst survey: WorkspaceInitSurvey | undefined = undefined;\nvoid survey;\n",
+    [
+      "import type { WorkspaceInitSurvey } from '@megamono/plugin';",
+      ...(supportsInferencePlugins
+        ? [
+            "import type { ApplePluginOptions } from '@megamono/nx-apple';",
+            "import type { CargoPluginOptions } from '@megamono/nx-cargo';",
+            "import type { CloudflarePluginOptions } from '@megamono/nx-cloudflare';",
+          ]
+        : []),
+      'const survey: WorkspaceInitSurvey | undefined = undefined;',
+      ...(supportsInferencePlugins
+        ? [
+            'const apple: ApplePluginOptions = {};',
+            'const cargo: CargoPluginOptions = {};',
+            'const cloudflare: CloudflarePluginOptions = {};',
+            'void apple; void cargo; void cloudflare;',
+          ]
+        : []),
+      'void survey;',
+      '',
+    ].join('\n'),
   );
   run('npm', [
     'exec',
