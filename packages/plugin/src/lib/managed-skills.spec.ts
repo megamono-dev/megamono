@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   applyManagedSkillTemplates,
   ejectManagedSkill,
+  evaluateManagedSkillDiscovery,
   hashManagedSkillFiles,
   loadManagedSkillTemplates,
   MANAGED_SKILL_NAMES,
@@ -39,6 +40,21 @@ describe('managed skills', () => {
       expect(template.positivePrompts).toHaveLength(5);
       expect(template.negativePrompts).toHaveLength(5);
       expect(template.templateHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    }
+  });
+
+  it('routes every positive trigger and rejects every negative trigger', () => {
+    for (const template of loadManagedSkillTemplates()) {
+      for (const prompt of template.positivePrompts) {
+        expect(evaluateManagedSkillDiscovery(prompt), prompt).toContain(
+          template.name,
+        );
+      }
+      for (const prompt of template.negativePrompts) {
+        expect(evaluateManagedSkillDiscovery(prompt), prompt).not.toContain(
+          template.name,
+        );
+      }
     }
   });
 

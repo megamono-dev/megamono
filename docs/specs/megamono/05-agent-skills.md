@@ -234,7 +234,7 @@ shadcn ships `shadcn/skills` on the same premise — an agent that does not know
 
 - Hooks are opt-in and deterministic. V1 never invokes a model from Git hooks or CI.
 - Skill content is portable Agent Skills Markdown. `.agents/skills` is canonical and `.claude/skills` is a symlink projection.
-- Every skill includes at least five positive and five negative example prompts. The package test suite runs the same prompt set through the supported discovery evaluator and fails when a positive example is not selected or a negative example is selected.
+- Every skill includes at least five positive and five negative example prompts. The package test suite runs the same prompt set through Megamono's deterministic, provider-neutral discovery evaluator and fails when a positive example is not selected or a negative example is selected. Runtime agents continue to discover portable skills from front-matter descriptions; CI does not make a model or network call.
 - Managed skills upgrade only when their stored template hash matches; ejected skills are never changed.
 - Skill ownership uses the common Megamono artifact registry and ejection library; the legacy per-skill sidecar is migration input only.
 

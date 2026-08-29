@@ -198,6 +198,7 @@ export {
   MANAGED_SKILL_NAMES,
   applyManagedSkillTemplates,
   ejectManagedSkill,
+  evaluateManagedSkillDiscovery,
   hashManagedSkillFiles,
   inspectManagedSkills,
   loadManagedSkillTemplates,

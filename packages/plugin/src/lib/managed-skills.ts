@@ -77,6 +77,78 @@ export interface ManagedSkillsHealthState {
   >;
 }
 
+const MANAGED_SKILL_DISCOVERY_SIGNALS: Readonly<
+  Record<ManagedSkillName, readonly RegExp[]>
+> = {
+  'structure-review': [
+    /\b(project boundaries?|dependency direction|nx tags?|repository structure)\b/i,
+    /\bshared librar(?:y|ies)\b.*\b(packages?|applications?)\b/i,
+    /\b(split this service|applications? share)\b/i,
+  ],
+  'plan-sync': [
+    /\b(sync|reconcile|bring|update)\b.*\b(active|implementation|current|in-progress|migration)\b(?:\s+[a-z-]+){0,2}\s+plan\b/i,
+    /\bmark\b.*\bplan steps?\b/i,
+  ],
+  'drift-check': [
+    /\b(contract drift|drifted? from|drift before)\b/i,
+    /\b(audit|check|verify)\b.*\bagainst\b.*\b(specification|spec|decisions?)\b/i,
+    /\bcompare\b.*\bproject graph\b.*\bdocumented architecture\b/i,
+    /\bshipped targets?\b.*\bdocumented behavior\b/i,
+  ],
+  'decision-capture': [
+    /\b(record|capture|create|document|supersede)\b.*\b(decision|choice|strategy|direction)\b/i,
+    /\bdecided before\b.*\b(document|record|capture)\b/i,
+  ],
+  'docs-placement': [
+    /\bwhere should\b.*\b(write-up|document|documentation)\b.*\blive\b/i,
+    /\bdecision\b.*\bresearch\b.*\b(specification|spec)\b/i,
+    /\bright documentation corpus\b/i,
+    /\brepository documentation\b.*\bpublished content\b/i,
+    /\bwhich docs generator\b/i,
+  ],
+  'archive-review': [
+    /\breview\b.*\barchive\b/i,
+    /\bstale repository documents?\b/i,
+    /\bmerged branches?\b.*\bplans?\b/i,
+    /\bpropose archive candidates?\b/i,
+    /\bexpired reports?\b.*\bsuperseded research\b/i,
+  ],
+  'visibility-recheck': [
+    /\brecheck\b.*\bpublic (?:spec|document|docs)\b/i,
+    /\breview public repository docs\b/i,
+    /\bvisibility_reviewed_at\b.*\bvalid\b/i,
+    /\bpublication boundary\b.*\b(changed decisions?|documents?|docs)\b/i,
+    /\baudit public docs\b.*\b(secrets|internal)\b/i,
+  ],
+  'dependency-review': [
+    /\breview\b.*\balign\b.*\b(applications?|projects?|dependencies?)\b/i,
+    /\bdependency\b.*\bevery project constraint\b/i,
+    /\badding this package\b.*\bdependency direction\b/i,
+    /\bcompatibility impact\b.*\bupgrade\b/i,
+    /\bevery consumer\b.*\bshared dependency\b/i,
+  ],
+};
+
+/**
+ * Deterministic evaluator for the portable skill discovery contract. Runtime
+ * agents still discover skills from their front-matter descriptions; this
+ * evaluator turns the documented semantic signals into a provider-neutral CI
+ * gate so routing regressions do not depend on a model or network call.
+ */
+export function evaluateManagedSkillDiscovery(
+  prompt: string,
+): readonly ManagedSkillName[] {
+  const normalized = prompt.trim();
+  if (!normalized) return [];
+  return MANAGED_SKILL_NAMES.filter(
+    (name) =>
+      normalized.toLowerCase().includes(name) ||
+      MANAGED_SKILL_DISCOVERY_SIGNALS[name].some((signal) =>
+        signal.test(normalized),
+      ),
+  );
+}
+
 const LEGACY_PROVENANCE_FILE = '.megamono-skill.json';
 const TEMPLATE_ROOT = resolve(__dirname, '..', 'skills');
 const PACKAGE_ROOT = resolve(__dirname, '..', '..');
