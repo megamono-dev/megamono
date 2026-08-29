@@ -227,6 +227,85 @@ describe('workspace-init generator', () => {
     );
   });
 
+  it('matches the representative package, Nx, and Megamono contract snapshot', async () => {
+    addProjectConfiguration(tree, 'fixture-kit', {
+      root: 'packages/fixture-kit',
+      projectType: 'library',
+      targets: {
+        build: {
+          executor: '@nx/js:tsc',
+          options: { outputPath: 'dist/packages/fixture-kit' },
+        },
+      },
+    });
+    tree.write(
+      'packages/fixture-kit/package.json',
+      JSON.stringify({ name: '@fixture/kit', version: '0.0.1' }),
+    );
+
+    await workspaceInitGenerator(tree, {
+      only: 'release',
+      packageManager: 'npm',
+      yes: true,
+    });
+
+    const packageJson = readJson(tree, 'package.json');
+    const nxJson = readJson(tree, 'nx.json');
+    const megamono = readJson(tree, 'megamono.json');
+    expect({
+      package: {
+        packageManager: packageJson.packageManager,
+        yalcPublish: packageJson.scripts['megamono:yalc-publish'],
+      },
+      nx: {
+        sharedGlobals: nxJson.namedInputs.sharedGlobals,
+        release: nxJson.release,
+      },
+      megamono: {
+        version: megamono.version,
+        packageManager: megamono.conventions.packageManager,
+        adoption: megamono.adoption,
+      },
+    }).toMatchInlineSnapshot(`
+      {
+        "megamono": {
+          "adoption": {
+            "inference": {},
+            "modules": [
+              "release",
+            ],
+            "ratchets": [],
+            "reductions": [],
+          },
+          "packageManager": "npm",
+          "version": 1,
+        },
+        "nx": {
+          "release": {
+            "groups": {
+              "workspace": {
+                "projects": [
+                  "fixture-kit",
+                ],
+                "projectsRelationship": "fixed",
+                "releaseTag": {
+                  "pattern": "workspace@{version}",
+                },
+              },
+            },
+          },
+          "sharedGlobals": [
+            "{workspaceRoot}/.yalc/**/*",
+          ],
+        },
+        "package": {
+          "packageManager": "npm@11.17.0",
+          "yalcPublish": "node .megamono/publish-yalc.mjs",
+        },
+      }
+    `);
+  });
+
   it('defers release artifacts when no publishable libraries exist', async () => {
     await workspaceInitGenerator(tree, {
       only: 'release',
