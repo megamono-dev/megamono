@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { join, relative } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { ProjectGraph } from '@nx/devkit';
 import type { MegamonoConfig } from './config';
 import type { RepositoryDocument } from './docs';
@@ -78,6 +78,15 @@ interface PackageManifest {
 
 interface ExpoConfig {
   readonly expo?: { readonly sdkVersion?: string };
+}
+
+interface PlaystackDatabaseTarget {
+  readonly adapter?: unknown;
+  readonly target?: unknown;
+}
+
+interface PlaystackConfig {
+  readonly databases?: Readonly<Record<string, PlaystackDatabaseTarget>>;
 }
 
 type DependencyEcosystem = 'npm' | 'expo' | 'swiftpm' | 'cargo';
@@ -903,6 +912,111 @@ function specDriftFindings(
   return findings;
 }
 
+async function databaseTargetFindings(
+  workspaceRoot: string,
+  graph: ProjectGraph,
+  config: MegamonoConfig,
+): Promise<HealthFinding[]> {
+  const configured = Object.entries(config.databases).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  if (configured.length === 0) return [];
+
+  const playstack = await readJson<PlaystackConfig>(
+    join(workspaceRoot, 'playstack.json'),
+  );
+  const targets = playstack?.databases ?? {};
+  const findings: HealthFinding[] = [];
+
+  for (const [name, database] of configured) {
+    const project = graph.nodes[database.project];
+    if (!project) {
+      findings.push({
+        check: 'spec-drift',
+        fingerprint: `database:missing-project:${name}:${database.project}`,
+        state: 'constrained',
+        confidence: 'complete',
+        summary: `Database ${name} references missing Nx project ${database.project}.`,
+        evidence: ['megamono.json'],
+        recommendation:
+          'Restore the project or update the database project mapping explicitly.',
+      });
+      continue;
+    }
+
+    const target = targets[name];
+    if (!target) {
+      findings.push({
+        check: 'spec-drift',
+        fingerprint: `database:missing-playstack-target:${name}`,
+        state: 'constrained',
+        confidence: 'complete',
+        summary: `Database ${name} has no corresponding Playstack artifact target.`,
+        evidence: ['megamono.json', 'playstack.json'],
+        recommendation:
+          'Configure the same logical database name in playstack.json before synchronizing package artifacts.',
+      });
+      continue;
+    }
+
+    if (target.adapter !== database.adapter) {
+      findings.push({
+        check: 'spec-drift',
+        fingerprint: `database:adapter-disagreement:${name}`,
+        state: 'constrained',
+        confidence: 'complete',
+        summary: `Database ${name} disagrees on its schema adapter.`,
+        evidence: [
+          `megamono.json: ${database.adapter}`,
+          `playstack.json: ${String(target.adapter ?? 'missing')}`,
+        ],
+        recommendation:
+          'Choose one adapter explicitly and align both configuration files; Megamono will not translate between ORM formats.',
+      });
+    }
+
+    if (typeof target.target !== 'string' || target.target.length === 0) {
+      findings.push({
+        check: 'spec-drift',
+        fingerprint: `database:invalid-playstack-target:${name}`,
+        state: 'constrained',
+        confidence: 'complete',
+        summary: `Database ${name} has no usable Playstack artifact destination.`,
+        evidence: ['playstack.json'],
+        recommendation:
+          'Set a workspace-relative artifact target inside the selected Nx project.',
+      });
+      continue;
+    }
+
+    const projectRoot = resolve(workspaceRoot, project.data.root);
+    const artifactTarget = resolve(workspaceRoot, target.target);
+    const projectRelativeTarget = relative(projectRoot, artifactTarget);
+    const outsideProject =
+      isAbsolute(target.target) ||
+      projectRelativeTarget === '..' ||
+      projectRelativeTarget.startsWith(`..${sep}`) ||
+      isAbsolute(projectRelativeTarget);
+    if (outsideProject) {
+      findings.push({
+        check: 'spec-drift',
+        fingerprint: `database:target-outside-project:${name}`,
+        state: 'constrained',
+        confidence: 'complete',
+        summary: `Database ${name}'s Playstack artifact target is outside Nx project ${database.project}.`,
+        evidence: [
+          `project root: ${project.data.root}`,
+          `artifact target: ${target.target}`,
+        ],
+        recommendation:
+          'Move the target into the selected project or explicitly map the database to the project that owns it.',
+      });
+    }
+  }
+
+  return findings;
+}
+
 async function stalePlanFindings(
   documents: readonly RepositoryDocument[],
   staleDays: number,
@@ -1190,6 +1304,13 @@ export async function runRepositoryHealth(options: {
     shouldRun('dependency-alignment') || shouldRun('spec-drift')
       ? await cloudflareHealthFindings(options.workspaceRoot, options.graph)
       : { dependencyAlignment: [], specDrift: [] };
+  const databaseDrift = shouldRun('spec-drift')
+    ? await databaseTargetFindings(
+        options.workspaceRoot,
+        options.graph,
+        options.config,
+      )
+    : [];
   const findings = (
     await Promise.all([
       shouldRun('dependency-alignment')
@@ -1210,6 +1331,7 @@ export async function runRepositoryHealth(options: {
               options.config,
             ),
             ...cloudflare.specDrift,
+            ...databaseDrift,
           ]
         : [],
       shouldRun('stale-plans')

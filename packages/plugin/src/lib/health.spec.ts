@@ -865,4 +865,83 @@ describe('repository health', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('reports named database ownership and adapter drift', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-health-database-'));
+    try {
+      await mkdir(join(root, 'packages/database-primary'), { recursive: true });
+      await writeFile(
+        join(root, 'playstack.json'),
+        JSON.stringify({
+          databases: {
+            primary: {
+              adapter: 'drizzle',
+              target: 'packages/shared/schema',
+            },
+          },
+        }),
+      );
+      const graph: ProjectGraph = {
+        nodes: {
+          'database-primary': {
+            name: 'database-primary',
+            type: 'lib',
+            data: { root: 'packages/database-primary' },
+          },
+        },
+        dependencies: { 'database-primary': [] },
+      };
+      const config: MegamonoConfig = {
+        ...DEFAULT_MEGAMONO_CONFIG,
+        databases: {
+          primary: { adapter: 'prisma', project: 'database-primary' },
+          events: { adapter: 'drizzle', project: 'database-events' },
+        },
+      };
+
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph,
+        config,
+        documents: [],
+        checks: ['spec-drift'],
+      });
+      expect(report.findings.map(({ fingerprint }) => fingerprint)).toEqual(
+        expect.arrayContaining([
+          'database:adapter-disagreement:primary',
+          'database:target-outside-project:primary',
+          'database:missing-project:events:database-events',
+        ]),
+      );
+
+      await writeFile(
+        join(root, 'playstack.json'),
+        JSON.stringify({
+          databases: {
+            primary: {
+              adapter: 'prisma',
+              target: 'packages/database-primary/prisma/models',
+            },
+          },
+        }),
+      );
+      const aligned = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph,
+        config: {
+          ...config,
+          databases: { primary: config.databases.primary },
+        },
+        documents: [],
+        checks: ['spec-drift'],
+      });
+      expect(
+        aligned.findings.filter(({ fingerprint }) =>
+          fingerprint.startsWith('database:'),
+        ),
+      ).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
