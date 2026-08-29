@@ -1,0 +1,86 @@
+name: Nx compatibility
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nx-compatibility.yml'
+      - 'package-lock.json'
+      - 'packages/plugin/**'
+      - 'packages/nx-apple/**'
+      - 'packages/nx-cargo/**'
+      - 'packages/nx-cloudflare/**'
+  pull_request:
+    paths:
+      - '.github/workflows/nx-compatibility.yml'
+      - 'package-lock.json'
+      - 'packages/plugin/**'
+      - 'packages/nx-apple/**'
+      - 'packages/nx-cargo/**'
+      - 'packages/nx-cloudflare/**'
+  merge_group:
+  schedule:
+    - cron: '43 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stable:
+    name: Nx ${{ matrix.nx }} / TypeScript ${{ matrix.typescript }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nx: 17.1.2
+            typescript: 5.2.2
+            node: 20
+          - nx: 18.3.5
+            typescript: 5.4.5
+            node: 20
+          - nx: 19.8.14
+            typescript: 5.5.4
+            node: 20
+          - nx: 20.0.1
+            typescript: 5.6.2
+            node: 20
+          - nx: 21.6.11
+            typescript: 5.9.3
+            node: 22
+          - nx: 22.2.3
+            typescript: 5.9.3
+            node: 22
+          - nx: 23.1.1
+            typescript: 6.0.3
+            node: 24
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm exec nx -- run @megamono/plugin:e2e-nx-compatibility --output-style=static
+        env:
+          MEGAMONO_NX_VERSION: ${{ matrix.nx }}
+          MEGAMONO_TYPESCRIPT_VERSION: ${{ matrix.typescript }}
+
+  future:
+    name: Nx next canary
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm exec nx -- run @megamono/plugin:e2e-nx-compatibility --output-style=static
+        env:
+          MEGAMONO_NX_VERSION: next
+          MEGAMONO_TYPESCRIPT_VERSION: next
+          MEGAMONO_FUTURE_NX: 'true'

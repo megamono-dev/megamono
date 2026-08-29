@@ -69,7 +69,8 @@ export function nxWorkspaceCapabilities(tree: Tree): NxWorkspaceCapabilities {
   return {
     version,
     major,
-    targetParallelism: major >= 20,
+    targetParallelism:
+      major > 19 || (major === 19 && (parsed?.minor ?? 0) >= 5),
     continuousTargets: major >= 21,
   };
 }

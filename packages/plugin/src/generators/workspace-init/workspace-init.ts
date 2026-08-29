@@ -583,9 +583,12 @@ function renderPackageManagerSetup(
           version: ${toolchain.pnpm}
 `
       : '';
+  const nodeVersion = /^\d+\.\d+\.\d+$/.test(toolchain.node)
+    ? toolchain.node
+    : `'${toolchain.node.replaceAll("'", "''")}'`;
   return `${pnpmSetup}      - uses: actions/setup-node@v5
         with:
-          node-version: '${toolchain.node.replaceAll("'", "''")}'
+          node-version: ${nodeVersion}
           cache: ${packageManager}`;
 }
 

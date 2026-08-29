@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { DependencyType, type ProjectConfiguration } from '@nx/devkit';
 import {
   collectAppleManifests,
+  createNodes,
   dependenciesFromAppleManifests,
   parsePbxLocalPackagePaths,
   parseWorkspaceProjectPaths,
@@ -11,6 +12,32 @@ import {
   type AppleManifestRecord,
   type SwiftPackageDumpRunner,
 } from './apple';
+
+describe('Apple createNodes compatibility', () => {
+  it('adapts the Nx 18/19 single-file createNodes contract', async () => {
+    const workspaceRoot = await mkdtemp(resolve(tmpdir(), 'nx-apple-v1-node-'));
+    const singleFileCallback = createNodes[1] as unknown as (
+      configFile: string,
+      options: Record<string, never>,
+      context: { workspaceRoot: string },
+    ) => Promise<{ projects: Record<string, ProjectConfiguration> }>;
+
+    const result = await singleFileCallback(
+      'missing/Package.swift',
+      {},
+      {
+        workspaceRoot,
+      },
+    );
+
+    expect(Array.isArray(result)).toBe(false);
+    expect(result.projects.missing).toMatchObject({
+      name: 'missing',
+      root: 'missing',
+      projectType: 'library',
+    });
+  });
+});
 
 describe('Apple manifest parsers', () => {
   it('parses quoted and unquoted local Swift package references', () => {

@@ -2,6 +2,7 @@ export {
   collectAppleManifests,
   createDependencies,
   createNodes,
+  createNodesV2,
   dependenciesFromAppleManifests,
   getAppleDiagnostics,
   parsePbxLocalPackagePaths,

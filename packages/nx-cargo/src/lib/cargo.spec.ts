@@ -4,12 +4,35 @@ import { resolve } from 'node:path';
 import { DependencyType, type ProjectConfiguration } from '@nx/devkit';
 import {
   collectCargoMetadata,
+  createNodes,
   dependenciesFromCargoMetadata,
   projectsFromCargoMetadata,
   type CargoMetadata,
   type CargoMetadataPackage,
   type CargoMetadataRecord,
 } from './cargo';
+
+describe('Cargo createNodes compatibility', () => {
+  it('adapts the Nx 18/19 single-file createNodes contract', async () => {
+    const workspaceRoot = await mkdtemp(resolve(tmpdir(), 'nx-cargo-v1-node-'));
+    const singleFileCallback = createNodes[1] as unknown as (
+      configFile: string,
+      options: Record<string, never>,
+      context: { workspaceRoot: string },
+    ) => Promise<{ projects: Record<string, ProjectConfiguration> }>;
+
+    const result = await singleFileCallback(
+      'missing/Cargo.toml',
+      {},
+      {
+        workspaceRoot,
+      },
+    );
+
+    expect(Array.isArray(result)).toBe(false);
+    expect(result.projects).toEqual({});
+  });
+});
 
 function cargoPackage(
   root: string,

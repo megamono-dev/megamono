@@ -641,9 +641,15 @@ export function dependenciesFromAppleManifests(
 
 export const createNodes: CreateNodes<ApplePluginOptions> = [
   '**/{Package.swift,*.xcodeproj/project.pbxproj,*.xcworkspace/contents.xcworkspacedata}',
-  async (configFiles, options = {}, context) => {
+  async (
+    configFiles: readonly string[] | string,
+    options: ApplePluginOptions = {},
+    context: { readonly workspaceRoot: string },
+  ) => {
+    const singleFileContract = typeof configFiles === 'string';
+    const normalizedFiles = singleFileContract ? [configFiles] : configFiles;
     const collected = await collectAppleManifests(
-      configFiles,
+      normalizedFiles,
       context.workspaceRoot,
     );
     diagnostics = [...collected.diagnostics];
@@ -663,13 +669,26 @@ export const createNodes: CreateNodes<ApplePluginOptions> = [
       workspaceRoot: context.workspaceRoot,
       records: collected.records,
     };
-    return projectsFromAppleManifests(
+    const results = projectsFromAppleManifests(
       collected.records,
       context.workspaceRoot,
       options,
     );
+    return singleFileContract
+      ? {
+          projects: Object.assign(
+            {},
+            ...results.map(([, result]) => result.projects),
+          ),
+        }
+      : results;
   },
-];
+] as unknown as CreateNodes<ApplePluginOptions>;
+
+// Nx 19 prefers this transitional export and Nx 21 requires it. Nx 18 and
+// Nx 22+ continue to load createNodes, so both names intentionally share one
+// implementation until the Nx 18/19 compatibility window closes.
+export const createNodesV2 = createNodes;
 
 export const createDependencies: CreateDependencies<
   ApplePluginOptions

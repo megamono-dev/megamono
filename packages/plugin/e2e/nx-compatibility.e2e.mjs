@@ -1,0 +1,285 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const workspaceRoot = resolve(
+  fileURLToPath(new URL('../../..', import.meta.url)),
+);
+const nxVersion = process.env.MEGAMONO_NX_VERSION ?? '23.1.1';
+const typescriptVersion = process.env.MEGAMONO_TYPESCRIPT_VERSION ?? '6.0.3';
+const future = process.env.MEGAMONO_FUTURE_NX === 'true';
+const nxMatch = nxVersion.match(/(\d+)\.(\d+)/);
+const nxMajor = Number(nxMatch?.[1] ?? 999);
+const nxMinor = Number(nxMatch?.[2] ?? 0);
+const supportsInferencePlugins = nxMajor >= 18;
+const supportsTargetParallelism =
+  nxMajor > 19 || (nxMajor === 19 && nxMinor >= 5);
+const temporaryRoot = mkdtempSync(join(tmpdir(), 'megamono-nx-compatibility-'));
+const fixtureRoot = join(temporaryRoot, 'fixture');
+mkdirSync(fixtureRoot, { recursive: true });
+const packageRoots = {
+  '@megamono/plugin': resolve(workspaceRoot, 'packages/plugin'),
+  ...(supportsInferencePlugins
+    ? {
+        '@megamono/nx-apple': resolve(workspaceRoot, 'packages/nx-apple'),
+        '@megamono/nx-cargo': resolve(workspaceRoot, 'packages/nx-cargo'),
+        '@megamono/nx-cloudflare': resolve(
+          workspaceRoot,
+          'packages/nx-cloudflare',
+        ),
+      }
+    : {}),
+};
+
+function run(command, args, cwd = fixtureRoot) {
+  return execFileSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      CI: 'true',
+      NX_DAEMON: 'false',
+      NX_INTERACTIVE: 'false',
+      npm_config_cache:
+        process.env.MEGAMONO_NPM_CACHE ?? join(temporaryRoot, 'npm-cache'),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+function writeJson(path, value) {
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function removeTemporaryRoot() {
+  const fixturePrefix = join(tmpdir(), 'megamono-nx-compatibility-');
+  if (!temporaryRoot.startsWith(fixturePrefix)) {
+    throw new Error(
+      `Refusing to remove unexpected fixture path ${temporaryRoot}.`,
+    );
+  }
+  execFileSync('rm', ['-rf', '--', temporaryRoot]);
+}
+
+try {
+  const packedPackages = Object.fromEntries(
+    Object.entries(packageRoots).map(([name, packageRoot]) => {
+      const packed = run(
+        'npm',
+        ['pack', packageRoot, '--pack-destination', fixtureRoot, '--json'],
+        workspaceRoot,
+      );
+      const packageFilename = JSON.parse(packed)[0]?.filename;
+      assert(packageFilename, `npm pack did not report the ${name} archive.`);
+      return [name, `file:./${basename(packageFilename)}`];
+    }),
+  );
+
+  const npmVersion = run('npm', ['--version']).trim();
+  writeJson(join(fixtureRoot, 'package.json'), {
+    name: `megamono-nx-${nxVersion.replaceAll(/[^a-zA-Z0-9]+/g, '-')}`,
+    version: '0.0.0',
+    private: true,
+    packageManager: `npm@${npmVersion}`,
+    engines: { node: process.versions.node },
+    devDependencies: {
+      ...packedPackages,
+      '@nx/devkit': nxVersion,
+      nx: nxVersion,
+      typescript: typescriptVersion,
+    },
+  });
+  writeJson(
+    join(fixtureRoot, 'nx.json'),
+    supportsInferencePlugins
+      ? {
+          plugins: [
+            '@megamono/nx-apple',
+            '@megamono/nx-cargo',
+            '@megamono/nx-cloudflare',
+          ],
+        }
+      : {},
+  );
+  mkdirSync(join(fixtureRoot, 'apps/demo/src'), { recursive: true });
+  writeJson(join(fixtureRoot, 'apps/demo/project.json'), {
+    name: 'demo',
+    root: 'apps/demo',
+    sourceRoot: 'apps/demo/src',
+    projectType: 'application',
+    targets: {},
+  });
+  writeFileSync(join(fixtureRoot, 'apps/demo/src/index.ts'), 'export {};\n');
+  writeJson(join(fixtureRoot, 'tsconfig.base.json'), {
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'Node16',
+      moduleResolution: 'Node16',
+      strict: true,
+      skipLibCheck: true,
+    },
+  });
+
+  run('npm', [
+    'install',
+    '--no-audit',
+    '--no-fund',
+    ...(future ? ['--force'] : []),
+  ]);
+  run('npm', [
+    'exec',
+    'nx',
+    '--',
+    'generate',
+    '@megamono/plugin:workspace-init',
+    '--only=ci,lint,health,agents,skills',
+    '--defaultPlatform=node',
+    '--packageManager=npm',
+    '--interactive=false',
+    '--yes',
+    '--bootstrap',
+  ]);
+
+  const project = JSON.parse(
+    run('npm', ['exec', 'nx', '--', 'show', 'project', 'megamono', '--json']),
+  );
+  if (!supportsTargetParallelism) {
+    assert(
+      !Object.hasOwn(project.targets.import, 'parallelism'),
+      `Nx ${nxVersion} received unsupported target parallelism metadata.`,
+    );
+  } else {
+    assert(
+      project.targets.import.parallelism === false,
+      `Nx ${nxVersion} did not retain serialized import execution.`,
+    );
+  }
+  const projects = run('npm', ['exec', 'nx', '--', 'show', 'projects']);
+  assert(
+    projects.includes('demo'),
+    'The fixture application is missing from the Nx project graph.',
+  );
+  run('npm', ['exec', 'nx', '--', 'run', 'megamono:check']);
+
+  if (supportsInferencePlugins) {
+    mkdirSync(join(fixtureRoot, 'apps/worker/src'), { recursive: true });
+    writeJson(join(fixtureRoot, 'apps/worker/wrangler.json'), {
+      name: 'fixture-worker',
+      main: 'src/index.ts',
+      compatibility_date: '2026-08-23',
+    });
+    writeFileSync(
+      join(fixtureRoot, 'apps/worker/src/index.ts'),
+      'export default {};\n',
+    );
+    run('npm', ['exec', 'nx', '--', 'reset']);
+    const inferredProjects = run('npm', [
+      'exec',
+      'nx',
+      '--',
+      'show',
+      'projects',
+    ]);
+    assert(
+      inferredProjects.includes('worker'),
+      `The packed Cloudflare plugin did not infer the Worker project. Projects:\n${inferredProjects}`,
+    );
+    const worker = JSON.parse(
+      run('npm', ['exec', 'nx', '--', 'show', 'project', 'worker', '--json']),
+    );
+    if (nxMajor < 21) {
+      assert(
+        !Object.hasOwn(worker.targets.dev, 'continuous'),
+        `Nx ${nxVersion} received unsupported continuous target metadata.`,
+      );
+    } else {
+      assert(
+        worker.targets.dev.continuous === true,
+        `Nx ${nxVersion} did not retain continuous Worker targets.`,
+      );
+    }
+  }
+  const managedPaths = [
+    'megamono.json',
+    '.megamono/project.json',
+    '.megamono/artifacts.json',
+    '.github/workflows/megamono-ci.yml',
+    '.github/workflows/megamono-health.yml',
+    'eslint.config.mjs',
+  ];
+  const beforeRerun = Object.fromEntries(
+    managedPaths.map((path) => [
+      path,
+      readFileSync(join(fixtureRoot, path), 'utf8'),
+    ]),
+  );
+  run('npm', [
+    'exec',
+    'nx',
+    '--',
+    'generate',
+    '@megamono/plugin:workspace-init',
+    '--only=ci,lint,health,agents,skills',
+    '--defaultPlatform=node',
+    '--packageManager=npm',
+    '--interactive=false',
+    '--yes',
+    '--bootstrap',
+  ]);
+  for (const path of managedPaths) {
+    assert(
+      readFileSync(join(fixtureRoot, path), 'utf8') === beforeRerun[path],
+      `Nx ${nxVersion} changed ${path} during an idempotent rerun.`,
+    );
+  }
+
+  writeFileSync(
+    join(fixtureRoot, 'consumer.ts'),
+    "import type { WorkspaceInitSurvey } from '@megamono/plugin';\nconst survey: WorkspaceInitSurvey | undefined = undefined;\nvoid survey;\n",
+  );
+  run('npm', [
+    'exec',
+    'tsc',
+    '--',
+    '--noEmit',
+    '--skipLibCheck',
+    '--target',
+    'ES2022',
+    '--module',
+    'Node16',
+    '--moduleResolution',
+    'Node16',
+    'consumer.ts',
+  ]);
+
+  const workflow = readFileSync(
+    join(fixtureRoot, '.github/workflows/megamono-ci.yml'),
+    'utf8',
+  );
+  assert(
+    workflow.includes(`node-version: ${process.versions.node}`),
+    'Generated CI did not retain the fixture Node version.',
+  );
+  console.log(
+    `Verified packed ${supportsInferencePlugins ? 'Megamono plugins' : '@megamono/plugin'} with Nx ${nxVersion}, TypeScript ${typescriptVersion}, and Node ${process.versions.node}.`,
+  );
+} catch (error) {
+  const stdout = error?.stdout?.toString().trim();
+  const stderr = error?.stderr?.toString().trim();
+  if (stdout) console.error(stdout);
+  if (stderr) console.error(stderr);
+  throw error;
+} finally {
+  if (process.env.MEGAMONO_KEEP_FIXTURE === 'true') {
+    console.error(`Retained compatibility fixture at ${fixtureRoot}`);
+    process.exitCode = 1;
+  } else {
+    removeTemporaryRoot();
+  }
+}

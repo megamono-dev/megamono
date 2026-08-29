@@ -18,6 +18,7 @@ export type {
 export {
   createDependencies,
   createNodes,
+  createNodesV2,
   dependenciesFromWranglerConfigs,
   getCloudflareDiagnostics,
   getLastCloudflareRecords,

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { DependencyType, type ProjectConfiguration } from '@nx/devkit';
 import {
+  createNodes,
   dependenciesFromWranglerConfigs,
   projectsFromWranglerConfigs,
   type CloudflareProjectMetadata,
@@ -37,6 +38,31 @@ function projectFrom(
 }
 
 describe('projectsFromWranglerConfigs', () => {
+  it('adapts the Nx 18/19 single-file createNodes contract', async () => {
+    const workspaceRoot = await mkdtemp(
+      resolve(tmpdir(), 'nx-cloudflare-v1-node-'),
+    );
+    await mkdir(resolve(workspaceRoot, 'apps/worker'), { recursive: true });
+    await writeFile(
+      resolve(workspaceRoot, 'apps/worker/wrangler.json'),
+      JSON.stringify({ name: 'worker', main: 'src/index.ts' }),
+    );
+    const singleFileCallback = createNodes[1] as unknown as (
+      configFile: string,
+      options: Record<string, never>,
+      context: { workspaceRoot: string },
+    ) => Promise<{ projects: Record<string, ProjectConfiguration> }>;
+
+    const result = await singleFileCallback(
+      'apps/worker/wrangler.json',
+      {},
+      { workspaceRoot },
+    );
+
+    expect(Array.isArray(result)).toBe(false);
+    expect(result.projects['apps/worker']?.name).toBe('worker');
+  });
+
   it('uses repository identity while preserving Worker binding identity', async () => {
     const workspaceRoot = await mkdtemp(
       resolve(tmpdir(), 'nx-cloudflare-node-'),

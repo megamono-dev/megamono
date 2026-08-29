@@ -2,6 +2,7 @@ export {
   collectCargoMetadata,
   createDependencies,
   createNodes,
+  createNodesV2,
   dependenciesFromCargoMetadata,
   getCargoDiagnostics,
   projectsFromCargoMetadata,

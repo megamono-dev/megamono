@@ -621,9 +621,15 @@ export function projectsFromWranglerConfigs(
 
 export const createNodes: CreateNodes<CloudflarePluginOptions> = [
   '**/{wrangler.jsonc,wrangler.json,wrangler.toml}',
-  async (configFiles, options = {}, context) => {
+  async (
+    configFiles: readonly string[] | string,
+    options: CloudflarePluginOptions = {},
+    context: { readonly workspaceRoot: string },
+  ) => {
+    const singleFileContract = typeof configFiles === 'string';
+    const normalizedFiles = singleFileContract ? [configFiles] : configFiles;
     const records = await collectWranglerConfigs(
-      configFiles,
+      normalizedFiles,
       context.workspaceRoot,
       options,
     );
@@ -654,9 +660,21 @@ export const createNodes: CreateNodes<CloudflarePluginOptions> = [
         return preflight?.diagnostics ?? [];
       }),
     );
-    return results;
+    return singleFileContract
+      ? {
+          projects: Object.assign(
+            {},
+            ...results.map(([, result]) => result.projects),
+          ),
+        }
+      : results;
   },
-];
+] as unknown as CreateNodes<CloudflarePluginOptions>;
+
+// Nx 19 prefers this transitional export and Nx 21 requires it. Nx 18 and
+// Nx 22+ continue to load createNodes, so both names intentionally share one
+// implementation until the Nx 18/19 compatibility window closes.
+export const createNodesV2 = createNodes;
 
 function projectForRecord(
   record: WranglerConfigRecord,
