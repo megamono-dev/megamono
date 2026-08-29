@@ -368,6 +368,13 @@ describe('createPlan', () => {
     expect(rendered).toContain('jest-environment-node@30.3.0');
     expect(rendered).toContain('jest-util@30.3.0');
     expect(rendered).toContain('ts-jest@29.4.7');
+    expect(rendered).toContain('@nx/nest:library');
+    expect(rendered).toContain('--name=nest-home');
+    expect(rendered).toContain('--directory=packages/nest-home');
+    expect(rendered).toContain('--importPath=@acme-tools/nest-home');
+    expect(rendered).toContain(
+      '--tags=platform:node,scope:acme-tools,type:feature',
+    );
     expect(rendered).toContain('ts-node@10.9.1');
     expect(rendered).toContain('--linter=eslint');
     expect(rendered).toContain('--unitTestRunner=none');
@@ -722,7 +729,8 @@ describe('executePlan', () => {
       'npm install',
     ]);
     expect(invocations[4]).toContain('@nx/nest:application');
-    expect(invocations[5]).toContain('@megamono/plugin:workspace-init');
+    expect(invocations[5]).toContain('@nx/nest:library');
+    expect(invocations[6]).toContain('@megamono/plugin:workspace-init');
     expect(
       JSON.parse(
         await readFile(
@@ -760,6 +768,36 @@ describe('executePlan', () => {
         'utf8',
       ),
     ).toContain('process.env.PORT || 43016');
+    expect(
+      await readFile(
+        resolve(plan.options.destination, 'apps/api/src/app/app.module.ts'),
+        'utf8',
+      ),
+    ).toContain("from '@acme-tools/nest-home'");
+    expect(
+      JSON.parse(
+        await readFile(
+          resolve(plan.options.destination, 'packages/nest-home/package.json'),
+          'utf8',
+        ),
+      ),
+    ).toMatchObject({
+      name: '@acme-tools/nest-home',
+      private: true,
+      nx: {
+        projectType: 'library',
+        tags: ['platform:node', 'scope:acme-tools', 'type:feature'],
+      },
+    });
+    expect(
+      await readFile(
+        resolve(
+          plan.options.destination,
+          'packages/nest-home/src/lib/nest-home.controller.ts',
+        ),
+        'utf8',
+      ),
+    ).toContain('@Controller()');
     for (const supportFile of [
       'test-setup.ts',
       'global-setup.ts',

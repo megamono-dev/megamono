@@ -636,7 +636,28 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         'staging',
       ),
     );
-    if (app === 'api') steps.push({ kind: 'configure', id: 'configure-api' });
+    if (app === 'api') {
+      steps.push(
+        commandStep(
+          'generate-api-feature',
+          options.packageManager,
+          nxArgs(options.packageManager, [
+            'generate',
+            '@nx/nest:library',
+            '--name=nest-home',
+            '--directory=packages/nest-home',
+            `--importPath=@${options.scope}/nest-home`,
+            `--tags=platform:node,scope:${options.scope},type:feature`,
+            '--linter=eslint',
+            '--unitTestRunner=jest',
+            '--interactive=false',
+            '--skipFormat',
+          ]),
+          'staging',
+        ),
+      );
+      steps.push({ kind: 'configure', id: 'configure-api' });
+    }
     if (app === 'mobile')
       steps.push({ kind: 'configure', id: 'configure-mobile' });
     if (app === 'site') steps.push({ kind: 'configure', id: 'configure-site' });
@@ -1225,6 +1246,13 @@ async function configurePackageApplication(
   packageJson.name = `@${plan.options.scope}/${app}`;
   packageJson.nx ??= {};
   packageJson.nx.projectType = 'application';
+  if (app === 'api') {
+    packageJson.dependencies = {
+      ...packageJson.dependencies,
+      [`@${plan.options.scope}/nest-home`]:
+        plan.options.packageManager === 'pnpm' ? 'workspace:*' : '*',
+    };
+  }
   if (app === 'site' || app === 'web') {
     packageJson.dependencies = {
       ...packageJson.dependencies,
@@ -1303,7 +1331,110 @@ export default function App({ Component, pageProps }: AppProps) {
     );
   }
   if (app === 'api' || app === 'site' || app === 'web') {
+    if (app === 'api') await configureApiFeature(plan);
     await configureE2ePackage(plan, app);
+  }
+}
+
+async function configureApiFeature(plan: CreationPlan): Promise<void> {
+  const workspaceRoot = plan.options.stagingDirectory;
+  const featureRoot = resolve(workspaceRoot, 'packages/nest-home');
+  const featureSource = resolve(featureRoot, 'src/lib');
+  await mkdir(featureSource, { recursive: true });
+  const featurePackagePath = resolve(featureRoot, 'package.json');
+  const featurePackage = (await pathExists(featurePackagePath))
+    ? (JSON.parse(await readFile(featurePackagePath, 'utf8')) as Record<
+        string,
+        unknown
+      >)
+    : {};
+  const featureNx =
+    typeof featurePackage.nx === 'object' && featurePackage.nx !== null
+      ? (featurePackage.nx as Record<string, unknown>)
+      : {};
+  featurePackage.name = `@${plan.options.scope}/nest-home`;
+  featurePackage.private = true;
+  featurePackage.nx = {
+    ...featureNx,
+    projectType: 'library',
+    tags: ['platform:node', `scope:${plan.options.scope}`, 'type:feature'],
+  };
+  await writeFile(
+    featurePackagePath,
+    `${JSON.stringify(featurePackage, null, 2)}\n`,
+    'utf8',
+  );
+  await writeFile(
+    resolve(featureSource, 'nest-home.service.ts'),
+    `import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class NestHomeService {
+  getData() {
+    return { message: 'Hello API' };
+  }
+}
+`,
+    'utf8',
+  );
+  await writeFile(
+    resolve(featureSource, 'nest-home.controller.ts'),
+    `import { Controller, Get } from '@nestjs/common';
+import { NestHomeService } from './nest-home.service';
+
+@Controller()
+export class NestHomeController {
+  constructor(private readonly service: NestHomeService) {}
+
+  @Get()
+  getData() {
+    return this.service.getData();
+  }
+}
+`,
+    'utf8',
+  );
+  await writeFile(
+    resolve(featureSource, 'nest-home.module.ts'),
+    `import { Module } from '@nestjs/common';
+import { NestHomeController } from './nest-home.controller';
+import { NestHomeService } from './nest-home.service';
+
+@Module({
+  controllers: [NestHomeController],
+  providers: [NestHomeService],
+})
+export class NestHomeModule {}
+`,
+    'utf8',
+  );
+  await writeFile(
+    resolve(featureRoot, 'src/index.ts'),
+    `export * from './lib/nest-home.module';
+export * from './lib/nest-home.controller';
+export * from './lib/nest-home.service';
+`,
+    'utf8',
+  );
+  const appRoot = resolve(workspaceRoot, 'apps/api/src/app');
+  await mkdir(appRoot, { recursive: true });
+  await writeFile(
+    resolve(appRoot, 'app.module.ts'),
+    `import { NestHomeModule } from '@${plan.options.scope}/nest-home';
+import { Module } from '@nestjs/common';
+
+@Module({ imports: [NestHomeModule] })
+export class AppModule {}
+`,
+    'utf8',
+  );
+  for (const path of [
+    'app.controller.spec.ts',
+    'app.controller.ts',
+    'app.service.spec.ts',
+    'app.service.ts',
+  ]) {
+    await rm(resolve(appRoot, path), { force: true });
   }
 }
 
