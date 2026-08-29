@@ -29,6 +29,7 @@ jobs:
       - run: npm ci
       - run: npm run release:check-private
       - uses: nrwl/nx-set-shas@v5
+      - run: npm exec nx -- run megamono:check --output-style=static
       - id: affected
         shell: bash
         run: |

@@ -695,6 +695,7 @@ ${hasLinux ? `      linux: ${gh('steps.affected.outputs.linux')}\n` : ''}${hasAp
 ${packageManagerSetup}
       - run: ${install}
       - uses: nrwl/nx-set-shas@v5
+      - run: ${nx} run megamono:check --output-style=static
       - id: affected
         shell: bash
         run: |

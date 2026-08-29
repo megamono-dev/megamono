@@ -62,6 +62,7 @@ describe('workspace-init generator', () => {
     expect(ci).toContain('actions/checkout@v7');
     expect(ci).toContain('fetch-depth: 0');
     expect(ci).toContain('nrwl/nx-set-shas@v5');
+    expect(ci).toContain('npm exec nx -- run megamono:check');
     expect(ci).toContain('merge_group:');
     expect(ci).toContain('npm exec nx -- affected -t lint test build');
     expect(ci).not.toContain('contents: write');
@@ -158,6 +159,9 @@ describe('workspace-init generator', () => {
       expect(workflow).not.toContain('npm ci');
       expect(workflow).not.toContain('- run: npm exec');
     }
+    expect(
+      tree.read('.github/workflows/megamono-ci.yml', 'utf8'),
+    ).toContain('pnpm exec nx run megamono:check');
   });
 
   it('adapts target metadata and CI toolchains for a legacy Nx workspace', async () => {
