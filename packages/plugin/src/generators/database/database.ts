@@ -51,6 +51,36 @@ interface NormalizedDatabaseOptions {
   readonly bootstrap: boolean;
 }
 
+const projectTypeTags = new Set([
+  'type:app',
+  'type:feature',
+  'type:ui',
+  'type:data',
+  'type:util',
+]);
+
+function databaseTags(
+  options: NormalizedDatabaseOptions,
+  existing: readonly string[] = [],
+): string[] {
+  return [
+    ...existing.filter(
+      (tag) =>
+        !projectTypeTags.has(tag) &&
+        !tag.startsWith('platform:') &&
+        !tag.startsWith('scope:') &&
+        !tag.startsWith('visibility:') &&
+        !tag.startsWith('database:'),
+    ),
+    'platform:node',
+    `scope:${options.scope}`,
+    'type:data',
+    `database:${options.adapter}`,
+  ]
+    .filter((tag, index, tags) => tags.indexOf(tag) === index)
+    .sort();
+}
+
 export class DatabaseGeneratorError extends Error {
   readonly diagnosticCode: string;
 
@@ -226,7 +256,8 @@ function projectMatches(
     project.projectType === 'library' &&
     tags.has('platform:node') &&
     tags.has(`scope:${options.scope}`) &&
-    tags.has('type:database')
+    tags.has('type:data') &&
+    tags.has(`database:${options.adapter}`)
   );
 }
 
@@ -366,12 +397,7 @@ function ensureWorkspacePackagePath(
 function projectConfiguration(
   options: NormalizedDatabaseOptions,
 ): ProjectConfiguration {
-  const tags = [
-    'platform:node',
-    `scope:${options.scope}`,
-    'type:database',
-    'visibility:internal',
-  ];
+  const tags = databaseTags(options);
   if (options.adapter === 'prisma') {
     return {
       root: options.directory,
@@ -571,15 +597,7 @@ export async function databaseGenerator(
     }
     updateProjectConfiguration(tree, options.project, {
       ...project,
-      tags: [
-        ...new Set([
-          ...(project.tags ?? []),
-          'platform:node',
-          `scope:${options.scope}`,
-          'type:database',
-          'visibility:internal',
-        ]),
-      ].sort(),
+      tags: databaseTags(options, project.tags),
     });
     writeConfigurations(tree, options);
     await formatFiles(tree);

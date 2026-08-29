@@ -231,6 +231,7 @@ That generator refuses a workspace already carrying `megamono.json` unless it is
 ## Acceptance criteria
 
 - Every app selection alone and the all-app combination passes `--verify=config` in a fresh fixture.
+- A Prisma selection in an npm fixture and a Drizzle selection in a pnpm fixture pass adapter-native validation and database-target health alignment.
 - Non-interactive creation with complete flags never reads stdin; missing required flags exits `4` before creating the destination.
 - Dry-run and execution produce the same ordered plan.
 - `--service-runner=springbar` places an `inspect_candidates` → `setup_workspace` handoff after the atomic commit; `runner=none` never contacts Springbar.

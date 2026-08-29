@@ -150,6 +150,57 @@ async function applicationContract(root, environment) {
   };
 }
 
+async function databaseContract(root, environment) {
+  const project = JSON.parse(
+    (
+      await run(
+        'npm',
+        [
+          'exec',
+          'nx',
+          '--',
+          'show',
+          'project',
+          'fixture-database-events',
+          '--json',
+        ],
+        { cwd: root, env: environment },
+      )
+    ).stdout,
+  );
+  const manifest = JSON.parse(
+    await readFile(
+      resolve(root, 'packages/database-events/package.json'),
+      'utf8',
+    ),
+  );
+  const megamono = JSON.parse(
+    await readFile(resolve(root, 'megamono.json'), 'utf8'),
+  );
+  const playstack = JSON.parse(
+    await readFile(resolve(root, 'playstack.json'), 'utf8'),
+  );
+  return {
+    project: {
+      root: project.root,
+      projectType: project.projectType,
+      tags: [...project.tags].sort(),
+      targets: project.targets,
+    },
+    manifest,
+    megamono: megamono.databases.events,
+    playstack: playstack.databases.events,
+    drizzleConfig: await readFile(
+      resolve(root, 'packages/database-events/drizzle.config.ts'),
+      'utf8',
+    ),
+    schema: await readFile(
+      resolve(root, 'packages/database-events/src/schema/index.ts'),
+      'utf8',
+    ),
+  };
+}
+
 const temporaryRoot = await mkdtemp(
   join(tmpdir(), 'megamono-add-equivalence-e2e-'),
 );
@@ -253,6 +304,8 @@ try {
       '--directory=created',
       '--apps=web',
       '--package-manager=npm',
+      '--database-adapter=drizzle',
+      '--database-name=events',
       '--interactive=false',
       '--verify=config',
     ],
@@ -394,12 +447,82 @@ try {
     ],
     { cwd: adoptedRoot, env: environment },
   );
+  const beforeDatabasePreview = (
+    await run('git', ['status', '--porcelain'], {
+      cwd: adoptedRoot,
+      env: environment,
+    })
+  ).stdout;
+  await run(
+    process.execPath,
+    [
+      megamonoCli,
+      'add',
+      'database',
+      'events',
+      '--adapter=drizzle',
+      '--scope=fixture',
+      '--dry-run',
+    ],
+    { cwd: adoptedRoot, env: environment },
+  );
+  const afterDatabasePreview = (
+    await run('git', ['status', '--porcelain'], {
+      cwd: adoptedRoot,
+      env: environment,
+    })
+  ).stdout;
+  assert(
+    beforeDatabasePreview === afterDatabasePreview,
+    'Packed database dry-run mutated the workspace.',
+  );
+  await run(
+    process.execPath,
+    [
+      megamonoCli,
+      'add',
+      'database',
+      'events',
+      '--adapter=drizzle',
+      '--scope=fixture',
+      '--interactive=false',
+      '--yes',
+    ],
+    { cwd: adoptedRoot, env: environment },
+  );
   const createdContract = await applicationContract(createdRoot, environment);
   const adoptedContract = await applicationContract(adoptedRoot, environment);
   assert(
     JSON.stringify(adoptedContract) === JSON.stringify(createdContract),
     'create-megamono and megamono add app web emitted different contracts.',
   );
+  const createdDatabaseContract = await databaseContract(
+    createdRoot,
+    environment,
+  );
+  const adoptedDatabaseContract = await databaseContract(
+    adoptedRoot,
+    environment,
+  );
+  assert(
+    JSON.stringify(adoptedDatabaseContract) ===
+      JSON.stringify(createdDatabaseContract),
+    'create-megamono and megamono add database emitted different contracts.',
+  );
+  for (const root of [createdRoot, adoptedRoot]) {
+    await run(
+      'npm',
+      [
+        'exec',
+        'nx',
+        '--',
+        'run',
+        'fixture-database-events:validate',
+        '--output-style=static',
+      ],
+      { cwd: root, env: environment },
+    );
+  }
 
   await run(
     process.execPath,
@@ -426,7 +549,7 @@ try {
 
   succeeded = true;
   process.stdout.write(
-    'Packed create/add equivalence passed: dry-run, shared web contract, and named-instance allocation.\n',
+    'Packed create/add equivalence passed: dry-run, shared app and database contracts, and named-instance allocation.\n',
   );
 } finally {
   verdaccio.kill('SIGTERM');

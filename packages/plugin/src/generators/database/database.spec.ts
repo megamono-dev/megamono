@@ -155,7 +155,10 @@ describe('database generator', () => {
       project: 'existing-db',
     });
     expect(readJson(tree, 'packages/existing-db/project.json').tags).toContain(
-      'type:database',
+      'type:data',
+    );
+    expect(readJson(tree, 'packages/existing-db/project.json').tags).toContain(
+      'database:drizzle',
     );
     expect(tree.read('packages/existing-db/drizzle.config.ts', 'utf8')).toBe(
       "export default { schema: './src/schema' };\n",

@@ -33,9 +33,21 @@ const appPlatforms = {
 };
 const allApps = Object.keys(appRoots).sort();
 const matrixCases = [
-  ...allApps.map((app) => ({ id: app, apps: [app], packageManager: 'pnpm' })),
+  ...allApps.map((app) => ({
+    id: app,
+    apps: [app],
+    packageManager: 'pnpm',
+    ...(app === 'api'
+      ? { database: { adapter: 'drizzle', name: 'events' } }
+      : {}),
+  })),
   { id: 'all', apps: allApps, packageManager: 'pnpm' },
-  { id: 'web-npm', apps: ['web'], packageManager: 'npm' },
+  {
+    id: 'web-npm',
+    apps: ['web'],
+    packageManager: 'npm',
+    database: { adapter: 'prisma', name: 'primary' },
+  },
   {
     id: 'web-no-install',
     apps: ['web'],
@@ -138,6 +150,18 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function parseJsonRecord(output, label) {
+  for (const line of output.trim().split(/\r?\n/).reverse()) {
+    if (!line.trim().startsWith('{')) continue;
+    try {
+      return JSON.parse(line);
+    } catch {
+      // Continue past package-manager and sync output that resembles JSON.
+    }
+  }
+  throw new Error(`${label} did not emit a JSON record.\n${output}`);
+}
+
 function nxInvocation(packageManager, args) {
   return packageManager === 'pnpm'
     ? { command: 'pnpm', args: ['exec', 'nx', ...args] }
@@ -171,6 +195,12 @@ async function verifyCase(root, testCase, environment, createCliPath) {
       `--directory=${scope}`,
       `--apps=${testCase.apps.join(',')}`,
       `--package-manager=${packageManager}`,
+      ...(testCase.database
+        ? [
+            `--database-adapter=${testCase.database.adapter}`,
+            `--database-name=${testCase.database.name}`,
+          ]
+        : []),
       `--install=${String(testCase.install ?? true)}`,
       '--interactive=false',
       `--verify=${verifyMode}`,
@@ -214,6 +244,58 @@ async function verifyCase(root, testCase, environment, createCliPath) {
     JSON.stringify(megamono.platforms) === JSON.stringify(expectedPlatforms),
     `${testCase.id}: expected platforms ${expectedPlatforms.join(',')}, received ${JSON.stringify(megamono.platforms)}.`,
   );
+  if (testCase.database) {
+    const { adapter, name } = testCase.database;
+    const projectName = `${scope}-database-${name}`;
+    const expectedRoot = `packages/database-${name}`;
+    assert(
+      JSON.stringify(megamono.databases?.[name]) ===
+        JSON.stringify({ adapter, project: projectName }),
+      `${testCase.id}: Megamono database mapping is incorrect.`,
+    );
+    const playstack = JSON.parse(
+      await readFile(resolve(destination, 'playstack.json'), 'utf8'),
+    );
+    const expectedTarget =
+      adapter === 'prisma'
+        ? `${expectedRoot}/prisma/models`
+        : `${expectedRoot}/src/schema`;
+    assert(
+      JSON.stringify(playstack.databases?.[name]) ===
+        JSON.stringify({ adapter, target: expectedTarget, packages: {} }),
+      `${testCase.id}: Playstack database target is incorrect.`,
+    );
+    const showDatabase = nxInvocation(packageManager, [
+      'show',
+      'project',
+      projectName,
+      '--json',
+    ]);
+    const databaseProject = parseJsonRecord(
+      (
+        await run(showDatabase.command, showDatabase.args, {
+          cwd: destination,
+          env: caseEnvironment,
+        })
+      ).stdout,
+      `${testCase.id}: database project query`,
+    );
+    assert(
+      databaseProject.root === expectedRoot &&
+        databaseProject.tags.includes('type:data') &&
+        databaseProject.tags.includes(`database:${adapter}`),
+      `${testCase.id}: generated database project does not match its adapter contract.`,
+    );
+    const validateDatabase = nxInvocation(packageManager, [
+      'run',
+      `${projectName}:validate`,
+      '--output-style=static',
+    ]);
+    await run(validateDatabase.command, validateDatabase.args, {
+      cwd: destination,
+      env: caseEnvironment,
+    });
+  }
 
   const healthInvocation = nxInvocation(packageManager, [
     'run',
@@ -230,6 +312,12 @@ async function verifyCase(root, testCase, environment, createCliPath) {
   assert(
     health.schemaVersion === 1 && Array.isArray(health.findings),
     `${testCase.id}: packed health executor did not emit a valid report.`,
+  );
+  assert(
+    !health.findings.some(({ fingerprint }) =>
+      fingerprint.startsWith('database:'),
+    ),
+    `${testCase.id}: generated database configuration failed Megamono health.`,
   );
   const packageManifest = JSON.parse(
     await readFile(resolve(destination, 'package.json'), 'utf8'),
@@ -306,13 +394,14 @@ async function verifyCase(root, testCase, environment, createCliPath) {
       projectName,
       '--json',
     ]);
-    const project = JSON.parse(
+    const project = parseJsonRecord(
       (
         await run(showProject.command, showProject.args, {
           cwd: destination,
           env: caseEnvironment,
         })
       ).stdout,
+      `${testCase.id}: ${projectName} project query`,
     );
     assert(
       project.root === appRoots[app],
