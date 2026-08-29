@@ -1316,32 +1316,35 @@ export async function workspaceInitGenerator(
     );
   }
 
-  const inference = {
-    ...(workspaceSurvey.manifests.apple.length > 0
-      ? {
-          apple: {
-            plugin: '@megamono/nx-apple' as const,
-            manifests: workspaceSurvey.manifests.apple,
-          },
-        }
-      : {}),
-    ...(workspaceSurvey.manifests.cargo.length > 0
-      ? {
-          cargo: {
-            plugin: '@megamono/nx-cargo' as const,
-            manifests: workspaceSurvey.manifests.cargo,
-          },
-        }
-      : {}),
-    ...(workspaceSurvey.manifests.cloudflare.length > 0
-      ? {
-          cloudflare: {
-            plugin: '@megamono/nx-cloudflare' as const,
-            manifests: workspaceSurvey.manifests.cloudflare,
-          },
-        }
-      : {}),
-  };
+  const inferenceSupported = nxWorkspaceCapabilities(tree).major >= 18;
+  const inference = inferenceSupported
+    ? {
+        ...(workspaceSurvey.manifests.apple.length > 0
+          ? {
+              apple: {
+                plugin: '@megamono/nx-apple' as const,
+                manifests: workspaceSurvey.manifests.apple,
+              },
+            }
+          : {}),
+        ...(workspaceSurvey.manifests.cargo.length > 0
+          ? {
+              cargo: {
+                plugin: '@megamono/nx-cargo' as const,
+                manifests: workspaceSurvey.manifests.cargo,
+              },
+            }
+          : {}),
+        ...(workspaceSurvey.manifests.cloudflare.length > 0
+          ? {
+              cloudflare: {
+                plugin: '@megamono/nx-cloudflare' as const,
+                manifests: workspaceSurvey.manifests.cloudflare,
+              },
+            }
+          : {}),
+      }
+    : {};
   if (modules.has('inference') && Object.keys(inference).length > 0) {
     updateJson(tree, 'nx.json', (value) => {
       const plugins: unknown[] = Array.isArray(value.plugins)
@@ -1419,7 +1422,9 @@ export async function workspaceInitGenerator(
         return ratchet ? [ratchet] : [];
       }),
       inference: modules.has('inference')
-        ? inference
+        ? inferenceSupported
+          ? inference
+          : (existingConfig?.adoption.inference ?? {})
         : (existingConfig?.adoption.inference ?? {}),
     },
     services: {

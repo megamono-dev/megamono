@@ -873,6 +873,33 @@ export default [
     expect(JSON.stringify(readJson(tree, 'nx.json'))).not.toContain('go.mod');
   });
 
+  it('retains core adoption and records inference reductions on Nx 17', async () => {
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        packageManager: 'npm@9.8.1',
+        engines: { node: '>=18.18 <21' },
+        devDependencies: { nx: '17.1.2', typescript: '5.2.2' },
+      }),
+    );
+    tree.write('apps/apple/Package.swift', '// swift-tools-version: 5.9\n');
+    tree.write('crates/tool/Cargo.toml', '[package]\nname = "tool"\n');
+    tree.write('apps/worker/wrangler.jsonc', '{"name":"worker"}\n');
+
+    await workspaceInitGenerator(tree, { only: 'inference', yes: true });
+
+    expect(readJson(tree, 'nx.json').plugins ?? []).toEqual([]);
+    expect(readJson(tree, 'package.json').devDependencies).not.toHaveProperty(
+      '@megamono/nx-apple',
+    );
+    expect(readJson(tree, 'megamono.json').adoption.inference).toEqual({});
+    expect(readJson(tree, 'megamono.json').adoption.reductions).toEqual([
+      expect.objectContaining({ capability: 'apple-plugin' }),
+      expect.objectContaining({ capability: 'cargo-plugin' }),
+      expect.objectContaining({ capability: 'cloudflare-plugin' }),
+    ]);
+  });
+
   it('preserves an exact yalc-backed inference dependency', async () => {
     tree.write('apps/worker/wrangler.jsonc', '{"name":"worker"}\n');
     const packageJson = readJson(tree, 'package.json');

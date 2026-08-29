@@ -1,6 +1,7 @@
 import { getProjects, type ProjectConfiguration, type Tree } from '@nx/devkit';
 import { readArtifactRegistry } from './managed-artifacts';
 import { MANAGED_SKILL_NAMES } from './managed-skills';
+import { nxWorkspaceCapabilities } from './workspace-compatibility';
 
 export const WORKSPACE_INIT_MODULES = [
   'docs',
@@ -810,6 +811,7 @@ export function createWorkspaceInitPlan(
     }
   }
   if (modules.includes('inference')) {
+    const inferenceSupported = nxWorkspaceCapabilities(tree).major >= 18;
     for (const [platform, manifests] of [
       ['apple', survey.manifests.apple],
       ['cargo', survey.manifests.cargo],
@@ -818,13 +820,22 @@ export function createWorkspaceInitPlan(
       operation(
         operations,
         'inference',
-        manifests.length > 0 ? 'add' : 'skip',
+        manifests.length > 0 && inferenceSupported ? 'add' : 'skip',
         platform,
         manifests.length > 0
-          ? `Register the supported ${platform} inference plugin for ${manifests.join(', ')}.`
+          ? inferenceSupported
+            ? `Register the supported ${platform} inference plugin for ${manifests.join(', ')}.`
+            : `Nx 17 cannot load the async ${platform} inference plugin for ${manifests.join(', ')}; upgrade to Nx 18 or newer to enable it.`
           : `No ${platform} manifests were detected.`,
       );
-      if (manifests.length > 0) {
+      if (manifests.length > 0 && !inferenceSupported) {
+        reductions.push({
+          module: 'inference',
+          capability: `${platform}-plugin`,
+          reason: `Nx 17 uses a synchronous project-inference callback; @megamono/nx-${platform} requires Nx 18 or newer.`,
+        });
+      }
+      if (manifests.length > 0 && inferenceSupported) {
         const plugin =
           platform === 'apple'
             ? '@megamono/nx-apple'
