@@ -159,9 +159,88 @@ describe('workspace-init generator', () => {
       expect(workflow).not.toContain('npm ci');
       expect(workflow).not.toContain('- run: npm exec');
     }
-    expect(
-      tree.read('.github/workflows/megamono-ci.yml', 'utf8'),
-    ).toContain('pnpm exec nx run megamono:check');
+    expect(tree.read('.github/workflows/megamono-ci.yml', 'utf8')).toContain(
+      'pnpm exec nx run megamono:check',
+    );
+  });
+
+  it('configures package releases and publishes local packages from dist', async () => {
+    addProjectConfiguration(tree, 'fixture-kit', {
+      root: 'packages/fixture-kit',
+      projectType: 'library',
+      targets: {
+        build: {
+          executor: '@nx/js:tsc',
+          options: { outputPath: 'dist/packages/fixture-kit' },
+        },
+      },
+    });
+    tree.write(
+      'packages/fixture-kit/package.json',
+      JSON.stringify({ name: '@fixture/kit', version: '0.0.1' }),
+    );
+
+    await workspaceInitGenerator(tree, {
+      only: 'release',
+      packageManager: 'pnpm',
+      yes: true,
+    });
+
+    expect(readJson(tree, 'nx.json').release).toEqual({
+      groups: {
+        workspace: {
+          projects: ['fixture-kit'],
+          projectsRelationship: 'fixed',
+          releaseTag: { pattern: 'workspace@{version}' },
+        },
+      },
+    });
+    expect(readJson(tree, 'nx.json').namedInputs.sharedGlobals).toContain(
+      '{workspaceRoot}/.yalc/**/*',
+    );
+    expect(readJson(tree, 'package.json').scripts).toMatchObject({
+      'megamono:yalc-publish': 'node .megamono/publish-yalc.mjs',
+    });
+    const publisher = tree.read('.megamono/publish-yalc.mjs', 'utf8') ?? '';
+    expect(publisher).toContain('dist/packages/fixture-kit');
+    expect(publisher).toContain("await run(yalc, ['publish'], directory)");
+    expect(publisher.indexOf('"build"')).toBeLessThan(
+      publisher.indexOf("['publish']"),
+    );
+    const workflow =
+      tree.read('.github/workflows/megamono-release.yml', 'utf8') ?? '';
+    expect(workflow).toContain('release publish --tag next');
+    expect(workflow).toContain('pnpm exec nx run-many -t lint test build');
+    expect(tree.read('.gitignore', 'utf8')).toContain('.yalc/');
+    expect(tree.read('.gitignore', 'utf8')).toContain('yalc.lock');
+    expect(readJson(tree, '.megamono/artifacts.json').artifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'release.workflow',
+          mode: 'managed',
+        }),
+        expect.objectContaining({
+          id: 'release.yalc-publisher',
+          mode: 'managed',
+        }),
+      ]),
+    );
+  });
+
+  it('defers release artifacts when no publishable libraries exist', async () => {
+    await workspaceInitGenerator(tree, {
+      only: 'release',
+      packageManager: 'npm',
+      yes: true,
+    });
+
+    expect(tree.exists('.github/workflows/megamono-release.yml')).toBe(false);
+    expect(tree.exists('.megamono/publish-yalc.mjs')).toBe(false);
+    expect(readJson(tree, 'megamono.json').adoption.reductions).toContainEqual({
+      module: 'release',
+      capability: 'package-publishing',
+      reason: expect.stringContaining('No publishable library'),
+    });
   });
 
   it('adapts target metadata and CI toolchains for a legacy Nx workspace', async () => {

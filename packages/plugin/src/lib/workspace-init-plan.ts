@@ -7,6 +7,7 @@ export const WORKSPACE_INIT_MODULES = [
   'docs',
   'agents',
   'ci',
+  'release',
   'lint',
   'skills',
   'health',
@@ -312,6 +313,22 @@ function detectsAffectedCi(source: string): boolean {
     new RegExp(`\\b${target}\\b`).test(source),
   );
   return invokesAffected && establishesBase && checksLifecycleTargets;
+}
+
+function publishableWorkspaceProjects(tree: Tree): readonly string[] {
+  return [...getProjects(tree).entries()]
+    .flatMap(([name, project]) => {
+      const manifest = readJsonObject(
+        tree,
+        project.root === '.' ? 'package.json' : `${project.root}/package.json`,
+      );
+      return project.projectType === 'library' &&
+        typeof manifest.name === 'string' &&
+        manifest.private !== true
+        ? [name]
+        : [];
+    })
+    .sort(compare);
 }
 
 export function parseWorkspaceInitModules(
@@ -687,6 +704,69 @@ export function createWorkspaceInitPlan(
       conflicts.push(
         `${target} is occupied without Megamono ownership metadata.`,
       );
+    }
+  }
+  if (modules.includes('release')) {
+    const publishableProjects = publishableWorkspaceProjects(tree);
+    if (publishableProjects.length === 0) {
+      reductions.push({
+        module: 'release',
+        capability: 'package-publishing',
+        reason:
+          'No publishable library package manifests were detected; release artifacts will be deferred until one exists.',
+      });
+    } else {
+      const existingNx = readJsonObject(tree, 'nx.json');
+      operation(
+        operations,
+        'release',
+        existingNx.release === undefined ? 'modify' : 'retain',
+        'nx.json#release',
+        existingNx.release === undefined
+          ? `Configure a fixed workspace release group for: ${publishableProjects.join(', ')}.`
+          : 'Retain the repository-owned Nx Release configuration.',
+      );
+      operation(
+        operations,
+        'release',
+        'modify',
+        'nx.json#namedInputs.sharedGlobals',
+        'Invalidate Nx caches when yalc-linked package contents change.',
+      );
+      operation(
+        operations,
+        'release',
+        managedAction('release.yalc-publisher', '.megamono/publish-yalc.mjs'),
+        '.megamono/publish-yalc.mjs',
+        'Build publishable projects and publish their dist outputs to yalc.',
+      );
+      operation(
+        operations,
+        'release',
+        managedAction(
+          'release.workflow',
+          '.github/workflows/megamono-release.yml',
+        ),
+        '.github/workflows/megamono-release.yml',
+        'Add a manually dispatched next-tag prerelease workflow.',
+      );
+      operation(
+        operations,
+        'release',
+        'modify',
+        'package.json#scripts.megamono:yalc-publish',
+        'Expose the generated local-package publishing command.',
+      );
+      for (const [id, target] of [
+        ['release.yalc-publisher', '.megamono/publish-yalc.mjs'],
+        ['release.workflow', '.github/workflows/megamono-release.yml'],
+      ] as const) {
+        if (tree.exists(target) && !owned(id, target) && !ejected(id, target)) {
+          conflicts.push(
+            `${target} is occupied without Megamono ownership metadata.`,
+          );
+        }
+      }
     }
   }
   if (modules.includes('lint')) {

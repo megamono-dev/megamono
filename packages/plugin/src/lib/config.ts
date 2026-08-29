@@ -59,6 +59,7 @@ export const ADOPTION_MODULES = [
   'docs',
   'agents',
   'ci',
+  'release',
   'lint',
   'skills',
   'health',

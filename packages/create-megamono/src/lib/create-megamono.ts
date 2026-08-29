@@ -652,7 +652,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         '@megamono/plugin:workspace-init',
         `--defaultScope=${options.scope}`,
         ...(options.apps.includes('desktop') ? ['--defaultPlatform=rust'] : []),
-        '--only=docs,agents,ci,lint,skills,health,inference',
+        '--only=docs,agents,ci,release,lint,skills,health,inference',
         '--yes',
         '--bootstrap',
         `--platforms=${requestedPlatforms(options).join(',')}`,

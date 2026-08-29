@@ -536,6 +536,146 @@ interface WorkflowToolchain {
   readonly pnpm?: string;
 }
 
+interface ReleaseProject {
+  readonly name: string;
+  readonly outputPath: string;
+}
+
+function releaseProjects(tree: Tree): readonly ReleaseProject[] {
+  return [...getProjects(tree).entries()]
+    .flatMap(([name, project]) => {
+      const manifestPath =
+        project.root === '.' ? 'package.json' : `${project.root}/package.json`;
+      let manifest: { name?: unknown; private?: unknown };
+      try {
+        manifest = JSON.parse(tree.read(manifestPath, 'utf8') ?? '{}');
+      } catch {
+        return [];
+      }
+      if (
+        project.projectType !== 'library' ||
+        typeof manifest.name !== 'string' ||
+        manifest.private === true
+      ) {
+        return [];
+      }
+      const configuredOutput = project.targets?.build?.options?.outputPath;
+      const outputPath =
+        typeof configuredOutput === 'string'
+          ? configuredOutput
+          : `dist/${project.root}`;
+      return [{ name, outputPath }];
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function renderYalcPublisher(
+  projects: readonly ReleaseProject[],
+  packageManager: 'pnpm' | 'npm',
+): string {
+  const managerArgs =
+    packageManager === 'pnpm'
+      ? ['exec', 'nx', 'run-many', '-t', 'build', '-p']
+      : ['exec', 'nx', '--', 'run-many', '-t', 'build', '-p'];
+  return `#!/usr/bin/env node
+
+import { spawn } from 'node:child_process';
+import { access } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const packageManager = process.platform === 'win32' ? '${packageManager}.cmd' : '${packageManager}';
+const yalc = process.platform === 'win32' ? 'yalc.cmd' : 'yalc';
+const projects = ${JSON.stringify(projects, null, 2)};
+
+function run(command, args, cwd = root) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      env: { ...process.env, NX_DAEMON: 'false' },
+      shell: false,
+      stdio: 'inherit',
+    });
+    child.once('error', (error) => reject(new Error(\`Unable to run \${command}: \${error.message}\`)));
+    child.once('exit', (code, signal) => {
+      if (code === 0) return resolve();
+      reject(new Error(\`\${command} \${args.join(' ')} \${code === null ? \`stopped after signal \${signal ?? 'unknown'}\` : \`exited with code \${code}\`}\`));
+    });
+  });
+}
+
+try {
+  await run(yalc, ['--version']);
+  await run(packageManager, [...${JSON.stringify(managerArgs)}, ...projects.map(({ name }) => name), '--output-style=static']);
+  for (const { name, outputPath } of projects) {
+    const directory = join(root, outputPath);
+    await access(join(directory, 'package.json'));
+    process.stdout.write(\`\\nPublishing \${name} from \${outputPath} to yalc...\\n\`);
+    await run(yalc, ['publish'], directory);
+  }
+} catch (error) {
+  process.stderr.write(\`\${error instanceof Error ? error.message : String(error)}\\n\`);
+  process.exitCode = 1;
+}
+`;
+}
+
+function renderReleaseWorkflow(
+  projects: readonly ReleaseProject[],
+  packageManager: 'pnpm' | 'npm',
+  toolchain: WorkflowToolchain,
+): string {
+  const packageManagerSetup = renderPackageManagerSetup(
+    packageManager,
+    toolchain,
+  );
+  const install =
+    packageManager === 'pnpm' ? 'pnpm install --frozen-lockfile' : 'npm ci';
+  const nx = packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
+  const projectSelection = projects.map(({ name }) => name).join(',');
+  return `name: Megamono package prerelease
+
+on:
+  workflow_dispatch:
+    inputs:
+      specifier:
+        description: Semver keyword or exact version
+        required: true
+        default: prerelease
+        type: string
+      preid:
+        description: Prerelease identifier
+        required: true
+        default: next
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    environment: npm-next
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+${packageManagerSetup}
+      - run: ${install}
+      - run: ${nx} run-many -t lint test build -p ${projectSelection} --output-style=static
+      - name: Preview version changes
+        run: ${nx} release version "\${{ inputs.specifier }}" --preid "\${{ inputs.preid }}" --dry-run
+      - name: Version packages
+        run: ${nx} release version "\${{ inputs.specifier }}" --preid "\${{ inputs.preid }}" --git-commit --git-tag
+      - name: Publish next prerelease
+        env:
+          NODE_AUTH_TOKEN: \${{ secrets.NPM_TOKEN }}
+        run: ${nx} release publish --tag next
+      - run: git push --follow-tags origin HEAD
+`;
+}
+
 function workflowToolchain(
   tree: Tree,
   packageManager: 'pnpm' | 'npm',
@@ -1088,6 +1228,9 @@ export async function workspaceInitGenerator(
   }
   const planConfirmed = true;
   const modules = new Set(requestedModules);
+  const configuredReleaseProjects = modules.has('release')
+    ? releaseProjects(tree)
+    : [];
   const requestedPlatforms = parseConfiguredPlatforms(options.platforms);
   const serviceRequirements = parseServiceRequirements(
     options.serviceRequirements,
@@ -1125,6 +1268,8 @@ export async function workspaceInitGenerator(
     agents: !tree.exists('AGENTS.md'),
     claude: !tree.exists('CLAUDE.md'),
     ci: !tree.exists('.github/workflows/megamono-ci.yml'),
+    releaseWorkflow: !tree.exists('.github/workflows/megamono-release.yml'),
+    yalcPublisher: !tree.exists('.megamono/publish-yalc.mjs'),
     health: !tree.exists('.github/workflows/megamono-health.yml'),
   };
   if (!isSafeWorkspaceRelativePath(docsRoot)) {
@@ -1152,6 +1297,37 @@ export async function workspaceInitGenerator(
       throw new Error(
         `${path} already exists without Megamono ownership metadata.`,
       );
+    }
+  }
+  if (modules.has('release') && configuredReleaseProjects.length > 0) {
+    for (const [id, path] of [
+      ['release.workflow', '.github/workflows/megamono-release.yml'],
+      ['release.yalc-publisher', '.megamono/publish-yalc.mjs'],
+    ] as const) {
+      if (!existingConfig && tree.exists(path) && !artifactEntry(tree, id)) {
+        throw new Error(
+          `${path} already exists without Megamono ownership metadata.`,
+        );
+      }
+    }
+    try {
+      const manifest = JSON.parse(
+        tree.read('package.json', 'utf8') ?? '{}',
+      ) as { scripts?: Record<string, unknown> };
+      const current = manifest.scripts?.['megamono:yalc-publish'];
+      if (
+        current !== undefined &&
+        current !== 'node .megamono/publish-yalc.mjs'
+      ) {
+        throw new Error(
+          'package.json script megamono:yalc-publish is already repository-owned with a different command.',
+        );
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error('package.json is not valid JSON.', { cause: error });
+      }
+      throw error;
     }
   }
   const defaultScope = options.defaultScope ?? 'shared';
@@ -1443,7 +1619,46 @@ export async function workspaceInitGenerator(
       typeof manifest.packageManager === 'string'
         ? manifest.packageManager
         : `${packageManager}@${compatibility.packageManagers[packageManager]}`,
+    ...(configuredReleaseProjects.length > 0
+      ? {
+          scripts: {
+            ...(manifest.scripts ?? {}),
+            ...(!manifest.scripts?.['megamono:yalc-publish']
+              ? {
+                  'megamono:yalc-publish': 'node .megamono/publish-yalc.mjs',
+                }
+              : {}),
+          },
+        }
+      : {}),
   }));
+  if (configuredReleaseProjects.length > 0) {
+    updateJson(tree, 'nx.json', (nx) => {
+      const namedInputs = nx.namedInputs ?? {};
+      const sharedGlobals = new Set<string>(namedInputs.sharedGlobals ?? []);
+      sharedGlobals.add('{workspaceRoot}/.yalc/**/*');
+      return {
+        ...nx,
+        namedInputs: {
+          ...namedInputs,
+          sharedGlobals: [...sharedGlobals].sort(),
+        },
+        ...(nx.release === undefined
+          ? {
+              release: {
+                groups: {
+                  workspace: {
+                    projects: configuredReleaseProjects.map(({ name }) => name),
+                    projectsRelationship: 'fixed',
+                    releaseTag: { pattern: 'workspace@{version}' },
+                  },
+                },
+              },
+            }
+          : {}),
+      };
+    });
+  }
   tree.write('megamono.json', `${JSON.stringify(config, null, 2)}\n`);
   const eslintWiring =
     modules.has('lint') && lintCanWire
@@ -1463,6 +1678,7 @@ export async function workspaceInitGenerator(
     ...(modules.has('docs') ? ['.content-collections/'] : []),
     '.megamono/graph.json',
     ...(modules.has('health') ? ['.megamono/health.json'] : []),
+    ...(configuredReleaseProjects.length > 0 ? ['.yalc/', 'yalc.lock'] : []),
   ];
   const ignoreTemplate = `\n${ignored.join('\n')}\n`;
   const gitignoreCanUpdate = applyManagedSectionTemplate(
@@ -1557,6 +1773,35 @@ export async function workspaceInitGenerator(
         planConfirmed,
       )
     : false;
+  const releaseWorkflow = renderReleaseWorkflow(
+    configuredReleaseProjects,
+    packageManager,
+    workflowToolchain(tree, packageManager),
+  );
+  const releaseWorkflowCanUpdate =
+    configuredReleaseProjects.length > 0
+      ? applyManagedFileTemplate(
+          tree,
+          'release.workflow',
+          '.github/workflows/megamono-release.yml',
+          releaseWorkflow,
+          planConfirmed,
+        )
+      : false;
+  const yalcPublisher = renderYalcPublisher(
+    configuredReleaseProjects,
+    packageManager,
+  );
+  const yalcPublisherCanUpdate =
+    configuredReleaseProjects.length > 0
+      ? applyManagedFileTemplate(
+          tree,
+          'release.yalc-publisher',
+          '.megamono/publish-yalc.mjs',
+          yalcPublisher,
+          planConfirmed,
+        )
+      : false;
   if (
     modules.has('agents') &&
     !artifactIsEjected(tree, 'agents.instructions') &&
@@ -1897,6 +2142,36 @@ export async function workspaceInitGenerator(
         templateContent: ciWorkflow,
         claimExisting: created.ci,
         allowManagedUpdate: ciCanUpdate,
+      },
+      pluginVersion,
+    );
+  }
+  if (configuredReleaseProjects.length > 0) {
+    registerFileArtifact(
+      tree,
+      {
+        id: 'release.workflow',
+        module: 'release',
+        mode: 'managed',
+        target: '.github/workflows/megamono-release.yml',
+        ejectable: true,
+        templateContent: releaseWorkflow,
+        claimExisting: created.releaseWorkflow,
+        allowManagedUpdate: releaseWorkflowCanUpdate,
+      },
+      pluginVersion,
+    );
+    registerFileArtifact(
+      tree,
+      {
+        id: 'release.yalc-publisher',
+        module: 'release',
+        mode: 'managed',
+        target: '.megamono/publish-yalc.mjs',
+        ejectable: true,
+        templateContent: yalcPublisher,
+        claimExisting: created.yalcPublisher,
+        allowManagedUpdate: yalcPublisherCanUpdate,
       },
       pluginVersion,
     );

@@ -81,6 +81,7 @@ Every execution installs a small baseline: `megamono.json`, the `megamono` proje
 | `docs`      | Centralized corpus directories, Content Collections config, indexes, and `megamono-docs` targets (`spec-megamono-0004`, `spec-megamono-0011`) |
 | `agents`    | A managed section in `AGENTS.md`, a safe `CLAUDE.md` pointer when possible, and `docs/DESIGN.md`                                              |
 | `ci`        | A dedicated affected-CI workflow owned by Megamono; existing repository workflows remain untouched                                            |
+| `release`   | Nx Release groups and tag strategy for publishable packages, a private prerelease workflow, and yalc-from-dist local package vetting          |
 | `lint`      | Project-tag completion, structural checks, docs validation, and ESLint wiring (`spec-megamono-0006`)                                          |
 | `skills`    | Managed portable skills under `.agents/skills` and the `.claude/skills` projection (`spec-megamono-0005`)                                     |
 | `health`    | The deterministic scheduled health workflow and local health target (`spec-megamono-0008`)                                                    |
@@ -107,7 +108,7 @@ Ownership follows the artifact's semantic lifecycle, not its file extension or t
 
 The committed registry `.megamono/artifacts.json` is the authority for the lifecycle of Megamono-emitted workspace artifacts. It has schema version `1` and a stable, ID-sorted `artifacts` array. Each entry records `id`, `module`, `mode`, `target`, `sourceVersion`, `templateHash`, `installedHash`, `state: managed|seeded|derived|ejected`, and `ejectable`. A `managed-section` entry additionally records its exact start and end delimiters. A managed file set, such as a skill, records a stable, explicit `files` array under its target directory. Hashes are SHA-256 values prefixed with `sha256:`; a whole-file hash covers exact bytes, a section hash covers only the bytes inside its delimiters, and a file-set hash covers each sorted relative path, byte length, and file content. A symlink hash covers its normalized relative target.
 
-Artifact IDs match `^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)*$` and remain stable when a target path changes. V1 reserves `agents.instructions`, `agents.claude-pointer`, `ci.affected`, `health.workflow`, `docs.loader`, `docs.index`, `docs.archive-index`, and `skill.<name>` for their corresponding artifacts.
+Artifact IDs match `^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)*$` and remain stable when a target path changes. V1 reserves `agents.instructions`, `agents.claude-pointer`, `ci.affected`, `release.workflow`, `release.yalc-publisher`, `health.workflow`, `docs.loader`, `docs.index`, `docs.archive-index`, and `skill.<name>` for their corresponding artifacts.
 
 Creating a directory never grants Megamono ownership of later descendants. Registry entries name files, symlinks, bounded sections, or an explicit file set; unlisted descendants are always repository-owned. The registry is committed and validated by `megamono:check`, but is not an entry in its own array and therefore has no self-referential hash.
 

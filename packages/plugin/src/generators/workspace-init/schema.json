@@ -18,7 +18,7 @@
     },
     "only": {
       "type": "string",
-      "description": "Comma-separated modules to adopt: docs, agents, ci, lint, skills, health, inference."
+      "description": "Comma-separated modules to adopt: docs, agents, ci, release, lint, skills, health, inference."
     },
     "interactive": {
       "type": "boolean",

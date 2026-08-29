@@ -342,7 +342,7 @@ describe('createPlan', () => {
     expect(rendered).toContain('--linter=eslint');
     expect(rendered).toContain('--e2eTestRunner=playwright');
     expect(rendered).toContain(
-      '--only=docs,agents,ci,lint,skills,health,inference',
+      '--only=docs,agents,ci,release,lint,skills,health,inference',
     );
     expect(rendered).toContain('--yes');
     expect(rendered).toContain('--bootstrap');
