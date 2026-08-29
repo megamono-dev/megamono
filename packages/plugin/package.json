@@ -122,15 +122,20 @@
     "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "@nx/devkit": ">=23.1 <24",
-    "eslint": ">=9 <11",
-    "nx": ">=23.1 <24",
-    "typescript": ">=6.0 <6.1"
+    "@nx/devkit": ">=17 <24",
+    "eslint": ">=8 <11",
+    "nx": ">=17 <24",
+    "typescript": ">=5.2 <7"
+  },
+  "peerDependenciesMeta": {
+    "eslint": {
+      "optional": true
+    }
   },
   "engines": {
-    "node": ">=24 <25",
-    "pnpm": ">=11 <12",
-    "npm": ">=11 <12"
+    "node": ">=18.18 <25",
+    "pnpm": ">=8 <12",
+    "npm": ">=9 <12"
   },
   "executors": "./executors.json",
   "generators": "./generators.json",

@@ -54,6 +54,7 @@ import {
 } from '../../lib/workspace-init-preflight';
 import { createWorkspaceInitPostFlushCallback } from '../../lib/workspace-init-execution';
 import { ensureManagedSkillsProjection } from '../../lib/skills-projection';
+import { nxWorkspaceCapabilities } from '../../lib/workspace-compatibility';
 
 const compatibility = JSON.parse(
   readFileSync(join(__dirname, '../../../compatibility.json'), 'utf8'),
@@ -61,11 +62,15 @@ const compatibility = JSON.parse(
   packageManagers: Record<'pnpm' | 'npm', string>;
 };
 
-const importTarget = {
-  executor: '@megamono/plugin:import',
-  cache: false,
-  parallelism: false,
-};
+function importTarget(tree: Tree) {
+  return {
+    executor: '@megamono/plugin:import',
+    cache: false,
+    ...(nxWorkspaceCapabilities(tree).targetParallelism
+      ? { parallelism: false }
+      : {}),
+  };
+}
 
 const healthTarget = {
   executor: '@megamono/plugin:health',
@@ -376,8 +381,9 @@ function ensureImportTarget(tree: Tree): boolean {
     );
   }
   const current = project.targets?.import;
+  const expected = importTarget(tree);
   if (current) {
-    if (JSON.stringify(current) !== JSON.stringify(importTarget)) {
+    if (JSON.stringify(current) !== JSON.stringify(expected)) {
       throw new Error(
         'megamono:import already exists with a different configuration.',
       );
@@ -386,7 +392,7 @@ function ensureImportTarget(tree: Tree): boolean {
   }
   updateProjectConfiguration(tree, 'megamono', {
     ...project,
-    targets: { ...project.targets, import: importTarget },
+    targets: { ...project.targets, import: expected },
   });
   return true;
 }
@@ -484,9 +490,13 @@ function renderHealthWorkflow(
   cadence: 'weekly' | 'daily',
   target: 'megamono:health' | 'megamono-docs:health',
   packageManager: 'pnpm' | 'npm',
+  toolchain: WorkflowToolchain,
 ): string {
   const cron = cadence === 'daily' ? '17 9 * * *' : '17 9 * * 1';
-  const packageManagerSetup = renderPackageManagerSetup(packageManager);
+  const packageManagerSetup = renderPackageManagerSetup(
+    packageManager,
+    toolchain,
+  );
   const install =
     packageManager === 'pnpm' ? 'pnpm install --frozen-lockfile' : 'npm ci';
   const nx = packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
@@ -521,29 +531,77 @@ ${packageManagerSetup}
 `;
 }
 
-function renderPackageManagerSetup(packageManager: 'pnpm' | 'npm'): string {
+interface WorkflowToolchain {
+  readonly node: string;
+  readonly pnpm?: string;
+}
+
+function workflowToolchain(
+  tree: Tree,
+  packageManager: 'pnpm' | 'npm',
+): WorkflowToolchain {
+  let manifest: {
+    packageManager?: unknown;
+    engines?: { node?: unknown };
+  } = {};
+  try {
+    manifest = JSON.parse(tree.read('package.json', 'utf8') ?? '{}');
+  } catch {
+    // Preflight owns the structured invalid-manifest diagnostic.
+  }
+  const configuredNode =
+    tree.read('.node-version', 'utf8')?.trim() ||
+    tree.read('.nvmrc', 'utf8')?.trim() ||
+    (typeof manifest.engines?.node === 'string'
+      ? manifest.engines.node
+      : undefined);
+  const nxMajor = nxWorkspaceCapabilities(tree).major;
+  const defaultNode = nxMajor >= 23 ? '24' : nxMajor >= 21 ? '22' : '20';
+  const declaredManager =
+    typeof manifest.packageManager === 'string'
+      ? manifest.packageManager.split('@')[1]
+      : undefined;
+  return {
+    node: configuredNode ?? defaultNode,
+    ...(packageManager === 'pnpm'
+      ? {
+          pnpm:
+            declaredManager ?? compatibility.packageManagers[packageManager],
+        }
+      : {}),
+  };
+}
+
+function renderPackageManagerSetup(
+  packageManager: 'pnpm' | 'npm',
+  toolchain: WorkflowToolchain,
+): string {
   const pnpmSetup =
     packageManager === 'pnpm'
       ? `      - uses: pnpm/action-setup@v4
         with:
-          version: 11
+          version: ${toolchain.pnpm}
 `
       : '';
   return `${pnpmSetup}      - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: '${toolchain.node.replaceAll("'", "''")}'
           cache: ${packageManager}`;
 }
 
 function renderCiWorkflow(
   platforms: ReadonlySet<string>,
   packageManager: 'pnpm' | 'npm',
+  toolchain: WorkflowToolchain,
 ): string {
   const linuxPlatforms = ['web', 'node', 'worker', 'rust', 'php', 'extension'];
   const hasLinux = linuxPlatforms.some((platform) => platforms.has(platform));
   const hasApple = platforms.has('apple');
   const gh = (expression: string) => '${{ ' + expression + ' }}';
-  const packageManagerSetup = renderPackageManagerSetup(packageManager);
+  const packageManagerSetup = renderPackageManagerSetup(
+    packageManager,
+    toolchain,
+  );
   const install =
     packageManager === 'pnpm' ? 'pnpm install --frozen-lockfile' : 'npm ci';
   const nx = packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
@@ -977,6 +1035,14 @@ export async function workspaceInitGenerator(
     only = await promptForModules();
   }
   const requestedModules = parseWorkspaceInitModules(only);
+  const lintCanWire =
+    !requestedModules.includes('lint') ||
+    workspaceSurvey.existing.eslint.some((path) =>
+      path.startsWith('eslint.config.'),
+    ) ||
+    !workspaceSurvey.existing.eslint.some((path) =>
+      path.startsWith('.eslintrc'),
+    );
   let defaultPlatform = options.defaultPlatform;
   let adoptionPlan = createWorkspaceInitPlan(tree, {
     ...options,
@@ -1004,7 +1070,8 @@ export async function workspaceInitGenerator(
   if (adoptionPlan.conflicts.length > 0) {
     throw new WorkspaceInitError('conflict', adoptionPlan.conflicts.join(' '));
   }
-  if (requestedModules.includes('lint')) preflightEslintConfig(tree);
+  if (requestedModules.includes('lint') && lintCanWire)
+    preflightEslintConfig(tree);
   logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
   if (!options.yes) {
     if (!canPrompt(options)) {
@@ -1050,7 +1117,7 @@ export async function workspaceInitGenerator(
     docsIndex: !tree.exists(`${docsRoot}/INDEX.md`),
     docsArchiveIndex: !tree.exists(`${docsRoot}/archives/INDEX.md`),
     design: !tree.exists(`${docsRoot}/DESIGN.md`),
-    eslint: !tree.exists('eslint.config.mjs'),
+    eslint: lintCanWire && !tree.exists('eslint.config.mjs'),
     agents: !tree.exists('AGENTS.md'),
     claude: !tree.exists('CLAUDE.md'),
     ci: !tree.exists('.github/workflows/megamono-ci.yml'),
@@ -1201,7 +1268,7 @@ export async function workspaceInitGenerator(
             '{workspaceRoot}/.agents/skills/**/*',
           ],
         },
-        import: importTarget,
+        import: importTarget(tree),
         ...(modules.has('health') && !modules.has('docs')
           ? { health: healthTarget }
           : {}),
@@ -1369,9 +1436,10 @@ export async function workspaceInitGenerator(
         : `${packageManager}@${compatibility.packageManagers[packageManager]}`,
   }));
   tree.write('megamono.json', `${JSON.stringify(config, null, 2)}\n`);
-  const eslintWiring = modules.has('lint')
-    ? wireEslintConfig(tree)
-    : { imports: false, rules: false };
+  const eslintWiring =
+    modules.has('lint') && lintCanWire
+      ? wireEslintConfig(tree)
+      : { imports: false, rules: false };
   const docsLoaderTemplate = renderContentCollectionsConfig(docsRoot);
   const docsLoaderCanUpdate = modules.has('docs')
     ? applyManagedFileTemplate(
@@ -1454,6 +1522,7 @@ export async function workspaceInitGenerator(
     config.health.cadence === 'disabled' ? 'weekly' : config.health.cadence,
     modules.has('docs') ? 'megamono-docs:health' : 'megamono:health',
     packageManager,
+    workflowToolchain(tree, packageManager),
   );
   const healthCanUpdate =
     modules.has('health') && config.health.cadence !== 'disabled'
@@ -1468,6 +1537,7 @@ export async function workspaceInitGenerator(
   const ciWorkflow = renderCiWorkflow(
     configuredWorkspacePlatforms(tree, defaultPlatform),
     packageManager,
+    workflowToolchain(tree, packageManager),
   );
   const ciCanUpdate = modules.has('ci')
     ? applyManagedFileTemplate(

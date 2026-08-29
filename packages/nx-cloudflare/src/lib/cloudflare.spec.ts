@@ -148,6 +148,24 @@ describe('projectsFromWranglerConfigs', () => {
     });
   });
 
+  it('omits continuous target metadata before Nx 21', async () => {
+    const workspaceRoot = await mkdtemp(
+      resolve(tmpdir(), 'nx-cloudflare-legacy-target-'),
+    );
+    const results = projectsFromWranglerConfigs(
+      [record('apps/worker', { name: 'worker', main: 'src/index.ts' })],
+      workspaceRoot,
+      {},
+      { continuousTargets: false },
+    );
+    const project = results
+      .flatMap(([, result]) => Object.values(result.projects))
+      .find((candidate) => candidate.root === 'apps/worker');
+
+    expect(project?.targets?.['dev']).not.toHaveProperty('continuous');
+    expect(project?.targets?.['tail']).not.toHaveProperty('continuous');
+  });
+
   it('resolves local and explicitly external references into versioned metadata', async () => {
     const workspaceRoot = await mkdtemp(
       resolve(tmpdir(), 'nx-cloudflare-ref-'),

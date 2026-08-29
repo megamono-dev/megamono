@@ -473,6 +473,7 @@ function createTargets(
   prepared: PreparedRecord,
   metadata: CloudflareProjectMetadata,
   options: CloudflarePluginOptions,
+  continuousTargets: boolean,
 ): ProjectConfiguration['targets'] {
   if (!prepared.record.executable) return {};
   const configParts = ['--config', prepared.record.configPath];
@@ -533,7 +534,7 @@ function createTargets(
       ...('outputs' in target && target.outputs !== undefined
         ? { outputs: [...target.outputs] }
         : {}),
-      ...(target.continuous ? { continuous: true } : {}),
+      ...(target.continuous && continuousTargets ? { continuous: true } : {}),
       options: {
         command: command(parts),
         cwd: '{workspaceRoot}',
@@ -551,6 +552,9 @@ export function projectsFromWranglerConfigs(
   records: readonly WranglerConfigRecord[],
   workspaceRoot: string,
   options: CloudflarePluginOptions = {},
+  capabilities: { readonly continuousTargets: boolean } = {
+    continuousTargets: true,
+  },
 ): Array<
   readonly [string, { projects: Record<string, ProjectConfiguration> }]
 > {
@@ -587,7 +591,12 @@ export function projectsFromWranglerConfigs(
               'type:app',
               'visibility:internal',
             ],
-            targets: createTargets(item, metadata, options),
+            targets: createTargets(
+              item,
+              metadata,
+              options,
+              capabilities.continuousTargets,
+            ),
             metadata: {
               technologies: ['cloudflare-workers', 'wrangler'],
               [CLOUDFLARE_METADATA_KEY]: metadata,
@@ -619,10 +628,24 @@ export const createNodes: CreateNodes<CloudflarePluginOptions> = [
       options,
     );
     lastRecords = { workspaceRoot: context.workspaceRoot, records, options };
+    const manifest = (() => {
+      try {
+        return JSON.parse(
+          readFileSync(resolve(context.workspaceRoot, 'package.json'), 'utf8'),
+        ) as Record<string, Record<string, unknown> | undefined>;
+      } catch {
+        return {};
+      }
+    })();
+    const nxVersion = ['dependencies', 'devDependencies', 'peerDependencies']
+      .map((field) => manifest[field]?.nx)
+      .find((value): value is string => typeof value === 'string');
+    const nxMajor = Number(nxVersion?.match(/(\d+)\./)?.[1] ?? 23);
     const results = projectsFromWranglerConfigs(
       records,
       context.workspaceRoot,
       options,
+      { continuousTargets: nxMajor >= 21 },
     );
     diagnostics = results.flatMap(([, result]) =>
       Object.values(result.projects).flatMap((project) => {

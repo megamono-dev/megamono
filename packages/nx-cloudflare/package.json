@@ -73,8 +73,8 @@
     "tslib": "^2.3.0"
   },
   "peerDependencies": {
-    "@nx/devkit": ">=23.1 <24",
-    "nx": ">=23.1 <24",
+    "@nx/devkit": ">=17 <24",
+    "nx": ">=17 <24",
     "wrangler": ">=4.125 <5"
   },
   "peerDependenciesMeta": {
@@ -83,9 +83,9 @@
     }
   },
   "engines": {
-    "node": ">=24 <25",
-    "pnpm": ">=11 <12",
-    "npm": ">=11 <12"
+    "node": ">=18.18 <25",
+    "pnpm": ">=8 <12",
+    "npm": ">=9 <12"
   },
   "repository": {
     "type": "git",

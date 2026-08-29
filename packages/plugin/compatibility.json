@@ -9,6 +9,23 @@
     "typescript": ">=6.0 <6.1",
     "prisma": ">=6.7"
   },
+  "adoptionToolchains": {
+    "node": ">=18.18 <25",
+    "pnpm": ">=8 <12",
+    "npm": ">=9 <12",
+    "nx": ">=17 <24",
+    "typescript": ">=5.2 <7"
+  },
+  "compatibilityTests": {
+    "stable": [
+      { "nx": "17.1.2", "typescript": "5.2.2", "node": "20" },
+      { "nx": "20.0.1", "typescript": "5.6.2", "node": "20" },
+      { "nx": "21.6.11", "typescript": "5.9.3", "node": "22" },
+      { "nx": "22.2.3", "typescript": "5.9.3", "node": "22" },
+      { "nx": "23.1.1", "typescript": "6.0.3", "node": "24" }
+    ],
+    "future": { "nx": "next", "typescript": "next", "node": "24" }
+  },
   "packageManagers": {
     "pnpm": "11.24.0",
     "npm": "11.17.0"

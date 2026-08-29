@@ -50,8 +50,8 @@ describe('workspace init preflight', () => {
     [{ git: { ...featureBranch.git, clean: false } }, 'clean working tree'],
     [{ git: { ...featureBranch.git, branch: 'main' } }, 'default branch main'],
     [{ platform: 'win32' }, 'Operating system win32'],
-    [{ node: 'v22.18.0' }, 'Node.js v22.18.0'],
-    [{ npm: '10.9.0' }, 'npm 10.9.0'],
+    [{ node: 'v18.17.0' }, 'Node.js v18.17.0'],
+    [{ npm: '8.19.4' }, 'npm 8.19.4'],
   ] satisfies readonly [Partial<WorkspaceInitHostState>, string][])(
     'refuses unsupported host state %#',
     (override, message) => {
@@ -128,19 +128,49 @@ describe('workspace init preflight', () => {
     );
   });
 
-  it('refuses incompatible workspace dependencies', () => {
-    const oldNx = supportedTree();
-    oldNx.write(
+  it.each([
+    ['17.1.2', '5.2.2'],
+    ['20.0.1', '5.6.2'],
+    ['21.6.11', '5.9.3'],
+    ['22.2.3', '5.9.3'],
+    ['23.1.1', '6.0.3'],
+  ])(
+    'accepts the Nx %s and TypeScript %s adoption anchor',
+    (nx, typescript) => {
+      const tree = supportedTree();
+      tree.write(
+        'package-lock.json',
+        JSON.stringify({
+          packages: {
+            'node_modules/nx': { version: nx },
+            'node_modules/typescript': { version: typescript },
+          },
+        }),
+      );
+      expect(() =>
+        assertWorkspaceInitPreflight(tree, featureBranch),
+      ).not.toThrow();
+    },
+  );
+
+  it.each([
+    ['Nx', '16.10.0', '6.0.3'],
+    ['Nx', '24.0.0', '6.0.3'],
+    ['TypeScript', '23.1.1', '5.1.6'],
+    ['TypeScript', '23.1.1', '7.0.0'],
+  ])('refuses %s outside the adoption range', (label, nx, typescript) => {
+    const tree = supportedTree();
+    tree.write(
       'package-lock.json',
       JSON.stringify({
         packages: {
-          'node_modules/nx': { version: '22.0.0' },
-          'node_modules/typescript': { version: '6.0.3' },
+          'node_modules/nx': { version: nx },
+          'node_modules/typescript': { version: typescript },
         },
       }),
     );
-    expect(() => assertWorkspaceInitPreflight(oldNx, featureBranch)).toThrow(
-      /Nx 22.0.0 is unsupported/,
+    expect(() => assertWorkspaceInitPreflight(tree, featureBranch)).toThrow(
+      new RegExp(`${label} .* is unsupported for adoption`),
     );
   });
 

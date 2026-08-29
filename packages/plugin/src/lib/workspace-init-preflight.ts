@@ -2,6 +2,11 @@ import type { Tree } from '@nx/devkit';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { WorkspaceInitError } from './workspace-init-plan';
+import {
+  parseVersionNumber,
+  workspaceDependencyVersion,
+  type VersionNumber,
+} from './workspace-compatibility';
 
 const executeFile = promisify(execFile);
 
@@ -84,67 +89,42 @@ export async function collectWorkspaceInitHostState(
   };
 }
 
-function majorMinor(version: string | undefined): readonly [number, number] {
-  const match = version?.match(/(?:^|[^0-9])(\d+)\.(\d+)/);
-  return match ? [Number(match[1]), Number(match[2])] : [-1, -1];
-}
-
-function dependencyVersion(tree: Tree, name: string): string | undefined {
+function assertValidPackageLock(tree: Tree): void {
   const lockSource = tree.read('package-lock.json', 'utf8');
-  if (lockSource) {
-    try {
-      const lock = JSON.parse(lockSource) as {
-        packages?: Record<string, { version?: unknown }>;
-      };
-      const version = lock.packages?.[`node_modules/${name}`]?.version;
-      if (typeof version === 'string') return version;
-    } catch {
-      throw new WorkspaceInitError(
-        'preflight',
-        'package-lock.json is not valid JSON.',
-      );
-    }
-  }
-  const manifestSource = tree.read('package.json', 'utf8');
-  if (!manifestSource) return undefined;
+  if (!lockSource) return;
   try {
-    const manifest = JSON.parse(manifestSource) as Record<string, unknown>;
-    for (const key of ['dependencies', 'devDependencies']) {
-      const dependencies = manifest[key];
-      if (
-        dependencies &&
-        typeof dependencies === 'object' &&
-        !Array.isArray(dependencies)
-      ) {
-        const version = (dependencies as Record<string, unknown>)[name];
-        if (typeof version === 'string') return version;
-      }
-    }
+    JSON.parse(lockSource);
   } catch {
     throw new WorkspaceInitError(
       'preflight',
-      'package.json is not valid JSON.',
+      'package-lock.json is not valid JSON.',
     );
   }
-  return undefined;
 }
 
-function requireVersion(
+function compareVersion(left: VersionNumber, right: VersionNumber): number {
+  return (
+    left.major - right.major ||
+    left.minor - right.minor ||
+    left.patch - right.patch
+  );
+}
+
+function requireVersionRange(
   label: string,
   version: string | undefined,
-  expectedMajor: number,
-  minimumMinor = 0,
-  maximumMinor?: number,
+  minimum: VersionNumber,
+  maximumExclusive: VersionNumber,
 ): void {
-  const [major, minor] = majorMinor(version);
+  const parsed = parseVersionNumber(version);
   if (
-    major !== expectedMajor ||
-    minor < minimumMinor ||
-    (maximumMinor !== undefined && minor >= maximumMinor)
+    !parsed ||
+    compareVersion(parsed, minimum) < 0 ||
+    compareVersion(parsed, maximumExclusive) >= 0
   ) {
     throw new WorkspaceInitError(
       'preflight',
-      `${label} ${version ?? 'unknown'} is unsupported; expected ${expectedMajor}.${minimumMinor}${maximumMinor === undefined ? '.x' : ` through ${expectedMajor}.${maximumMinor - 1}.x`}.`,
+      `${label} ${version ?? 'unknown'} is unsupported for adoption; expected >=${minimum.major}.${minimum.minor}.${minimum.patch} <${maximumExclusive.major}.${maximumExclusive.minor}.${maximumExclusive.patch}.`,
     );
   }
 }
@@ -187,6 +167,7 @@ export function assertWorkspaceInitPreflight(
       'nx.json is missing; run nx init before workspace-init.',
     );
   }
+  assertValidPackageLock(tree);
   for (const lockfile of ['yarn.lock', 'bun.lock', 'bun.lockb']) {
     if (tree.exists(lockfile)) {
       throw new WorkspaceInitError(
@@ -227,14 +208,32 @@ export function assertWorkspaceInitPreflight(
       `Requested ${options.packageManager}, but the workspace has the ${packageManager} lockfile.`,
     );
   }
-  requireVersion('Node.js', state.node, 24);
-  requireVersion(
+  requireVersionRange(
+    'Node.js',
+    state.node,
+    { major: 18, minor: 18, patch: 0 },
+    { major: 25, minor: 0, patch: 0 },
+  );
+  requireVersionRange(
     packageManager,
     packageManager === 'pnpm' ? state.pnpm : state.npm,
-    11,
+    packageManager === 'pnpm'
+      ? { major: 8, minor: 0, patch: 0 }
+      : { major: 9, minor: 0, patch: 0 },
+    { major: 12, minor: 0, patch: 0 },
   );
-  requireVersion('Nx', dependencyVersion(tree, 'nx'), 23, 1);
-  requireVersion('TypeScript', dependencyVersion(tree, 'typescript'), 6, 0, 1);
+  requireVersionRange(
+    'Nx',
+    workspaceDependencyVersion(tree, 'nx'),
+    { major: 17, minor: 0, patch: 0 },
+    { major: 24, minor: 0, patch: 0 },
+  );
+  requireVersionRange(
+    'TypeScript',
+    workspaceDependencyVersion(tree, 'typescript'),
+    { major: 5, minor: 2, patch: 0 },
+    { major: 7, minor: 0, patch: 0 },
+  );
 
   if (options.bootstrap) return;
   if (!state.git.available) {

@@ -432,6 +432,12 @@ export function surveyWorkspaceInit(tree: Tree): WorkspaceInitSurvey {
         'eslint.config.js',
         'eslint.config.mjs',
         'eslint.config.cjs',
+        '.eslintrc',
+        '.eslintrc.json',
+        '.eslintrc.js',
+        '.eslintrc.cjs',
+        '.eslintrc.yml',
+        '.eslintrc.yaml',
       ].filter((path) => files.includes(path)),
       contentCollections: [
         'content-collections.ts',
@@ -683,13 +689,30 @@ export function createWorkspaceInitPlan(
     }
   }
   if (modules.includes('lint')) {
+    const flatEslint = survey.existing.eslint.find((path) =>
+      path.startsWith('eslint.config.'),
+    );
+    const legacyEslint = survey.existing.eslint.find((path) =>
+      path.startsWith('.eslintrc'),
+    );
+    const lintTarget = flatEslint ?? legacyEslint ?? 'eslint.config.mjs';
+    const legacyOnly = Boolean(legacyEslint && !flatEslint);
     operation(
       operations,
       'lint',
-      survey.existing.eslint.length ? 'modify' : 'add',
-      survey.existing.eslint[0] ?? 'eslint.config.mjs',
-      'Wire Megamono structural rules.',
+      legacyOnly ? 'skip' : flatEslint ? 'modify' : 'add',
+      lintTarget,
+      legacyOnly
+        ? 'Retain legacy ESLint configuration; Megamono tags and structural checks remain available.'
+        : 'Wire Megamono structural rules.',
     );
+    if (legacyOnly) {
+      reductions.push({
+        module: 'lint',
+        capability: 'eslint-rule-wiring',
+        reason: `${legacyEslint} uses the legacy ESLint configuration contract; migrate to flat config before enabling the Megamono ESLint plugin.`,
+      });
+    }
     const untaggedApplications = survey.projects.filter(
       (project) =>
         project.type === 'application' &&

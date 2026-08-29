@@ -160,6 +160,52 @@ describe('workspace-init generator', () => {
     }
   });
 
+  it('adapts target metadata and CI toolchains for a legacy Nx workspace', async () => {
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        packageManager: 'npm@9.8.1',
+        engines: { node: '>=18.18 <21' },
+        devDependencies: { nx: '17.1.2', typescript: '5.2.2' },
+      }),
+    );
+
+    await workspaceInitGenerator(tree, {
+      only: 'ci',
+      packageManager: 'npm',
+      yes: true,
+    });
+
+    expect(
+      readProjectConfiguration(tree, 'megamono').targets?.import,
+    ).not.toHaveProperty('parallelism');
+    expect(tree.read('.github/workflows/megamono-ci.yml', 'utf8')).toContain(
+      "node-version: '>=18.18 <21'",
+    );
+    expect(readJson(tree, 'package.json').packageManager).toBe('npm@9.8.1');
+  });
+
+  it('retains legacy ESLint and records reduced rule wiring', async () => {
+    tree.write(
+      '.eslintrc.json',
+      JSON.stringify({ root: true, extends: ['plugin:@nx/typescript'] }),
+    );
+
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+
+    expect(tree.exists('eslint.config.mjs')).toBe(false);
+    expect(readJson(tree, 'megamono.json').adoption.reductions).toContainEqual({
+      module: 'lint',
+      capability: 'eslint-rule-wiring',
+      reason: expect.stringContaining('.eslintrc.json'),
+    });
+    expect(readJson(tree, '.megamono/artifacts.json').artifacts).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'lint.eslint-config-file' }),
+      ]),
+    );
+  });
+
   it('requires explicit module input without an interactive terminal', async () => {
     const changes = tree.listChanges();
 
