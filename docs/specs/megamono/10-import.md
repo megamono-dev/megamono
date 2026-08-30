@@ -103,7 +103,7 @@ Same logic as `spec-megamono-0008`, applied at merge time. For each conflicting 
 
 **Never silently take the higher version.** That is the default behaviour of naive merges and it is how an import breaks the app that was working before the import.
 
-Where isolation is required, prefer mechanisms native to the target workspace's recorded package manager. A root `overrides` rule is allowed only when it satisfies both sides; nested independent installs are not accepted because they make lockfile and affected behavior ambiguous. An unsatisfied conflict blocks the import. A pnpm target may use catalogs for aligned shared versions and `workspace:` for local packages; an npm target retains npm-compatible declarations.
+Where isolation is required, prefer mechanisms native to the target workspace's recorded package manager. A root override or resolution rule is allowed only when it satisfies both sides; nested independent installs are not accepted because they make lockfile and affected behavior ambiguous. An unsatisfied conflict blocks the import. A pnpm target may use catalogs for aligned shared versions and `workspace:` for local packages; npm, Yarn, and Bun targets retain package-json-workspace-compatible declarations and their native root conflict controls.
 
 ### Phase 4 — Translate builds
 

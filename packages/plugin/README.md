@@ -171,10 +171,12 @@ npm exec nx g @megamono/plugin:docs-audit <target> --project=<project> --spec=<s
 Record generators default to internal visibility, validate controlled topics before
 writing, and are no-ops when rerun with identical inputs.
 
-New workspaces use the pinned Node 24, package-manager 11, Nx 23.1, and
-TypeScript 6 scaffold. Existing-workspace adoption supports Node 18.18–24,
-npm 9–11 or pnpm 8–11, Nx 17–23, and TypeScript 5.2–6. The optional Apple,
-Cargo, and Cloudflare inference plugins require Nx 18 or newer. See
+New workspaces use pinned Node 24, npm 11 by default (or a pinned pnpm, Yarn,
+or Bun selection), Nx 23.1, and TypeScript 6. Existing-workspace adoption
+preserves npm 9–11, pnpm 8–11, Yarn 1.22–4, or Bun 1.x on Node 18.18–24, Nx
+17–23, and TypeScript 5.2–6. Core survey and platform-neutral adoption are not
+restricted by host OS; individual platform capabilities retain their own
+gates. The optional Apple, Cargo, and Cloudflare inference plugins require Nx 18 or newer. See
 [`compatibility.json`](./compatibility.json) for the machine-readable contract
 and tested version anchors.
 

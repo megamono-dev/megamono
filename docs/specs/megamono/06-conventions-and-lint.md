@@ -121,7 +121,7 @@ Emitted per repo, tuned to the selected platforms.
 
 The CI job grants `contents: read` and `actions: read`; pull-request and merge-queue jobs also grant `pull-requests: read`. No generic CI job has write permission.
 
-Deployment is a separate job, never part of the generic CI command. It runs only on the default branch, declares a GitHub Environment per destination, uses environment protection for production, and invokes the selected package manager's Nx execution command after CI succeeds. A repository may omit deploy entirely. The example above is the pnpm default; npm workspaces emit `npm ci` and `npm exec nx` instead.
+Deployment is a separate job, never part of the generic CI command. It runs only on the default branch, declares a GitHub Environment per destination, uses environment protection for production, and invokes the selected package manager's Nx execution command after CI succeeds. A repository may omit deploy entirely. The example above is pnpm-specific. npm emits `npm ci` and `npm exec nx --`; Yarn emits its version-appropriate immutable/frozen install and `yarn nx`; Bun emits `bun install --frozen-lockfile` and `bunx nx`.
 
 ### The `affected` base — pin this
 
@@ -175,7 +175,7 @@ Repo-level config recording the choices made at scaffold time, so generators add
   "conventions": {
     "nestFeatureLibraries": true,
     "docsLocation": "centralized",
-    "packageManager": "pnpm",
+    "packageManager": "npm",
     "apps": {
       "web": {
         "router": "pages",

@@ -30,10 +30,11 @@ npm exec nx -- graph
 
 ## Compatibility
 
-New workspaces use the pinned Node 24, package-manager 11, Nx 23.1, and
-TypeScript 6 scaffold. `megamono init` supports existing workspaces on Node
-18.18–24, npm 9–11 or pnpm 8–11, Nx 17–23, and TypeScript 5.2–6. Apple,
-Cargo, and Cloudflare inference plugins require Nx 18 or newer. CI verifies
+New workspaces use pinned Node 24, npm 11 by default (or an explicitly selected
+pnpm, Yarn, or Bun baseline), Nx 23.1, and TypeScript 6. `megamono init`
+preserves existing npm 9–11, pnpm 8–11, Yarn 1.22–4, or Bun 1.x workspaces on
+Node 18.18–24, Nx 17–23, and TypeScript 5.2–6. Read-only survey remains
+available when mutation toolchains are not ready. Apple, Cargo, and Cloudflare inference plugins require Nx 18 or newer. CI verifies
 packed packages against every supported Nx major and monitors `nx@next` in a
 non-blocking canary.
 

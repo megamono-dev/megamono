@@ -44,7 +44,7 @@ Inference and graph repair are the product. Scaffolding is deliberately secondar
 
 ## Compatibility and discovery
 
-The package follows the adoption Node and pnpm/npm ranges in `spec-megamono-0000` and supports Nx `>=18 <24`. Nx 17 remains supported by the core plugin but cannot host this package's async config discovery. Its tested Wrangler range, pinned scaffold version, and pinned scaffold `compatibility_date` live in `@megamono/plugin/compatibility.json`; no generator resolves `latest` or chooses a date from the wall clock.
+The package follows the adoption Node and package-manager ranges in `spec-megamono-0000` and supports Nx `>=18 <24`. Nx 17 remains supported by the core plugin but cannot host this package's async config discovery. Its tested Wrangler range, pinned scaffold version, and pinned scaffold `compatibility_date` live in `@megamono/plugin/compatibility.json`; no generator resolves `latest` or chooses a date from the wall clock.
 
 `createNodes` discovers the standard Wrangler configuration names:
 

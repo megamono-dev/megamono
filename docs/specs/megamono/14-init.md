@@ -28,11 +28,11 @@ external_references: [playstack:45-cli]
 
 ## Three entry points
 
-| Situation                           | Path                                     |
-| ----------------------------------- | ---------------------------------------- |
-| New repository                      | `create-megamono` (`spec-megamono-0002`) |
-| Existing npm repository, not yet Nx | `nx init`, then convert (`0009`)         |
-| Existing, established Nx workspace  | `workspace-init` (this spec)             |
+| Situation                               | Path                                     |
+| --------------------------------------- | ---------------------------------------- |
+| New repository                          | `create-megamono` (`spec-megamono-0002`) |
+| Existing package repository, not yet Nx | `nx init`, then convert (`0009`)         |
+| Existing, established Nx workspace      | `workspace-init` (this spec)             |
 
 `create-megamono` never modifies an existing repository. Convert owns structural adoption, including moving a single application into the accepted workspace shape. `workspace-init` owns an Nx workspace whose project structure already works and needs only Megamono's repository-governance layers.
 
@@ -50,7 +50,7 @@ The direct generator invocation remains supported for repository-local automatio
 npm exec nx -- generate @megamono/plugin:workspace-init
 ```
 
-`megamono init` is a thin global dispatcher. It requires the repository-local plugin, selects the local package manager from the lockfile, consumes only its documented Playstack routing options, forwards every other init option, and returns the local Nx process status. The core path does not install dependencies or weaken the preflight below; explicitly requested post-init Playstack setup may install the packages described in its separate handoff contract. After initialization, the same dispatcher exposes additive repository and application operations without duplicating generator behavior.
+`megamono init` is a thin global dispatcher. It requires the repository-local plugin, selects root package-manager ownership from an unambiguous lockfile or matching `packageManager` declaration, consumes only its documented Playstack routing options, forwards every other init option, and returns the local Nx process status. The core path does not install dependencies or weaken mutation preflight; explicitly requested post-init Playstack setup may install the packages described in its separate handoff contract. A core-only survey uses the local Nx binary directly through Node and therefore does not require the active package-manager executable to be compatible. After initialization, the same dispatcher exposes additive repository and application operations without duplicating generator behavior.
 
 ```text
 megamono add app web
@@ -86,7 +86,9 @@ When a terminal is interactive, a bare `--playstack-packages` opens a multiselec
 
 For a survey, no packages are installed. An already-installed Playstack CLI contributes its own read-only survey; otherwise the Megamono report lists the deferred package and command plan.
 
-Existing-workspace adoption uses the adoption baseline from `spec-megamono-0000`: Node `>=18.18 <25`, npm `>=9 <12` or pnpm `>=8 <12`, Nx `>=17 <24`, TypeScript `>=5.2 <7`, and macOS or Linux. Optional Playstack setup applies its narrower Node `>=20` gate only when requested, plus ESLint `^9` only when the explicit `@playstack/lint` package is selected; these constraints never narrow core Megamono adoption. Inference plugins require Nx 18 or newer; an Nx 17 workspace can adopt the core modules and receives an explicit capability reduction for detected Apple, Cargo, or Cloudflare manifests. An unsupported or ambiguous lockfile, unsupported toolchain, malformed project graph, dirty worktree, or execution on the default branch refuses before mutation. The global dispatcher checks the actually active Node and package-manager binaries as well as committed manifests, so an unsupported global pnpm or Node 25+ cannot begin generation merely because CI uses a supported toolchain. `--toolchainPin=nvmrc|node-version|both --toolchainNode=<exact-version>` may add explicit repository-owned runtime pins after the same conflict preview. `--survey` is read-only and may run on a dirty or default-branch worktree.
+Existing-workspace mutation uses the adoption baseline from `spec-megamono-0000`: Node `>=18.18 <25`; npm `>=9 <12`, pnpm `>=8 <12`, Yarn `>=1.22 <5`, or Bun `>=1.1 <2`; Nx `>=17 <24`; and TypeScript `>=5.2 <7`. Core adoption is operating-system-neutral. Platform-specific generators and targets apply their own host gates instead of disqualifying the repository. Optional Playstack setup applies its narrower Node `>=20` gate only when requested, plus ESLint `^9` only when the explicit `@playstack/lint` package is selected; these constraints never narrow core Megamono adoption. Inference plugins require Nx 18 or newer; an Nx 17 workspace can adopt the core modules and receives an explicit capability reduction for detected Apple, Cargo, or Cloudflare manifests.
+
+Eligibility, mutation safety, and host readiness are separate decisions. Any established Nx repository with the local plugin can be surveyed, including one with no recognized manager, an unavailable global manager, a dirty tree, or an untested future Nx version. Mutation additionally requires supported Nx and TypeScript versions, unambiguous root ownership, a supported active Node and selected package-manager binary, a valid project graph, a clean worktree, and a non-default named branch. Nested project lockfiles are ignored for root ownership; conflicting root managers refuse. If the lockfile identifies the manager but `package.json#packageManager` is absent, init records the inferred manager only in `megamono.json`. It never adds, replaces, or upgrades the repository's manager declaration. Package-manager migration is a separate explicit operation. `--toolchainPin=nvmrc|node-version|both --toolchainNode=<exact-version>` may add explicit repository-owned runtime pins after the same conflict preview.
 
 ## Additive and modular
 
@@ -161,7 +163,7 @@ The command refuses unknown and `ejectable: false` artifacts before mutation. An
 Every run begins with the same deterministic survey:
 
 - resolved Nx project names, roots, evidence-backed application/library types, per-project platforms, targets, and tags;
-- npm, Node, Nx, and TypeScript versions;
+- root package-manager ownership and active package-manager, Node, Nx, and TypeScript versions;
 - supported and unsupported non-JavaScript manifests;
 - existing docs roots, corpus-like directories, and Markdown files;
 - existing `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, and skill directories;
@@ -184,7 +186,7 @@ The default flow follows the adaptive-prompting rule from `spec-megamono-0002`:
 4. Show the complete ordered plan and diff summary.
 5. Require explicit confirmation, then apply the same plan.
 
-Inference is never a prompt. Lockfiles identify the package manager, resolved Nx metadata identifies projects and targets, manifests identify relevant inference plugins, and existing tags identify the current vocabulary. A prompt is permitted only when two valid outcomes remain.
+Inference is never a prompt. Root lockfiles and `packageManager` declarations identify package-manager ownership, resolved Nx metadata identifies projects and targets, manifests identify relevant inference plugins, and existing tags identify the current vocabulary. A prompt is permitted only when two valid outcomes remain.
 
 The preview may be skipped only with `--yes`. `--yes` is not an answer to an ambiguity: non-interactive execution must also provide `--only` and every option named as unresolved by the survey. Missing input exits with programmatic classification `4` and the stable diagnostic `workspace-init-decision-required`.
 
@@ -272,4 +274,4 @@ The completion summary lists modules adopted or skipped, paths added or modified
 - Temporary structural warnings remain visible to health until ratcheted or covered by an accepted decision.
 - A failed external command writes recovery guidance without committing, pushing, or rolling back repository-owned changes.
 - Playstack capability handoff passes explicit Nx project roots, resolves a sole candidate deterministically, and exits `4` before Playstack mutation when automated selection is ambiguous.
-- A direct-package yalc handoff validates the complete local closure before init and hydrates it under npm and pnpm without requesting an unpublished Playstack dependency from the registry.
+- A direct-package yalc handoff validates the complete local closure before init and hydrates it through the selected package-manager adapter without requesting an unpublished Playstack dependency from the registry; packed npm and pnpm fixtures remain the exhaustive registry-escape contract.

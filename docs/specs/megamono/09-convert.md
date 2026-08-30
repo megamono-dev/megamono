@@ -5,7 +5,7 @@ status: accepted
 visibility: internal
 projects: [megamono]
 topics: [convert, migration, generators, git]
-summary: Defines planned, reversible conversion of an existing single-project npm repository into a Megamono workspace.
+summary: Defines planned, reversible conversion of an existing single-project package repository into a Megamono workspace.
 date: 2026-08-23
 supersedes: null
 references:
@@ -63,7 +63,7 @@ Two operations, deliberately separate.
 
 Convert-then-import is the natural sequence: make the repo a valid host, then absorb into it. Import assumes convert has already happened.
 
-An established Nx workspace whose structure should remain in place uses `workspace-init` (`spec-megamono-0014`) instead. Convert is for a single npm package or plain npm workspaces that run `nx init` only as the prerequisite to structural conversion; it is not the adoption path for a working Nx monorepo.
+An established Nx workspace whose structure should remain in place uses `workspace-init` (`spec-megamono-0014`) instead. Convert is for a single package or plain package-json/pnpm workspace that runs `nx init` only as the prerequisite to structural conversion; it is not the adoption path for a working Nx monorepo.
 
 ## What convert does
 
@@ -129,14 +129,14 @@ If execution fails after the Nx tree flushes, the generator writes `MEGAMONO-REC
 
 ## V1 decisions
 
-- V1 supports one package or plain pnpm/npm workspaces after `nx init`. The detected manager is preserved and written to `megamono.json`. Detection of Lerna, Turborepo, Rush, Yarn, Bun, conflicting lockfiles, or another workspace orchestrator produces an analysis report and refuses before mutation with `convert-unsupported-orchestrator` (programmatic classification `3`; Nx generator process status `1`, per `spec-megamono-0000`).
+- V1 supports one package, package-json workspaces (npm, Yarn, or Bun), and pnpm workspaces after `nx init`. The detected manager is preserved and written to `megamono.json`. Detection of Lerna, Turborepo, Rush, conflicting root lockfiles, or another workspace orchestrator produces an analysis report and refuses before mutation with `convert-unsupported-orchestrator` (programmatic classification `3`; Nx generator process status `1`, per `spec-megamono-0000`).
 - No library extraction is automatic. A proposal requires at least two statically identified consumers and explicit approval or a non-interactive `--extract=<source>:<destination>` mapping.
 - `--verify=config` runs docs validation, `megamono:check`, graph construction, and local health analysis. Health findings appear in the conversion summary and never create or update a GitHub issue during convert.
 - A source-root file is classified before moving. Repository infrastructure (`.github`, editor config, licenses, root manifests, Git files, and Nx files) remains at root; app-owned framework and source files move. Unclassified files are unresolved decisions, not guessed moves.
 
 ## Acceptance criteria
 
-- Single-package and plain pnpm/npm-workspace fixtures convert with preserved commands, project names, and graph edges.
+- Single-package and package-json/pnpm-workspace fixtures convert with preserved manager command families, project names, and graph edges.
 - Dirty trees, default-branch execution, unsupported orchestrators, ambiguous files, and unresolved non-interactive choices exit before mutation.
 - Dry-run and execution produce the same ordered move/update plan.
 - Every source build/test/lint command has a behaviorally equivalent target; deploy is emitted only when detected.

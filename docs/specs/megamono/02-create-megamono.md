@@ -38,7 +38,7 @@ Not a fixed preset. A guided setup that asks a handful of good questions and com
 The design tension is a combinatorial matrix that becomes unmaintainable. The line:
 
 - **Fixed (the opinionated spine):** docs and agent structure, conventions, lint rules, library boundaries, release mechanics, and maintained framework presets. The Next preset is Pages Router, Chakra UI, `src/`, ESLint, and Playwright; these are explicit generator inputs rather than inherited Nx defaults.
-- **Variable:** which platforms are in play, whether there's a Nest API, which services, which integrations, and whether the workspace uses pnpm or npm. pnpm is the default per `spec-megamono-0000`.
+- **Variable:** which platforms are in play, whether there's a Nest API, which services, which integrations, and whether the workspace uses npm, pnpm, Yarn, or Bun. npm is the default per `spec-megamono-0000`.
 
 ### Adaptive prompting
 
@@ -128,14 +128,14 @@ npx create-megamono <name>
   --integrations sentry
   --interactive true|false
   --install true|false
-  --package-manager pnpm|npm
+  --package-manager npm|pnpm|yarn|bun
   --local-packages registry|yalc
   --verify none|config|build
   --cleanup-on-failure
   --dry-run
 ```
 
-Defaults are `--database-adapter=none`, `--service-runner=none`, no integrations, `--install=true`, `--package-manager=pnpm`, `--local-packages=registry`, and `--verify=config`. Interactive creation offers Prisma, Drizzle, and no database toolkit as genuine choices, with Prisma marked recommended while it remains the fully verified baseline. A requested PostgreSQL service does not silently select an ORM. Non-interactive mode requires `name` and `apps`; all other omitted values use those defaults. `--verify=config` runs formatting, docs validation, `megamono:check`, and graph creation. `--verify=build` additionally runs affected build/test/lint targets for generated projects.
+Defaults are `--database-adapter=none`, `--service-runner=none`, no integrations, `--install=true`, `--package-manager=npm`, `--local-packages=registry`, and `--verify=config`. Interactive creation offers Prisma, Drizzle, and no database toolkit as genuine choices, with Prisma marked recommended while it remains the fully verified baseline. A requested PostgreSQL service does not silently select an ORM. Non-interactive mode requires `name` and `apps`; all other omitted values use those defaults. `--verify=config` runs formatting, docs validation, `megamono:check`, and graph creation. `--verify=build` additionally runs affected build/test/lint targets for generated projects.
 
 When a database adapter is selected, `create-megamono` invokes the same `@megamono/plugin:database` generator exposed by `megamono add database`. Database names are repository-defined normalized slugs, not a Megamono vocabulary: `primary` is only the interactive suggestion and non-interactive default when `--database-name` is omitted. Names such as `events`, `analytics`, and `identity` require no product change. Database scaffolding completes before the optional Playstack handoff so `playstack init` can bind package-owned `database-schema` artifacts to an existing named target. Service selection remains independent: the adapter owns repository tooling, while Springbar owns any requested database service.
 
@@ -220,7 +220,7 @@ That generator refuses a workspace already carrying `megamono.json` unless it is
 
 ## V1 decisions
 
-- pnpm and npm are supported. pnpm is the default; other or conflicting lockfiles fail preflight with an explicit compatibility message.
+- npm, pnpm, Yarn, and Bun are supported through their package-manager adapters. npm is the default. Creation records and pins the explicit choice; it never infers a different manager from globally available executables.
 - Selecting `apple` requires macOS. On Linux it exits `3` before staging; other selections remain supported.
 - The `create-megamono` binary creates new workspaces only. The separate `megamono init` dispatcher and its delegated `workspace-init` generator own existing workspaces.
 - Every application selected during creation is produced by the same canonical `app` generator used by `megamono add app`.

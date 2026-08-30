@@ -28,36 +28,38 @@ This document is normative. When another spec uses an older package name, comman
 
 Megamono distinguishes a pinned scaffold baseline from a broader adoption range. A new workspace is deterministic and moves forward as one tested stack; initializing an existing workspace does not require an otherwise unnecessary Nx upgrade.
 
-| Surface                            | New workspace scaffold                          | Existing-workspace adoption               |
-| ---------------------------------- | ----------------------------------------------- | ----------------------------------------- |
-| Node.js                            | `>=24 <25`                                      | `>=18.18 <25`                             |
-| pnpm                               | `>=11 <12`; default and exactly pinned          | `>=8 <12`; detected and preserved         |
-| npm                                | `>=11 <12`; exactly pinned compatibility option | `>=9 <12`; detected and preserved         |
-| Nx core adoption                   | `>=23.1 <24`                                    | `>=17 <24`                                |
-| TypeScript                         | `>=6.0 <6.1`                                    | `>=5.2 <7`                                |
-| Apple/Cargo/Cloudflare inference   | `>=23.1 <24`                                    | `>=18 <24`                                |
-| Optional Playstack handoff         | Node `>=20`; ESLint `^9` when lint is selected  | Same per-capability gate                  |
-| Operating systems for core tooling | macOS and Linux                                 | macOS and Linux                           |
-| Windows                            | Unsupported; actionable preflight refusal       | Unsupported; actionable preflight refusal |
+| Surface                            | New workspace scaffold                           | Existing-workspace adoption             |
+| ---------------------------------- | ------------------------------------------------ | --------------------------------------- |
+| Node.js                            | `>=24 <25`                                       | `>=18.18 <25`                           |
+| npm                                | `>=11 <12`; default and exactly pinned           | `>=9 <12`; detected and preserved       |
+| pnpm                               | `>=11 <12`; exactly pinned compatibility option  | `>=8 <12`; detected and preserved       |
+| Yarn                               | `>=1.22 <5`; exactly pinned compatibility option | `>=1.22 <5`; detected and preserved     |
+| Bun                                | `>=1.1 <2`; exactly pinned compatibility option  | `>=1.1 <2`; detected and preserved      |
+| Nx core adoption                   | `>=23.1 <24`                                     | `>=17 <24`                              |
+| TypeScript                         | `>=6.0 <6.1`                                     | `>=5.2 <7`                              |
+| Apple/Cargo/Cloudflare inference   | `>=23.1 <24`                                     | `>=18 <24`                              |
+| Optional Playstack handoff         | Node `>=20`; ESLint `^9` when lint is selected   | Same per-capability gate                |
+| Operating systems for core tooling | macOS and Linux                                  | Any Node-supported host                 |
+| Windows                            | Unsupported for new-workspace bootstrap in v1    | Supported for platform-neutral adoption |
 
-`create-megamono` accepts `--package-manager=pnpm|npm`, defaults to pnpm, and records the selection in both the root `packageManager` field and `megamono.json`. Every generated install, execution, CI, verification, recovery, and local-package command uses that recorded manager. Existing-workspace adoption detects an unambiguous pnpm or npm lockfile and preserves it; conflicting or unsupported lockfiles fail preflight.
+`create-megamono` accepts `--package-manager=npm|pnpm|yarn|bun`, defaults to npm, and records the selection in both the root `packageManager` field and `megamono.json`. Every generated install, execution, CI, verification, recovery, and local-package command uses that recorded manager. Existing-workspace adoption selects the manager from an unambiguous root lockfile or a matching `packageManager` declaration and preserves it. Nested lockfiles do not participate in root ownership. When a root lockfile supplies the only answer, Megamono records the inferred choice in `megamono.json` without adding a `packageManager` declaration. Changing managers is a separate explicit migration, never a side effect of adoption.
 
-`@megamono/plugin` declares the adoption range in `engines` and `peerDependencies`. Each inference plugin declares its narrower Nx floor independently. Nx 17's plugin discovery callback is synchronous, so it can host core adoption but not the async Apple, Cargo, or Cloudflare discovery implementations. Adding an unsupported package manager, operating system, or Nx version remains an explicit compatibility project.
+`@megamono/plugin` declares the adoption range in `engines` and `peerDependencies`. Each inference plugin declares its narrower Nx floor independently. Nx 17's plugin discovery callback is synchronous, so it can host core adoption but not the async Apple, Cargo, or Cloudflare discovery implementations. Adding another package-manager or Nx range remains an explicit compatibility project; operating-system gates belong only to capabilities that actually require them.
 
 `@megamono/plugin/compatibility.json` is a public, versioned data export containing the exact scaffold defaults, adoption ranges, per-package Nx ranges, stable test anchors, application frameworks, service images, vendor SDKs, and optional external CLIs. Generators read that file rather than resolving `latest`. Changing an entry requires the affected fixture and snapshot suite in the same release.
 
 ## Package and release map
 
-| Package                   | Responsibility                                                                                      | Runtime dependency?                  | Repository status                     |
-| ------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------- |
-| `create-megamono`         | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `pnpm dlx` / `npx` | Implemented; separate release group   |
-| `@megamono/cli`           | Global `megamono` command that delegates existing-workspace operations to the local Nx plugin       | Global development tool              | Implemented; restricted release group |
-| `@megamono/plugin`        | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                  | Implemented; restricted release group |
-| `@megamono/nx-apple`      | Apple project inference, targets, and graph edges                                                   | Dev dependency only                  | Implemented; restricted release group |
-| `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                  | Implemented; restricted release group |
-| `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators                                    | Dev dependency only                  | Implemented; restricted release group |
-| `@megamono/nx-extension`  | WXT extension inference and generators                                                              | Dev dependency only                  | Reserved; no package directory        |
-| `@megamono/nx-laravel`    | Composer/Laravel inference and generators                                                           | Dev dependency only                  | Reserved; no package directory        |
+| Package                   | Responsibility                                                                                      | Runtime dependency?                   | Repository status                     |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------- |
+| `create-megamono`         | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `npx` or equivalent | Implemented; separate release group   |
+| `@megamono/cli`           | Global `megamono` command that delegates existing-workspace operations to the local Nx plugin       | Global development tool               | Implemented; restricted release group |
+| `@megamono/plugin`        | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                   | Implemented; restricted release group |
+| `@megamono/nx-apple`      | Apple project inference, targets, and graph edges                                                   | Dev dependency only                   | Implemented; restricted release group |
+| `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                   | Implemented; restricted release group |
+| `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators                                    | Dev dependency only                   | Implemented; restricted release group |
+| `@megamono/nx-extension`  | WXT extension inference and generators                                                              | Dev dependency only                   | Reserved; no package directory        |
+| `@megamono/nx-laravel`    | Composer/Laravel inference and generators                                                           | Dev dependency only                   | Reserved; no package directory        |
 
 The `megamono` Nx release group is configured to publish `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, `@megamono/nx-cargo`, and `@megamono/nx-cloudflare` as fixed-version restricted packages on npm from `megamono-dev/megamono`. Their canonical names do not change when they graduate to public npm. The unscoped `create-megamono` entry package cannot be private on npm and remains in a separate release group until public promotion.
 
@@ -135,7 +137,7 @@ megamono help
 megamono --version
 ```
 
-`megamono init [...options]` finds the workspace from the current directory, detects exactly one supported lockfile, verifies that the corresponding local package manager, Nx, and `@megamono/plugin` are installed, and delegates to the local `@megamono/plugin:workspace-init` generator. pnpm workspaces run `pnpm exec nx generate`; npm workspaces run `npm exec nx -- generate`. Every option not owned by the Playstack orchestration families below is forwarded as its own argument without reinterpretation, including `--survey`, `--only`, `--interactive`, `--yes`, and generator options added by a compatible local plugin.
+`megamono init [...options]` finds the workspace from the current directory, resolves root package-manager ownership from the committed lockfile or `packageManager` declaration, verifies that the corresponding local package manager, Nx, and `@megamono/plugin` are installed, and delegates to the local `@megamono/plugin:workspace-init` generator through the recorded manager's adapter. A core-only `--survey` is the exception: it invokes the repository-local Nx binary directly through Node, so an unsupported or unavailable global package manager does not prevent read-only inspection. Every option not owned by the Playstack orchestration families below is forwarded as its own argument without reinterpretation, including `--survey`, `--only`, `--interactive`, `--yes`, and generator options added by a compatible local plugin.
 
 `megamono generate <name> [...options]` reads the workspace-local plugin availability registry before delegation. Available names run through the local Nx and package manager; gated and reserved names exit `3` with the registry's exact unsatisfied gate and never reach Nx. This preserves an available-only published collection while giving the dedicated CLI a stable diagnostic for canonical names that are not yet buildable.
 
@@ -158,7 +160,7 @@ The local `@megamono/plugin` remains a prerequisite because installing it would 
 
 After workspace-init succeeds, Megamono reads the local Nx graph for capability handoff. Conventional `apps/web` and `apps/api` projects win automatically; otherwise a sole matching `type:app` plus `platform:web|node` candidate is selected. Multiple candidates prompt interactively and exit `4` in automation unless the matching `--playstack-web` or `--playstack-api` path is supplied. A false value deliberately omits that surface. Every selected root is passed explicitly as `--web=<root>` or `--api=<root>`; Playstack never needs to infer Nx layout.
 
-Playstack setup installs a missing `@playstack/cli` as a dev dependency, handles explicitly named full package IDs, delegates each concise capability to the repository-local `playstack add`, and finally invokes `playstack init`. For a direct yalc package, Megamono installs required third-party dependencies and peers first, adds the complete validated local Playstack closure at exact versions, rewrites copied internal dependency edges to sibling `file:` references, and only then hydrates npm or pnpm. Existing `file:.yalc/*` declarations are treated as satisfied. Capability commands instead receive `--local-packages=yalc` and retain Playstack ownership of recipe closure resolution. Neither path substitutes a registry version; a partial failure names completed commands and the exact retry. Playstack owns capability recipes, `playstack.json`, package detection, artifact targets, and all later sync/update behavior.
+Playstack setup installs a missing `@playstack/cli` as a dev dependency, handles explicitly named full package IDs, delegates each concise capability to the repository-local `playstack add`, and finally invokes `playstack init`. For a direct yalc package, Megamono installs required third-party dependencies and peers first, adds the complete validated local Playstack closure at exact versions, rewrites copied internal dependency edges to sibling `file:` references, and only then hydrates through the selected package-manager adapter. Existing `file:.yalc/*` declarations are treated as satisfied. Capability commands instead receive `--local-packages=yalc` and retain Playstack ownership of recipe closure resolution. Neither path substitutes a registry version; a partial failure names completed commands and the exact retry. Playstack owns capability recipes, `playstack.json`, package detection, artifact targets, and all later sync/update behavior.
 
 `--survey` remains write-free. With `--playstack`, it runs `playstack init --survey` only when the local Playstack CLI already exists; otherwise it reports the package additions and command that a real run would perform. It never installs from either source during a survey.
 
@@ -206,7 +208,7 @@ Every generator follows these rules:
 7. **Secrets by name only.** Workflows declare required secret names; generators never request or persist secret values.
 8. **Dry run.** Mutating generators support `--dry-run`, print the same ordered plan used for execution, and write nothing.
 
-Commands emitted by a generator are package-manager-aware. pnpm workspaces use `pnpm install`, `pnpm exec`, `pnpm run`, and `workspace:` dependency declarations. npm workspaces use `npm install`, `npm exec`, `npm run`, and npm-compatible local workspace declarations. A generator never mixes command families or infers a manager from executable availability after the workspace contract has been recorded. Generated CI and health workflows inherit the workspace's committed Node and package-manager versions; when Node is undeclared, the fallback is selected from the installed Nx major rather than the scaffold baseline.
+Commands emitted by a generator are package-manager-aware. npm, pnpm, Yarn, and Bun each use a single tested adapter for install, frozen install, executable, script, lockfile, workspace-discovery, and local-dependency syntax. pnpm uses `workspace:` declarations; npm, Yarn, and Bun retain package-json-workspace-compatible declarations. A generator never mixes command families or infers ownership from executable availability after the workspace contract has been recorded. Generated CI and health workflows inherit the workspace's committed Node and package-manager versions; when the manager version is undeclared, lockfile evidence such as Yarn Classic is preserved before falling back to the compatibility baseline. When Node is undeclared, the fallback is selected from the installed Nx major rather than the scaffold baseline.
 
 Private package routing is configuration, not a yalc deployment strategy. `megamono.json.packageSources.registries` maps user-selected scopes to HTTPS registries, and a bounded `.npmrc` section records only those routes. Authentication remains external. CI validation rejects development-only local package addresses and yalc state, requires the selected manager's committed lockfile, and verifies recorded routes before builds begin.
 
@@ -248,10 +250,10 @@ A spec is build-ready when it has `status: accepted`, no unresolved decision tha
 
 ## Acceptance criteria
 
-- Packed packages enforce the supported Node, pnpm/npm, Nx, and TypeScript ranges and reject unsupported or ambiguous package managers and operating systems during preflight.
+- Packed packages enforce the supported Node, npm/pnpm/Yarn/Bun, Nx, and TypeScript ranges. Mutation rejects unsupported or ambiguous root package-manager ownership, while survey remains available and platform-neutral core adoption does not reject a repository solely because of its host OS.
 - `workspace-eject` preserves artifact content, changes only Megamono ownership metadata or managed-section delimiters, and prevents later plugin upgrades from reclaiming the artifact.
 - Every public generator and executor name appears in this contract and resolves from a local-registry installation fixture.
-- A packed `@megamono/cli` installed globally delegates `megamono init --survey` through both pnpm and npm fixtures, refuses missing or ambiguous workspace prerequisites before spawn, forwards generator arguments unchanged, and propagates delegated exit status.
+- A packed `@megamono/cli` installed globally delegates mutation through npm and pnpm fixtures, forwards generator arguments unchanged, and propagates delegated exit status. Adapter tests cover Yarn and Bun command families, and core-only survey bypasses package-manager execution while remaining repository-local.
 - Packed npm and pnpm fixtures prove `megamono add app web` and `megamono add app api` produce the same project contracts as `create-megamono`, are stable on rerun, preview without writes, reject incompatible occupied roots, and support a second named instance.
 - Packed npm and pnpm fixtures prove named Prisma and Drizzle database projects use the shared create/add primitive, validate in their native formats, retain the canonical `type:data` graph contract, and keep Playstack artifact targets inside their selected Nx projects.
 - Registry and yalc Playstack fixtures prove init-only options are consumed rather than forwarded, concise capabilities receive explicit Nx-resolved web/API roots, ambiguous automation refuses before Playstack mutation, explicit yalc packages install their complete local closure without registry fallback, `@playstack/cli` remains a dev dependency, the local `playstack` binary performs configuration, survey writes nothing, missing closure artifacts fail before workspace-init, and a post-init failure reports completed commands plus an exact recovery command.
