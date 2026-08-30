@@ -209,11 +209,11 @@ OpenGraphs (shipping, 200+ users), Timespans, and Basemarks. Horizens is not a c
 
 **Wave 2.** Real demand, but it does not block anything the way the Apple and Cargo plugins do.
 
-## Wave 3 — `@megamono/nx-cloudflare`
+## Implemented restricted-validation package — `@megamono/nx-cloudflare`
 
 Cloudflare Workers remain JavaScript projects, but their service, Durable Object, Workflow, Tail Worker, and Queue relationships live in Wrangler configuration rather than imports. That makes them a graph-repair problem, not merely another JavaScript scaffolder.
 
-`spec-megamono-0015` promotes this package out of the demand-driven list and defines its `createNodes`/`createDependencies` contract, inferred targets, normalized binding metadata, health integration, and deliberately thin generators. It follows Wave 1 because the Apple and Cargo packages establish the packed inference and affected-propagation pattern it must reuse.
+`spec-megamono-0015` promoted this package out of the demand-driven list and defines its `createNodes`/`createDependencies` contract, inferred targets, normalized binding metadata, health integration, and deliberately thin generators. The implementation and packed-package fixture now live in this repository, and the package is part of the restricted `megamono` release group. Public promotion remains a distribution decision rather than unfinished generator work.
 
 ## Documented, demand-driven
 

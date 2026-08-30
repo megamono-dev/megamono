@@ -46,22 +46,22 @@ Megamono distinguishes a pinned scaffold baseline from a broader adoption range.
 
 `@megamono/plugin/compatibility.json` is a public, versioned data export containing the exact scaffold defaults, adoption ranges, per-package Nx ranges, stable test anchors, application frameworks, service images, vendor SDKs, and optional external CLIs. Generators read that file rather than resolving `latest`. Changing an entry requires the affected fixture and snapshot suite in the same release.
 
-## Published package map
+## Package and release map
 
-| Package                   | Responsibility                                                                                      | Runtime dependency?                  |
-| ------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `create-megamono`         | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `pnpm dlx` / `npx` |
-| `@megamono/cli`           | Global `megamono` command that delegates existing-workspace operations to the local Nx plugin       | Global development tool              |
-| `@megamono/plugin`        | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                  |
-| `@megamono/nx-apple`      | Apple project inference, targets, and graph edges                                                   | Dev dependency only                  |
-| `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                  |
-| `@megamono/nx-extension`  | WXT extension inference and generators; Wave 2                                                      | Dev dependency only                  |
-| `@megamono/nx-laravel`    | Composer/Laravel inference and generators; Wave 2                                                   | Dev dependency only                  |
-| `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators; Wave 3                            | Dev dependency only                  |
+| Package                   | Responsibility                                                                                      | Runtime dependency?                  | Repository status                     |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------- |
+| `create-megamono`         | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `pnpm dlx` / `npx` | Implemented; separate release group   |
+| `@megamono/cli`           | Global `megamono` command that delegates existing-workspace operations to the local Nx plugin       | Global development tool              | Implemented; restricted release group |
+| `@megamono/plugin`        | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                  | Implemented; restricted release group |
+| `@megamono/nx-apple`      | Apple project inference, targets, and graph edges                                                   | Dev dependency only                  | Implemented; restricted release group |
+| `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                  | Implemented; restricted release group |
+| `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators                                    | Dev dependency only                  | Implemented; restricted release group |
+| `@megamono/nx-extension`  | WXT extension inference and generators                                                              | Dev dependency only                  | Reserved; no package directory        |
+| `@megamono/nx-laravel`    | Composer/Laravel inference and generators                                                           | Dev dependency only                  | Reserved; no package directory        |
 
-The initial validation channel publishes `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, `@megamono/nx-cargo`, and `@megamono/nx-cloudflare` as restricted packages on npm from `megamono-dev/megamono`. Their canonical names do not change when they graduate to public npm. The unscoped `create-megamono` entry package cannot be private on npm and remains in a separate release group until public promotion.
+The `megamono` Nx release group is configured to publish `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, `@megamono/nx-cargo`, and `@megamono/nx-cloudflare` as fixed-version restricted packages on npm from `megamono-dev/megamono`. Their canonical names do not change when they graduate to public npm. The unscoped `create-megamono` entry package cannot be private on npm and remains in a separate release group until public promotion.
 
-Later scoped packages enter the same restricted validation channel before public promotion. Adding a package to this map does not add it to the current release group until its accepted spec and packed-package fixture are complete.
+These labels deliberately distinguish specification state from software and distribution state. `accepted` means the behavioral contract is build-ready; `implemented` means a package directory and tested implementation exist; membership in the restricted release group means CI is authorized to publish it after its gates pass; public availability requires a separate promotion. A reserved row is neither implemented nor published. Later scoped packages enter the restricted validation group only after their accepted spec, implementation, and packed-package fixture are complete.
 
 `docs`, `skills`, `conventions`, `content`, `integrations`, `playstack`, and `generators` are internal modules of `@megamono/plugin`, not separately published packages in v1. This avoids version skew between repo-shaping capabilities that must agree on one `megamono.json` schema.
 
@@ -218,7 +218,9 @@ Each published package must pass:
 - For language plugins, fixtures for workspace roots, leaf projects, local dependencies, renamed targets, missing toolchains, malformed manifests, and cycles.
 - Graph assertions using `NX_DAEMON=false NX_CACHE_PROJECT_GRAPH=false nx graph --file=...` plus one `nx affected` assertion per dependency-edge kind.
 
-The compatibility suite installs packed output—not workspace source aliases—against stable anchors for every supported Nx major, 17 through 23. Nx 17 exercises `@megamono/plugin`; Nx 18 onward also exercise the inference plugins. Each fixture runs init twice, checks target metadata capability gates, compiles a consumer TypeScript import, and runs core graph/check behavior. A scheduled and manually dispatchable `nx@next` plus `typescript@next` canary is non-blocking until that future line enters the declared peer range.
+The compatibility suite installs packed output—not workspace source aliases—against stable anchors for every supported Nx major, 17 through 23. Nx 17 exercises `@megamono/plugin`; Nx 18 onward also exercise the inference plugins. Each fixture runs init twice, adds and reruns named Prisma and Drizzle targets, checks target metadata capability gates, compiles a consumer TypeScript import, and runs core graph/check behavior. Nx 18 onward also add a Cloudflare binding fixture, while Nx 18–23 add the supported inference surfaces exercised by that anchor.
+
+A scheduled and manually dispatchable `nx@next` plus `typescript@next` canary is non-blocking until that future line enters the declared peer range. Nx 24 is not supported merely because the canary starts: promotion requires replacing any removed/deprecated executor configuration exposed by the canary, updating peer and engine ranges, adding a stable Nx 24 anchor, and making the full packed matrix blocking for that line.
 
 ## Cross-product contracts
 

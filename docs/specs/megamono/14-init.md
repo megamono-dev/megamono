@@ -19,6 +19,7 @@ references:
     spec-megamono-0008,
     spec-megamono-0009,
     spec-megamono-0011,
+    spec-megamono-0015,
   ]
 external_references: [playstack:45-cli]
 ---
@@ -98,7 +99,7 @@ Every execution installs a small baseline: `megamono.json`, the `megamono` proje
 | `lint`      | Project-tag completion, structural checks, docs validation, and ESLint wiring (`spec-megamono-0006`)                                          |
 | `skills`    | Managed portable skills under `.agents/skills` and the `.claude/skills` projection (`spec-megamono-0005`)                                     |
 | `health`    | The deterministic scheduled health workflow and local health target (`spec-megamono-0008`)                                                    |
-| `inference` | Supported Apple or Cargo plugins when corresponding manifests are detected (`spec-megamono-0003`)                                             |
+| `inference` | Supported Apple, Cargo, or Cloudflare plugins when corresponding manifests are detected (`spec-megamono-0003`, `spec-megamono-0015`)          |
 
 ```text
 npm exec nx g @megamono/plugin:workspace-init --only=docs,agents
@@ -190,7 +191,7 @@ Init adapts rather than normalizing for its own sake:
 - Existing project names, roots, target names, and library names remain unchanged.
 - Existing `type:`, `scope:`, `platform:`, and `visibility:` tags remain unchanged when valid. Missing required tags are proposed using `--defaultScope` and `--defaultPlatform`; conflicting vocabularies are reported rather than renamed.
 - The Nest feature-library convention applies to newly generated libraries only. Renaming existing libraries and imports is outside init.
-- Supported `Package.swift` and `Cargo.toml` surfaces produce an inference-plugin offer. A surface without a shipped plugin is reported as a graph-confidence gap.
+- Supported `Package.swift`, `Cargo.toml`, and Wrangler configuration surfaces produce an inference-plugin offer. A surface without a shipped plugin is reported as a graph-confidence gap.
 
 Generated documentation is centralized under `--docsRoot=docs`, matching the settled location in `spec-megamono-0004`. Init does not reopen the centralized-versus-colocated decision.
 
