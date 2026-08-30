@@ -13,6 +13,7 @@ import { isSafeWorkspaceRelativePath } from '../../lib/config';
 import {
   PlaystackWorkspaceIntegrationError,
   assertPlaystackProductInstalled,
+  assertPlaystackWorkspaceCompatibility,
   readInitializedMegamonoWorkspace,
   retainedLocalPackageVersion,
 } from '../playstack-workspace';
@@ -188,6 +189,7 @@ export async function playstackSkillsGenerator(
   options: PlaystackSkillsGeneratorSchema,
 ): Promise<GeneratorCallback | void> {
   const workspace = readInitializedMegamonoWorkspace(tree);
+  assertPlaystackWorkspaceCompatibility(tree);
   const products = assertPlaystackProductInstalled(tree);
   const config = plannedPlaystackConfiguration(tree);
   logger.info(`# Playstack skills plan

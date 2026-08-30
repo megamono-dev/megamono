@@ -356,6 +356,13 @@ try {
       },
     },
   );
+  await json(
+    resolve(packageDirectories.get('@megamono/plugin'), 'compatibility.json'),
+    {
+      playstackIntegration: { node: '>=20', eslint: '^9.0.0' },
+      scaffoldPackages: {},
+    },
+  );
   for (const directory of packageDirectories.values())
     await publishPackage(directory, registry, environment);
 

@@ -10,6 +10,7 @@ import {
   PlaystackWorkspaceIntegrationError,
   assertInitializedMegamonoWorkspace,
   assertPlaystackProductInstalled,
+  assertPlaystackWorkspaceCompatibility,
   declaredRootDevelopmentDependency,
   retainedLocalPackageVersion,
 } from '../playstack-workspace';
@@ -114,6 +115,7 @@ export async function playstackLintGenerator(
 ): Promise<GeneratorCallback | void> {
   assertInitializedMegamonoWorkspace(tree);
   const products = assertPlaystackProductInstalled(tree);
+  assertPlaystackWorkspaceCompatibility(tree, { eslint: true });
   const preset = options.preset ?? 'recommended';
   if (!['recommended', 'all'].includes(preset)) {
     throw new PlaystackWorkspaceIntegrationError(

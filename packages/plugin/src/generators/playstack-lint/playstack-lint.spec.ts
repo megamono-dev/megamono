@@ -11,6 +11,7 @@ function fixture(product = true): Tree {
     ...(product
       ? { dependencies: { '@playstack/content': '0.1.0-beta.1' } }
       : {}),
+    devDependencies: { eslint: '^9.39.0' },
   });
   writeJson(tree, 'megamono.json', DEFAULT_MEGAMONO_CONFIG);
   tree.write(
@@ -83,7 +84,10 @@ describe('playstack-lint generator', () => {
       name: '@acme/workspace',
       private: true,
       dependencies: { '@playstack/content': '0.1.0-beta.1' },
-      devDependencies: { '@playstack/lint': 'file:.yalc/@playstack/lint' },
+      devDependencies: {
+        '@playstack/lint': 'file:.yalc/@playstack/lint',
+        eslint: '^9.39.0',
+      },
     });
     await playstackLintGenerator(tree, {});
     expect(readJson(tree, 'package.json')).toMatchObject({

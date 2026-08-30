@@ -9,6 +9,7 @@ import { posix } from 'node:path';
 import { isSafeWorkspaceRelativePath } from '../lib/config';
 import { compatiblePlaystackPackageVersion } from '../lib/emissions';
 import { normalizeSlug, readDocsGeneratorConfig } from './docs-record';
+import { assertPlaystackWorkspaceCompatibility } from './playstack-workspace';
 
 const contentCollectionVersion = 1;
 const contentCollectionsVersion = '0.15.2';
@@ -231,6 +232,7 @@ export function createContentCollection(
   tree: Tree,
   rawName: string,
 ): ContentCollection {
+  assertPlaystackWorkspaceCompatibility(tree);
   readDocsGeneratorConfig(tree);
   const name = normalizeSlug(rawName, 'content library name');
   const root = `packages/${name}`;

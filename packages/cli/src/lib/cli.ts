@@ -855,6 +855,83 @@ async function pluginScaffoldVersions(
   return compatibility.scaffoldPackages ?? {};
 }
 
+async function pluginPlaystackCompatibility(root: string): Promise<{
+  readonly node: string;
+  readonly eslint: string;
+}> {
+  const manifest = createRequire(join(root, 'package.json')).resolve(
+    '@megamono/plugin/package.json',
+  );
+  const compatibility = JSON.parse(
+    await readFile(join(dirname(manifest), 'compatibility.json'), 'utf8'),
+  ) as {
+    playstackIntegration?: { node?: unknown; eslint?: unknown };
+  };
+  const node = compatibility.playstackIntegration?.node;
+  const eslint = compatibility.playstackIntegration?.eslint;
+  if (typeof node !== 'string' || typeof eslint !== 'string') {
+    throw new CliError(
+      'The local @megamono/plugin does not declare Playstack compatibility.',
+      3,
+    );
+  }
+  return { node, eslint };
+}
+
+function versionMajor(value: string | undefined): number | undefined {
+  const match = value?.match(/(?:^|[^0-9])(\d+)(?:\.\d+)?/);
+  return match ? Number(match[1]) : undefined;
+}
+
+async function assertPlaystackCompatibility(
+  root: string,
+  packages: readonly string[],
+): Promise<void> {
+  const compatibility = await pluginPlaystackCompatibility(root);
+  const manifest = JSON.parse(
+    await readFile(join(root, 'package.json'), 'utf8'),
+  ) as {
+    engines?: { node?: unknown };
+    dependencies?: Record<string, unknown>;
+    devDependencies?: Record<string, unknown>;
+  };
+  const declaredNode = manifest.engines?.node;
+  if (typeof declaredNode === 'string') {
+    const lowerBound = declaredNode.match(/>=\s*(\d+)/)?.[1];
+    const declaredMajor = lowerBound
+      ? Number(lowerBound)
+      : versionMajor(declaredNode);
+    if (declaredMajor === undefined || declaredMajor < 20) {
+      throw new CliError(
+        `Playstack packages require Node ${compatibility.node}, but package.json engines.node is ${declaredNode}. Narrow the workspace engine before enabling Playstack.`,
+        3,
+      );
+    }
+  } else if (Number(process.versions.node.split('.')[0]) < 20) {
+    throw new CliError(
+      `Playstack packages require Node ${compatibility.node}; the current runtime is ${process.version}.`,
+      3,
+    );
+  }
+  if (packages.includes('@playstack/lint')) {
+    const declaredEslint =
+      manifest.devDependencies?.eslint ?? manifest.dependencies?.eslint;
+    if (
+      typeof declaredEslint !== 'string' ||
+      versionMajor(declaredEslint) !== 9
+    ) {
+      throw new CliError(
+        `Playstack lint requires ESLint ${compatibility.eslint}; the workspace declares ${
+          typeof declaredEslint === 'string'
+            ? declaredEslint
+            : 'no ESLint version'
+        }.`,
+        3,
+      );
+    }
+  }
+}
+
 function requiredAppPlugins(type: string): readonly string[] {
   if (type === 'web' || type === 'site')
     return ['@nx/next', '@nx/playwright', '@nx/js', '@nx/eslint'];
@@ -1244,6 +1321,9 @@ async function runInit(
       )}. Commit that dependency change, then rerun megamono init.`,
       3,
     );
+  }
+  if (options.playstack) {
+    await assertPlaystackCompatibility(root, options.playstackPackages);
   }
 
   const [nxCommand, nxArgs] = nxInvocation(

@@ -156,6 +156,72 @@ try {
     '--bootstrap',
   ]);
 
+  const databaseCommand = [
+    'exec',
+    'nx',
+    '--',
+    'generate',
+    '@megamono/plugin:database',
+    '--name=compatibility',
+    '--adapter=drizzle',
+    '--scope=compat',
+    '--interactive=false',
+    '--yes',
+    '--bootstrap',
+  ];
+  run('npm', databaseCommand);
+  const databaseConfig = readFileSync(
+    join(fixtureRoot, 'packages/database-compatibility/package.json'),
+    'utf8',
+  );
+  const playstackConfig = JSON.parse(
+    readFileSync(join(fixtureRoot, 'playstack.json'), 'utf8'),
+  );
+  assert(
+    playstackConfig.databases?.compatibility?.adapter === 'drizzle' &&
+      playstackConfig.databases.compatibility.dialect === 'postgresql',
+    `Nx ${nxVersion} did not retain the named Drizzle target contract.`,
+  );
+  run('npm', databaseCommand);
+  assert(
+    readFileSync(
+      join(fixtureRoot, 'packages/database-compatibility/package.json'),
+      'utf8',
+    ) === databaseConfig,
+    `Nx ${nxVersion} changed the database project during an idempotent rerun.`,
+  );
+
+  if (supportsInferencePlugins) {
+    const appCommand = [
+      'exec',
+      'nx',
+      '--',
+      'generate',
+      '@megamono/plugin:app',
+      '--type=apple',
+      '--name=compat-apple',
+      '--directory=apps/compat-apple',
+      '--scope=compat',
+      '--workspaceName=Compatibility',
+      '--interactive=false',
+      '--yes',
+      '--bootstrap',
+    ];
+    run('npm', appCommand);
+    const appleApp = readFileSync(
+      join(fixtureRoot, 'apps/compat-apple/project.json'),
+      'utf8',
+    );
+    run('npm', appCommand);
+    assert(
+      readFileSync(
+        join(fixtureRoot, 'apps/compat-apple/project.json'),
+        'utf8',
+      ) === appleApp,
+      `Nx ${nxVersion} changed the application during an idempotent rerun.`,
+    );
+  }
+
   const project = JSON.parse(
     run('npm', ['exec', 'nx', '--', 'show', 'project', 'megamono', '--json']),
   );
@@ -175,6 +241,16 @@ try {
     projects.includes('demo'),
     'The fixture application is missing from the Nx project graph.',
   );
+  assert(
+    projects.includes('compat-database-compatibility'),
+    `Nx ${nxVersion} did not register the generated database project.`,
+  );
+  if (supportsInferencePlugins) {
+    assert(
+      projects.includes('compat-compat-apple'),
+      `Nx ${nxVersion} did not register the generated Apple application.`,
+    );
+  }
   run('npm', ['exec', 'nx', '--', 'run', 'megamono:check']);
 
   if (supportsInferencePlugins) {
@@ -304,13 +380,7 @@ process.stdout.write(JSON.stringify({
     '.github/workflows/megamono-health.yml',
     'eslint.config.mjs',
   ];
-  const beforeRerun = Object.fromEntries(
-    managedPaths.map((path) => [
-      path,
-      readFileSync(join(fixtureRoot, path), 'utf8'),
-    ]),
-  );
-  run('npm', [
+  const initCommand = [
     'exec',
     'nx',
     '--',
@@ -322,7 +392,17 @@ process.stdout.write(JSON.stringify({
     '--interactive=false',
     '--yes',
     '--bootstrap',
-  ]);
+  ];
+  // Reconcile the newly added compatibility projects before measuring the
+  // stable rerun contract.
+  run('npm', initCommand);
+  const beforeRerun = Object.fromEntries(
+    managedPaths.map((path) => [
+      path,
+      readFileSync(join(fixtureRoot, path), 'utf8'),
+    ]),
+  );
+  run('npm', initCommand);
   for (const path of managedPaths) {
     assert(
       readFileSync(join(fixtureRoot, path), 'utf8') === beforeRerun[path],

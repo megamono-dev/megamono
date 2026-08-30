@@ -1,5 +1,22 @@
 import { getProjects, readJson, type Tree } from '@nx/devkit';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { megamonoConfigSchema } from '../lib/config';
+import {
+  parseVersionNumber,
+  workspaceDependencyVersion,
+} from '../lib/workspace-compatibility';
+
+const playstackCompatibility = (
+  JSON.parse(
+    readFileSync(join(__dirname, '../../compatibility.json'), 'utf8'),
+  ) as {
+    readonly playstackIntegration: {
+      readonly node: string;
+      readonly eslint: string;
+    };
+  }
+).playstackIntegration;
 
 const integrationPackages = new Set([
   '@playstack/cli',
@@ -11,6 +28,7 @@ interface PackageManifest {
   readonly dependencies?: Readonly<Record<string, unknown>>;
   readonly devDependencies?: Readonly<Record<string, unknown>>;
   readonly optionalDependencies?: Readonly<Record<string, unknown>>;
+  readonly engines?: Readonly<Record<string, unknown>>;
 }
 
 export class PlaystackWorkspaceIntegrationError extends Error {
@@ -37,6 +55,40 @@ export function readInitializedMegamonoWorkspace(tree: Tree) {
 
 export function assertInitializedMegamonoWorkspace(tree: Tree): void {
   readInitializedMegamonoWorkspace(tree);
+}
+
+function declaredNodeLowerBound(value: string): number | undefined {
+  const minimum = value.match(/>=\s*(\d+)/)?.[1];
+  if (minimum) return Number(minimum);
+  return parseVersionNumber(value)?.major;
+}
+
+export function assertPlaystackWorkspaceCompatibility(
+  tree: Tree,
+  options: { readonly eslint?: boolean } = {},
+): void {
+  const manifest = readJson<PackageManifest>(tree, 'package.json');
+  const declaredNode = manifest.engines?.node;
+  if (typeof declaredNode === 'string') {
+    const lowerBound = declaredNodeLowerBound(declaredNode);
+    if (lowerBound === undefined || lowerBound < 20) {
+      throw new PlaystackWorkspaceIntegrationError(
+        `Playstack packages require Node ${playstackCompatibility.node}, but package.json engines.node is ${declaredNode}. Narrow the workspace engine before enabling Playstack.`,
+      );
+    }
+  } else if (Number(process.versions.node.split('.')[0]) < 20) {
+    throw new PlaystackWorkspaceIntegrationError(
+      `Playstack packages require Node ${playstackCompatibility.node}; the current runtime is ${process.version}.`,
+    );
+  }
+  if (options.eslint) {
+    const eslint = workspaceDependencyVersion(tree, 'eslint');
+    if (parseVersionNumber(eslint)?.major !== 9) {
+      throw new PlaystackWorkspaceIntegrationError(
+        `Playstack lint requires ESLint ${playstackCompatibility.eslint}; the workspace resolves ${eslint ?? 'no ESLint version'}.`,
+      );
+    }
+  }
 }
 
 function dependencyNames(manifest: PackageManifest): string[] {

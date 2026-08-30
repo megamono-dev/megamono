@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -57,6 +57,13 @@ async function workspace(
     );
   }
   if (packages.includes('@megamono/plugin')) {
+    await json(
+      join(root, 'node_modules', '@megamono', 'plugin', 'compatibility.json'),
+      {
+        playstackIntegration: { node: '>=20', eslint: '^9.0.0' },
+        scaffoldPackages: {},
+      },
+    );
     await json(
       join(root, 'node_modules', '@megamono', 'plugin', 'availability.json'),
       {
@@ -642,6 +649,58 @@ describe('@megamono/cli', () => {
     expect(harness.invocations).toHaveLength(1);
     expect(harness.invocations[0]?.args).toContain('--survey');
     expect(harness.stdout.join('\n')).toContain('Playstack survey deferred');
+  });
+
+  it('applies Playstack compatibility without narrowing core init', async () => {
+    const root = await workspace('pnpm');
+    const manifestPath = join(root, 'package.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    await json(manifestPath, {
+      ...manifest,
+      engines: { node: '>=18.18 <25' },
+    });
+    const core = io(root);
+    expect(
+      (await runMegamonoCli(['init', '--survey'], core.value)).exitCode,
+    ).toBe(0);
+
+    const playstack = io(root);
+    expect(
+      (
+        await runMegamonoCli(
+          ['init', '--survey', '--playstack'],
+          playstack.value,
+        )
+      ).exitCode,
+    ).toBe(3);
+    expect(playstack.invocations).toEqual([]);
+    expect(playstack.stderr.at(-1)).toContain(
+      'Playstack packages require Node >=20',
+    );
+  });
+
+  it('checks the ESLint peer only for an explicit Playstack lint package', async () => {
+    const root = await workspace('npm');
+    const manifestPath = join(root, 'package.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    await json(manifestPath, {
+      ...manifest,
+      engines: { node: '>=20 <25' },
+      devDependencies: { ...manifest.devDependencies, eslint: '^8.57.0' },
+    });
+    const harness = io(root);
+    expect(
+      (
+        await runMegamonoCli(
+          ['init', '--playstack-packages=@playstack/lint'],
+          harness.value,
+        )
+      ).exitCode,
+    ).toBe(3);
+    expect(harness.invocations).toEqual([]);
+    expect(harness.stderr.at(-1)).toContain(
+      'Playstack lint requires ESLint ^9.0.0',
+    );
   });
 
   it('prompts for capabilities when playstack-packages has no value', async () => {
