@@ -34,6 +34,10 @@
     "@megamono/nx-cargo": { "nx": ">=18 <24" },
     "@megamono/nx-cloudflare": { "nx": ">=18 <24" }
   },
+  "playstackIntegration": {
+    "node": ">=20",
+    "eslint": "^9.0.0"
+  },
   "compatibilityTests": {
     "stable": [
       { "nx": "17.1.2", "typescript": "5.2.2", "node": "20" },
