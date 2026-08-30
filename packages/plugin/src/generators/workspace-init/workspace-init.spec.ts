@@ -854,6 +854,40 @@ export default [
     );
   });
 
+  it('adopts equivalent mature CI without adding a duplicate workflow', async () => {
+    const repositoryCi =
+      'jobs:\n  verify:\n    steps:\n      - run: pnpm exec nx run-many -t lint test build\n';
+    tree.write('.github/workflows/repository-ci.yml', repositoryCi);
+
+    await workspaceInitGenerator(tree, { only: 'ci', yes: true });
+
+    expect(tree.read('.github/workflows/repository-ci.yml', 'utf8')).toBe(
+      repositoryCi,
+    );
+    expect(tree.exists('.github/workflows/megamono-ci.yml')).toBe(false);
+  });
+
+  it('can add a bounded reusable workflow beside repository-owned CI', async () => {
+    tree.write(
+      '.github/workflows/repository-ci.yml',
+      'jobs:\n  verify:\n    steps:\n      - run: pnpm exec nx run-many -t lint test build\n',
+    );
+
+    await workspaceInitGenerator(tree, {
+      only: 'ci',
+      ciMode: 'reusable',
+      yes: true,
+    });
+
+    const workflow = tree.read(
+      '.github/workflows/megamono-ci-reusable.yml',
+      'utf8',
+    );
+    expect(workflow).toContain('workflow_call:');
+    expect(workflow).not.toContain('pull_request:');
+    expect(workflow).not.toContain('branches: [main]');
+  });
+
   it('refuses an occupied managed path before mutating the tree', async () => {
     tree.write('.github/workflows/megamono-ci.yml', 'repository workflow\n');
     const changes = tree.listChanges();

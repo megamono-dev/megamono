@@ -741,6 +741,7 @@ function renderCiWorkflow(
   platforms: ReadonlySet<string>,
   packageManager: 'pnpm' | 'npm',
   toolchain: WorkflowToolchain,
+  reusable = false,
 ): string {
   const linuxPlatforms = ['web', 'node', 'worker', 'rust', 'php', 'extension'];
   const hasLinux = linuxPlatforms.some((platform) => platforms.has(platform));
@@ -753,6 +754,9 @@ function renderCiWorkflow(
   const install =
     packageManager === 'pnpm' ? 'pnpm install --frozen-lockfile' : 'npm ci';
   const nx = packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
+  const trigger = reusable
+    ? '  workflow_call:'
+    : '  push:\n    branches: [main]\n  pull_request:\n  merge_group:';
   const planChecks = [
     ...(hasLinux
       ? [
@@ -814,13 +818,10 @@ ${packageManagerSetup}
         ]
       : []),
   ].join('\n\n');
-  return `name: CI
+  return `name: ${reusable ? 'Megamono reusable CI' : 'CI'}
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-  merge_group:
+${trigger}
 
 permissions:
   actions: read
@@ -1306,6 +1307,16 @@ export async function workspaceInitGenerator(
   }
   const planConfirmed = true;
   const modules = new Set(requestedModules);
+  const ciMode = options.ciMode ?? 'auto';
+  const equivalentCi = workspaceSurvey.recommendations.find(
+    (recommendation) => recommendation.module === 'ci',
+  );
+  const ciShouldGenerate =
+    modules.has('ci') && !(ciMode === 'auto' && equivalentCi);
+  const ciTarget =
+    ciMode === 'reusable'
+      ? '.github/workflows/megamono-ci-reusable.yml'
+      : '.github/workflows/megamono-ci.yml';
   const configuredReleaseProjects = modules.has('release')
     ? releaseProjects(tree)
     : [];
@@ -1348,7 +1359,7 @@ export async function workspaceInitGenerator(
     eslint: lintCanWire && !tree.exists('eslint.config.mjs'),
     agents: !tree.exists('AGENTS.md'),
     claude: !tree.exists('CLAUDE.md'),
-    ci: !tree.exists('.github/workflows/megamono-ci.yml'),
+    ci: ciShouldGenerate && !tree.exists(ciTarget),
     releaseWorkflow: !tree.exists('.github/workflows/megamono-release.yml'),
     yalcPublisher: !tree.exists('.megamono/publish-yalc.mjs'),
     health: !tree.exists('.github/workflows/megamono-health.yml'),
@@ -1371,11 +1382,11 @@ export async function workspaceInitGenerator(
       `${docsContract.loader} already exists. Adopt a compatible loader or select separate docs loader/module/output paths before running workspace-init.`,
     );
   }
-  for (const [module, path] of [
-    ['ci', '.github/workflows/megamono-ci.yml'],
-    ['health', '.github/workflows/megamono-health.yml'],
+  for (const [path, enabled] of [
+    [ciTarget, ciShouldGenerate],
+    ['.github/workflows/megamono-health.yml', modules.has('health')],
   ] as const) {
-    if (!existingConfig && modules.has(module) && tree.exists(path)) {
+    if (!existingConfig && enabled && tree.exists(path)) {
       throw new Error(
         `${path} already exists without Megamono ownership metadata.`,
       );
@@ -1911,12 +1922,13 @@ export async function workspaceInitGenerator(
     configuredWorkspacePlatforms(tree, defaultPlatform),
     packageManager,
     workflowToolchain(tree, packageManager),
+    ciMode === 'reusable',
   );
-  const ciCanUpdate = modules.has('ci')
+  const ciCanUpdate = ciShouldGenerate
     ? applyManagedFileTemplate(
         tree,
         'ci.affected',
-        '.github/workflows/megamono-ci.yml',
+        ciTarget,
         ciWorkflow,
         planConfirmed,
       )
@@ -2280,14 +2292,14 @@ export async function workspaceInitGenerator(
       );
     }
   }
-  if (modules.has('ci')) {
+  if (ciShouldGenerate) {
     registerFileArtifact(
       tree,
       {
         id: 'ci.affected',
         module: 'ci',
         mode: 'managed',
-        target: '.github/workflows/megamono-ci.yml',
+        target: ciTarget,
         ejectable: true,
         templateContent: ciWorkflow,
         claimExisting: created.ci,

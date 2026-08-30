@@ -141,7 +141,7 @@ describe('workspace init survey and plan', () => {
         action: 'skip',
         paths: ['.github/workflows/repository-ci.yml'],
         reason:
-          'Existing workflows establish an affected base/head and run lint, test, and build through Nx affected.',
+          'Existing repository-owned CI runs lint, test, and build through Nx affected or full-workspace run-many.',
       },
     ]);
     expect(renderWorkspaceInitSurvey(survey)).toContain(
@@ -150,6 +150,38 @@ describe('workspace init survey and plan', () => {
 
     tree.write('.github/workflows/plain.yml', 'jobs: {}\n');
     expect(surveyWorkspaceInit(tree).recommendations).toHaveLength(1);
+  });
+
+  it('recognizes mature full-workspace CI and plans a bounded reusable alternative', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      '.github/workflows/repository-ci.yml',
+      'jobs:\n  verify:\n    steps:\n      - run: pnpm exec nx run-many -t lint test build\n',
+    );
+
+    const automatic = createWorkspaceInitPlan(tree, { only: 'ci' });
+    expect(automatic.operations).toEqual(
+      expect.arrayContaining([
+      expect.objectContaining({
+        action: 'retain',
+        target: '.github/workflows/repository-ci.yml',
+      }),
+      ]),
+    );
+    expect(automatic.conflicts).toEqual([]);
+
+    const reusable = createWorkspaceInitPlan(tree, {
+      only: 'ci',
+      ciMode: 'reusable',
+    });
+    expect(reusable.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: 'add',
+          target: '.github/workflows/megamono-ci-reusable.yml',
+        }),
+      ]),
+    );
   });
 
   it('uses the stable decision-required classification for missing input', () => {

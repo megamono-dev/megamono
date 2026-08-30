@@ -165,6 +165,7 @@ export interface WorkspaceInitPlanOptions {
   readonly toolchainNode?: string;
   readonly yes?: boolean;
   readonly packageManager?: 'pnpm' | 'npm';
+  readonly ciMode?: 'auto' | 'standalone' | 'reusable';
 }
 
 export interface WorkspaceDocsContract {
@@ -378,15 +379,19 @@ function classifyDocumentation(
   };
 }
 
-function detectsAffectedCi(source: string): boolean {
+function detectsEquivalentCi(source: string): boolean {
   const invokesAffected = /\bnx\s+(?:--\s+)?affected\b/.test(source);
+  const invokesRunMany = /\bnx\s+(?:--\s+)?run-many\b/.test(source);
   const establishesBase =
     /\bnx-set-shas(?:@|\b)/.test(source) ||
     (/\bNX_BASE\b/.test(source) && /\bNX_HEAD\b/.test(source));
   const checksLifecycleTargets = ['lint', 'test', 'build'].every((target) =>
     new RegExp(`\\b${target}\\b`).test(source),
   );
-  return invokesAffected && establishesBase && checksLifecycleTargets;
+  return (
+    checksLifecycleTargets &&
+    ((invokesAffected && establishesBase) || invokesRunMany)
+  );
 }
 
 function publishableWorkspaceProjects(tree: Tree): readonly string[] {
@@ -511,8 +516,10 @@ export function surveyWorkspaceInit(
   );
   const equivalentAffectedCi = workflows.filter(
     (path) =>
-      path !== '.github/workflows/megamono-ci.yml' &&
-      detectsAffectedCi(tree.read(path, 'utf8') ?? ''),
+      ![
+        '.github/workflows/megamono-ci.yml',
+        '.github/workflows/megamono-ci-reusable.yml',
+      ].includes(path) && detectsEquivalentCi(tree.read(path, 'utf8') ?? ''),
   );
   return {
     schemaVersion: 1,
@@ -578,7 +585,7 @@ export function surveyWorkspaceInit(
               action: 'skip',
               paths: equivalentAffectedCi,
               reason:
-                'Existing workflows establish an affected base/head and run lint, test, and build through Nx affected.',
+                'Existing repository-owned CI runs lint, test, and build through Nx affected or full-workspace run-many.',
             },
           ]
         : [],
@@ -879,22 +886,42 @@ export function createWorkspaceInitPlan(
     );
   }
   if (modules.includes('ci')) {
-    const target = '.github/workflows/megamono-ci.yml';
-    operation(
-      operations,
-      'ci',
-      managedAction('ci.affected', target),
-      target,
-      'Add dedicated affected CI.',
+    const ciMode = options.ciMode ?? 'auto';
+    const equivalent = survey.recommendations.find(
+      (recommendation) => recommendation.module === 'ci',
     );
-    if (
-      tree.exists(target) &&
-      !owned('ci.affected', target) &&
-      !ejected('ci.affected', target)
-    ) {
-      conflicts.push(
-        `${target} is occupied without Megamono ownership metadata.`,
+    const target =
+      ciMode === 'reusable'
+        ? '.github/workflows/megamono-ci-reusable.yml'
+        : '.github/workflows/megamono-ci.yml';
+    if (ciMode === 'auto' && equivalent) {
+      for (const path of equivalent.paths)
+        operation(
+          operations,
+          'ci',
+          'retain',
+          path,
+          'Retain equivalent repository-owned CI without adding a duplicate workflow.',
+        );
+    } else {
+      operation(
+        operations,
+        'ci',
+        managedAction('ci.affected', target),
+        target,
+        ciMode === 'reusable'
+          ? 'Add a bounded reusable affected-CI workflow without editing callers.'
+          : 'Add dedicated affected CI.',
       );
+      if (
+        tree.exists(target) &&
+        !owned('ci.affected', target) &&
+        !ejected('ci.affected', target)
+      ) {
+        conflicts.push(
+          `${target} is occupied without Megamono ownership metadata.`,
+        );
+      }
     }
   }
   if (modules.includes('release')) {
