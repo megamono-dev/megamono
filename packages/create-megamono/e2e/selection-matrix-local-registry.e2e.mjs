@@ -266,7 +266,6 @@ async function verifyCase(root, testCase, environment, createCliPath) {
           adapter,
           ...(adapter === 'drizzle' ? { dialect: 'postgresql' } : {}),
           target: expectedTarget,
-          packages: {},
         }),
       `${testCase.id}: Playstack database target is incorrect.`,
     );

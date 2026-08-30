@@ -561,7 +561,6 @@ function writeConfigurations(
           ? { dialect: compatibility.databaseAdapters.drizzle.provider }
           : {}),
         target: options.target,
-        packages: {},
       },
     },
   });

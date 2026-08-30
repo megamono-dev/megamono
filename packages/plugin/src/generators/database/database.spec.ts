@@ -48,7 +48,6 @@ describe('database generator', () => {
       events: {
         adapter: 'prisma',
         target: 'packages/database-events/prisma/models',
-        packages: {},
       },
     });
     expect(
@@ -96,7 +95,6 @@ describe('database generator', () => {
       adapter: 'drizzle',
       dialect: 'postgresql',
       target: 'packages/database-analytics/src/schema',
-      packages: {},
     });
   });
 
@@ -191,5 +189,29 @@ describe('database generator', () => {
     expect(tree.read('packages/existing-db/drizzle.config.ts', 'utf8')).toBe(
       "export default { schema: './src/schema' };\n",
     );
+  });
+
+  it('preserves an existing explicit Playstack package allowlist', async () => {
+    const tree = workspace();
+    writeJson(tree, 'playstack.json', {
+      databases: {
+        events: {
+          adapter: 'prisma',
+          target: 'packages/database-events/prisma/models',
+          packages: { '@playstack/auth': {} },
+        },
+      },
+    });
+
+    await databaseGenerator(tree, {
+      name: 'events',
+      adapter: 'prisma',
+      interactive: false,
+      yes: true,
+    });
+
+    expect(readJson(tree, 'playstack.json').databases.events.packages).toEqual({
+      '@playstack/auth': {},
+    });
   });
 });
