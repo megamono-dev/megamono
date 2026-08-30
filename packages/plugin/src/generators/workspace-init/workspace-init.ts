@@ -49,6 +49,10 @@ import {
   surveyWorkspaceInit,
 } from '../../lib/workspace-init-plan';
 import {
+  classifyProjectForAdoption,
+  readProjectAdoptionResolutions,
+} from '../../lib/project-adoption';
+import {
   assertWorkspaceInitPreflight,
   collectWorkspaceInitHostState,
 } from '../../lib/workspace-init-preflight';
@@ -1121,18 +1125,31 @@ function docsProjectConfiguration(docsRoot: string, includeHealth: boolean) {
   };
 }
 
-function projectGraphFromTree(tree: Tree): ProjectGraph {
+function projectGraphFromTree(
+  tree: Tree,
+  resolutions = readProjectAdoptionResolutions(tree),
+  defaultPlatform?: WorkspaceInitGeneratorSchema['defaultPlatform'],
+): ProjectGraph {
   const projects = getProjects(tree);
   return {
     nodes: Object.fromEntries(
-      [...projects.entries()].map(([name, project]) => [
-        name,
-        {
+      [...projects.entries()].map(([name, project]) => {
+        const classification = classifyProjectForAdoption(
+          tree,
           name,
-          type: project.projectType === 'library' ? 'lib' : 'app',
-          data: project,
-        },
-      ]),
+          project,
+          resolutions,
+          defaultPlatform,
+        );
+        return [
+          name,
+          {
+            name,
+            type: classification.kind === 'application' ? 'app' : 'lib',
+            data: project,
+          },
+        ];
+      }),
     ),
     dependencies: Object.fromEntries(
       [...projects.keys()].map((name) => [name, []]),
@@ -1145,7 +1162,10 @@ export async function workspaceInitGenerator(
   options: WorkspaceInitGeneratorSchema,
 ): Promise<GeneratorCallback> {
   const outputFormat = options.format ?? 'markdown';
-  const initialSurvey = surveyWorkspaceInit(tree);
+  const initialSurvey = surveyWorkspaceInit(tree, {
+    adoptionMap: options.adoptionMap,
+    defaultPlatform: options.defaultPlatform,
+  });
   const declaredPackageManager =
     initialSurvey.baseline.packageManager?.split('@')[0];
   if (
@@ -1231,7 +1251,13 @@ export async function workspaceInitGenerator(
     defaultPlatform,
     packageManager,
   });
-  if (adoptionPlan.decisions.length > 0 && !defaultPlatform) {
+  if (
+    adoptionPlan.decisions.length > 0 &&
+    !defaultPlatform &&
+    adoptionPlan.decisions.every((decision) =>
+      decision.startsWith('defaultPlatform is required'),
+    )
+  ) {
     if (!canPrompt(options)) {
       throw new WorkspaceInitError(
         'decision-required',
@@ -1246,6 +1272,12 @@ export async function workspaceInitGenerator(
       defaultPlatform,
       packageManager,
     });
+  }
+  if (adoptionPlan.decisions.length > 0) {
+    throw new WorkspaceInitError(
+      'decision-required',
+      adoptionPlan.decisions.join(' '),
+    );
   }
   if (adoptionPlan.conflicts.length > 0) {
     throw new WorkspaceInitError('conflict', adoptionPlan.conflicts.join(' '));
@@ -1384,7 +1416,11 @@ export async function workspaceInitGenerator(
   ) {
     const graph =
       tree.root === '/virtual'
-        ? projectGraphFromTree(tree)
+        ? projectGraphFromTree(
+            tree,
+            readProjectAdoptionResolutions(tree, options.adoptionMap),
+            defaultPlatform,
+          )
         : await createProjectGraphAsync({ exitOnError: false });
     const diagnostics = await checkWorkspaceStructure(
       tree.root,
@@ -1400,13 +1436,30 @@ export async function workspaceInitGenerator(
     }
   }
   const configuredPlatforms = new Set<string>();
-  const isApplication = (project: { projectType?: string }) =>
-    project.projectType !== 'library';
+  const adoptionResolutions = readProjectAdoptionResolutions(
+    tree,
+    options.adoptionMap,
+  );
+  const projectClassifications = new Map(
+    [...projects.entries()].map(([name, project]) => [
+      name,
+      classifyProjectForAdoption(
+        tree,
+        name,
+        project,
+        adoptionResolutions,
+        defaultPlatform,
+      ),
+    ]),
+  );
+  const isApplication = (name: string) =>
+    projectClassifications.get(name)?.kind === 'application';
   const projectsNeedingPlatform = [...projects.entries()].filter(
     ([name, project]) =>
       name !== 'megamono' &&
       name !== 'megamono-docs' &&
-      isApplication(project) &&
+      isApplication(name) &&
+      !projectClassifications.get(name)?.platform &&
       !(project.tags ?? []).some((tag) => tag.startsWith('platform:')),
   );
   if (
@@ -1429,7 +1482,12 @@ export async function workspaceInitGenerator(
       modules.has('lint') &&
       ![...tags].some((tag) => tag.startsWith('type:'))
     ) {
-      tags.add(isApplication(project) ? 'type:app' : 'type:util');
+      tags.add(
+        `type:${
+          projectClassifications.get(name)?.type ??
+          (isApplication(name) ? 'app' : 'util')
+        }`,
+      );
     }
     if (
       modules.has('lint') &&
@@ -1437,9 +1495,11 @@ export async function workspaceInitGenerator(
     ) {
       tags.add(`scope:${defaultScope}`);
     }
-    if (modules.has('lint') && isApplication(project)) {
+    if (modules.has('lint') && isApplication(name)) {
       if (![...tags].some((tag) => tag.startsWith('platform:'))) {
-        tags.add(`platform:${defaultPlatform}`);
+        tags.add(
+          `platform:${projectClassifications.get(name)?.platform ?? defaultPlatform}`,
+        );
       }
       if (![...tags].some((tag) => tag.startsWith('visibility:'))) {
         tags.add('visibility:internal');

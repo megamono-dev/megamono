@@ -71,6 +71,17 @@ export {
   type WorkspaceInitSurveyProject,
 } from './lib/workspace-init-plan';
 export {
+  PROJECT_ADOPTION_PLATFORMS,
+  PROJECT_ADOPTION_TYPES,
+  classifyProjectForAdoption,
+  readProjectAdoptionResolutions,
+  type ProjectAdoptionClassification,
+  type ProjectAdoptionPlatform,
+  type ProjectAdoptionResolution,
+  type ProjectAdoptionResolutions,
+  type ProjectAdoptionType,
+} from './lib/project-adoption';
+export {
   assertWorkspaceMutationGitPreflight,
   assertWorkspaceInitPreflight,
   collectWorkspaceInitHostState,

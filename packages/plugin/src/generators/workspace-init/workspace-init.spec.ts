@@ -622,14 +622,20 @@ export default [
     expect(tree.read(path, 'utf8')).toBe(source);
   });
 
-  it('treats an inferred project without projectType as an application', async () => {
+  it('requires a resolution for an evidence-free project and applies it consistently', async () => {
     addProjectConfiguration(tree, 'root-app', {
       root: '.',
       targets: {},
     });
+    tree.write(
+      '.megamono-adoption.json',
+      JSON.stringify({
+        projects: { 'root-app': { type: 'app', platform: 'node' } },
+      }),
+    );
     await workspaceInitGenerator(tree, {
       ...options,
-      defaultPlatform: 'node',
+      adoptionMap: '.megamono-adoption.json',
     });
     expect(readProjectConfiguration(tree, 'root-app').tags).toEqual([
       'platform:node',

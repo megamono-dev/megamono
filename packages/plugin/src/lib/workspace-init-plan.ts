@@ -1,7 +1,13 @@
-import { getProjects, type ProjectConfiguration, type Tree } from '@nx/devkit';
+import { getProjects, type Tree } from '@nx/devkit';
 import { readArtifactRegistry } from './managed-artifacts';
 import { MANAGED_SKILL_NAMES } from './managed-skills';
 import { nxWorkspaceCapabilities } from './workspace-compatibility';
+import {
+  classifyProjectForAdoption,
+  readProjectAdoptionResolutions,
+  type ProjectAdoptionPlatform,
+  type ProjectAdoptionResolutions,
+} from './project-adoption';
 
 export const WORKSPACE_INIT_MODULES = [
   'docs',
@@ -62,7 +68,10 @@ export class WorkspaceInitError extends Error {
 export interface WorkspaceInitSurveyProject {
   readonly name: string;
   readonly root: string;
-  readonly type: 'application' | 'library';
+  readonly type: 'application' | 'library' | 'ambiguous';
+  readonly tagType: string | null;
+  readonly platform: string | null;
+  readonly evidence: readonly string[];
   readonly targets: readonly string[];
   readonly tags: readonly string[];
 }
@@ -147,6 +156,7 @@ export interface WorkspaceInitPlanOptions {
   readonly docsRoot?: string;
   readonly defaultScope?: string;
   readonly defaultPlatform?: string;
+  readonly adoptionMap?: string;
   readonly yes?: boolean;
   readonly packageManager?: 'pnpm' | 'npm';
 }
@@ -207,12 +217,6 @@ function listFiles(tree: Tree): readonly string[] {
   };
   visit('');
   return files;
-}
-
-function projectType(
-  project: ProjectConfiguration,
-): WorkspaceInitSurveyProject['type'] {
-  return project.projectType === 'library' ? 'library' : 'application';
 }
 
 const DOCUMENT_TYPES = new Set([
@@ -322,7 +326,8 @@ function publishableWorkspaceProjects(tree: Tree): readonly string[] {
         tree,
         project.root === '.' ? 'package.json' : `${project.root}/package.json`,
       );
-      return project.projectType === 'library' &&
+      return classifyProjectForAdoption(tree, name, project).kind ===
+        'library' &&
         typeof manifest.name === 'string' &&
         manifest.private !== true
         ? [name]
@@ -361,7 +366,14 @@ export function parseWorkspaceInitModules(
   return WORKSPACE_INIT_MODULES.filter((module) => selected.has(module));
 }
 
-export function surveyWorkspaceInit(tree: Tree): WorkspaceInitSurvey {
+export function surveyWorkspaceInit(
+  tree: Tree,
+  options: {
+    readonly adoptionMap?: string;
+    readonly defaultPlatform?: string;
+    readonly resolutions?: ProjectAdoptionResolutions;
+  } = {},
+): WorkspaceInitSurvey {
   const files = listFiles(tree);
   const manifest = readJsonObject(tree, 'package.json');
   const engines =
@@ -378,14 +390,38 @@ export function surveyWorkspaceInit(tree: Tree): WorkspaceInitSurvey {
         : typeof engines.npm === 'string'
           ? `npm@${engines.npm}`
           : null;
-  const projects = [...getProjects(tree).entries()]
-    .map(([name, project]) => ({
-      name,
-      root: project.root,
-      type: projectType(project),
-      targets: Object.keys(project.targets ?? {}).sort(compare),
-      tags: [...(project.tags ?? [])].sort(compare),
-    }))
+  const resolutions =
+    options.resolutions ??
+    readProjectAdoptionResolutions(tree, options.adoptionMap);
+  const workspaceProjects = getProjects(tree);
+  const unknownResolutions = Object.keys(resolutions).filter(
+    (name) => !workspaceProjects.has(name),
+  );
+  if (unknownResolutions.length > 0)
+    throw new WorkspaceInitError(
+      'options',
+      `adoptionMap contains unknown Nx projects: ${unknownResolutions.sort(compare).join(', ')}.`,
+    );
+  const projects = [...workspaceProjects.entries()]
+    .map(([name, project]) => {
+      const classification = classifyProjectForAdoption(
+        tree,
+        name,
+        project,
+        resolutions,
+        options.defaultPlatform as ProjectAdoptionPlatform | undefined,
+      );
+      return {
+        name,
+        root: project.root,
+        type: classification.kind,
+        tagType: classification.type ?? null,
+        platform: classification.platform ?? null,
+        evidence: classification.evidence,
+        targets: Object.keys(project.targets ?? {}).sort(compare),
+        tags: [...(project.tags ?? [])].sort(compare),
+      };
+    })
     .sort((left, right) => compare(left.name, right.name));
   const markdown = files.filter(
     (path) =>
@@ -501,7 +537,10 @@ export function createWorkspaceInitPlan(
   options: WorkspaceInitPlanOptions = {},
 ): WorkspaceInitPlan {
   const modules = parseWorkspaceInitModules(options.only);
-  const survey = surveyWorkspaceInit(tree);
+  const survey = surveyWorkspaceInit(tree, {
+    adoptionMap: options.adoptionMap,
+    defaultPlatform: options.defaultPlatform,
+  });
   const packageManager =
     options.packageManager ??
     (survey.baseline.packageManager?.startsWith('npm') ? 'npm' : 'pnpm');
@@ -797,8 +836,19 @@ export function createWorkspaceInitPlan(
     const untaggedApplications = survey.projects.filter(
       (project) =>
         project.type === 'application' &&
+        !project.platform &&
         !project.tags.some((tag) => tag.startsWith('platform:')),
     );
+    const ambiguousProjects = survey.projects.filter(
+      (project) => project.type === 'ambiguous',
+    );
+    if (ambiguousProjects.length > 0) {
+      decisions.push(
+        `adoptionMap project type is required for: ${ambiguousProjects
+          .map(({ name }) => name)
+          .join(', ')}.`,
+      );
+    }
     if (untaggedApplications.length > 0 && !options.defaultPlatform) {
       decisions.push(
         `defaultPlatform is required for: ${untaggedApplications.map(({ name }) => name).join(', ')}.`,
@@ -808,15 +858,21 @@ export function createWorkspaceInitPlan(
       if (project.name === 'megamono' || project.name === 'megamono-docs')
         continue;
       const additions = [
-        ...(project.tags.some((tag) => tag.startsWith('type:'))
+        ...(project.tags.some((tag) => tag.startsWith('type:')) ||
+        project.type === 'ambiguous'
           ? []
-          : [`type:${project.type === 'application' ? 'app' : 'util'}`]),
+          : [
+              `type:${
+                project.tagType ??
+                (project.type === 'application' ? 'app' : 'util')
+              }`,
+            ]),
         ...(project.tags.some((tag) => tag.startsWith('scope:'))
           ? []
           : [`scope:${options.defaultScope ?? 'shared'}`]),
         ...(project.type === 'application' &&
         !project.tags.some((tag) => tag.startsWith('platform:'))
-          ? [`platform:${options.defaultPlatform ?? '<required>'}`]
+          ? [`platform:${project.platform ?? '<required>'}`]
           : []),
         ...(project.type === 'application' &&
         !project.tags.some((tag) => tag.startsWith('visibility:'))
@@ -984,7 +1040,12 @@ export function renderWorkspaceInitSurvey(
 
 ## Projects
 
-${values(survey.projects.map((project) => `${project.name} — ${project.type} at ${project.root}; targets: ${project.targets.join(', ') || 'none'}; tags: ${project.tags.join(', ') || 'none'}`))}
+${values(
+  survey.projects.map(
+    (project) =>
+      `${project.name} — ${project.type}${project.platform ? ` (${project.platform})` : ''} at ${project.root}; targets: ${project.targets.join(', ') || 'none'}; tags: ${project.tags.join(', ') || 'none'}; evidence: ${project.evidence.join(', ')}`,
+  ),
+)}
 
 ## Inference manifests
 

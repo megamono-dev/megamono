@@ -81,6 +81,10 @@
       "description": "Platform assigned to untagged existing applications.",
       "enum": ["web", "node", "worker", "apple", "rust", "php", "extension"],
       "x-prompt": "Which platform should untagged existing applications use?"
+    },
+    "adoptionMap": {
+      "type": "string",
+      "description": "Workspace-relative JSON file resolving per-project type and platform ambiguity."
     }
   },
   "additionalProperties": false

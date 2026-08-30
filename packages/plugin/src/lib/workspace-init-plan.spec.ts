@@ -149,6 +149,70 @@ describe('workspace init survey and plan', () => {
     ).toThrow(/defaultPlatform is required/);
   });
 
+  it('classifies inferred Nx libraries and applications from repository evidence', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    addProjectConfiguration(tree, 'data', {
+      root: 'libs/data',
+      targets: { build: { executor: 'nx:run-commands' } },
+    });
+    tree.write('libs/data/tsconfig.lib.json', '{}');
+    addProjectConfiguration(tree, 'site', {
+      root: 'apps/site',
+      targets: {
+        dev: {
+          executor: 'nx:run-commands',
+          options: { command: 'next dev' },
+        },
+      },
+    });
+    tree.write('apps/site/next.config.js', 'module.exports = {};\n');
+
+    const survey = surveyWorkspaceInit(tree);
+
+    expect(survey.projects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'data', type: 'library' }),
+        expect.objectContaining({
+          name: 'site',
+          type: 'application',
+          platform: 'web',
+        }),
+      ]),
+    );
+    expect(createWorkspaceInitPlan(tree, { only: 'lint' }).decisions).toEqual(
+      [],
+    );
+  });
+
+  it('requires and consumes an adoption map for conflicting project evidence', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    addProjectConfiguration(tree, 'mixed', {
+      root: 'packages/mixed',
+      targets: { serve: { executor: 'nx:run-commands' } },
+    });
+    tree.write('packages/mixed/tsconfig.lib.json', '{}');
+    expect(createWorkspaceInitPlan(tree, { only: 'lint' }).decisions).toEqual([
+      'adoptionMap project type is required for: mixed.',
+    ]);
+
+    tree.write(
+      '.megamono/adoption-map.json',
+      JSON.stringify({
+        projects: { mixed: { type: 'data', platform: 'node' } },
+      }),
+    );
+    const resolved = createWorkspaceInitPlan(tree, {
+      only: 'lint',
+      adoptionMap: '.megamono/adoption-map.json',
+    });
+    expect(resolved.decisions).toEqual([]);
+    expect(
+      resolved.operations.find(
+        ({ target }) => target === 'nx-project:mixed#tags',
+      )?.detail,
+    ).toContain('type:data');
+  });
+
   it('previews every config-key and docs-structure mutation', () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write('apps/apple/Package.swift', '// swift-tools-version: 6.0');
