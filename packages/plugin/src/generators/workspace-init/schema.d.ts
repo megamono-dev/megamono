@@ -17,4 +17,6 @@ export interface WorkspaceInitGeneratorSchema {
   readonly defaultPlatform?:
     'web' | 'node' | 'worker' | 'apple' | 'rust' | 'php' | 'extension';
   readonly adoptionMap?: string;
+  readonly toolchainPin?: 'none' | 'nvmrc' | 'node-version' | 'both';
+  readonly toolchainNode?: string;
 }

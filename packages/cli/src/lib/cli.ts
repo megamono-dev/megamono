@@ -33,11 +33,18 @@ export interface MegamonoCliIo {
   ): Promise<string>;
   confirmAddPlan?(message: string): Promise<boolean>;
   workspaceMutationState?(): Promise<WorkspaceMutationState>;
+  activeToolchainState?(): Promise<ActiveToolchainState>;
   runCommand(
     command: string,
     args: readonly string[],
     options: { readonly cwd: string; readonly capture?: boolean },
   ): Promise<CommandResult>;
+}
+
+export interface ActiveToolchainState {
+  readonly node: string;
+  readonly npm?: string;
+  readonly pnpm?: string;
 }
 
 export interface WorkspaceMutationState {
@@ -321,6 +328,104 @@ async function detectPackageManager(root: string): Promise<PackageManager> {
     );
   }
   return managers[0];
+}
+
+interface VersionNumber {
+  readonly major: number;
+  readonly minor: number;
+  readonly patch: number;
+}
+
+function versionNumber(value: string | undefined): VersionNumber | undefined {
+  const match = value?.match(/(?:^|[^0-9])(\d+)\.(\d+)(?:\.(\d+))?/);
+  return match
+    ? {
+        major: Number(match[1]),
+        minor: Number(match[2]),
+        patch: Number(match[3] ?? 0),
+      }
+    : undefined;
+}
+
+function compareVersion(left: VersionNumber, right: VersionNumber): number {
+  return (
+    left.major - right.major ||
+    left.minor - right.minor ||
+    left.patch - right.patch
+  );
+}
+
+async function collectActiveToolchainState(
+  manager: PackageManager,
+): Promise<ActiveToolchainState> {
+  let managerVersion: string | undefined;
+  try {
+    managerVersion = (
+      await executeFile(manager, ['--version'], { encoding: 'utf8' })
+    ).stdout.trim();
+  } catch {
+    // The structured preflight below reports the missing executable.
+  }
+  return {
+    node: process.version,
+    ...(managerVersion ? { [manager]: managerVersion } : {}),
+  };
+}
+
+async function assertActiveToolchainPreflight(
+  io: MegamonoCliIo,
+  workspace: Workspace,
+): Promise<void> {
+  const state = io.activeToolchainState
+    ? await io.activeToolchainState()
+    : await collectActiveToolchainState(workspace.packageManager);
+  const node = versionNumber(state.node);
+  if (
+    !node ||
+    compareVersion(node, { major: 18, minor: 18, patch: 0 }) < 0 ||
+    compareVersion(node, { major: 25, minor: 0, patch: 0 }) >= 0
+  ) {
+    throw new CliError(
+      `Active Node.js ${state.node || 'unknown'} is unsupported for adoption; expected >=18.18 <25. Switch runtimes before Megamono invokes the workspace package manager. After adoption, --toolchainPin can record the selected runtime.`,
+      3,
+    );
+  }
+  const active = state[workspace.packageManager];
+  const managerVersion = versionNumber(active);
+  const minimumMajor = workspace.packageManager === 'pnpm' ? 8 : 9;
+  if (
+    !managerVersion ||
+    managerVersion.major < minimumMajor ||
+    managerVersion.major >= 12
+  ) {
+    throw new CliError(
+      `Active ${workspace.packageManager} ${active ?? 'unknown'} is unsupported for adoption; expected >=${minimumMajor} <12. Activate the workspace package manager before Megamono invokes Nx.`,
+      3,
+    );
+  }
+  const manifest = JSON.parse(
+    await readFile(join(workspace.root, 'package.json'), 'utf8'),
+  ) as { packageManager?: unknown };
+  const declared =
+    typeof manifest.packageManager === 'string'
+      ? manifest.packageManager
+      : undefined;
+  const [declaredName, declaredValue] = declared?.split('@') ?? [];
+  const declaredVersion = versionNumber(declaredValue);
+  if (
+    declaredName === workspace.packageManager &&
+    declaredVersion &&
+    declaredVersion.major !== managerVersion.major
+  ) {
+    const activation =
+      workspace.packageManager === 'pnpm'
+        ? ` Run: corepack enable && corepack prepare ${declared} --activate.`
+        : '';
+    throw new CliError(
+      `Active ${workspace.packageManager} ${active} does not match the workspace-declared ${declared} major.${activation}`,
+      3,
+    );
+  }
 }
 
 function localPackageAvailable(root: string, name: string): boolean {
@@ -830,6 +935,7 @@ async function runGenerate(
   }
   const root = await findWorkspaceRoot(io.cwd);
   const manager = await detectPackageManager(root);
+  await assertActiveToolchainPreflight(io, { root, packageManager: manager });
   if (!localPackageAvailable(root, 'nx')) {
     throw new CliError('The workspace-local nx package is not installed.', 3);
   }
@@ -1718,6 +1824,7 @@ async function resolveDatabaseAdapter(
 async function addWorkspace(io: MegamonoCliIo): Promise<Workspace> {
   const root = await findWorkspaceRoot(io.cwd);
   const workspace = { root, packageManager: await detectPackageManager(root) };
+  await assertActiveToolchainPreflight(io, workspace);
   if (!localPackageAvailable(root, 'nx')) {
     throw new CliError('The workspace-local nx package is not installed.', 3);
   }
@@ -1904,6 +2011,7 @@ async function runInit(
     root,
     packageManager: await detectPackageManager(root),
   };
+  await assertActiveToolchainPreflight(io, workspace);
   if (!localPackageAvailable(root, 'nx')) {
     throw new CliError('The workspace-local nx package is not installed.', 3);
   }

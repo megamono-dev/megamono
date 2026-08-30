@@ -674,6 +674,19 @@ export default [
     expect(readJson(tree, 'megamono.json').adoption.ratchets).toEqual([]);
   });
 
+  it('seeds explicitly selected repository-owned Node pin files', async () => {
+    await workspaceInitGenerator(tree, {
+      only: 'agents',
+      yes: true,
+      bootstrap: true,
+      toolchainPin: 'both',
+      toolchainNode: '22.23.1',
+    });
+
+    expect(tree.read('.nvmrc', 'utf8')).toBe('22.23.1\n');
+    expect(tree.read('.node-version', 'utf8')).toBe('22.23.1\n');
+  });
+
   it('emits only the configured platform jobs and toolchains', async () => {
     addProjectConfiguration(tree, 'apple-app', {
       root: 'apps/apple',

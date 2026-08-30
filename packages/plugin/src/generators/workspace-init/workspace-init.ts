@@ -1736,6 +1736,21 @@ export async function workspaceInitGenerator(
         }
       : {}),
   }));
+  if (options.toolchainPin && options.toolchainPin !== 'none') {
+    if (!options.toolchainNode) {
+      throw new WorkspaceInitError(
+        'decision-required',
+        `toolchainNode is required when toolchainPin=${options.toolchainPin}.`,
+      );
+    }
+    if (options.toolchainPin === 'nvmrc' || options.toolchainPin === 'both')
+      tree.write('.nvmrc', `${options.toolchainNode}\n`);
+    if (
+      options.toolchainPin === 'node-version' ||
+      options.toolchainPin === 'both'
+    )
+      tree.write('.node-version', `${options.toolchainNode}\n`);
+  }
   if (configuredReleaseProjects.length > 0) {
     updateJson(tree, 'nx.json', (nx) => {
       const namedInputs = nx.namedInputs ?? {};

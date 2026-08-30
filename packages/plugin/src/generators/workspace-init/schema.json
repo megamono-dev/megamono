@@ -85,6 +85,17 @@
     "adoptionMap": {
       "type": "string",
       "description": "Workspace-relative JSON file resolving per-project type and platform ambiguity."
+    },
+    "toolchainPin": {
+      "type": "string",
+      "enum": ["none", "nvmrc", "node-version", "both"],
+      "default": "none",
+      "description": "Optionally seed repository-owned Node runtime pin files."
+    },
+    "toolchainNode": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Exact supported Node version written by --toolchainPin."
     }
   },
   "additionalProperties": false

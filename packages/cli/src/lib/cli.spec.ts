@@ -122,6 +122,11 @@ function io(
       stdout: (message) => stdout.push(message),
       stderr: (message) => stderr.push(message),
       workspaceMutationState: async () => mutationState,
+      activeToolchainState: async () => ({
+        node: 'v22.23.1',
+        npm: '11.5.2',
+        pnpm: '11.24.0',
+      }),
       ...(selectedPlaystackPackages
         ? {
             selectPlaystackPackages: async () => selectedPlaystackPackages,
@@ -195,6 +200,59 @@ afterEach(async () => {
 });
 
 describe('@megamono/cli', () => {
+  it('rejects the active runtime and package manager before invoking Nx', async () => {
+    const root = await workspace('pnpm');
+    await json(join(root, 'package.json'), {
+      name: 'fixture',
+      private: true,
+      packageManager: 'pnpm@11.24.0',
+      devDependencies: { nx: '0.0.1', '@megamono/plugin': '0.0.1' },
+    });
+    const harness = io(root);
+    const nodeResult = await runMegamonoCli(['init', '--survey'], {
+      ...harness.value,
+      activeToolchainState: async () => ({
+        node: 'v26.5.0',
+        pnpm: '6.18.0',
+      }),
+    });
+    expect(nodeResult.exitCode).toBe(3);
+    expect(harness.stderr.join('\n')).toContain('Node.js v26.5.0');
+    expect(harness.invocations).toEqual([]);
+
+    const managerResult = await runMegamonoCli(['init', '--survey'], {
+      ...harness.value,
+      activeToolchainState: async () => ({
+        node: 'v22.23.1',
+        pnpm: '6.18.0',
+      }),
+    });
+    expect(managerResult.exitCode).toBe(3);
+    expect(harness.stderr.join('\n')).toContain('pnpm 6.18.0');
+    expect(harness.invocations).toEqual([]);
+  });
+
+  it('rejects an active package-manager major that differs from the workspace pin', async () => {
+    const root = await workspace('pnpm');
+    const manifest = JSON.parse(
+      await readFile(join(root, 'package.json'), 'utf8'),
+    );
+    await json(join(root, 'package.json'), {
+      ...manifest,
+      packageManager: 'pnpm@11.24.0',
+    });
+    const harness = io(root);
+    const result = await runMegamonoCli(['init', '--survey'], {
+      ...harness.value,
+      activeToolchainState: async () => ({ node: 'v22.23.1', pnpm: '10.9.0' }),
+    });
+    expect(result.exitCode).toBe(3);
+    expect(harness.stderr.join('\n')).toContain(
+      'does not match the workspace-declared pnpm@11.24.0 major',
+    );
+    expect(harness.invocations).toEqual([]);
+  });
+
   it('routes module additions through workspace-init', async () => {
     const root = await workspace('pnpm');
     const harness = io(root);

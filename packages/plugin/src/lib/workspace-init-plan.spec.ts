@@ -101,6 +101,31 @@ describe('workspace init survey and plan', () => {
     expect(renderWorkspaceInitPlan(plan)).toContain('health.spec-drift');
   });
 
+  it('plans explicit repository-owned Node pin files without overwriting conflicts', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const plan = createWorkspaceInitPlan(tree, {
+      only: 'agents',
+      toolchainPin: 'both',
+      toolchainNode: '22.23.1',
+    });
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ target: '.nvmrc', action: 'add' }),
+        expect.objectContaining({ target: '.node-version', action: 'add' }),
+      ]),
+    );
+    tree.write('.nvmrc', '20.19.0\n');
+    expect(
+      createWorkspaceInitPlan(tree, {
+        only: 'agents',
+        toolchainPin: 'nvmrc',
+        toolchainNode: '22.23.1',
+      }).conflicts,
+    ).toEqual([
+      '.nvmrc already pins repository-owned Node 20.19.0; requested 22.23.1.',
+    ]);
+  });
+
   it('recommends retaining equivalent repository-owned affected CI', () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write(

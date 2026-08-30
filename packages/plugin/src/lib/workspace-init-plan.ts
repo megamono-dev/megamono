@@ -157,6 +157,8 @@ export interface WorkspaceInitPlanOptions {
   readonly defaultScope?: string;
   readonly defaultPlatform?: string;
   readonly adoptionMap?: string;
+  readonly toolchainPin?: 'none' | 'nvmrc' | 'node-version' | 'both';
+  readonly toolchainNode?: string;
   readonly yes?: boolean;
   readonly packageManager?: 'pnpm' | 'npm';
 }
@@ -594,6 +596,52 @@ export function createWorkspaceInitPlan(
     'package.json#packageManager',
     `Record ${packageManager} as the workspace package manager.`,
   );
+  const toolchainPin = options.toolchainPin ?? 'none';
+  if (toolchainPin === 'none' && options.toolchainNode) {
+    throw new WorkspaceInitError(
+      'options',
+      'toolchainNode requires --toolchainPin=nvmrc|node-version|both.',
+    );
+  }
+  if (toolchainPin !== 'none') {
+    if (!options.toolchainNode) {
+      decisions.push(
+        `toolchainNode is required when toolchainPin=${toolchainPin}.`,
+      );
+    } else {
+      const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(options.toolchainNode);
+      const major = match ? Number(match[1]) : -1;
+      const minor = match ? Number(match[2]) : -1;
+      if (!match || major < 18 || major >= 25 || (major === 18 && minor < 18)) {
+        throw new WorkspaceInitError(
+          'options',
+          `toolchainNode ${options.toolchainNode} is unsupported; expected an exact version in >=18.18 <25.`,
+        );
+      }
+      const pinPaths = [
+        ...(toolchainPin === 'nvmrc' || toolchainPin === 'both'
+          ? ['.nvmrc']
+          : []),
+        ...(toolchainPin === 'node-version' || toolchainPin === 'both'
+          ? ['.node-version']
+          : []),
+      ];
+      for (const path of pinPaths) {
+        const current = tree.read(path, 'utf8')?.trim();
+        operation(
+          operations,
+          'baseline',
+          current === options.toolchainNode ? 'retain' : 'add',
+          path,
+          `Seed the selected Node ${options.toolchainNode} runtime pin.`,
+        );
+        if (current && current !== options.toolchainNode)
+          conflicts.push(
+            `${path} already pins repository-owned Node ${current}; requested ${options.toolchainNode}.`,
+          );
+      }
+    }
+  }
   operation(
     operations,
     'baseline',
