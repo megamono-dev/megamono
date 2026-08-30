@@ -3,6 +3,7 @@ import { readArtifactRegistry } from './managed-artifacts';
 import { MANAGED_SKILL_NAMES } from './managed-skills';
 import { nxWorkspaceCapabilities } from './workspace-compatibility';
 import { readDocsAdoptionMap } from './docs-adoption';
+import { parsePackageRegistries } from './package-sources';
 import {
   classifyProjectForAdoption,
   readProjectAdoptionResolutions,
@@ -171,6 +172,7 @@ export interface WorkspaceInitPlanOptions {
   readonly yes?: boolean;
   readonly packageManager?: 'pnpm' | 'npm';
   readonly ciMode?: 'auto' | 'standalone' | 'reusable';
+  readonly packageRegistries?: string;
 }
 
 export interface WorkspaceDocsContract {
@@ -675,6 +677,14 @@ export function createWorkspaceInitPlan(
   const reductions: WorkspaceInitReduction[] = [];
   const conflicts: string[] = [];
   const decisions: string[] = [];
+  let packageRegistries: Readonly<Record<string, string>> = {};
+  if (options.packageRegistries !== undefined) {
+    try {
+      packageRegistries = parsePackageRegistries(options.packageRegistries);
+    } catch (error) {
+      conflicts.push(error instanceof Error ? error.message : String(error));
+    }
+  }
   let docsAdoptionEntries: ReturnType<typeof readDocsAdoptionMap> = [];
   if (modules.includes('docs') && options.docsAdoptionMap) {
     try {
@@ -808,6 +818,30 @@ export function createWorkspaceInitPlan(
       target,
       'Maintain bounded ignore entries for generated Megamono state.',
     );
+  }
+  if (options.packageRegistries !== undefined) {
+    operation(
+      operations,
+      'baseline',
+      tree.exists('.npmrc') ? 'modify' : 'add',
+      '.npmrc',
+      'Route configured package scopes to reproducible registries without storing authentication.',
+    );
+    const npmrc = tree.read('.npmrc', 'utf8') ?? '';
+    for (const [scope, registry] of Object.entries(packageRegistries)) {
+      const existing = new RegExp(
+        `^${scope.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:registry=(.+)$`,
+        'm',
+      ).exec(npmrc)?.[1]?.trim();
+      if (existing && existing.replace(/\/+$/, '') !== registry) {
+        conflicts.push(
+          `.npmrc already routes ${scope} to ${existing}; requested ${registry}.`,
+        );
+      }
+    }
+    if (Object.keys(packageRegistries).length === 0) {
+      conflicts.push('packageRegistries must contain at least one scope.');
+    }
   }
   if (modules.includes('docs')) {
     for (const { path } of docsAdoptionEntries) {

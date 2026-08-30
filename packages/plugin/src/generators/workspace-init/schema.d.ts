@@ -11,6 +11,7 @@ export interface WorkspaceInitGeneratorSchema {
   readonly ports?: string;
   readonly serviceRunner?: 'none' | 'springbar';
   readonly serviceRequirements?: string;
+  readonly packageRegistries?: string;
   readonly packageManager?: 'pnpm' | 'npm';
   readonly ciMode?: 'auto' | 'standalone' | 'reusable';
   readonly docsRoot?: string;

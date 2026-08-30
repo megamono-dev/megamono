@@ -370,6 +370,18 @@ export const megamonoConfigSchema = z
       })
       .strict()
       .default({ runner: 'none', requirements: {} }),
+    packageSources: z
+      .object({
+        registries: z
+          .record(
+            z.string().regex(/^@[a-z0-9][a-z0-9._-]*$/),
+            z.url().refine((value) => value.startsWith('https://')),
+          )
+          .default({}),
+        forbidLocalInCi: z.boolean().default(true),
+      })
+      .strict()
+      .default({ registries: {}, forbidLocalInCi: true }),
   })
   .strict()
   .superRefine((value, context) => {
@@ -453,6 +465,7 @@ export const DEFAULT_MEGAMONO_CONFIG: MegamonoConfig =
     },
     databases: {},
     services: { runner: 'none', requirements: {} },
+    packageSources: { registries: {}, forbidLocalInCi: true },
   });
 
 export async function readMegamonoConfig(

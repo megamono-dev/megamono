@@ -10,6 +10,7 @@ import { checkWorkspaceStructure } from '../../lib/structural-check';
 import { checkProjectPreflights } from '../../lib/project-preflight';
 import { validateInstalledSkills } from '../../lib/managed-skills';
 import { validateManagedArtifactRegistry } from '../../lib/managed-artifacts';
+import { validatePackageSources } from '../../lib/package-sources';
 import type { CheckExecutorSchema } from './schema';
 
 const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
@@ -50,6 +51,12 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
     diagnostics.push(...(await checkProjectPreflights(context.projectGraph)));
     diagnostics.push(...validateInstalledSkills(context.root));
     diagnostics.push(...validateManagedArtifactRegistry(context.root));
+    if (
+      config.packageSources.forbidLocalInCi &&
+      (options.ci || process.env.CI === 'true')
+    ) {
+      diagnostics.push(...(await validatePackageSources(context.root, config)));
+    }
     for (const diagnostic of diagnostics) {
       const message = formatDiagnostic(diagnostic);
       if (diagnostic.severity === 'error') logger.error(message);

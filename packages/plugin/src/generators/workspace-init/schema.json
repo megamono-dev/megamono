@@ -61,6 +61,10 @@
       "type": "string",
       "description": "JSON object of service names to tested version requirements."
     },
+    "packageRegistries": {
+      "type": "string",
+      "description": "JSON object mapping package scopes such as @megamono and @playstack to HTTPS registry URLs; authentication remains repository/CI-owned."
+    },
     "packageManager": {
       "type": "string",
       "enum": ["pnpm", "npm"],

@@ -64,6 +64,10 @@ import {
   applyDocsAdoptionMap,
   readDocsAdoptionMap,
 } from '../../lib/docs-adoption';
+import {
+  parsePackageRegistries,
+  renderPackageRegistrySection,
+} from '../../lib/package-sources';
 
 const compatibility = JSON.parse(
   readFileSync(join(__dirname, '../../../compatibility.json'), 'utf8'),
@@ -110,6 +114,8 @@ const AGENTS_SECTION_END = '<!-- megamono instructions end -->';
 const LEGACY_AGENTS_MARKER = '<!-- megamono affected CI -->';
 const IGNORE_SECTION_START = '# megamono ignore entries start';
 const IGNORE_SECTION_END = '# megamono ignore entries end';
+const REGISTRY_SECTION_START = '# megamono package registries start';
+const REGISTRY_SECTION_END = '# megamono package registries end';
 const ESLINT_IMPORTS_START = '// megamono eslint imports start';
 const ESLINT_IMPORTS_END = '// megamono eslint imports end';
 const ESLINT_RULES_START = '  // megamono eslint rules start';
@@ -845,7 +851,7 @@ ${hasLinux ? `      linux: ${gh('steps.affected.outputs.linux')}\n` : ''}${hasAp
 ${packageManagerSetup}
       - run: ${install}
       - uses: nrwl/nx-set-shas@v5
-      - run: ${nx} run megamono:check --output-style=static
+      - run: ${nx} run megamono:check --ci --output-style=static
       - id: affected
         shell: bash
         run: |
@@ -1332,6 +1338,10 @@ export async function workspaceInitGenerator(
   const serviceRequirements = parseServiceRequirements(
     options.serviceRequirements,
   );
+  const packageRegistries =
+    options.packageRegistries !== undefined
+      ? parsePackageRegistries(options.packageRegistries)
+      : (existingConfig?.packageSources.registries ?? {});
   const docsContract = resolveWorkspaceDocsContract(tree, options);
   const docsRoot = docsContract.root;
   const docsStructureArtifacts = [
@@ -1758,6 +1768,11 @@ export async function workspaceInitGenerator(
           ? serviceRequirements
           : (existingConfig?.services.requirements ?? {}),
     },
+    packageSources: {
+      ...(existingConfig?.packageSources ??
+        DEFAULT_MEGAMONO_CONFIG.packageSources),
+      registries: packageRegistries,
+    },
   });
   updateJson(tree, 'package.json', (manifest) => ({
     ...manifest,
@@ -1860,6 +1875,18 @@ export async function workspaceInitGenerator(
     IGNORE_SECTION_START,
     IGNORE_SECTION_END,
   );
+  const registryTemplate = renderPackageRegistrySection(packageRegistries);
+  const registryCanUpdate =
+    options.packageRegistries !== undefined
+      ? applyManagedSectionTemplate(
+          tree,
+          'core.package-registries',
+          '.npmrc',
+          registryTemplate,
+          REGISTRY_SECTION_START,
+          REGISTRY_SECTION_END,
+        )
+      : false;
   if (modules.has('docs')) {
     const docsTsconfig = tree.exists('tsconfig.base.json')
       ? 'tsconfig.base.json'
@@ -2121,6 +2148,24 @@ export async function workspaceInitGenerator(
         templateContent: ignoreTemplate,
         claimExisting: allowManagedUpdate,
         allowManagedUpdate,
+      },
+      pluginVersion,
+    );
+  }
+  if (registryCanUpdate || artifactEntry(tree, 'core.package-registries')) {
+    registerFileArtifact(
+      tree,
+      {
+        id: 'core.package-registries',
+        module: 'baseline',
+        mode: 'managed-section',
+        target: '.npmrc',
+        ejectable: true,
+        startDelimiter: REGISTRY_SECTION_START,
+        endDelimiter: REGISTRY_SECTION_END,
+        templateContent: registryTemplate,
+        claimExisting: registryCanUpdate,
+        allowManagedUpdate: registryCanUpdate,
       },
       pluginVersion,
     );

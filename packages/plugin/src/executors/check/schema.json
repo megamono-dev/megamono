@@ -19,6 +19,11 @@
     "verbose": {
       "type": "boolean",
       "default": false
+    },
+    "ci": {
+      "type": "boolean",
+      "default": false,
+      "description": "Reject development-only package addresses and verify registry routing plus the frozen lockfile."
     }
   },
   "additionalProperties": false

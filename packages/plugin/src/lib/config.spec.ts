@@ -19,6 +19,10 @@ describe('Megamono configuration', () => {
       ratchets: [],
     });
     expect(config.services.requirements).toEqual({});
+    expect(config.packageSources).toEqual({
+      registries: {},
+      forbidLocalInCi: true,
+    });
     expect(config.databases).toEqual({});
     expect(config.conventions.packageManager).toBe('pnpm');
     expect(getTopicVocabulary(config)).toContain('architecture');

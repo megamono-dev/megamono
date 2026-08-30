@@ -389,6 +389,24 @@
           }
         }
       }
+    },
+    "packageSources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "registries": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^@[a-z0-9][a-z0-9._-]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://"
+          }
+        },
+        "forbidLocalInCi": { "type": "boolean", "default": true }
+      }
     }
   }
 }

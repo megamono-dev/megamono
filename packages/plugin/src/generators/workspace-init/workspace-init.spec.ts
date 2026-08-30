@@ -290,6 +290,30 @@ describe('workspace-init generator', () => {
     });
   });
 
+  it('records private registry routing without owning authentication', async () => {
+    await workspaceInitGenerator(tree, {
+      only: 'agents',
+      packageRegistries: JSON.stringify({
+        '@playstack': 'https://npm.example.test/playstack/',
+        '@megamono': 'https://npm.example.test/megamono',
+      }),
+      yes: true,
+    });
+
+    expect(readJson(tree, 'megamono.json').packageSources).toEqual({
+      registries: {
+        '@megamono': 'https://npm.example.test/megamono',
+        '@playstack': 'https://npm.example.test/playstack',
+      },
+      forbidLocalInCi: true,
+    });
+    const npmrc = tree.read('.npmrc', 'utf8');
+    expect(npmrc).toContain(
+      '@megamono:registry=https://npm.example.test/megamono',
+    );
+    expect(npmrc).not.toMatch(/token|password|authToken/i);
+  });
+
   it('records pnpm and emits pnpm-only CI and health workflows', async () => {
     await workspaceInitGenerator(tree, {
       only: 'ci,health',

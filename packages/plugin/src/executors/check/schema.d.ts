@@ -3,4 +3,5 @@ export interface CheckExecutorSchema {
   readonly docsRoot?: string;
   readonly skipDocs?: boolean;
   readonly verbose?: boolean;
+  readonly ci?: boolean;
 }

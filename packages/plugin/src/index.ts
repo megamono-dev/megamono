@@ -133,6 +133,11 @@ export {
   type DiagnosticSeverity,
 } from './lib/diagnostics';
 export {
+  parsePackageRegistries,
+  renderPackageRegistrySection,
+  validatePackageSources,
+} from './lib/package-sources';
+export {
   generateDocsIndexes,
   getDocumentDirectory,
   getDocumentFileName,
