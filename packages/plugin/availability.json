@@ -86,24 +86,24 @@
       "description": "Add a document type to a content collection library"
     },
     "playstack-auth": {
-      "status": "gated",
-      "gate": "The Playstack auth install, compatibility, configuration, tier, and fixture contract is unavailable."
+      "status": "reserved",
+      "gate": "Use the package-owned `playstack add auth` capability; Megamono reserves this legacy generator name and does not duplicate Playstack recipes."
     },
     "playstack-accounts": {
-      "status": "gated",
-      "gate": "The Playstack accounts install, compatibility, configuration, tier, and fixture contract is unavailable."
+      "status": "reserved",
+      "gate": "Use the package-owned `playstack add accounts` capability; Megamono reserves this legacy generator name and does not duplicate Playstack recipes."
     },
     "playstack-webhooks": {
-      "status": "gated",
-      "gate": "The Playstack webhooks install, compatibility, configuration, tier, and fixture contract is unavailable."
+      "status": "reserved",
+      "gate": "Playstack owns product-capability installation; this Megamono generator name is reserved until Playstack exposes a canonical webhooks capability."
     },
     "playstack-cache": {
-      "status": "gated",
-      "gate": "The Playstack cache install, compatibility, configuration, tier, and fixture contract is unavailable."
+      "status": "reserved",
+      "gate": "Playstack owns product-capability installation; this Megamono generator name is reserved until Playstack exposes a canonical cache capability."
     },
     "playstack-media": {
-      "status": "gated",
-      "gate": "The Playstack media install, compatibility, configuration, tier, and fixture contract is unavailable."
+      "status": "reserved",
+      "gate": "Playstack owns product-capability installation; this Megamono generator name is reserved until Playstack exposes a canonical media capability."
     },
     "integration-sentry": {
       "status": "gated",

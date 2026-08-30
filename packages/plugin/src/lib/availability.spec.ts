@@ -73,6 +73,10 @@ describe('published collection availability', () => {
       status: 'gated',
       gate: expect.stringContaining('fixture contract'),
     });
+    expect(getGeneratorAvailability('playstack-auth')).toMatchObject({
+      status: 'reserved',
+      gate: expect.stringContaining('playstack add auth'),
+    });
     expect(() => assertGeneratorAvailable('docs-spec')).not.toThrow();
     expect(() => assertGeneratorAvailable('not-a-generator')).toThrow(
       /No canonical Megamono generator uses this name/,

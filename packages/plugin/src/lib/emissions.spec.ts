@@ -70,4 +70,16 @@ describe('Playstack emission registry', () => {
       ),
     ).toBe('0.1.0-beta.1');
   });
+
+  it('keeps legacy product generators reserved for Playstack-owned capabilities', () => {
+    for (const packageName of [
+      '@playstack/auth',
+      '@playstack/accounts',
+      '@playstack/webhooks',
+      '@playstack/cache',
+      '@playstack/media',
+    ]) {
+      expect(getPlaystackEmission(packageName)?.availability).toBe('reserved');
+    }
+  });
 });

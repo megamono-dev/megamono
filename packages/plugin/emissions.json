@@ -41,29 +41,29 @@
     {
       "package": "@playstack/auth",
       "generators": ["playstack-auth"],
-      "purpose": "Identity runtime and Prisma fragment",
+      "purpose": "Identity runtime and database-schema artifacts",
       "dependencyType": "runtime",
       "requiredTier": "free",
       "compatibleVersion": "0.1.0-beta.1",
-      "availability": "gated"
+      "availability": "reserved"
     },
     {
       "package": "@playstack/accounts",
       "generators": ["playstack-accounts"],
-      "purpose": "Tenancy runtime and Prisma fragment",
+      "purpose": "Tenancy runtime and database-schema artifacts",
       "dependencyType": "runtime",
       "requiredTier": "free",
       "compatibleVersion": "0.1.0-beta.1",
-      "availability": "gated"
+      "availability": "reserved"
     },
     {
       "package": "@playstack/webhooks",
       "generators": ["playstack-webhooks"],
-      "purpose": "Webhook receipt runtime and Prisma fragment",
+      "purpose": "Webhook receipt runtime and database-schema artifacts",
       "dependencyType": "runtime",
       "requiredTier": "free",
       "compatibleVersion": "0.1.0-beta.1",
-      "availability": "gated"
+      "availability": "reserved"
     },
     {
       "package": "@playstack/cache",
@@ -72,16 +72,16 @@
       "dependencyType": "runtime",
       "requiredTier": "free",
       "compatibleVersion": "0.1.0-beta.1",
-      "availability": "gated"
+      "availability": "reserved"
     },
     {
       "package": "@playstack/media",
       "generators": ["playstack-media"],
-      "purpose": "Media runtime and Prisma fragment",
+      "purpose": "Media runtime and database-schema artifacts",
       "dependencyType": "runtime",
       "requiredTier": "free",
       "compatibleVersion": null,
-      "availability": "gated"
+      "availability": "reserved"
     },
     {
       "package": "@playstack/mail",
