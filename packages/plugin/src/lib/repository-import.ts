@@ -16,6 +16,7 @@ import {
   validateRepositoryDocs,
   type RepositoryDocumentType,
 } from './docs';
+import { isPackageManager, type PackageManager } from './package-manager';
 
 const executeFile = promisify(execFile);
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -110,7 +111,7 @@ export interface RepositoryImportAnalysis {
   readonly destination: string;
   readonly history?: ImportHistoryStrategy;
   readonly verify: ImportVerifyMode;
-  readonly packageManager: 'pnpm' | 'npm';
+  readonly packageManager: PackageManager;
   readonly targetGit: ImportGitState;
   readonly sourceGit: ImportGitState;
   readonly sourcePackageName?: string;
@@ -720,7 +721,7 @@ function importedDocumentIsPreservable(
 }
 
 const INFRASTRUCTURE_PATH =
-  /^(?:\.agents|\.github)(?:\/|$)|^(?:AGENTS\.md|CLAUDE\.md|content-collections\.ts|megamono\.json|nx\.json|project\.json|package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock)$/;
+  /^(?:\.agents|\.github)(?:\/|$)|^(?:AGENTS\.md|CLAUDE\.md|content-collections\.ts|megamono\.json|nx\.json|project\.json|package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|bun\.lockb)$/;
 
 function documentationRelativePath(source: string): string {
   return source.replace(/^docs\//, '');
@@ -1360,14 +1361,10 @@ export async function analyzeRepositoryImport(
     }
     const sourcePackageManager =
       snapshot.manifest.packageManager?.split('@')[0];
-    if (
-      sourcePackageManager &&
-      sourcePackageManager !== 'pnpm' &&
-      sourcePackageManager !== 'npm'
-    ) {
+    if (sourcePackageManager && !isPackageManager(sourcePackageManager)) {
       blockers.push({
         code: 'import-unsupported-package-manager',
-        message: 'V1 imports pnpm and npm sources only.',
+        message: 'Imports support npm, pnpm, Yarn, and Bun sources.',
       });
     }
     if (
@@ -1667,8 +1664,7 @@ export async function analyzeRepositoryImport(
         (left.subject ?? '').localeCompare(right.subject ?? ''),
     );
 
-    const packageManager =
-      hostConfig?.conventions.packageManager === 'npm' ? 'npm' : 'pnpm';
+    const packageManager = hostConfig?.conventions.packageManager ?? 'npm';
     const commands = Object.fromEntries(
       (['build', 'test', 'lint', 'deploy'] as const).flatMap((name) =>
         snapshot.manifest.scripts?.[name]

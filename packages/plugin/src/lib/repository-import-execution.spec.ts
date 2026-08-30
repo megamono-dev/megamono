@@ -229,7 +229,7 @@ describe('repository import subtree execution', { timeout: 20_000 }, () => {
 
     expect(commands).toEqual([
       'npm install',
-      'npm exec nx run megamono-docs:index',
+      'npm exec nx -- run megamono-docs:index',
     ]);
     expect(
       await readFile(
@@ -568,7 +568,13 @@ describe('repository import subtree execution', { timeout: 20_000 }, () => {
   });
 
   it('integrates and verifies with the target pnpm command family', async () => {
-    await writeJson(targetRoot, 'megamono.json', DEFAULT_MEGAMONO_CONFIG);
+    await writeJson(targetRoot, 'megamono.json', {
+      ...DEFAULT_MEGAMONO_CONFIG,
+      conventions: {
+        ...DEFAULT_MEGAMONO_CONFIG.conventions,
+        packageManager: 'pnpm',
+      },
+    });
     await writeFile(
       join(targetRoot, 'pnpm-workspace.yaml'),
       "packages:\n  - 'packages/*'\n",
@@ -643,7 +649,7 @@ describe('repository import subtree execution', { timeout: 20_000 }, () => {
     expect(failure).toBeInstanceOf(ImportExecutionError);
     expect(failure).toMatchObject({
       phase: 'docs',
-      command: 'npm exec nx run megamono-docs:index',
+      command: 'npm exec nx -- run megamono-docs:index',
     });
 
     const recovery = await readFile(

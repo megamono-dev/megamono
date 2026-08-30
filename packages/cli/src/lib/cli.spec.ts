@@ -6,6 +6,7 @@ import {
   runMegamonoCli,
   type CommandResult,
   type MegamonoCliIo,
+  type PackageManager,
   type WorkspaceMutationState,
 } from './cli.js';
 
@@ -24,7 +25,7 @@ async function json(path: string, value: unknown): Promise<void> {
 }
 
 async function workspace(
-  manager: 'npm' | 'pnpm',
+  manager: PackageManager,
   packages: readonly string[] = ['nx', '@megamono/plugin'],
 ): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'megamono-cli-'));
@@ -46,10 +47,13 @@ async function workspace(
       rules: {},
     },
   });
-  await writeFile(
-    join(root, manager === 'pnpm' ? 'pnpm-lock.yaml' : 'package-lock.json'),
-    manager === 'pnpm' ? 'lockfileVersion: 9\n' : '{"lockfileVersion":3}\n',
-  );
+  const lockfiles: Record<PackageManager, readonly [string, string]> = {
+    npm: ['package-lock.json', '{"lockfileVersion":3}\n'],
+    pnpm: ['pnpm-lock.yaml', 'lockfileVersion: 9\n'],
+    yarn: ['yarn.lock', '# yarn lockfile v1\n'],
+    bun: ['bun.lock', '{}\n'],
+  };
+  await writeFile(join(root, lockfiles[manager][0]), lockfiles[manager][1]);
   for (const packageName of packages) {
     await json(
       join(root, 'node_modules', ...packageName.split('/'), 'package.json'),
@@ -126,6 +130,8 @@ function io(
         node: 'v22.23.1',
         npm: '11.5.2',
         pnpm: '11.24.0',
+        yarn: '4.9.4',
+        bun: '1.1.26',
       }),
       ...(selectedPlaystackPackages
         ? {
@@ -209,7 +215,7 @@ describe('@megamono/cli', () => {
       devDependencies: { nx: '0.0.1', '@megamono/plugin': '0.0.1' },
     });
     const harness = io(root);
-    const nodeResult = await runMegamonoCli(['init', '--survey'], {
+    const nodeResult = await runMegamonoCli(['init', '--only=agents'], {
       ...harness.value,
       activeToolchainState: async () => ({
         node: 'v26.5.0',
@@ -220,7 +226,7 @@ describe('@megamono/cli', () => {
     expect(harness.stderr.join('\n')).toContain('Node.js v26.5.0');
     expect(harness.invocations).toEqual([]);
 
-    const managerResult = await runMegamonoCli(['init', '--survey'], {
+    const managerResult = await runMegamonoCli(['init', '--only=agents'], {
       ...harness.value,
       activeToolchainState: async () => ({
         node: 'v22.23.1',
@@ -242,7 +248,7 @@ describe('@megamono/cli', () => {
       packageManager: 'pnpm@11.24.0',
     });
     const harness = io(root);
-    const result = await runMegamonoCli(['init', '--survey'], {
+    const result = await runMegamonoCli(['init', '--only=agents'], {
       ...harness.value,
       activeToolchainState: async () => ({ node: 'v22.23.1', pnpm: '10.9.0' }),
     });
@@ -277,6 +283,29 @@ describe('@megamono/cli', () => {
       },
     ]);
   });
+
+  it.each([
+    ['yarn', 'yarn', ['nx', 'generate']],
+    ['bun', 'bunx', ['nx', 'generate']],
+  ] as const)(
+    'uses the %s command family in an adopted workspace',
+    async (manager, command, prefix) => {
+      const root = await workspace(manager);
+      const harness = io(root);
+      const result = await runMegamonoCli(
+        ['add', 'docs', '--dry-run'],
+        harness.value,
+      );
+      expect(result.exitCode).toBe(0);
+      expect(harness.invocations[0]).toMatchObject({
+        command,
+        args: expect.arrayContaining([
+          ...prefix,
+          '@megamono/plugin:workspace-init',
+        ]),
+      });
+    },
+  );
 
   it('delegates an explicit application through the canonical generator', async () => {
     const root = await workspace('pnpm', [
@@ -590,7 +619,7 @@ describe('@megamono/cli', () => {
     expect(harness.invocations).toEqual([]);
   });
 
-  it('delegates pnpm init options unchanged to the local generator', async () => {
+  it('delegates read-only survey through the workspace-local Nx binary', async () => {
     const root = await workspace('pnpm');
     const harness = io(join(root, 'apps', 'web'));
     await mkdir(harness.value.cwd, { recursive: true });
@@ -603,10 +632,9 @@ describe('@megamono/cli', () => {
     expect(result.exitCode).toBe(0);
     expect(harness.invocations).toEqual([
       {
-        command: 'pnpm',
+        command: process.execPath,
         args: [
-          'exec',
-          'nx',
+          expect.stringMatching(/node_modules\/nx\/bin\/nx\.js$/),
           'generate',
           '@megamono/plugin:workspace-init',
           '--survey',

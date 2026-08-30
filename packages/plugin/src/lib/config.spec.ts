@@ -24,7 +24,7 @@ describe('Megamono configuration', () => {
       forbidLocalInCi: true,
     });
     expect(config.databases).toEqual({});
-    expect(config.conventions.packageManager).toBe('pnpm');
+    expect(config.conventions.packageManager).toBe('npm');
     expect(getTopicVocabulary(config)).toContain('architecture');
   });
 
@@ -226,7 +226,7 @@ describe('Megamono configuration', () => {
         JSON.stringify(DEFAULT_MEGAMONO_CONFIG),
       );
       const config = await readMegamonoConfig(root, 'config/megamono.json');
-      expect(config.conventions.packageManager).toBe('pnpm');
+      expect(config.conventions.packageManager).toBe('npm');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

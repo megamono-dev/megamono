@@ -170,7 +170,9 @@
   "engines": {
     "node": ">=18.18 <25",
     "pnpm": ">=8 <12",
-    "npm": ">=9 <12"
+    "npm": ">=9 <12",
+    "yarn": ">=1.22 <5",
+    "bun": ">=1.1 <2"
   },
   "executors": "./executors.json",
   "generators": "./generators.json",

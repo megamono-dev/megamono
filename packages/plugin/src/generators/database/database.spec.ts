@@ -61,7 +61,7 @@ describe('database generator', () => {
 
     const before = tree
       .listChanges()
-      .map(({ path, content }) => [path, content.toString()]);
+      .map(({ path, content }) => [path, content?.toString()]);
     await databaseGenerator(tree, {
       name: 'events',
       adapter: 'prisma',
@@ -69,7 +69,9 @@ describe('database generator', () => {
       yes: true,
     });
     expect(
-      tree.listChanges().map(({ path, content }) => [path, content.toString()]),
+      tree
+        .listChanges()
+        .map(({ path, content }) => [path, content?.toString()]),
     ).toEqual(before);
   });
 
@@ -125,7 +127,7 @@ describe('database generator', () => {
     const tree = workspace();
     const before = tree
       .listChanges()
-      .map(({ path, content }) => [path, content.toString()]);
+      .map(({ path, content }) => [path, content?.toString()]);
     await databaseGenerator(tree, {
       name: 'primary',
       adapter: 'prisma',
@@ -134,7 +136,9 @@ describe('database generator', () => {
       dryRun: true,
     });
     expect(
-      tree.listChanges().map(({ path, content }) => [path, content.toString()]),
+      tree
+        .listChanges()
+        .map(({ path, content }) => [path, content?.toString()]),
     ).toEqual(before);
 
     writeJson(tree, 'megamono.json', {

@@ -44,6 +44,10 @@ describe('package source contracts', () => {
       );
       const config = {
         ...DEFAULT_MEGAMONO_CONFIG,
+        conventions: {
+          ...DEFAULT_MEGAMONO_CONFIG.conventions,
+          packageManager: 'pnpm' as const,
+        },
         packageSources: {
           registries: {
             '@megamono': 'https://npm.example.test/megamono',

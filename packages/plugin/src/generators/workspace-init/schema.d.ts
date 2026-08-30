@@ -12,7 +12,7 @@ export interface WorkspaceInitGeneratorSchema {
   readonly serviceRunner?: 'none' | 'springbar';
   readonly serviceRequirements?: string;
   readonly packageRegistries?: string;
-  readonly packageManager?: 'pnpm' | 'npm';
+  readonly packageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun';
   readonly ciMode?: 'auto' | 'standalone' | 'reusable';
   readonly docsRoot?: string;
   readonly docsLoader?: string;

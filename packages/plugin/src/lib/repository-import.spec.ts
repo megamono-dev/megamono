@@ -239,7 +239,13 @@ describe('repository import analysis', { timeout: 20_000 }, () => {
   });
 
   it('uses the target workspace package manager for imported commands', async () => {
-    await writeJson(targetRoot, 'megamono.json', DEFAULT_MEGAMONO_CONFIG);
+    await writeJson(targetRoot, 'megamono.json', {
+      ...DEFAULT_MEGAMONO_CONFIG,
+      conventions: {
+        ...DEFAULT_MEGAMONO_CONFIG.conventions,
+        packageManager: 'pnpm',
+      },
+    });
     await run(targetRoot, 'git', ['add', 'megamono.json']);
     await run(targetRoot, 'git', ['commit', '-m', 'use pnpm']);
     await createSource(sourceRoot, false);

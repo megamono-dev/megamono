@@ -7,6 +7,12 @@ import {
   workspaceDependencyVersion,
   type VersionNumber,
 } from './workspace-compatibility';
+import {
+  isPackageManager,
+  lockfileManagers,
+  packageManagerAdapter,
+  type PackageManager,
+} from './package-manager';
 
 const executeFile = promisify(execFile);
 
@@ -15,6 +21,8 @@ export interface WorkspaceInitHostState {
   readonly node: string;
   readonly npm?: string;
   readonly pnpm?: string;
+  readonly yarn?: string;
+  readonly bun?: string;
   readonly git: {
     readonly available: boolean;
     readonly clean: boolean;
@@ -88,12 +96,16 @@ export async function collectWorkspaceInitHostState(
   ]);
   const npm = await commandOutput(workspaceRoot, 'npm', ['--version']);
   const pnpm = await commandOutput(workspaceRoot, 'pnpm', ['--version']);
+  const yarn = await commandOutput(workspaceRoot, 'yarn', ['--version']);
+  const bun = await commandOutput(workspaceRoot, 'bun', ['--version']);
   if (inside !== 'true') {
     return {
       platform: process.platform,
       node: process.version,
       ...(npm ? { npm } : {}),
       ...(pnpm ? { pnpm } : {}),
+      ...(yarn ? { yarn } : {}),
+      ...(bun ? { bun } : {}),
       git: { available: false, clean: false },
     };
   }
@@ -120,6 +132,8 @@ export async function collectWorkspaceInitHostState(
     node: process.version,
     ...(npm ? { npm } : {}),
     ...(pnpm ? { pnpm } : {}),
+    ...(yarn ? { yarn } : {}),
+    ...(bun ? { bun } : {}),
     git: {
       available: true,
       clean: status === '',
@@ -174,15 +188,9 @@ export function assertWorkspaceInitPreflight(
   state: WorkspaceInitHostState,
   options: {
     readonly bootstrap?: boolean;
-    readonly packageManager?: 'pnpm' | 'npm';
+    readonly packageManager?: PackageManager;
   } = {},
 ): void {
-  if (state.platform !== 'darwin' && state.platform !== 'linux') {
-    throw new WorkspaceInitError(
-      'preflight',
-      `Operating system ${state.platform} is unsupported; use macOS or Linux.`,
-    );
-  }
   const manifestSource = tree.read('package.json', 'utf8');
   if (!manifestSource) {
     throw new WorkspaceInitError('preflight', 'package.json is missing.');
@@ -208,44 +216,40 @@ export function assertWorkspaceInitPreflight(
     );
   }
   assertValidPackageLock(tree);
-  for (const lockfile of ['yarn.lock', 'bun.lock', 'bun.lockb']) {
-    if (tree.exists(lockfile)) {
-      throw new WorkspaceInitError(
-        'preflight',
-        `Unsupported package-manager lockfile ${lockfile}; Megamono supports pnpm and npm.`,
-      );
-    }
-  }
-  const lockfileManagers = [
-    ...(tree.exists('pnpm-lock.yaml') ? (['pnpm'] as const) : []),
-    ...(tree.exists('package-lock.json') ? (['npm'] as const) : []),
-  ];
-  if (lockfileManagers.length !== 1) {
-    throw new WorkspaceInitError(
-      'preflight',
-      lockfileManagers.length === 0
-        ? 'A pnpm-lock.yaml or package-lock.json is required.'
-        : 'Conflicting pnpm-lock.yaml and package-lock.json files are not supported.',
-    );
-  }
-  const packageManager = lockfileManagers[0];
+  const detectedManagers = lockfileManagers((path) => tree.exists(path));
   const declaredName = declaredPackageManager?.split('@')[0];
-  if (declaredName && declaredName !== 'pnpm' && declaredName !== 'npm') {
+  if (declaredName && !isPackageManager(declaredName)) {
     throw new WorkspaceInitError(
       'preflight',
-      `package.json declares unsupported package manager ${declaredPackageManager}.`,
+      `package.json declares unsupported package manager ${declaredPackageManager}. Survey remains available, but mutation requires an npm, pnpm, Yarn, or Bun workspace.`,
     );
   }
-  if (declaredName && declaredName !== packageManager) {
+  if (detectedManagers.length > 1) {
     throw new WorkspaceInitError(
       'preflight',
-      `package.json declares ${declaredPackageManager}, but the workspace has the ${packageManager} lockfile.`,
+      `Conflicting root package-manager lockfiles are not supported: ${detectedManagers.join(', ')}. Nested project lockfiles do not participate in root detection.`,
+    );
+  }
+  const lockedManager = detectedManagers[0];
+  const packageManager =
+    lockedManager ??
+    (declaredName && isPackageManager(declaredName) ? declaredName : undefined);
+  if (!packageManager) {
+    throw new WorkspaceInitError(
+      'preflight',
+      'Mutation requires a declared packageManager or one root lockfile: package-lock.json, pnpm-lock.yaml, yarn.lock, bun.lock, or bun.lockb. Survey remains available without either.',
+    );
+  }
+  if (declaredName && lockedManager && declaredName !== lockedManager) {
+    throw new WorkspaceInitError(
+      'preflight',
+      `package.json declares ${declaredPackageManager}, but the root lockfile belongs to ${lockedManager}.`,
     );
   }
   if (options.packageManager && options.packageManager !== packageManager) {
     throw new WorkspaceInitError(
       'preflight',
-      `Requested ${options.packageManager}, but the workspace has the ${packageManager} lockfile.`,
+      `Requested ${options.packageManager}, but the workspace owns ${packageManager}. Package-manager migration is a separate explicit operation.`,
     );
   }
   requireVersionRange(
@@ -254,13 +258,16 @@ export function assertWorkspaceInitPreflight(
     { major: 18, minor: 18, patch: 0 },
     { major: 25, minor: 0, patch: 0 },
   );
+  const adapter = packageManagerAdapter(packageManager);
   requireVersionRange(
     packageManager,
-    packageManager === 'pnpm' ? state.pnpm : state.npm,
-    packageManager === 'pnpm'
-      ? { major: 8, minor: 0, patch: 0 }
-      : { major: 9, minor: 0, patch: 0 },
-    { major: 12, minor: 0, patch: 0 },
+    state[packageManager],
+    {
+      major: adapter.minimumVersion[0],
+      minor: adapter.minimumVersion[1],
+      patch: 0,
+    },
+    { major: adapter.maximumMajorExclusive, minor: 0, patch: 0 },
   );
   requireVersionRange(
     'Nx',

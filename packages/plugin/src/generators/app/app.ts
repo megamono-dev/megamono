@@ -21,6 +21,12 @@ import {
   collectWorkspaceInitHostState,
 } from '../../lib/workspace-init-preflight';
 import type { AppGeneratorSchema, AppType } from './schema';
+import {
+  isPackageManager,
+  lockfileManagers,
+  packageManagerAdapter,
+  type PackageManager,
+} from '../../lib/package-manager';
 
 export const APP_TYPES = [
   'web',
@@ -83,7 +89,7 @@ interface NormalizedAppOptions {
   readonly platform: 'web' | 'node' | 'worker' | 'apple' | 'rust';
   readonly tags: readonly string[];
   readonly port?: number;
-  readonly packageManager: 'npm' | 'pnpm';
+  readonly packageManager: PackageManager;
   readonly workspaceName: string;
   readonly requestedApps: readonly AppType[];
   readonly requestedServices: readonly string[];
@@ -160,19 +166,43 @@ function slug(value: string, label: string): string {
   return normalized;
 }
 
-function packageManager(tree: Tree): 'npm' | 'pnpm' {
-  const pnpm = tree.exists('pnpm-lock.yaml');
-  const npm = tree.exists('package-lock.json');
-  if (pnpm === npm) {
+function packageManager(tree: Tree): PackageManager {
+  const managers = lockfileManagers((path) => tree.exists(path));
+  const declared = readJson<{ packageManager?: string }>(
+    tree,
+    'package.json',
+  ).packageManager?.split('@')[0];
+  if (managers.length > 1) {
     throw new AppGeneratorError(
-      pnpm
-        ? 'Conflicting pnpm-lock.yaml and package-lock.json files are not supported.'
-        : 'A pnpm-lock.yaml or package-lock.json is required.',
+      `Conflicting root package-manager lockfiles are not supported: ${managers.join(', ')}.`,
       3,
       'package-manager',
     );
   }
-  return pnpm ? 'pnpm' : 'npm';
+  const locked = managers[0];
+  if (declared && !isPackageManager(declared)) {
+    throw new AppGeneratorError(
+      `Unsupported package manager ${declared}.`,
+      3,
+      'package-manager',
+    );
+  }
+  if (declared && locked && declared !== locked) {
+    throw new AppGeneratorError(
+      `package.json declares ${declared}, but the root lockfile belongs to ${locked}.`,
+      3,
+      'package-manager',
+    );
+  }
+  const selected = locked ?? (declared as PackageManager | undefined);
+  if (!selected) {
+    throw new AppGeneratorError(
+      'Declare packageManager or commit a supported root lockfile before adding an application.',
+      3,
+      'package-manager',
+    );
+  }
+  return selected;
 }
 
 function workspaceIdentity(tree: Tree): {
@@ -431,7 +461,7 @@ function updatePackage(
 }
 
 function workspaceDependency(options: NormalizedAppOptions): string {
-  return options.packageManager === 'pnpm' ? 'workspace:*' : '*';
+  return packageManagerAdapter(options.packageManager).workspaceDependency('*');
 }
 
 function themeSystemSource(): string {
@@ -458,8 +488,7 @@ export const megamonoSystem = createSystem(defaultConfig, config);
 }
 
 function billboardSource(options: NormalizedAppOptions): string {
-  const nx =
-    options.packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
+  const nx = packageManagerAdapter(options.packageManager).nx;
   const surfaces = (
     options.requestedApps.length ? options.requestedApps : [options.type]
   ).map((type) => APP_LABELS[type]);
@@ -634,8 +663,7 @@ module.exports = {
     return;
   }
 
-  const nx =
-    options.packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
+  const nx = packageManagerAdapter(options.packageManager).nx;
   const port = options.port ?? 4200;
   tree.write(
     `${e2eRoot}/playwright.config.mts`,
@@ -918,7 +946,7 @@ function ensureWorkspacePackagePath(
   tree: Tree,
   options: NormalizedAppOptions,
 ): void {
-  if (options.packageManager === 'npm') {
+  if (options.packageManager !== 'pnpm') {
     updateJson(tree, 'package.json', (value: Record<string, unknown>) => {
       const workspaces = value.workspaces;
       if (workspaces !== undefined && !Array.isArray(workspaces)) {

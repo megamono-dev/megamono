@@ -3,6 +3,7 @@ import { join, relative } from 'node:path';
 import { z } from 'zod';
 import type { MegamonoConfig } from './config';
 import type { Diagnostic } from './diagnostics';
+import { packageManagerAdapter } from './package-manager';
 
 const scopePattern = /^@[a-z0-9][a-z0-9._-]*$/;
 const registriesSchema = z.record(
@@ -91,13 +92,17 @@ export async function validatePackageSources(
 ): Promise<readonly Diagnostic[]> {
   const diagnostics: Diagnostic[] = [];
   const manager = config.conventions.packageManager;
-  const lockfile = manager === 'pnpm' ? 'pnpm-lock.yaml' : 'package-lock.json';
-  if (!(await exists(join(root, lockfile)))) {
+  const lockfiles = packageManagerAdapter(manager).lockfiles;
+  const hasLockfile = (
+    await Promise.all(lockfiles.map((lockfile) => exists(join(root, lockfile))))
+  ).some(Boolean);
+  if (!hasLockfile) {
+    const lockfile = lockfiles[0] ?? 'package.json';
     diagnostics.push({
       severity: 'error',
       code: 'package-sources-lockfile',
       path: lockfile,
-      message: `Frozen CI requires the committed ${manager} lockfile.`,
+      message: `Frozen CI requires a committed ${manager} lockfile (${lockfiles.join(' or ')}).`,
     });
   }
   for (const path of ['yalc.lock', '.yalc']) {

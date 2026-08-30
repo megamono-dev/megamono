@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import { z } from 'zod';
+import { PACKAGE_MANAGERS } from './package-manager';
 
 export const BUILT_IN_TOPICS = [
   'agents',
@@ -65,8 +66,7 @@ export const ADOPTION_MODULES = [
   'health',
   'inference',
 ] as const;
-export const PACKAGE_MANAGERS = ['pnpm', 'npm'] as const;
-export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
+export { PACKAGE_MANAGERS, type PackageManager } from './package-manager';
 export const DATABASE_ADAPTERS = ['prisma', 'drizzle'] as const;
 export type DatabaseAdapter = (typeof DATABASE_ADAPTERS)[number];
 
@@ -114,7 +114,7 @@ const conventionsSchema = z
   .object({
     nestFeatureLibraries: z.boolean().default(true),
     docsLocation: z.literal('centralized').default('centralized'),
-    packageManager: z.enum(PACKAGE_MANAGERS).default('pnpm'),
+    packageManager: z.enum(PACKAGE_MANAGERS).default('npm'),
     apps: z
       .object({
         web: z
@@ -427,7 +427,7 @@ export const DEFAULT_MEGAMONO_CONFIG: MegamonoConfig =
     conventions: {
       nestFeatureLibraries: true,
       docsLocation: 'centralized',
-      packageManager: 'pnpm',
+      packageManager: 'npm',
       apps: {
         web: { router: 'pages', src: true, ui: 'chakra', e2e: 'playwright' },
         api: { framework: 'nest', featureLibraries: true, e2e: 'jest' },

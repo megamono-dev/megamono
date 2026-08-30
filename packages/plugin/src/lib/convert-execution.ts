@@ -17,6 +17,7 @@ import type {
   ConvertVerifyMode,
 } from './convert';
 import { CONVENTION_RULES } from './config';
+import { packageManagerExec } from './package-manager';
 
 interface PackageManifest extends Record<string, unknown> {
   name?: string;
@@ -394,7 +395,11 @@ export function applyConversionPlan(
             ? `nx run ${analysis.appName}:${name}`
             : analysis.detection.packageManager === 'pnpm'
               ? `pnpm --dir ${analysis.destination} run ${name}`
-              : `npm --prefix ${analysis.destination} run ${name}`,
+              : analysis.detection.packageManager === 'npm'
+                ? `npm --prefix ${analysis.destination} run ${name}`
+                : analysis.detection.packageManager === 'yarn'
+                  ? `yarn --cwd ${analysis.destination} run ${name}`
+                  : `bun --cwd ${analysis.destination} run ${name}`,
         ]),
     );
   } else {
@@ -487,51 +492,24 @@ export function conversionVerificationCommands(
 ): readonly ConvertVerificationCommand[] {
   if (analysis.verify === 'none') return [];
   const packageManager = analysis.detection.packageManager;
-  const nxArgs = (args: readonly string[]) => ['exec', 'nx', ...args];
-  const nxDisplay = (args: readonly string[]) =>
-    `${packageManager} exec nx ${args.join(' ')}`;
+  const nxCommand = (args: readonly string[]) =>
+    packageManagerExec(packageManager, 'nx', args);
+  const command = (
+    phase: ConvertVerificationCommand['phase'],
+    args: readonly string[],
+  ): ConvertVerificationCommand => ({ phase, ...nxCommand(args) });
   const commands: ConvertVerificationCommand[] = [
-    {
-      phase: 'config',
-      command: packageManager,
-      args: nxArgs(['run', 'megamono-docs:validate']),
-      display: nxDisplay(['run', 'megamono-docs:validate']),
-    },
-    {
-      phase: 'config',
-      command: packageManager,
-      args: nxArgs(['run', 'megamono:check']),
-      display: nxDisplay(['run', 'megamono:check']),
-    },
-    {
-      phase: 'config',
-      command: packageManager,
-      args: nxArgs(['show', 'project', analysis.appName, '--json']),
-      display: nxDisplay(['show', 'project', analysis.appName, '--json']),
-    },
-    {
-      phase: 'config',
-      command: packageManager,
-      args: nxArgs(['run', 'megamono-docs:health']),
-      display: nxDisplay(['run', 'megamono-docs:health']),
-    },
+    command('config', ['run', 'megamono-docs:validate']),
+    command('config', ['run', 'megamono:check']),
+    command('config', ['show', 'project', analysis.appName, '--json']),
+    command('config', ['run', 'megamono-docs:health']),
   ];
   if (analysis.verify === 'build') {
     if (analysis.detection.commands.build) {
-      commands.push({
-        phase: 'build',
-        command: packageManager,
-        args: nxArgs(['run', `${analysis.appName}:build`]),
-        display: nxDisplay(['run', `${analysis.appName}:build`]),
-      });
+      commands.push(command('build', ['run', `${analysis.appName}:build`]));
     }
     if (analysis.detection.commands.test) {
-      commands.push({
-        phase: 'test',
-        command: packageManager,
-        args: nxArgs(['run', `${analysis.appName}:test`]),
-        display: nxDisplay(['run', `${analysis.appName}:test`]),
-      });
+      commands.push(command('test', ['run', `${analysis.appName}:test`]));
     }
   }
   return commands;
@@ -603,9 +581,10 @@ function recoveryCommand(
       }
     : {
         phase,
-        command: packageManager,
-        args: ['exec', 'nx', 'run', 'megamono-docs:index'],
-        display: `${packageManager} exec nx run megamono-docs:index`,
+        ...packageManagerExec(packageManager, 'nx', [
+          'run',
+          'megamono-docs:index',
+        ]),
       };
 }
 

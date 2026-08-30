@@ -149,7 +149,7 @@ describe('conversion analysis', () => {
     const result = analyze(tree);
 
     expect(result.ready).toBe(true);
-    expect(result.detection.shape).toBe('npm-workspaces');
+    expect(result.detection.shape).toBe('package-json-workspaces');
     expect(result.detection.workspacePatterns).toEqual(['packages/*']);
     expect(result.operations).not.toContainEqual(
       expect.objectContaining({ source: 'packages' }),
@@ -275,7 +275,7 @@ describe('conversion analysis', () => {
   });
 
   it('reports unsupported package managers and orchestrators', () => {
-    const tree = createFixture({ packageManager: 'yarn@4.9.0' });
+    const tree = createFixture({ packageManager: 'bower@1.8.14' });
     tree.write('src/index.ts', 'export {};\n');
     tree.write('pnpm-lock.yaml', 'lockfileVersion: 9\n');
     writeJson(tree, 'turbo.json', { tasks: {} });

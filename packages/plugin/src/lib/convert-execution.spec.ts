@@ -278,8 +278,8 @@ describe('conversion execution', () => {
       conversionVerificationCommands(analysis).map(({ display }) => display),
     );
     expect(seen.slice(-2)).toEqual([
-      'npm exec nx run example-app:build',
-      'npm exec nx run example-app:test',
+      'npm exec nx -- run example-app:build',
+      'npm exec nx -- run example-app:test',
     ]);
   });
 
@@ -297,7 +297,7 @@ describe('conversion execution', () => {
     ).rejects.toMatchObject({
       verification: {
         phase: 'config',
-        display: 'npm exec nx run megamono:check',
+        display: 'npm exec nx -- run megamono:check',
       },
     });
     try {
@@ -312,7 +312,7 @@ describe('conversion execution', () => {
       const failure = error as ConvertVerificationError;
       expect(
         renderConversionRecovery(analysis, failure.verification),
-      ).toContain('- Retry command: `npm exec nx run megamono:check`');
+      ).toContain('- Retry command: `npm exec nx -- run megamono:check`');
     }
   });
 
@@ -361,7 +361,7 @@ describe('conversion execution', () => {
       );
       expect(recovery).toContain('stopped during the `config` phase');
       expect(recovery).toContain(
-        '- Failed command: `npm exec nx run megamono:check`',
+        '- Failed command: `npm exec nx -- run megamono:check`',
       );
       expect(recovery).toContain('- Rollback base: `0123456789abcdef`');
     } finally {

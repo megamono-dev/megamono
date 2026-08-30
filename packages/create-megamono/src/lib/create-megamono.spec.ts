@@ -64,7 +64,7 @@ describe('normalizeCreateOptions', () => {
     );
   });
 
-  it('defaults new workspaces to pnpm', () => {
+  it('defaults new workspaces to npm', () => {
     expect(
       normalizeCreateOptions({
         name: 'Acme Tools',
@@ -72,7 +72,7 @@ describe('normalizeCreateOptions', () => {
         cwd: '/workspace',
         platform: 'darwin',
       }).packageManager,
-    ).toBe('pnpm');
+    ).toBe('npm');
   });
 
   it.each([
@@ -82,7 +82,7 @@ describe('normalizeCreateOptions', () => {
     [{ integrations: ['sentry'] }, 3, 'fixture gate'],
     [{ apps: ['apple'], platform: 'linux' }, 3, 'requires macOS'],
     [{ localPackages: 'unknown' }, 2, 'local package source'],
-    [{ packageManager: 'yarn' }, 2, 'package manager'],
+    [{ packageManager: 'bower' }, 2, 'package manager'],
     [{ databaseAdapter: 'typeorm' }, 2, 'database adapter'],
     [
       { databaseAdapter: 'prisma', databaseName: 'Main Database' },
@@ -255,6 +255,48 @@ describe('createPlan', () => {
     );
     expect(renderPlan(plan)).not.toContain('npm exec');
   });
+
+  it.each([
+    ['yarn', 'yarn', 'create', 'nx-workspace@23.1.1', 'add', ['nx']],
+    ['bun', 'bun', 'x', 'create-nx-workspace@23.1.1', 'add', ['x', 'nx']],
+  ] as const)(
+    'uses %s consistently across bootstrap, install, and Nx delegation',
+    (manager, command, scaffoldVerb, scaffoldPackage, addVerb, nxParts) => {
+      const plan = createPlan(
+        options('/workspace', {
+          apps: ['web'],
+          packageManager: manager,
+          verify: 'config',
+        }),
+      );
+      const commands = plan.steps.filter(
+        (
+          step,
+        ): step is Extract<(typeof plan.steps)[number], { kind: 'command' }> =>
+          step.kind === 'command',
+      );
+      expect(
+        commands.find(({ id }) => id === 'create-nx-workspace'),
+      ).toMatchObject({
+        command,
+        args: expect.arrayContaining([
+          scaffoldVerb,
+          scaffoldPackage,
+          `--packageManager=${manager}`,
+        ]),
+      });
+      expect(commands.find(({ id }) => id === 'install-plugins')).toMatchObject(
+        {
+          command,
+          args: expect.arrayContaining([addVerb, '--dev']),
+        },
+      );
+      expect(commands.find(({ id }) => id === 'generate-web')).toMatchObject({
+        command,
+        args: expect.arrayContaining([...nxParts, '@megamono/plugin:app']),
+      });
+    },
+  );
 
   it('uses exact package versions and a deterministic ordered plan', () => {
     const plan = createPlan(

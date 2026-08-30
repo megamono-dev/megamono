@@ -25,6 +25,7 @@ import {
   type ImportRepositoryRoute,
   type RepositoryImportOptions,
 } from './repository-import';
+import { packageManagerExec } from './package-manager';
 
 const executeFile = promisify(execFile);
 
@@ -678,52 +679,29 @@ function verificationCommands(
 ): ImportExecutionCommand[] {
   if (analysis.verify === 'none') return [];
   const packageManager = analysis.packageManager;
-  const nxArgs = (args: readonly string[], separator = false) => [
-    'exec',
-    'nx',
-    ...(separator && packageManager === 'npm' ? ['--'] : []),
-    ...args,
-  ];
-  const nxDisplay = (args: readonly string[], separator = false) =>
-    `${packageManager} exec nx${separator && packageManager === 'npm' ? ' --' : ''} ${args.join(' ')}`;
+  const nxCommand = (args: readonly string[]) =>
+    packageManagerExec(packageManager, 'nx', args);
+  const command = (
+    phase: ImportExecutionCommand['phase'],
+    args: readonly string[],
+    captureOutput = false,
+  ): ImportExecutionCommand => ({
+    phase,
+    ...nxCommand(args),
+    ...(captureOutput ? { captureOutput: true } : {}),
+  });
   const commands: ImportExecutionCommand[] = [
-    {
-      phase: 'config',
-      command: packageManager,
-      args: nxArgs(['run', 'megamono-docs:validate']),
-      display: nxDisplay(['run', 'megamono-docs:validate']),
-    },
-    {
-      phase: 'config',
-      command: packageManager,
-      args: nxArgs(['run', 'megamono:check']),
-      display: nxDisplay(['run', 'megamono:check']),
-    },
-    {
-      phase: 'config',
-      command: packageManager,
-      args: nxArgs(['show', 'project', analysis.name, '--json']),
-      display: nxDisplay(['show', 'project', analysis.name, '--json']),
-    },
+    command('config', ['run', 'megamono-docs:validate']),
+    command('config', ['run', 'megamono:check']),
+    command('config', ['show', 'project', analysis.name, '--json']),
   ];
   if (analysis.expectedGraphDependencies.length > 0) {
-    commands.push({
-      phase: 'graph',
-      command: packageManager,
-      args: nxArgs(['graph', '--print'], true),
-      display: nxDisplay(['graph', '--print'], true),
-      captureOutput: true,
-    });
+    commands.push(command('graph', ['graph', '--print'], true));
   }
   if (analysis.verify === 'build') {
     for (const phase of ['build', 'test', 'lint'] as const) {
       if (!analysis.commands[phase]) continue;
-      commands.push({
-        phase,
-        command: packageManager,
-        args: nxArgs(['run', `${analysis.name}:${phase}`]),
-        display: nxDisplay(['run', `${analysis.name}:${phase}`]),
-      });
+      commands.push(command(phase, ['run', `${analysis.name}:${phase}`]));
     }
   }
   return commands;
@@ -966,9 +944,10 @@ export async function executeRepositoryImport(
       },
       {
         phase: 'docs',
-        command: analysis.packageManager,
-        args: ['exec', 'nx', 'run', 'megamono-docs:index'],
-        display: `${analysis.packageManager} exec nx run megamono-docs:index`,
+        ...packageManagerExec(analysis.packageManager, 'nx', [
+          'run',
+          'megamono-docs:index',
+        ]),
       },
       ...verificationCommands(analysis),
     ];

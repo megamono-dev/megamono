@@ -2,11 +2,16 @@ import type { Tree } from '@nx/devkit';
 import { execFile } from 'node:child_process';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
+import {
+  isPackageManager,
+  lockfileManagers as detectLockfileManagers,
+  type PackageManager,
+} from './package-manager';
 
 export type ConvertFramework = 'next' | 'nest' | 'expo' | 'vite' | 'node';
-export type ConvertPackageManager = 'pnpm' | 'npm';
+export type ConvertPackageManager = PackageManager;
 export type ConvertRepositoryShape =
-  'single-package' | 'pnpm-workspaces' | 'npm-workspaces';
+  'single-package' | 'pnpm-workspaces' | 'package-json-workspaces';
 export type ConvertVerifyMode = 'none' | 'config' | 'build';
 export type ConvertPlanPhase =
   'restructure' | 'targets' | 'conventions' | 'docs';
@@ -538,9 +543,6 @@ export function analyzeConversion(
   }
 
   const unsupportedMarkers = [
-    ['yarn.lock', 'Yarn'],
-    ['bun.lock', 'Bun'],
-    ['bun.lockb', 'Bun'],
     ['turbo.json', 'Turborepo'],
     ['lerna.json', 'Lerna'],
     ['rush.json', 'Rush'],
@@ -555,36 +557,29 @@ export function analyzeConversion(
     }
   }
   const declaredPackageManager = manifest.packageManager?.split('@')[0];
-  if (
-    declaredPackageManager &&
-    declaredPackageManager !== 'pnpm' &&
-    declaredPackageManager !== 'npm'
-  ) {
+  if (declaredPackageManager && !isPackageManager(declaredPackageManager)) {
     blockers.push({
       code: 'convert-unsupported-package-manager',
-      message: `Conversion supports pnpm and npm, not ${manifest.packageManager}.`,
+      message: `Conversion supports npm, pnpm, Yarn, and Bun, not ${manifest.packageManager}.`,
       path: manifestPath,
     });
   }
-  const lockfileManagers: ConvertPackageManager[] = [
-    ...(tree.exists('pnpm-lock.yaml') ? (['pnpm'] as const) : []),
-    ...(tree.exists('package-lock.json') ? (['npm'] as const) : []),
-  ];
-  if (lockfileManagers.length !== 1) {
+  const detectedManagers = detectLockfileManagers((path) => tree.exists(path));
+  if (detectedManagers.length > 1) {
     blockers.push({
       code: 'convert-package-lock',
-      message:
-        lockfileManagers.length === 0
-          ? 'Conversion requires pnpm-lock.yaml or package-lock.json.'
-          : 'Conversion refuses conflicting pnpm-lock.yaml and package-lock.json files.',
+      message: `Conversion refuses conflicting root package-manager lockfiles: ${detectedManagers.join(', ')}.`,
     });
   }
   const packageManager: ConvertPackageManager =
-    lockfileManagers[0] ?? (declaredPackageManager === 'pnpm' ? 'pnpm' : 'npm');
+    detectedManagers[0] ??
+    (declaredPackageManager && isPackageManager(declaredPackageManager)
+      ? declaredPackageManager
+      : 'npm');
   if (
     declaredPackageManager &&
-    (declaredPackageManager === 'pnpm' || declaredPackageManager === 'npm') &&
-    lockfileManagers.length === 1 &&
+    isPackageManager(declaredPackageManager) &&
+    detectedManagers.length === 1 &&
     declaredPackageManager !== packageManager
   ) {
     blockers.push({
@@ -762,7 +757,7 @@ export function analyzeConversion(
         patterns.length > 0
           ? packageManager === 'pnpm'
             ? 'pnpm-workspaces'
-            : 'npm-workspaces'
+            : 'package-json-workspaces'
           : 'single-package',
       framework,
       ...(testRunner ? { testRunner } : {}),

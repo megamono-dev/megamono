@@ -26,6 +26,12 @@ import {
   collectWorkspaceInitHostState,
 } from '../../lib/workspace-init-preflight';
 import type { DatabaseGeneratorSchema } from './schema';
+import {
+  isPackageManager,
+  lockfileManagers,
+  packageManagerAdapter,
+  type PackageManager,
+} from '../../lib/package-manager';
 
 interface AdapterCompatibility {
   readonly provider: 'postgresql';
@@ -49,7 +55,7 @@ interface NormalizedDatabaseOptions {
   readonly project: string;
   readonly packageName: string;
   readonly scope: string;
-  readonly packageManager: 'npm' | 'pnpm';
+  readonly packageManager: PackageManager;
   readonly target: string;
   readonly schema: string;
   readonly existingLayout: boolean;
@@ -175,19 +181,43 @@ async function resolveAdapter(
   return answer.adapter;
 }
 
-function packageManager(tree: Tree): 'npm' | 'pnpm' {
-  const pnpm = tree.exists('pnpm-lock.yaml');
-  const npm = tree.exists('package-lock.json');
-  if (pnpm === npm) {
+function packageManager(tree: Tree): PackageManager {
+  const managers = lockfileManagers((path) => tree.exists(path));
+  const declared = readJson<{ packageManager?: string }>(
+    tree,
+    'package.json',
+  ).packageManager?.split('@')[0];
+  if (managers.length > 1) {
     throw new DatabaseGeneratorError(
-      pnpm
-        ? 'Conflicting pnpm-lock.yaml and package-lock.json files are not supported.'
-        : 'A pnpm-lock.yaml or package-lock.json is required.',
+      `Conflicting root package-manager lockfiles are not supported: ${managers.join(', ')}.`,
       3,
       'package-manager',
     );
   }
-  return pnpm ? 'pnpm' : 'npm';
+  const locked = managers[0];
+  if (declared && !isPackageManager(declared)) {
+    throw new DatabaseGeneratorError(
+      `Unsupported package manager ${declared}.`,
+      3,
+      'package-manager',
+    );
+  }
+  if (declared && locked && declared !== locked) {
+    throw new DatabaseGeneratorError(
+      `package.json declares ${declared}, but the root lockfile belongs to ${locked}.`,
+      3,
+      'package-manager',
+    );
+  }
+  const selected = locked ?? (declared as PackageManager | undefined);
+  if (!selected) {
+    throw new DatabaseGeneratorError(
+      'Declare packageManager or commit a supported root lockfile before adding a database.',
+      3,
+      'package-manager',
+    );
+  }
+  return selected;
 }
 
 function workspaceScope(tree: Tree): string {
@@ -394,16 +424,14 @@ function command(
   executable: string,
   args: readonly string[],
 ): string {
-  return options.packageManager === 'pnpm'
-    ? `pnpm exec ${executable} ${args.join(' ')}`
-    : `npm exec ${executable} -- ${args.join(' ')}`;
+  return packageManagerAdapter(options.packageManager).exec(executable, args);
 }
 
 function ensureWorkspacePackagePath(
   tree: Tree,
   options: NormalizedDatabaseOptions,
 ): void {
-  if (options.packageManager === 'npm') {
+  if (options.packageManager !== 'pnpm') {
     updateJson(tree, 'package.json', (value: Record<string, unknown>) => {
       const workspaces = value.workspaces;
       if (workspaces !== undefined && !Array.isArray(workspaces)) {

@@ -19,6 +19,11 @@ import {
   type SpringbarConfigurator,
   type SpringbarSetupResult,
 } from './springbar.js';
+import {
+  PACKAGE_MANAGERS,
+  packageManagerAdapter,
+  type PackageManager,
+} from './package-manager.js';
 
 export const APP_IDS = [
   'web',
@@ -38,7 +43,6 @@ export const SERVICE_IDS = [
 export const VERIFY_MODES = ['none', 'config', 'build'] as const;
 export const SERVICE_RUNNERS = ['none', 'springbar'] as const;
 export const LOCAL_PACKAGE_SOURCES = ['registry', 'yalc'] as const;
-export const PACKAGE_MANAGERS = ['pnpm', 'npm'] as const;
 export const DATABASE_ADAPTERS = ['none', 'prisma', 'drizzle'] as const;
 
 export type AppId = (typeof APP_IDS)[number];
@@ -46,7 +50,6 @@ export type ServiceId = (typeof SERVICE_IDS)[number];
 export type VerifyMode = (typeof VERIFY_MODES)[number];
 export type ServiceRunner = (typeof SERVICE_RUNNERS)[number];
 export type LocalPackageSource = (typeof LOCAL_PACKAGE_SOURCES)[number];
-export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
 export type DatabaseAdapter = (typeof DATABASE_ADAPTERS)[number];
 
 export interface CreateMegamonoInput {
@@ -307,7 +310,7 @@ export function normalizeCreateOptions(
     ),
     packageManager: requireEnum<PackageManager>(
       'package manager',
-      input.packageManager ?? 'pnpm',
+      input.packageManager ?? 'npm',
       PACKAGE_MANAGER_SET,
     ),
     platform,
@@ -338,22 +341,14 @@ function nxArgs(
   packageManager: PackageManager,
   args: readonly string[],
 ): string[] {
-  return packageManager === 'pnpm'
-    ? ['exec', 'nx', ...args]
-    : ['exec', 'nx', '--', ...args];
+  return packageManagerAdapter(packageManager).exec('nx', args);
 }
 
 function packageInstallArgs(
   packageManager: PackageManager,
   packages: readonly string[] = [],
 ): string[] {
-  return packageManager === 'pnpm'
-    ? packages.length > 0
-      ? ['add', '--save-dev', '--save-exact', ...packages]
-      : ['install']
-    : packages.length > 0
-      ? ['install', '--save-dev', '--save-exact', ...packages]
-      : ['install'];
+  return packageManagerAdapter(packageManager).install(packages);
 }
 
 function scaffoldArgs(
@@ -361,9 +356,7 @@ function scaffoldArgs(
   packageName: string,
   args: readonly string[],
 ): string[] {
-  return packageManager === 'pnpm'
-    ? ['dlx', packageName, ...args]
-    : ['exec', '--yes', packageName, '--', ...args];
+  return packageManagerAdapter(packageManager).scaffold(packageName, args);
 }
 
 function requestedPlatforms(options: NormalizedCreateOptions): string[] {

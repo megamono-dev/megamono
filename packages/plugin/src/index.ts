@@ -127,6 +127,16 @@ export {
   type MegamonoConfig,
 } from './lib/config';
 export {
+  PACKAGE_MANAGERS,
+  isPackageManager,
+  lockfileManagers,
+  packageManagerAdapter,
+  packageManagerExec,
+  preferredLockfile,
+  type PackageManager,
+  type PackageManagerAdapter,
+} from './lib/package-manager';
+export {
   formatDiagnostic,
   hasErrors,
   type Diagnostic,

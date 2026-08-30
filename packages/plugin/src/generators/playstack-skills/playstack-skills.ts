@@ -18,12 +18,16 @@ import {
   retainedLocalPackageVersion,
 } from '../playstack-workspace';
 import type { PlaystackSkillsGeneratorSchema } from './schema';
+import {
+  packageManagerAdapter,
+  type PackageManager,
+} from '../../lib/package-manager';
 
 const executeFile = promisify(execFile);
 const recoveryHeading = '# Megamono Playstack skills recovery\n';
 
 export interface PlaystackSkillsCommand {
-  readonly command: 'npm' | 'pnpm';
+  readonly command: string;
   readonly args: readonly string[];
 }
 
@@ -44,17 +48,17 @@ const runPlaystackSkillsCommand: PlaystackSkillsCommandRunner = async (
 };
 
 function playstackCommand(
-  packageManager: 'npm' | 'pnpm',
+  packageManager: PackageManager,
 ): PlaystackSkillsCommand {
-  return packageManager === 'npm'
-    ? {
-        command: 'npm',
-        args: ['exec', 'playstack', '--', 'skills', 'sync'],
-      }
-    : {
-        command: 'pnpm',
-        args: ['exec', 'playstack', 'skills', 'sync'],
-      };
+  const [command, args] =
+    packageManager === 'bun'
+      ? (['bunx', ['playstack', 'skills', 'sync']] as const)
+      : packageManager === 'yarn'
+        ? (['yarn', ['playstack', 'skills', 'sync']] as const)
+        : packageManager === 'npm'
+          ? (['npm', ['exec', 'playstack', '--', 'skills', 'sync']] as const)
+          : (['pnpm', ['exec', 'playstack', 'skills', 'sync']] as const);
+  return { command, args };
 }
 
 function displayCommand(command: PlaystackSkillsCommand): string {
@@ -63,7 +67,7 @@ function displayCommand(command: PlaystackSkillsCommand): string {
 
 export function createPlaystackSkillsPostFlushCallback(
   workspaceRoot: string,
-  packageManager: 'npm' | 'pnpm',
+  packageManager: PackageManager,
   install: GeneratorCallback,
   runner: PlaystackSkillsCommandRunner = runPlaystackSkillsCommand,
 ): GeneratorCallback {
@@ -91,7 +95,7 @@ export function createPlaystackSkillsPostFlushCallback(
 
 Playstack skill synchronization stopped during the \`${phase}\` phase.
 
-- Retry install: \`${packageManager} install\`
+- Retry install: \`${packageManagerAdapter(packageManager).install}\`
 - Retry sync: \`${displayCommand(command)}\`
 
 Megamono did not copy, overwrite, register, or eject any Playstack-owned skill file. Resolve the package or Playstack CLI diagnostic, then rerun the failed command.

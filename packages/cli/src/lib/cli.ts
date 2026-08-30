@@ -3,8 +3,13 @@ import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { dirname, join, parse, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import {
+  isPackageManager,
+  packageManagerAdapter,
+  type PackageManager,
+} from './package-manager.js';
 
-export type PackageManager = 'npm' | 'pnpm';
+export type { PackageManager } from './package-manager.js';
 export type LocalPackageSource = 'registry' | 'yalc';
 
 export interface CommandResult {
@@ -45,6 +50,8 @@ export interface ActiveToolchainState {
   readonly node: string;
   readonly npm?: string;
   readonly pnpm?: string;
+  readonly yarn?: string;
+  readonly bun?: string;
 }
 
 export interface WorkspaceMutationState {
@@ -311,23 +318,55 @@ async function findWorkspaceRoot(start: string): Promise<string> {
 }
 
 async function detectPackageManager(root: string): Promise<PackageManager> {
-  const managers = [
-    ...((await exists(join(root, 'pnpm-lock.yaml')))
-      ? (['pnpm'] as const)
-      : []),
-    ...((await exists(join(root, 'package-lock.json')))
-      ? (['npm'] as const)
-      : []),
-  ];
-  if (managers.length !== 1) {
+  const manifest = JSON.parse(
+    await readFile(join(root, 'package.json'), 'utf8'),
+  ) as { packageManager?: unknown };
+  const declaredValue =
+    typeof manifest.packageManager === 'string'
+      ? manifest.packageManager.split('@')[0]
+      : undefined;
+  if (declaredValue && !isPackageManager(declaredValue)) {
     throw new CliError(
-      managers.length === 0
-        ? 'A pnpm-lock.yaml or package-lock.json is required.'
-        : 'Conflicting pnpm-lock.yaml and package-lock.json files are not supported.',
+      `package.json declares unsupported package manager ${manifest.packageManager}.`,
       3,
     );
   }
-  return managers[0];
+  const declared = declaredValue as PackageManager | undefined;
+  const managers: PackageManager[] = [];
+  for (const manager of ['npm', 'pnpm', 'yarn', 'bun'] as const) {
+    if (
+      (
+        await Promise.all(
+          packageManagerAdapter(manager).lockfiles.map((lockfile) =>
+            exists(join(root, lockfile)),
+          ),
+        )
+      ).some(Boolean)
+    ) {
+      managers.push(manager);
+    }
+  }
+  if (managers.length > 1) {
+    throw new CliError(
+      `Conflicting root package-manager lockfiles are not supported: ${managers.join(', ')}. Nested project lockfiles are ignored.`,
+      3,
+    );
+  }
+  const locked = managers[0];
+  if (declared && locked && declared !== locked) {
+    throw new CliError(
+      `package.json declares ${manifest.packageManager}, but the root lockfile belongs to ${locked}.`,
+      3,
+    );
+  }
+  const selected = locked ?? declared;
+  if (!selected) {
+    throw new CliError(
+      'Declare packageManager in package.json or commit one root lockfile: package-lock.json, pnpm-lock.yaml, yarn.lock, bun.lock, or bun.lockb.',
+      3,
+    );
+  }
+  return selected;
 }
 
 interface VersionNumber {
@@ -392,14 +431,19 @@ async function assertActiveToolchainPreflight(
   }
   const active = state[workspace.packageManager];
   const managerVersion = versionNumber(active);
-  const minimumMajor = workspace.packageManager === 'pnpm' ? 8 : 9;
+  const adapter = packageManagerAdapter(workspace.packageManager);
+  const [minimumMajor, minimumMinor] = adapter.minimumVersion;
   if (
     !managerVersion ||
-    managerVersion.major < minimumMajor ||
-    managerVersion.major >= 12
+    compareVersion(managerVersion, {
+      major: minimumMajor,
+      minor: minimumMinor,
+      patch: 0,
+    }) < 0 ||
+    managerVersion.major >= adapter.maximumMajorExclusive
   ) {
     throw new CliError(
-      `Active ${workspace.packageManager} ${active ?? 'unknown'} is unsupported for adoption; expected >=${minimumMajor} <12. Activate the workspace package manager before Megamono invokes Nx.`,
+      `Active ${workspace.packageManager} ${active ?? 'unknown'} cannot execute this adoption; expected >=${minimumMajor}.${minimumMinor} <${adapter.maximumMajorExclusive}. The repository remains eligible—activate its selected package manager, then retry.`,
       3,
     );
   }
@@ -655,37 +699,36 @@ function nxInvocation(
   generatorArgs: readonly string[],
   generator = 'workspace-init',
 ): readonly [string, readonly string[]] {
-  return manager === 'pnpm'
-    ? [
-        'pnpm',
-        [
-          'exec',
-          'nx',
-          'generate',
-          `@megamono/plugin:${generator}`,
-          ...generatorArgs,
-        ],
-      ]
-    : [
-        'npm',
-        [
-          'exec',
-          'nx',
-          '--',
-          'generate',
-          `@megamono/plugin:${generator}`,
-          ...generatorArgs,
-        ],
-      ];
+  return packageManagerAdapter(manager).exec('nx', [
+    'generate',
+    `@megamono/plugin:${generator}`,
+    ...generatorArgs,
+  ]);
 }
 
 function nxCommandInvocation(
   manager: PackageManager,
   args: readonly string[],
 ): readonly [string, readonly string[]] {
-  return manager === 'pnpm'
-    ? ['pnpm', ['exec', 'nx', ...args]]
-    : ['npm', ['exec', 'nx', '--', ...args]];
+  return packageManagerAdapter(manager).exec('nx', args);
+}
+
+function localNxCommandInvocation(
+  root: string,
+  args: readonly string[],
+): readonly [string, readonly string[]] {
+  const require = createRequire(join(root, 'package.json'));
+  const manifestPath = require.resolve(['nx', 'package.json'].join('/'));
+  const manifest = require(manifestPath) as {
+    readonly bin?: string | Readonly<Record<string, string>>;
+  };
+  const relativeBin =
+    (typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.nx) ??
+    './bin/nx.js';
+  return [
+    process.execPath,
+    [resolve(dirname(manifestPath), relativeBin), ...args],
+  ];
 }
 
 interface NxSurfaceProject {
@@ -967,9 +1010,7 @@ function playstackInvocation(
   manager: PackageManager,
   args: readonly string[],
 ): readonly [string, readonly string[]] {
-  return manager === 'pnpm'
-    ? ['pnpm', ['exec', 'playstack', ...args]]
-    : ['npm', ['exec', 'playstack', '--', ...args]];
+  return packageManagerAdapter(manager).exec('playstack', args);
 }
 
 function pluginInstallInstruction(
@@ -979,9 +1020,12 @@ function pluginInstallInstruction(
   if (source === 'yalc') {
     return `yalc add @megamono/plugin --dev --no-pure && ${manager} install`;
   }
-  return manager === 'pnpm'
-    ? 'pnpm add --save-dev @megamono/plugin'
-    : 'npm install --save-dev @megamono/plugin';
+  return [
+    manager,
+    ...packageManagerAdapter(manager).addArgs(['@megamono/plugin'], {
+      development: true,
+    }),
+  ].join(' ');
 }
 
 async function yalcRoot(io: MegamonoCliIo, root: string): Promise<string> {
@@ -1396,13 +1440,15 @@ async function installPlaystackPackages(
       },
     );
     if (externalPackages.length > 0) {
-      const install = workspace.packageManager === 'pnpm' ? 'add' : 'install';
+      const installArgs = packageManagerAdapter(
+        workspace.packageManager,
+      ).addArgs(externalPackages);
       await runRequired(
         io,
         workspace,
         workspace.packageManager,
-        [install, ...externalPackages],
-        `${workspace.packageManager} ${install} ${externalPackages.join(' ')}`,
+        installArgs,
+        `${workspace.packageManager} ${installArgs.join(' ')}`,
         completed,
       );
     }
@@ -1439,31 +1485,37 @@ async function installPlaystackPackages(
       io,
       workspace,
       workspace.packageManager,
-      ['install'],
+      packageManagerAdapter(workspace.packageManager).installArgs(),
       `${workspace.packageManager} install`,
       completed,
     );
     return;
   }
 
-  const install = workspace.packageManager === 'pnpm' ? 'add' : 'install';
   if (needsCli) {
+    const installArgs = packageManagerAdapter(workspace.packageManager).addArgs(
+      ['@playstack/cli'],
+      { development: true },
+    );
     await runRequired(
       io,
       workspace,
       workspace.packageManager,
-      [install, '--save-dev', '@playstack/cli'],
-      `${workspace.packageManager} ${install} --save-dev @playstack/cli`,
+      installArgs,
+      `${workspace.packageManager} ${installArgs.join(' ')}`,
       completed,
     );
   }
   if (products.length > 0) {
+    const installArgs = packageManagerAdapter(workspace.packageManager).addArgs(
+      products,
+    );
     await runRequired(
       io,
       workspace,
       workspace.packageManager,
-      [install, ...products],
-      `${workspace.packageManager} ${install} ${products.join(' ')}`,
+      installArgs,
+      `${workspace.packageManager} ${installArgs.join(' ')}`,
       completed,
     );
   }
@@ -1706,24 +1758,28 @@ async function installAppPlugins(
       }
       return `${name}@${version}`;
     });
-    const install = workspace.packageManager === 'pnpm' ? 'add' : 'install';
     await runAddCommand(io, workspace, workspace.packageManager, [
-      install,
-      '--save-dev',
-      ...specs,
+      ...packageManagerAdapter(workspace.packageManager).addArgs(specs, {
+        development: true,
+      }),
     ]);
   }
   if (registry.length > 0) {
     const nxVersion = await localPackageVersion(workspace.root, 'nx');
-    const install = workspace.packageManager === 'pnpm' ? 'add' : 'install';
     await runAddCommand(io, workspace, workspace.packageManager, [
-      install,
-      '--save-dev',
-      ...registry.map((name) => `${name}@${nxVersion}`),
+      ...packageManagerAdapter(workspace.packageManager).addArgs(
+        registry.map((name) => `${name}@${nxVersion}`),
+        { development: true },
+      ),
     ]);
   }
   if (source === 'yalc' && local.length > 0) {
-    await runAddCommand(io, workspace, workspace.packageManager, ['install']);
+    await runAddCommand(
+      io,
+      workspace,
+      workspace.packageManager,
+      packageManagerAdapter(workspace.packageManager).installArgs(),
+    );
   }
   return missing;
 }
@@ -1977,14 +2033,16 @@ function renderPlaystackSurveyPlan(
   surfaces: Readonly<Partial<Record<PlaystackSurfaceKind, string>>>,
 ): string {
   const products = options.playstackPackages.join(' ');
-  const install = manager === 'pnpm' ? 'add' : 'install';
+  const adapter = packageManagerAdapter(manager);
   const source =
     options.localPackages === 'yalc'
       ? `yalc add @playstack/cli --dev --no-pure${
           products ? `; yalc add ${products} --no-pure` : ''
         }; ${manager} install`
-      : `${manager} ${install} --save-dev @playstack/cli${
-          products ? `; ${manager} ${install} ${products}` : ''
+      : `${manager} ${adapter.addArgs(['@playstack/cli'], { development: true }).join(' ')}${
+          products
+            ? `; ${manager} ${adapter.addArgs(options.playstackPackages).join(' ')}`
+            : ''
         }`;
   const capabilities = options.playstackCapabilities
     .map(
@@ -2007,6 +2065,24 @@ async function runInit(
 ): Promise<MegamonoCliResult> {
   const parsedOptions = parseInitOptions(args);
   const root = await findWorkspaceRoot(io.cwd);
+  if (parsedOptions.survey && !parsedOptions.playstack) {
+    if (!localPackageAvailable(root, 'nx')) {
+      throw new CliError('The workspace-local nx package is not installed.', 3);
+    }
+    if (!localPackageAvailable(root, '@megamono/plugin')) {
+      throw new CliError(
+        '@megamono/plugin must be installed locally before a workspace survey can inspect its Nx graph.',
+        3,
+      );
+    }
+    const [command, commandArgs] = localNxCommandInvocation(root, [
+      'generate',
+      '@megamono/plugin:workspace-init',
+      ...parsedOptions.generatorArgs,
+    ]);
+    const surveyed = await io.runCommand(command, commandArgs, { cwd: root });
+    return { exitCode: surveyed.exitCode };
+  }
   const workspace: Workspace = {
     root,
     packageManager: await detectPackageManager(root),

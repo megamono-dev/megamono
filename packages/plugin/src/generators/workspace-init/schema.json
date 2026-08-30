@@ -67,7 +67,7 @@
     },
     "packageManager": {
       "type": "string",
-      "enum": ["pnpm", "npm"],
+      "enum": ["npm", "pnpm", "yarn", "bun"],
       "description": "Package manager selected by a calling scaffolder; existing workspaces infer it from their lockfile."
     },
     "ciMode": {

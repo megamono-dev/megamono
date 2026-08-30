@@ -10,6 +10,7 @@ import {
   type ProjectAdoptionPlatform,
   type ProjectAdoptionResolutions,
 } from './project-adoption';
+import type { PackageManager } from './package-manager';
 
 export const WORKSPACE_INIT_MODULES = [
   'docs',
@@ -157,6 +158,7 @@ export interface WorkspaceInitPlan {
 }
 
 export interface WorkspaceInitPlanOptions {
+  readonly bootstrap?: boolean;
   readonly only?: string | readonly WorkspaceInitModule[];
   readonly docsRoot?: string;
   readonly docsLoader?: string;
@@ -170,7 +172,7 @@ export interface WorkspaceInitPlanOptions {
   readonly toolchainPin?: 'none' | 'nvmrc' | 'node-version' | 'both';
   readonly toolchainNode?: string;
   readonly yes?: boolean;
-  readonly packageManager?: 'pnpm' | 'npm';
+  readonly packageManager?: PackageManager;
   readonly ciMode?: 'auto' | 'standalone' | 'reusable';
   readonly packageRegistries?: string;
 }
@@ -307,7 +309,9 @@ const DOCUMENT_TYPES = new Set([
 ]);
 const DECISION_DIRECTORIES = new Set(['adr', 'adrs', 'decision', 'decisions']);
 const RESEARCH_DIRECTORIES = new Set(['rfc', 'rfcs', 'research']);
-const DOCUMENT_DIRECTORIES: Readonly<Record<string, WorkspaceInitDocumentationClassification['type']>> = {
+const DOCUMENT_DIRECTORIES: Readonly<
+  Record<string, WorkspaceInitDocumentationClassification['type']>
+> = {
   specs: 'spec',
   plans: 'plan',
   decisions: 'decision',
@@ -318,9 +322,11 @@ const DOCUMENT_DIRECTORIES: Readonly<Record<string, WorkspaceInitDocumentationCl
 
 function workspaceDocumentScope(tree: Tree): string {
   try {
-    const name = (JSON.parse(tree.read('package.json', 'utf8') ?? '{}') as {
-      name?: unknown;
-    }).name;
+    const name = (
+      JSON.parse(tree.read('package.json', 'utf8') ?? '{}') as {
+        name?: unknown;
+      }
+    ).name;
     if (typeof name === 'string') {
       const candidate = name.startsWith('@')
         ? name.slice(1).split('/')[0]
@@ -579,9 +585,14 @@ export function surveyWorkspaceInit(
       node: typeof engines.node === 'string' ? engines.node : null,
       nx: dependencyVersion(manifest, 'nx'),
       typescript: dependencyVersion(manifest, 'typescript'),
-      lockfiles: ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock'].filter(
-        (path) => files.includes(path),
-      ),
+      lockfiles: [
+        'package-lock.json',
+        'npm-shrinkwrap.json',
+        'pnpm-lock.yaml',
+        'yarn.lock',
+        'bun.lock',
+        'bun.lockb',
+      ].filter((path) => files.includes(path)),
     },
     projects,
     manifests: {
@@ -734,9 +745,19 @@ export function createWorkspaceInitPlan(
   operation(
     operations,
     'baseline',
-    survey.baseline.packageManager ? 'retain' : 'modify',
-    'package.json#packageManager',
-    `Record ${packageManager} as the workspace package manager.`,
+    survey.baseline.packageManager
+      ? 'retain'
+      : options.bootstrap
+        ? 'modify'
+        : 'retain',
+    survey.baseline.packageManager || options.bootstrap
+      ? 'package.json#packageManager'
+      : 'package.json',
+    survey.baseline.packageManager
+      ? `Preserve the repository-owned ${survey.baseline.packageManager} declaration.`
+      : options.bootstrap
+        ? `Record ${packageManager} for the new workspace.`
+        : `Infer ${packageManager} from the root lockfile without adding packageManager ownership.`,
   );
   const toolchainPin = options.toolchainPin ?? 'none';
   if (toolchainPin === 'none' && options.toolchainNode) {
@@ -832,7 +853,9 @@ export function createWorkspaceInitPlan(
       const existing = new RegExp(
         `^${scope.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:registry=(.+)$`,
         'm',
-      ).exec(npmrc)?.[1]?.trim();
+      )
+        .exec(npmrc)?.[1]
+        ?.trim();
       if (existing && existing.replace(/\/+$/, '') !== registry) {
         conflicts.push(
           `.npmrc already routes ${scope} to ${existing}; requested ${registry}.`,

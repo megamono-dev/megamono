@@ -314,7 +314,7 @@ describe('workspace-init generator', () => {
     expect(npmrc).not.toMatch(/token|password|authToken/i);
   });
 
-  it('records pnpm and emits pnpm-only CI and health workflows', async () => {
+  it('uses inferred pnpm without claiming package.json ownership', async () => {
     await workspaceInitGenerator(tree, {
       only: 'ci,health',
       packageManager: 'pnpm',
@@ -324,7 +324,7 @@ describe('workspace-init generator', () => {
     expect(readJson(tree, 'megamono.json').conventions.packageManager).toBe(
       'pnpm',
     );
-    expect(readJson(tree, 'package.json').packageManager).toBe('pnpm@11.24.0');
+    expect(readJson(tree, 'package.json').packageManager).toBeUndefined();
     for (const path of [
       '.github/workflows/megamono-ci.yml',
       '.github/workflows/megamono-health.yml',
@@ -340,6 +340,49 @@ describe('workspace-init generator', () => {
     expect(tree.read('.github/workflows/megamono-ci.yml', 'utf8')).toContain(
       'pnpm exec nx run megamono:check',
     );
+  });
+
+  it.each([
+    [
+      'yarn',
+      ['cache: yarn', 'corepack enable', 'yarn install --immutable', 'yarn nx'],
+    ],
+    [
+      'bun',
+      ['oven-sh/setup-bun@v2', 'bun install --frozen-lockfile', 'bunx nx'],
+    ],
+  ] as const)(
+    'renders %s-owned CI without changing package.json ownership',
+    async (manager, expected) => {
+      await workspaceInitGenerator(tree, {
+        only: 'ci,health',
+        packageManager: manager,
+        yes: true,
+      });
+      expect(readJson(tree, 'megamono.json').conventions.packageManager).toBe(
+        manager,
+      );
+      expect(readJson(tree, 'package.json').packageManager).toBeUndefined();
+      const workflows = [
+        tree.read('.github/workflows/megamono-ci.yml', 'utf8') ?? '',
+        tree.read('.github/workflows/megamono-health.yml', 'utf8') ?? '',
+      ].join('\n');
+      for (const fragment of expected) expect(workflows).toContain(fragment);
+    },
+  );
+
+  it('preserves the Yarn Classic install contract inferred from its lockfile', async () => {
+    tree.write('yarn.lock', '# yarn lockfile v1\n');
+    await workspaceInitGenerator(tree, {
+      only: 'ci',
+      packageManager: 'yarn',
+      yes: true,
+    });
+
+    const workflow =
+      tree.read('.github/workflows/megamono-ci.yml', 'utf8') ?? '';
+    expect(workflow).toContain('yarn install --frozen-lockfile');
+    expect(workflow).not.toContain('yarn install --immutable');
   });
 
   it('configures package releases and publishes local packages from dist', async () => {
@@ -477,7 +520,7 @@ describe('workspace-init generator', () => {
           ],
         },
         "package": {
-          "packageManager": "npm@11.17.0",
+          "packageManager": undefined,
           "yalcPublish": "node .megamono/publish-yalc.mjs",
         },
       }

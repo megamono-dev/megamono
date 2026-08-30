@@ -68,11 +68,16 @@ import {
   parsePackageRegistries,
   renderPackageRegistrySection,
 } from '../../lib/package-sources';
+import {
+  lockfileManagers,
+  packageManagerAdapter,
+  type PackageManager,
+} from '../../lib/package-manager';
 
 const compatibility = JSON.parse(
   readFileSync(join(__dirname, '../../../compatibility.json'), 'utf8'),
 ) as {
-  packageManagers: Record<'pnpm' | 'npm', string>;
+  packageManagers: Record<PackageManager, string>;
 };
 
 function importTarget(tree: Tree) {
@@ -94,6 +99,9 @@ const healthTarget = {
     '{workspaceRoot}/package.json',
     '{workspaceRoot}/package-lock.json',
     '{workspaceRoot}/pnpm-lock.yaml',
+    '{workspaceRoot}/yarn.lock',
+    '{workspaceRoot}/bun.lock',
+    '{workspaceRoot}/bun.lockb',
     '{workspaceRoot}/nx.json',
     '{workspaceRoot}/docs/**/*.md',
     '{workspaceRoot}/**/package.json',
@@ -504,7 +512,7 @@ export default defineConfig({ content: [repoDocs, archivedDocs] });
 function renderHealthWorkflow(
   cadence: 'weekly' | 'daily',
   target: 'megamono:health' | 'megamono-docs:health',
-  packageManager: 'pnpm' | 'npm',
+  packageManager: PackageManager,
   toolchain: WorkflowToolchain,
 ): string {
   const cron = cadence === 'daily' ? '17 9 * * *' : '17 9 * * 1';
@@ -512,9 +520,9 @@ function renderHealthWorkflow(
     packageManager,
     toolchain,
   );
-  const install =
-    packageManager === 'pnpm' ? 'pnpm install --frozen-lockfile' : 'npm ci';
-  const nx = packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
+  const adapter = packageManagerAdapter(packageManager);
+  const install = frozenInstall(packageManager, toolchain);
+  const nx = adapter.nx;
   return `name: Megamono repository health
 
 on:
@@ -548,7 +556,7 @@ ${packageManagerSetup}
 
 interface WorkflowToolchain {
   readonly node: string;
-  readonly pnpm?: string;
+  readonly packageManagerVersion?: string;
 }
 
 interface ReleaseProject {
@@ -586,12 +594,14 @@ function releaseProjects(tree: Tree): readonly ReleaseProject[] {
 
 function renderYalcPublisher(
   projects: readonly ReleaseProject[],
-  packageManager: 'pnpm' | 'npm',
+  packageManager: PackageManager,
 ): string {
-  const managerArgs =
-    packageManager === 'pnpm'
-      ? ['exec', 'nx', 'run-many', '-t', 'build', '-p']
-      : ['exec', 'nx', '--', 'run-many', '-t', 'build', '-p'];
+  const managerArgs: Readonly<Record<PackageManager, readonly string[]>> = {
+    npm: ['exec', 'nx', '--', 'run-many', '-t', 'build', '-p'],
+    pnpm: ['exec', 'nx', 'run-many', '-t', 'build', '-p'],
+    yarn: ['nx', 'run-many', '-t', 'build', '-p'],
+    bun: ['x', 'nx', 'run-many', '-t', 'build', '-p'],
+  };
   return `#!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
@@ -622,7 +632,7 @@ function run(command, args, cwd = root) {
 
 try {
   await run(yalc, ['--version']);
-  await run(packageManager, [...${JSON.stringify(managerArgs)}, ...projects.map(({ name }) => name), '--output-style=static']);
+  await run(packageManager, [...${JSON.stringify(managerArgs[packageManager])}, ...projects.map(({ name }) => name), '--output-style=static']);
   for (const { name, outputPath } of projects) {
     const directory = join(root, outputPath);
     await access(join(directory, 'package.json'));
@@ -638,16 +648,16 @@ try {
 
 function renderReleaseWorkflow(
   projects: readonly ReleaseProject[],
-  packageManager: 'pnpm' | 'npm',
+  packageManager: PackageManager,
   toolchain: WorkflowToolchain,
 ): string {
   const packageManagerSetup = renderPackageManagerSetup(
     packageManager,
     toolchain,
   );
-  const install =
-    packageManager === 'pnpm' ? 'pnpm install --frozen-lockfile' : 'npm ci';
-  const nx = packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
+  const adapter = packageManagerAdapter(packageManager);
+  const install = frozenInstall(packageManager, toolchain);
+  const nx = adapter.nx;
   const projectSelection = projects.map(({ name }) => name).join(',');
   return `name: Megamono package prerelease
 
@@ -693,7 +703,7 @@ ${packageManagerSetup}
 
 function workflowToolchain(
   tree: Tree,
-  packageManager: 'pnpm' | 'npm',
+  packageManager: PackageManager,
 ): WorkflowToolchain {
   let manifest: {
     packageManager?: unknown;
@@ -716,40 +726,68 @@ function workflowToolchain(
     typeof manifest.packageManager === 'string'
       ? manifest.packageManager.split('@')[1]
       : undefined;
+  const inferredYarnVersion =
+    packageManager === 'yarn' &&
+    /(?:^|\n)# yarn lockfile v1(?:\n|$)/.test(
+      tree.read('yarn.lock', 'utf8') ?? '',
+    )
+      ? '1.22.22'
+      : undefined;
   return {
     node: configuredNode ?? defaultNode,
-    ...(packageManager === 'pnpm'
-      ? {
-          pnpm:
-            declaredManager ?? compatibility.packageManagers[packageManager],
-        }
-      : {}),
+    packageManagerVersion:
+      declaredManager ??
+      inferredYarnVersion ??
+      compatibility.packageManagers[packageManager],
   };
 }
 
+function frozenInstall(
+  packageManager: PackageManager,
+  toolchain: WorkflowToolchain,
+): string {
+  if (
+    packageManager === 'yarn' &&
+    toolchain.packageManagerVersion?.startsWith('1.')
+  ) {
+    return 'yarn install --frozen-lockfile';
+  }
+  return packageManagerAdapter(packageManager).frozenInstall;
+}
+
 function renderPackageManagerSetup(
-  packageManager: 'pnpm' | 'npm',
+  packageManager: PackageManager,
   toolchain: WorkflowToolchain,
 ): string {
   const pnpmSetup =
     packageManager === 'pnpm'
       ? `      - uses: pnpm/action-setup@v4
         with:
-          version: ${toolchain.pnpm}
+          version: ${toolchain.packageManagerVersion}
+`
+      : '';
+  const bunSetup =
+    packageManager === 'bun'
+      ? `      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${toolchain.packageManagerVersion}
 `
       : '';
   const nodeVersion = /^\d+\.\d+\.\d+$/.test(toolchain.node)
     ? toolchain.node
     : `'${toolchain.node.replaceAll("'", "''")}'`;
-  return `${pnpmSetup}      - uses: actions/setup-node@v5
+  const yarnSetup =
+    packageManager === 'yarn' ? '\n      - run: corepack enable' : '';
+  const cache =
+    packageManager === 'bun' ? '' : `\n          cache: ${packageManager}`;
+  return `${pnpmSetup}${bunSetup}      - uses: actions/setup-node@v5
         with:
-          node-version: ${nodeVersion}
-          cache: ${packageManager}`;
+          node-version: ${nodeVersion}${cache}${yarnSetup}`;
 }
 
 function renderCiWorkflow(
   platforms: ReadonlySet<string>,
-  packageManager: 'pnpm' | 'npm',
+  packageManager: PackageManager,
   toolchain: WorkflowToolchain,
   reusable = false,
 ): string {
@@ -761,9 +799,9 @@ function renderCiWorkflow(
     packageManager,
     toolchain,
   );
-  const install =
-    packageManager === 'pnpm' ? 'pnpm install --frozen-lockfile' : 'npm ci';
-  const nx = packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
+  const adapter = packageManagerAdapter(packageManager);
+  const install = frozenInstall(packageManager, toolchain);
+  const nx = adapter.nx;
   const trigger = reusable
     ? '  workflow_call:'
     : '  push:\n    branches: [main]\n  pull_request:\n  merge_group:';
@@ -1196,12 +1234,11 @@ export async function workspaceInitGenerator(
       `Requested ${options.packageManager}, but package.json declares ${initialSurvey.baseline.packageManager}.`,
     );
   }
-  const packageManager =
-    options.packageManager ??
-    (initialSurvey.baseline.packageManager?.startsWith('npm') ||
-    (!initialSurvey.baseline.packageManager && tree.exists('package-lock.json'))
-      ? 'npm'
-      : 'pnpm');
+  const detectedManagers = lockfileManagers((path) => tree.exists(path));
+  const inferredManager =
+    detectedManagers[0] ??
+    (declaredPackageManager as PackageManager | undefined);
+  const packageManager = options.packageManager ?? inferredManager ?? 'npm';
   if (options.survey) {
     logger.info(renderWorkspaceInitSurvey(initialSurvey, outputFormat));
     return () => undefined;
@@ -1776,10 +1813,13 @@ export async function workspaceInitGenerator(
   });
   updateJson(tree, 'package.json', (manifest) => ({
     ...manifest,
-    packageManager:
-      typeof manifest.packageManager === 'string'
-        ? manifest.packageManager
-        : `${packageManager}@${compatibility.packageManagers[packageManager]}`,
+    ...(typeof manifest.packageManager === 'string'
+      ? { packageManager: manifest.packageManager }
+      : options.bootstrap
+        ? {
+            packageManager: `${packageManager}@${compatibility.packageManagers[packageManager]}`,
+          }
+        : {}),
     ...(configuredReleaseProjects.length > 0
       ? {
           scripts: {
