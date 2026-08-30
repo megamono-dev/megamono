@@ -21,6 +21,10 @@ import {
   megamonoConfigSchema,
   type DatabaseAdapter,
 } from '../../lib/config';
+import {
+  assertWorkspaceMutationGitPreflight,
+  collectWorkspaceInitHostState,
+} from '../../lib/workspace-init-preflight';
 import type { DatabaseGeneratorSchema } from './schema';
 
 interface AdapterCompatibility {
@@ -586,6 +590,12 @@ export async function databaseGenerator(
   rawOptions: DatabaseGeneratorSchema,
 ): Promise<GeneratorCallback> {
   const options = await normalizeOptions(tree, rawOptions);
+  if (tree.root !== '/virtual' && !options.dryRun && !options.bootstrap) {
+    assertWorkspaceMutationGitPreflight(
+      await collectWorkspaceInitHostState(tree.root),
+      'Database addition',
+    );
+  }
   const state = preflight(tree, options);
   logger.info(renderPlan(options));
   if (state === 'noop' || options.dryRun) return () => undefined;

@@ -16,6 +16,10 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, posix } from 'node:path';
 import { isSafeWorkspaceRelativePath } from '../../lib/config';
+import {
+  assertWorkspaceMutationGitPreflight,
+  collectWorkspaceInitHostState,
+} from '../../lib/workspace-init-preflight';
 import type { AppGeneratorSchema, AppType } from './schema';
 
 export const APP_TYPES = [
@@ -132,7 +136,10 @@ async function resolveType(options: AppGeneratorSchema): Promise<AppType> {
     type: 'select',
     name: 'type',
     message: 'Which application preset should be added?',
-    choices: APP_TYPES.map((type) => ({ name: type, message: APP_LABELS[type] })),
+    choices: APP_TYPES.map((type) => ({
+      name: type,
+      message: APP_LABELS[type],
+    })),
   });
   return answer.type;
 }
@@ -144,7 +151,11 @@ function slug(value: string, label: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   if (!normalized) {
-    throw new AppGeneratorError(`${label} must contain a letter or number.`, 2, 'options');
+    throw new AppGeneratorError(
+      `${label} must contain a letter or number.`,
+      2,
+      'options',
+    );
   }
   return normalized;
 }
@@ -164,9 +175,13 @@ function packageManager(tree: Tree): 'npm' | 'pnpm' {
   return pnpm ? 'pnpm' : 'npm';
 }
 
-function workspaceIdentity(tree: Tree): { readonly name: string; readonly scope: string } {
+function workspaceIdentity(tree: Tree): {
+  readonly name: string;
+  readonly scope: string;
+} {
   const manifest = readJson<{ name?: string }>(tree, 'package.json');
-  const raw = manifest.name?.replace(/^@/, '').replace(/\//g, '-') ?? 'workspace';
+  const raw =
+    manifest.name?.replace(/^@/, '').replace(/\//g, '-') ?? 'workspace';
   const name = raw || 'workspace';
   return { name, scope: slug(name, 'Workspace package name') };
 }
@@ -189,8 +204,7 @@ function automaticPort(
   if (type !== 'api' && type !== 'site' && type !== 'web' && type !== 'worker')
     return undefined;
   const hash = [...scope].reduce(
-    (value, character) =>
-      (value * 31 + (character.codePointAt(0) ?? 0)) >>> 0,
+    (value, character) => (value * 31 + (character.codePointAt(0) ?? 0)) >>> 0,
     0,
   );
   const workspaceBase = 40_000 + (hash % 8_000);
@@ -205,9 +219,18 @@ function automaticPort(
   return candidate;
 }
 
-function csv<T extends string>(value: string | undefined, allowed?: ReadonlySet<string>): T[] {
-  return [...new Set((value ?? '').split(',').map((entry) => entry.trim()).filter(Boolean))]
-    .filter((entry) => !allowed || allowed.has(entry)) as T[];
+function csv<T extends string>(
+  value: string | undefined,
+  allowed?: ReadonlySet<string>,
+): T[] {
+  return [
+    ...new Set(
+      (value ?? '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    ),
+  ].filter((entry) => !allowed || allowed.has(entry)) as T[];
 }
 
 async function normalizeOptions(
@@ -225,7 +248,8 @@ async function normalizeOptions(
   const identity = workspaceIdentity(tree);
   const name = slug(raw.name ?? type, 'Application name');
   const scope = slug(raw.scope ?? identity.scope, 'Application scope');
-  const directory = raw.directory?.replace(/^\.\//, '').replace(/\/$/, '') ?? `apps/${name}`;
+  const directory =
+    raw.directory?.replace(/^\.\//, '').replace(/\/$/, '') ?? `apps/${name}`;
   if (!isSafeWorkspaceRelativePath(directory) || directory === 'apps') {
     throw new AppGeneratorError(
       `Application directory must be a safe workspace-relative child path; received ${directory}.`,
@@ -233,19 +257,28 @@ async function normalizeOptions(
       'options',
     );
   }
-  if (raw.port !== undefined && (!Number.isInteger(raw.port) || raw.port < 1024 || raw.port > 65535)) {
-    throw new AppGeneratorError('Application port must be an integer from 1024 through 65535.', 2, 'options');
+  if (
+    raw.port !== undefined &&
+    (!Number.isInteger(raw.port) || raw.port < 1024 || raw.port > 65535)
+  ) {
+    throw new AppGeneratorError(
+      'Application port must be an integer from 1024 through 65535.',
+      2,
+      'options',
+    );
   }
   const selectedPlatform = platform(type);
   const configuredPorts = !raw.bootstrap
-    ? (readJson<{ ports?: Record<string, number> }>(tree, 'megamono.json').ports ?? {})
+    ? (readJson<{ ports?: Record<string, number> }>(tree, 'megamono.json')
+        .ports ?? {})
     : {};
   const selectedPort =
     raw.port ?? automaticPort(type, name, scope, configuredPorts);
   if (
     selectedPort !== undefined &&
     Object.entries(configuredPorts).some(
-      ([configuredName, port]) => configuredName !== name && port === selectedPort,
+      ([configuredName, port]) =>
+        configuredName !== name && port === selectedPort,
     )
   ) {
     throw new AppGeneratorError(
@@ -279,7 +312,10 @@ async function normalizeOptions(
   };
 }
 
-function projectMatches(project: ProjectConfiguration, options: NormalizedAppOptions): boolean {
+function projectMatches(
+  project: ProjectConfiguration,
+  options: NormalizedAppOptions,
+): boolean {
   const tags = new Set(project.tags ?? []);
   return (
     project.root === options.directory &&
@@ -294,7 +330,9 @@ function assertProjectPreflight(
 ): 'create' | 'noop' {
   const projects = getProjects(tree);
   const named = projects.get(options.projectName);
-  const rooted = [...projects.entries()].find(([, project]) => project.root === options.directory);
+  const rooted = [...projects.entries()].find(
+    ([, project]) => project.root === options.directory,
+  );
   if (named && projectMatches(named, options)) return 'noop';
   if (named || rooted || tree.exists(options.directory)) {
     const occupied = named
@@ -338,7 +376,9 @@ type ComposedGenerator = (
 
 function localRequire(packageName: string): Record<string, unknown> {
   try {
-    return createRequire(posix.join(workspaceRoot, 'package.json'))(packageName) as Record<string, unknown>;
+    return createRequire(posix.join(workspaceRoot, 'package.json'))(
+      packageName,
+    ) as Record<string, unknown>;
   } catch {
     throw new AppGeneratorError(
       `Required application plugin ${packageName} is not installed locally.`,
@@ -373,7 +413,8 @@ function updatePackage(
     ...(Object.keys(dependencies).length
       ? {
           dependencies: {
-            ...((value.dependencies as Record<string, string> | undefined) ?? {}),
+            ...((value.dependencies as Record<string, string> | undefined) ??
+              {}),
             ...dependencies,
           },
         }
@@ -417,10 +458,11 @@ export const megamonoSystem = createSystem(defaultConfig, config);
 }
 
 function billboardSource(options: NormalizedAppOptions): string {
-  const nx = options.packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
-  const surfaces = (options.requestedApps.length ? options.requestedApps : [options.type]).map(
-    (type) => APP_LABELS[type],
-  );
+  const nx =
+    options.packageManager === 'pnpm' ? 'pnpm exec nx' : 'npm exec nx --';
+  const surfaces = (
+    options.requestedApps.length ? options.requestedApps : [options.type]
+  ).map((type) => APP_LABELS[type]);
   const services = options.requestedServices.map((service) =>
     service === 'postgres' ? 'PostgreSQL' : service,
   );
@@ -491,10 +533,7 @@ test('introduces the workspace and Commune development tools', async ({ page }) 
 `;
 }
 
-function configureE2ePackage(
-  tree: Tree,
-  options: NormalizedAppOptions,
-): void {
+function configureE2ePackage(tree: Tree, options: NormalizedAppOptions): void {
   const e2eRoot = `${options.directory}-e2e`;
   const packagePath = `${e2eRoot}/package.json`;
   const projectExists = [...getProjects(tree).values()].some(
@@ -626,13 +665,20 @@ export default defineConfig({
   );
 }
 
-async function ensureTheme(tree: Tree, options: NormalizedAppOptions): Promise<GeneratorCallback | void> {
+async function ensureTheme(
+  tree: Tree,
+  options: NormalizedAppOptions,
+): Promise<GeneratorCallback | void> {
   const themeRoot = 'packages/theme';
   const themeProject = `${options.scope}-theme`;
   const existing = getProjects(tree).get(themeProject);
   if (existing) return;
   if (tree.exists(themeRoot)) {
-    throw new AppGeneratorError(`Cannot add ${options.type}: path ${themeRoot} is occupied.`, 3, 'conflict');
+    throw new AppGeneratorError(
+      `Cannot add ${options.type}: path ${themeRoot} is occupied.`,
+      3,
+      'conflict',
+    );
   }
   const callback = await generator('@nx/js', 'libraryGenerator')(tree, {
     name: themeProject,
@@ -659,7 +705,10 @@ async function ensureTheme(tree: Tree, options: NormalizedAppOptions): Promise<G
   if (tree.exists(`${themeRoot}/package.json`))
     updateJson(tree, `${themeRoot}/package.json`, updateTheme);
   else writeJson(tree, `${themeRoot}/package.json`, updateTheme({}));
-  tree.write(`${themeRoot}/src/index.ts`, "export { megamonoSystem } from './lib/system';\n");
+  tree.write(
+    `${themeRoot}/src/index.ts`,
+    "export { megamonoSystem } from './lib/system';\n",
+  );
   tree.write(`${themeRoot}/src/lib/system.ts`, themeSystemSource());
   return callback;
 }
@@ -668,7 +717,9 @@ async function createWebApp(
   tree: Tree,
   options: NormalizedAppOptions,
 ): Promise<readonly (GeneratorCallback | void)[]> {
-  const callbacks: (GeneratorCallback | void)[] = [await ensureTheme(tree, options)];
+  const callbacks: (GeneratorCallback | void)[] = [
+    await ensureTheme(tree, options),
+  ];
   callbacks.push(
     await generator('@nx/next', 'applicationGenerator')(tree, {
       name: options.projectName,
@@ -688,14 +739,18 @@ async function createWebApp(
     [`@${options.scope}/theme`]: workspaceDependency(options),
   });
   const e2eRoot = `${options.directory}-e2e`;
-  if (tree.exists(`${e2eRoot}/package.json`)) updatePackage(tree, `${e2eRoot}/package.json`, options);
+  if (tree.exists(`${e2eRoot}/package.json`))
+    updatePackage(tree, `${e2eRoot}/package.json`, options);
   tree.delete(`${options.directory}/src/pages/index.module.none`);
   tree.delete(`${options.directory}/src/pages/styles.css`);
   tree.write(
     `${options.directory}/src/pages/_app.tsx`,
     `import { ChakraProvider } from '@chakra-ui/react';\nimport { megamonoSystem } from '@${options.scope}/theme';\nimport type { AppProps } from 'next/app';\n\nexport default function App({ Component, pageProps }: AppProps) {\n  return <ChakraProvider value={megamonoSystem}><Component {...pageProps} /></ChakraProvider>;\n}\n`,
   );
-  tree.write(`${options.directory}/src/pages/index.tsx`, billboardSource(options));
+  tree.write(
+    `${options.directory}/src/pages/index.tsx`,
+    billboardSource(options),
+  );
   tree.write(`${e2eRoot}/src/example.spec.ts`, billboardE2eSource(options));
   configureE2ePackage(tree, options);
   return callbacks;
@@ -708,8 +763,15 @@ async function createApiApp(
   const nest = localRequire('@nx/nest');
   const appGenerator = nest.applicationGenerator;
   const libraryGenerator = nest.libraryGenerator;
-  if (typeof appGenerator !== 'function' || typeof libraryGenerator !== 'function') {
-    throw new AppGeneratorError('@nx/nest does not expose compatible application and library generators.', 3, 'plugin-incompatible');
+  if (
+    typeof appGenerator !== 'function' ||
+    typeof libraryGenerator !== 'function'
+  ) {
+    throw new AppGeneratorError(
+      '@nx/nest does not expose compatible application and library generators.',
+      3,
+      'plugin-incompatible',
+    );
   }
   const callbacks: (GeneratorCallback | void)[] = [];
   callbacks.push(
@@ -723,7 +785,8 @@ async function createApiApp(
       skipFormat: true,
     }),
   );
-  const featureName = options.name === 'api' ? 'nest-home' : `nest-${options.name}-home`;
+  const featureName =
+    options.name === 'api' ? 'nest-home' : `nest-${options.name}-home`;
   const featureRoot = `packages/${featureName}`;
   const featureProject = `${options.scope}-${featureName}`;
   callbacks.push(
@@ -758,16 +821,43 @@ async function createApiApp(
     .map((part) => `${part[0]?.toUpperCase()}${part.slice(1)}`)
     .join('');
   const sourceRoot = `${featureRoot}/src/lib`;
-  tree.write(`${sourceRoot}/${featureName}.service.ts`, `import { Injectable } from '@nestjs/common';\n\n@Injectable()\nexport class ${featureClass}Service {\n  getData() { return { message: 'Hello API' }; }\n}\n`);
-  tree.write(`${sourceRoot}/${featureName}.controller.ts`, `import { Controller, Get } from '@nestjs/common';\nimport { ${featureClass}Service } from './${featureName}.service';\n\n@Controller()\nexport class ${featureClass}Controller {\n  constructor(private readonly service: ${featureClass}Service) {}\n  @Get() getData() { return this.service.getData(); }\n}\n`);
-  tree.write(`${sourceRoot}/${featureName}.module.ts`, `import { Module } from '@nestjs/common';\nimport { ${featureClass}Controller } from './${featureName}.controller';\nimport { ${featureClass}Service } from './${featureName}.service';\n\n@Module({ controllers: [${featureClass}Controller], providers: [${featureClass}Service] })\nexport class ${featureClass}Module {}\n`);
-  tree.write(`${featureRoot}/src/index.ts`, `export * from './lib/${featureName}.module';\nexport * from './lib/${featureName}.controller';\nexport * from './lib/${featureName}.service';\n`);
+  tree.write(
+    `${sourceRoot}/${featureName}.service.ts`,
+    `import { Injectable } from '@nestjs/common';\n\n@Injectable()\nexport class ${featureClass}Service {\n  getData() { return { message: 'Hello API' }; }\n}\n`,
+  );
+  tree.write(
+    `${sourceRoot}/${featureName}.controller.ts`,
+    `import { Controller, Get } from '@nestjs/common';\nimport { ${featureClass}Service } from './${featureName}.service';\n\n@Controller()\nexport class ${featureClass}Controller {\n  constructor(private readonly service: ${featureClass}Service) {}\n  @Get() getData() { return this.service.getData(); }\n}\n`,
+  );
+  tree.write(
+    `${sourceRoot}/${featureName}.module.ts`,
+    `import { Module } from '@nestjs/common';\nimport { ${featureClass}Controller } from './${featureName}.controller';\nimport { ${featureClass}Service } from './${featureName}.service';\n\n@Module({ controllers: [${featureClass}Controller], providers: [${featureClass}Service] })\nexport class ${featureClass}Module {}\n`,
+  );
+  tree.write(
+    `${featureRoot}/src/index.ts`,
+    `export * from './lib/${featureName}.module';\nexport * from './lib/${featureName}.controller';\nexport * from './lib/${featureName}.service';\n`,
+  );
   const appRoot = `${options.directory}/src/app`;
-  tree.write(`${appRoot}/app.module.ts`, `import { ${featureClass}Module } from '@${options.scope}/${featureName}';\nimport { Module } from '@nestjs/common';\n\n@Module({ imports: [${featureClass}Module] })\nexport class AppModule {}\n`);
-  for (const path of ['app.controller.spec.ts', 'app.controller.ts', 'app.service.spec.ts', 'app.service.ts']) tree.delete(`${appRoot}/${path}`);
+  tree.write(
+    `${appRoot}/app.module.ts`,
+    `import { ${featureClass}Module } from '@${options.scope}/${featureName}';\nimport { Module } from '@nestjs/common';\n\n@Module({ imports: [${featureClass}Module] })\nexport class AppModule {}\n`,
+  );
+  for (const path of [
+    'app.controller.spec.ts',
+    'app.controller.ts',
+    'app.service.spec.ts',
+    'app.service.ts',
+  ])
+    tree.delete(`${appRoot}/${path}`);
   const mainPath = `${options.directory}/src/main.ts`;
   if (options.port && tree.exists(mainPath)) {
-    tree.write(mainPath, (tree.read(mainPath, 'utf8') ?? '').replace('process.env.PORT || 3000', `process.env.PORT || ${options.port}`));
+    tree.write(
+      mainPath,
+      (tree.read(mainPath, 'utf8') ?? '').replace(
+        'process.env.PORT || 3000',
+        `process.env.PORT || ${options.port}`,
+      ),
+    );
   }
   configureE2ePackage(tree, options);
   return callbacks;
@@ -785,7 +875,12 @@ async function createDelegatedApp(
     skipFormat: true,
   };
   if (options.type === 'worker') {
-    return [await generator('@megamono/nx-cloudflare', 'workerGenerator')(tree, common)];
+    return [
+      await generator('@megamono/nx-cloudflare', 'workerGenerator')(
+        tree,
+        common,
+      ),
+    ];
   }
   if (options.type === 'apple') {
     return [
@@ -819,7 +914,10 @@ async function createDelegatedApp(
   return createDesktopApp(tree, options);
 }
 
-function ensureWorkspacePackagePath(tree: Tree, options: NormalizedAppOptions): void {
+function ensureWorkspacePackagePath(
+  tree: Tree,
+  options: NormalizedAppOptions,
+): void {
   if (options.packageManager === 'npm') {
     updateJson(tree, 'package.json', (value: Record<string, unknown>) => {
       const workspaces = value.workspaces;
@@ -830,14 +928,21 @@ function ensureWorkspacePackagePath(tree: Tree, options: NormalizedAppOptions): 
           'package-manager',
         );
       }
-      return { ...value, workspaces: [...new Set([...(workspaces ?? []), 'apps/*'])].sort() };
+      return {
+        ...value,
+        workspaces: [...new Set([...(workspaces ?? []), 'apps/*'])].sort(),
+      };
     });
     return;
   }
   const path = 'pnpm-workspace.yaml';
   const current = tree.read(path, 'utf8') ?? 'packages:\n';
   if (!/^packages:\s*$/m.test(current)) {
-    throw new AppGeneratorError('pnpm-workspace.yaml must contain a packages list.', 3, 'package-manager');
+    throw new AppGeneratorError(
+      'pnpm-workspace.yaml must contain a packages list.',
+      3,
+      'package-manager',
+    );
   }
   if (!/^\s*-\s*['"]?apps\/\*['"]?\s*$/m.test(current)) {
     tree.write(path, `${current.replace(/\s*$/, '')}\n  - 'apps/*'\n`);
@@ -871,15 +976,27 @@ function createDesktopApp(
       vite: packageVersion('vite'),
     },
   });
-  tree.write(`${options.directory}/index.html`, '<!doctype html>\n<html><body><main id="app"><h1>Megamono desktop app</h1></main><script type="module" src="/src/main.ts"></script></body></html>\n');
+  tree.write(
+    `${options.directory}/index.html`,
+    '<!doctype html>\n<html><body><main id="app"><h1>Megamono desktop app</h1></main><script type="module" src="/src/main.ts"></script></body></html>\n',
+  );
   tree.write(`${options.directory}/src/main.ts`, "import './styles.css';\n");
-  tree.write(`${options.directory}/src/styles.css`, 'body { font-family: system-ui, sans-serif; margin: 2rem; }\n');
-  tree.write(`${options.directory}/src-tauri/build.rs`, 'fn main() { tauri_build::build() }\n');
+  tree.write(
+    `${options.directory}/src/styles.css`,
+    'body { font-family: system-ui, sans-serif; margin: 2rem; }\n',
+  );
+  tree.write(
+    `${options.directory}/src-tauri/build.rs`,
+    'fn main() { tauri_build::build() }\n',
+  );
   tree.write(
     `${options.directory}/src-tauri/Cargo.toml`,
     `[package]\nname = "${options.projectName}"\nversion = "0.1.0"\nedition = "2021"\n\n[lib]\nname = "${crateName}_lib"\ncrate-type = ["staticlib", "cdylib", "rlib"]\n\n[build-dependencies]\ntauri-build = { version = "${rustCrateVersion('tauri-build')}", features = [] }\n\n[dependencies]\ntauri = { version = "${rustCrateVersion('tauri')}", features = [] }\ntauri-plugin-opener = "${rustCrateVersion('tauri-plugin-opener')}"\nserde = { version = "${rustCrateVersion('serde')}", features = ["derive"] }\nserde_json = "${rustCrateVersion('serde_json')}"\n`,
   );
-  tree.write(`${options.directory}/src-tauri/src/main.rs`, `fn main() { ${crateName}_lib::run() }\n`);
+  tree.write(
+    `${options.directory}/src-tauri/src/main.rs`,
+    `fn main() { ${crateName}_lib::run() }\n`,
+  );
   tree.write(
     `${options.directory}/src-tauri/src/lib.rs`,
     `#[cfg_attr(mobile, tauri::mobile_entry_point)]\npub fn run() {\n  tauri::Builder::default()\n    .plugin(tauri_plugin_opener::init())\n    .run(tauri::generate_context!())\n    .expect("error while running tauri application");\n}\n`,
@@ -889,8 +1006,16 @@ function createDesktopApp(
     productName: options.projectName,
     version: '0.1.0',
     identifier: `com.${options.scope}.${options.name}`,
-    build: { beforeDevCommand: 'npm run dev', devUrl: 'http://localhost:1420', beforeBuildCommand: 'npm run build', frontendDist: '../dist' },
-    app: { windows: [{ title: options.projectName, width: 800, height: 600 }], security: { csp: null } },
+    build: {
+      beforeDevCommand: 'npm run dev',
+      devUrl: 'http://localhost:1420',
+      beforeBuildCommand: 'npm run build',
+      frontendDist: '../dist',
+    },
+    app: {
+      windows: [{ title: options.projectName, width: 800, height: 600 }],
+      security: { csp: null },
+    },
     bundle: { active: true, targets: 'all' },
   });
   writeJson(tree, `${options.directory}/src-tauri/capabilities/default.json`, {
@@ -907,7 +1032,10 @@ function createDesktopApp(
         ? entry !== '@megamono/nx-cargo'
         : (entry as { plugin?: unknown }).plugin !== '@megamono/nx-cargo',
     );
-    next.push({ plugin: '@megamono/nx-cargo', options: { scope: options.scope, tauriTargetName: 'tauri-build' } });
+    next.push({
+      plugin: '@megamono/nx-cargo',
+      options: { scope: options.scope, tauriTargetName: 'tauri-build' },
+    });
     return { ...value, plugins: next };
   });
   return [];
@@ -936,6 +1064,12 @@ export async function appGenerator(
   rawOptions: AppGeneratorSchema,
 ): Promise<GeneratorCallback> {
   const options = await normalizeOptions(tree, rawOptions);
+  if (tree.root !== '/virtual' && !options.dryRun && !options.bootstrap) {
+    assertWorkspaceMutationGitPreflight(
+      await collectWorkspaceInitHostState(tree.root),
+      'Application addition',
+    );
+  }
   const state = assertProjectPreflight(tree, options);
   logger.info(renderPlan(options));
   if (state === 'noop' || options.dryRun) return () => undefined;
@@ -965,7 +1099,12 @@ export async function appGenerator(
   }
 
   await formatFiles(tree);
-  return runTasksInSerial(...callbacks.filter((callback): callback is GeneratorCallback => typeof callback === 'function'));
+  return runTasksInSerial(
+    ...callbacks.filter(
+      (callback): callback is GeneratorCallback =>
+        typeof callback === 'function',
+    ),
+  );
 }
 
 export default appGenerator;

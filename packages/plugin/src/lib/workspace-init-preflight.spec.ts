@@ -1,5 +1,6 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import {
+  assertWorkspaceMutationGitPreflight,
   assertWorkspaceInitPreflight,
   type WorkspaceInitHostState,
 } from './workspace-init-preflight';
@@ -40,6 +41,21 @@ const featureBranch: WorkspaceInitHostState = {
 };
 
 describe('workspace init preflight', () => {
+  it('shares operation-specific Git mutation safety', () => {
+    expect(() =>
+      assertWorkspaceMutationGitPreflight(
+        { ...featureBranch, git: { ...featureBranch.git, clean: false } },
+        'Application addition',
+      ),
+    ).toThrow('Application addition requires a clean working tree.');
+    expect(() =>
+      assertWorkspaceMutationGitPreflight(
+        { ...featureBranch, git: { ...featureBranch.git, branch: 'main' } },
+        'Database addition',
+      ),
+    ).toThrow('Database addition must not run on the default branch main.');
+  });
+
   it('accepts the supported baseline on a clean feature branch', () => {
     expect(() =>
       assertWorkspaceInitPreflight(supportedTree(), featureBranch),

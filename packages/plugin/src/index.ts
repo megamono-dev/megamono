@@ -71,6 +71,7 @@ export {
   type WorkspaceInitSurveyProject,
 } from './lib/workspace-init-plan';
 export {
+  assertWorkspaceMutationGitPreflight,
   assertWorkspaceInitPreflight,
   collectWorkspaceInitHostState,
   type WorkspaceInitHostState,

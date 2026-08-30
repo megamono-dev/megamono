@@ -25,9 +25,15 @@ megamono add database primary --adapter=prisma --interactive=false --yes
 
 A valueless `megamono add app` opens the application selector in an interactive
 terminal. Add commands preview before confirmation, install only missing
-compatible framework adapters, and preserve the workspace's Nx major. Use
+compatible framework adapters, and preserve the workspace's Nx major. Mutating
+app and database additions require a clean, named, non-default Git branch before
+dependency installation or generation begins. Use
 `--local-packages=yalc` when a required `@megamono/*` application adapter is
 available only from the local yalc store.
+
+If delegated generation fails after dependency setup or tree writes, the CLI
+preserves the delegated exit code and prints the completed dependency step,
+the partial-file inspection path, and an exact retry command.
 
 Database names are repository-defined slugs. A valueless `megamono add
 database` asks for the name with `primary` as a suggestion and then offers the

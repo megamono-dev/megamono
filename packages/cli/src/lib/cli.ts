@@ -1,6 +1,8 @@
 import { createRequire } from 'node:module';
 import { access, readFile, readdir } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
 import { dirname, join, parse, resolve } from 'node:path';
+import { promisify } from 'node:util';
 
 export type PackageManager = 'npm' | 'pnpm';
 export type LocalPackageSource = 'registry' | 'yalc';
@@ -26,11 +28,19 @@ export interface MegamonoCliIo {
     choices: readonly DatabaseAdapterChoice[],
   ): Promise<string>;
   confirmAddPlan?(message: string): Promise<boolean>;
+  workspaceMutationState?(): Promise<WorkspaceMutationState>;
   runCommand(
     command: string,
     args: readonly string[],
     options: { readonly cwd: string; readonly capture?: boolean },
   ): Promise<CommandResult>;
+}
+
+export interface WorkspaceMutationState {
+  readonly available: boolean;
+  readonly clean: boolean;
+  readonly branch?: string;
+  readonly defaultBranch?: string;
 }
 
 export interface MegamonoCliResult {
@@ -114,6 +124,8 @@ class CliError extends Error {
   }
 }
 
+const executeFile = promisify(execFile);
+
 const HELP = `Usage: megamono <command> [options]
 
 Commands:
@@ -172,6 +184,84 @@ async function exists(path: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function gitOutput(
+  root: string,
+  args: readonly string[],
+): Promise<string | undefined> {
+  try {
+    return (
+      await executeFile('git', [...args], { cwd: root, encoding: 'utf8' })
+    ).stdout.trim();
+  } catch {
+    return undefined;
+  }
+}
+
+async function collectWorkspaceMutationState(
+  root: string,
+): Promise<WorkspaceMutationState> {
+  if (
+    (await gitOutput(root, ['rev-parse', '--is-inside-work-tree'])) !== 'true'
+  ) {
+    return { available: false, clean: false };
+  }
+  const status = await gitOutput(root, [
+    'status',
+    '--porcelain=v1',
+    '--untracked-files=all',
+  ]);
+  const branch = await gitOutput(root, [
+    'symbolic-ref',
+    '--quiet',
+    '--short',
+    'HEAD',
+  ]);
+  const remoteDefault = await gitOutput(root, [
+    'symbolic-ref',
+    '--quiet',
+    '--short',
+    'refs/remotes/origin/HEAD',
+  ]);
+  const defaultBranch = remoteDefault?.replace(/^origin\//, '');
+  return {
+    available: true,
+    clean: status === '',
+    ...(branch ? { branch } : {}),
+    ...(defaultBranch ? { defaultBranch } : {}),
+  };
+}
+
+async function assertWorkspaceMutationPreflight(
+  io: MegamonoCliIo,
+  workspace: Workspace,
+  operation: string,
+): Promise<void> {
+  const state = io.workspaceMutationState
+    ? await io.workspaceMutationState()
+    : await collectWorkspaceMutationState(workspace.root);
+  if (!state.available) {
+    throw new CliError(`${operation} requires a Git worktree.`, 3);
+  }
+  if (!state.clean) {
+    throw new CliError(`${operation} requires a clean working tree.`, 3);
+  }
+  if (!state.branch) {
+    throw new CliError(
+      `${operation} requires a named branch, not detached HEAD.`,
+      3,
+    );
+  }
+  if (!state.defaultBranch) {
+    throw new CliError('The origin default branch could not be resolved.', 3);
+  }
+  if (state.branch === state.defaultBranch) {
+    throw new CliError(
+      `${operation} must not run on the default branch ${state.defaultBranch}.`,
+      3,
+    );
   }
 }
 
@@ -796,11 +886,11 @@ async function installAppPlugins(
   workspace: Workspace,
   packages: readonly string[],
   source: LocalPackageSource,
-): Promise<void> {
+): Promise<readonly string[]> {
   const missing = packages.filter(
     (packageName) => !localPackageAvailable(workspace.root, packageName),
   );
-  if (missing.length === 0) return;
+  if (missing.length === 0) return [];
   const local = missing.filter((name) => name.startsWith('@megamono/'));
   const registry = missing.filter((name) => !name.startsWith('@megamono/'));
   if (source === 'yalc' && local.length > 0) {
@@ -842,6 +932,7 @@ async function installAppPlugins(
   if (source === 'yalc' && local.length > 0) {
     await runAddCommand(io, workspace, workspace.packageManager, ['install']);
   }
+  return missing;
 }
 
 async function resolveAppType(
@@ -988,6 +1079,13 @@ async function runAdd(
       parsed,
     );
     const adapter = await resolveDatabaseAdapter(io, parsed.args, parsed);
+    if (!parsed.dryRun) {
+      await assertWorkspaceMutationPreflight(
+        io,
+        workspace,
+        'Database addition',
+      );
+    }
     const generatorArgs = [
       `--name=${name}`,
       ...(!explicitOption(parsed.args, '--adapter')
@@ -1003,6 +1101,11 @@ async function runAdd(
     const generated = await io.runCommand(command, commandArgs, {
       cwd: workspace.root,
     });
+    if (generated.exitCode !== 0 && !parsed.dryRun) {
+      io.stderr(
+        `Database generation failed after delegation. Inspect git diff for partial files, resolve the reported error, then retry: megamono add database ${name} --adapter=${adapter}`,
+      );
+    }
     return { exitCode: generated.exitCode };
   }
   if (subject !== 'app') {
@@ -1016,6 +1119,13 @@ async function runAdd(
     hasPositionalType ? args[1] : undefined,
     parsed,
   );
+  if (!parsed.dryRun) {
+    await assertWorkspaceMutationPreflight(
+      io,
+      workspace,
+      'Application addition',
+    );
+  }
   const required = requiredAppPlugins(type);
   const missing = required.filter(
     (packageName) => !localPackageAvailable(workspace.root, packageName),
@@ -1039,9 +1149,9 @@ async function runAdd(
     if (!confirmed) return { exitCode: 0 };
   }
 
-  if (!parsed.dryRun) {
-    await installAppPlugins(io, workspace, required, parsed.localPackages);
-  }
+  const installed = parsed.dryRun
+    ? []
+    : await installAppPlugins(io, workspace, required, parsed.localPackages);
   const generatorArgs = [
     `--type=${type}`,
     ...parsed.args,
@@ -1055,6 +1165,15 @@ async function runAdd(
   const generated = await io.runCommand(command, commandArgs, {
     cwd: workspace.root,
   });
+  if (generated.exitCode !== 0 && !parsed.dryRun) {
+    io.stderr(
+      `Application generation failed after delegation.${
+        installed.length > 0
+          ? ` Dependencies already installed: ${installed.join(', ')}.`
+          : ''
+      } Inspect git diff for partial files, resolve the reported error, then retry: megamono add app ${type}`,
+    );
+  }
   return { exitCode: generated.exitCode };
 }
 

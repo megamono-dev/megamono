@@ -23,6 +23,46 @@ export interface WorkspaceInitHostState {
   };
 }
 
+export function assertWorkspaceMutationGitPreflight(
+  state: WorkspaceInitHostState,
+  operation: string,
+): void {
+  if (!state.git.available) {
+    throw new WorkspaceInitError(
+      'preflight',
+      `${operation} requires a Git worktree.${
+        operation === 'Initialization'
+          ? ' Use create-megamono for a new repository.'
+          : ''
+      }`,
+    );
+  }
+  if (!state.git.clean) {
+    throw new WorkspaceInitError(
+      'preflight',
+      `${operation} requires a clean working tree.`,
+    );
+  }
+  if (!state.git.branch) {
+    throw new WorkspaceInitError(
+      'preflight',
+      `${operation} requires a named branch, not detached HEAD.`,
+    );
+  }
+  if (!state.git.defaultBranch) {
+    throw new WorkspaceInitError(
+      'preflight',
+      'The origin default branch could not be resolved.',
+    );
+  }
+  if (state.git.branch === state.git.defaultBranch) {
+    throw new WorkspaceInitError(
+      'preflight',
+      `${operation} must not run on the default branch ${state.git.defaultBranch}.`,
+    );
+  }
+}
+
 async function commandOutput(
   workspaceRoot: string,
   command: string,
@@ -236,34 +276,5 @@ export function assertWorkspaceInitPreflight(
   );
 
   if (options.bootstrap) return;
-  if (!state.git.available) {
-    throw new WorkspaceInitError(
-      'preflight',
-      'Initialization requires a Git worktree. Use create-megamono for a new repository.',
-    );
-  }
-  if (!state.git.clean) {
-    throw new WorkspaceInitError(
-      'preflight',
-      'Initialization requires a clean working tree.',
-    );
-  }
-  if (!state.git.branch) {
-    throw new WorkspaceInitError(
-      'preflight',
-      'Initialization requires a named branch, not detached HEAD.',
-    );
-  }
-  if (!state.git.defaultBranch) {
-    throw new WorkspaceInitError(
-      'preflight',
-      'The origin default branch could not be resolved.',
-    );
-  }
-  if (state.git.branch === state.git.defaultBranch) {
-    throw new WorkspaceInitError(
-      'preflight',
-      `Initialization must not run on the default branch ${state.git.defaultBranch}.`,
-    );
-  }
+  assertWorkspaceMutationGitPreflight(state, 'Initialization');
 }

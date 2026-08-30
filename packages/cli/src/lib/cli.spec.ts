@@ -6,6 +6,7 @@ import {
   runMegamonoCli,
   type CommandResult,
   type MegamonoCliIo,
+  type WorkspaceMutationState,
 } from './cli.js';
 
 interface Invocation {
@@ -88,6 +89,12 @@ function io(
     readonly name: string;
     readonly adapter: string;
   },
+  mutationState: WorkspaceMutationState = {
+    available: true,
+    clean: true,
+    branch: 'feat/add-capability',
+    defaultBranch: 'main',
+  },
 ): {
   readonly value: MegamonoCliIo;
   readonly invocations: Invocation[];
@@ -106,6 +113,7 @@ function io(
       version: '0.0.1-test',
       stdout: (message) => stdout.push(message),
       stderr: (message) => stderr.push(message),
+      workspaceMutationState: async () => mutationState,
       ...(selectedPlaystackPackages
         ? {
             selectPlaystackPackages: async () => selectedPlaystackPackages,
@@ -320,6 +328,108 @@ describe('@megamono/cli', () => {
       '--type=api',
       '--yes',
     ]);
+  });
+
+  it('refuses app and database mutations from an unsafe Git state', async () => {
+    const root = await workspace('pnpm');
+    const dirty = io(
+      root,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        available: true,
+        clean: false,
+        branch: 'feat/dirty',
+        defaultBranch: 'main',
+      },
+    );
+
+    expect(
+      (
+        await runMegamonoCli(
+          ['add', 'app', 'api', '--interactive=false', '--yes'],
+          dirty.value,
+        )
+      ).exitCode,
+    ).toBe(3);
+    expect(dirty.invocations).toEqual([]);
+    expect(dirty.stderr.at(-1)).toContain('clean working tree');
+
+    const defaultBranch = io(
+      root,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        available: true,
+        clean: true,
+        branch: 'main',
+        defaultBranch: 'main',
+      },
+    );
+    expect(
+      (
+        await runMegamonoCli(
+          [
+            'add',
+            'database',
+            'events',
+            '--adapter=drizzle',
+            '--interactive=false',
+            '--yes',
+          ],
+          defaultBranch.value,
+        )
+      ).exitCode,
+    ).toBe(3);
+    expect(defaultBranch.invocations).toEqual([]);
+    expect(defaultBranch.stderr.at(-1)).toContain('default branch main');
+  });
+
+  it('reports durable recovery after delegated add failures', async () => {
+    const root = await workspace('npm');
+    const app = io(root, (invocation) => ({
+      exitCode: invocation.args.includes('@megamono/plugin:app') ? 4 : 0,
+    }));
+    expect(
+      (
+        await runMegamonoCli(
+          ['add', 'app', 'api', '--interactive=false', '--yes'],
+          app.value,
+        )
+      ).exitCode,
+    ).toBe(4);
+    expect(app.stderr.at(-1)).toContain(
+      'Dependencies already installed: @nx/nest, @nx/jest, @nx/eslint',
+    );
+    expect(app.stderr.at(-1)).toContain('Inspect git diff');
+
+    const database = io(root, (invocation) => ({
+      exitCode: invocation.args.includes('@megamono/plugin:database') ? 4 : 0,
+    }));
+    expect(
+      (
+        await runMegamonoCli(
+          [
+            'add',
+            'database',
+            'events',
+            '--adapter=drizzle',
+            '--interactive=false',
+            '--yes',
+          ],
+          database.value,
+        )
+      ).exitCode,
+    ).toBe(4);
+    expect(database.stderr.at(-1)).toContain(
+      'Inspect git diff for partial files',
+    );
   });
 
   it('delegates available generators and diagnoses gated names', async () => {
