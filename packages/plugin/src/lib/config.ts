@@ -231,6 +231,7 @@ const databaseSchema = z
   .object({
     adapter: z.enum(DATABASE_ADAPTERS),
     project: z.string().min(1),
+    schema: z.string().refine(isSafeWorkspaceRelativePath).optional(),
   })
   .strict();
 

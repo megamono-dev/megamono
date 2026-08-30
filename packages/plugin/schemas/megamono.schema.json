@@ -350,7 +350,11 @@
         "required": ["adapter", "project"],
         "properties": {
           "adapter": { "enum": ["prisma", "drizzle"] },
-          "project": { "type": "string", "minLength": 1 }
+          "project": { "type": "string", "minLength": 1 },
+          "schema": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+          }
         }
       }
     },

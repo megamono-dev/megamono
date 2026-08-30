@@ -14,7 +14,7 @@ import {
 } from '@nx/devkit';
 import { prompt } from 'enquirer';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   DATABASE_ADAPTERS,
   isSafeWorkspaceRelativePath,
@@ -51,6 +51,8 @@ interface NormalizedDatabaseOptions {
   readonly scope: string;
   readonly packageManager: 'npm' | 'pnpm';
   readonly target: string;
+  readonly schema: string;
+  readonly existingLayout: boolean;
   readonly dryRun: boolean;
   readonly bootstrap: boolean;
 }
@@ -210,9 +212,17 @@ async function normalizeOptions(
   const name = await resolveName(raw);
   const adapter = await resolveAdapter(raw);
   const scope = slug(raw.scope ?? workspaceScope(tree), 'Database scope');
+  const inferredRootPrismaSchema =
+    adapter === 'prisma' && tree.exists('prisma/schema.prisma')
+      ? 'prisma/schema.prisma'
+      : undefined;
+  const schema =
+    adapter === 'prisma'
+      ? (raw.schema?.replace(/^\.\//, '') ?? inferredRootPrismaSchema)
+      : undefined;
   const directory =
     raw.directory?.replace(/^\.\//, '').replace(/\/$/, '') ??
-    `packages/database-${name}`;
+    (schema ? dirname(schema) : `packages/database-${name}`);
   if (!isSafeWorkspaceRelativePath(directory)) {
     throw new DatabaseGeneratorError(
       `Database directory must stay inside the workspace; received ${directory}.`,
@@ -224,7 +234,9 @@ async function normalizeOptions(
   const target =
     raw.target?.replace(/^\.\//, '').replace(/\/$/, '') ??
     (adapter === 'prisma'
-      ? `${directory}/prisma/models`
+      ? schema
+        ? `${directory}/models`
+        : `${directory}/prisma/models`
       : `${directory}/src/schema`);
   if (
     !isSafeWorkspaceRelativePath(target) ||
@@ -232,6 +244,20 @@ async function normalizeOptions(
   ) {
     throw new DatabaseGeneratorError(
       `Database target must be a safe path inside ${directory}; received ${target}.`,
+      2,
+      'options',
+    );
+  }
+  const normalizedSchema =
+    adapter === 'prisma'
+      ? (schema ?? `${directory}/prisma/schema.prisma`)
+      : `${directory}/drizzle.config.ts`;
+  if (
+    !isSafeWorkspaceRelativePath(normalizedSchema) ||
+    !normalizedSchema.startsWith(`${directory}/`)
+  ) {
+    throw new DatabaseGeneratorError(
+      `Database schema must be a safe path inside ${directory}; received ${normalizedSchema}.`,
       2,
       'options',
     );
@@ -245,6 +271,8 @@ async function normalizeOptions(
     scope,
     packageManager: packageManager(tree),
     target,
+    schema: normalizedSchema,
+    existingLayout: tree.exists(normalizedSchema),
     dryRun: raw.dryRun === true || process.env.NX_DRY_RUN === 'true',
     bootstrap: raw.bootstrap === true,
   };
@@ -268,7 +296,7 @@ function projectMatches(
 function preflight(
   tree: Tree,
   options: NormalizedDatabaseOptions,
-): 'create' | 'adopt' | 'noop' {
+): 'create' | 'adopt' | 'adopt-layout' | 'noop' {
   const configured = options.bootstrap
     ? undefined
     : megamonoConfigSchema.parse(readJson(tree, 'megamono.json')).databases[
@@ -277,7 +305,10 @@ function preflight(
   if (
     configured &&
     (configured.adapter !== options.adapter ||
-      configured.project !== options.project)
+      configured.project !== options.project ||
+      ('schema' in configured &&
+        configured.schema !== undefined &&
+        configured.schema !== options.schema))
   ) {
     throw new DatabaseGeneratorError(
       `Database ${options.name} is already configured as ${configured.adapter} in project ${configured.project}.`,
@@ -296,12 +327,14 @@ function preflight(
     !configured &&
     named?.root === options.directory &&
     named.projectType === 'library' &&
-    ((options.adapter === 'prisma' &&
-      tree.exists(`${options.directory}/prisma/schema.prisma`)) ||
+    ((options.adapter === 'prisma' && tree.exists(options.schema)) ||
       (options.adapter === 'drizzle' &&
         tree.exists(`${options.directory}/drizzle.config.ts`)))
   ) {
     return 'adopt';
+  }
+  if (!configured && !named && !rooted && options.existingLayout) {
+    return 'adopt-layout';
   }
   if (named || rooted || tree.exists(options.directory)) {
     throw new DatabaseGeneratorError(
@@ -345,6 +378,7 @@ function renderPlan(options: NormalizedDatabaseOptions): string {
 - Project: ${options.project}
 - Root: ${options.directory}
 - Playstack target: ${options.target}
+- Existing schema: ${options.existingLayout ? options.schema : 'none'}
 
 ## Ordered operations
 
@@ -466,8 +500,57 @@ function projectConfiguration(
   };
 }
 
+function adoptedProjectConfiguration(
+  options: NormalizedDatabaseOptions,
+): ProjectConfiguration {
+  return {
+    root: options.directory,
+    projectType: 'library',
+    tags: databaseTags(options),
+    targets: {
+      validate: {
+        executor: 'nx:run-commands',
+        cache: true,
+        options: {
+          cwd: '.',
+          command:
+            options.adapter === 'prisma'
+              ? command(options, 'prisma', [
+                  'validate',
+                  '--schema',
+                  options.schema,
+                ])
+              : command(options, 'drizzle-kit', ['check']),
+        },
+      },
+    },
+  };
+}
+
+function dependencySpecifier(tree: Tree, name: string): string | undefined {
+  const manifest = readJson<Record<string, unknown>>(tree, 'package.json');
+  for (const field of ['dependencies', 'devDependencies', 'peerDependencies']) {
+    const dependencies = manifest[field] as Record<string, unknown> | undefined;
+    if (typeof dependencies?.[name] === 'string')
+      return dependencies[name] as string;
+  }
+  return undefined;
+}
+
 function writePackage(tree: Tree, options: NormalizedDatabaseOptions): void {
   const adapter = compatibility.databaseAdapters[options.adapter];
+  const runtimePackages = Object.fromEntries(
+    Object.entries(adapter.runtimePackages).map(([name, pinned]) => [
+      name,
+      dependencySpecifier(tree, name) ?? pinned,
+    ]),
+  );
+  const developmentPackages = Object.fromEntries(
+    Object.entries(adapter.developmentPackages).map(([name, pinned]) => [
+      name,
+      dependencySpecifier(tree, name) ?? pinned,
+    ]),
+  );
   writeJson(tree, `${options.directory}/package.json`, {
     name: options.packageName,
     version: '0.0.0',
@@ -479,10 +562,12 @@ function writePackage(tree: Tree, options: NormalizedDatabaseOptions): void {
           types: './dist/src/index.d.ts',
         }
       : {}),
-    dependencies: adapter.runtimePackages,
+    dependencies: runtimePackages,
     devDependencies: {
-      ...adapter.developmentPackages,
-      typescript: compatibility.scaffoldPackages.typescript,
+      ...developmentPackages,
+      typescript:
+        dependencySpecifier(tree, 'typescript') ??
+        compatibility.scaffoldPackages.typescript,
     },
   });
 }
@@ -538,6 +623,7 @@ function writeConfigurations(
         [options.name]: {
           adapter: options.adapter,
           project: options.project,
+          schema: options.schema,
         },
       },
     }));
@@ -613,6 +699,17 @@ export async function databaseGenerator(
       ...project,
       tags: databaseTags(options, project.tags),
     });
+    writeConfigurations(tree, options);
+    await formatFiles(tree);
+    return () => undefined;
+  }
+
+  if (state === 'adopt-layout') {
+    addProjectConfiguration(
+      tree,
+      options.project,
+      adoptedProjectConfiguration(options),
+    );
     writeConfigurations(tree, options);
     await formatFiles(tree);
     return () => undefined;

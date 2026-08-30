@@ -42,6 +42,7 @@ describe('database generator', () => {
       events: {
         adapter: 'prisma',
         project: 'fixture-workspace-database-events',
+        schema: 'packages/database-events/prisma/schema.prisma',
       },
     });
     expect(readJson(tree, 'playstack.json').databases).toEqual({
@@ -179,6 +180,7 @@ describe('database generator', () => {
     expect(readJson(tree, 'megamono.json').databases.events).toEqual({
       adapter: 'drizzle',
       project: 'existing-db',
+      schema: 'packages/existing-db/drizzle.config.ts',
     });
     expect(readJson(tree, 'packages/existing-db/project.json').tags).toContain(
       'type:data',
@@ -189,6 +191,85 @@ describe('database generator', () => {
     expect(tree.read('packages/existing-db/drizzle.config.ts', 'utf8')).toBe(
       "export default { schema: './src/schema' };\n",
     );
+  });
+
+  it('adopts a root Prisma layout without moving schema, migrations, or client ownership', async () => {
+    const tree = workspace();
+    writeJson(tree, 'package.json', {
+      name: '@fixture/workspace',
+      private: true,
+      dependencies: { '@prisma/client': '^6.19.3' },
+      devDependencies: { prisma: '^6.19.3', typescript: '~5.9.2' },
+    });
+    const schema = `generator client {\n  provider = "prisma-client-js"\n}\n\ndatasource db {\n  provider = "postgresql"\n  url = env("DATABASE_URL")\n}\n`;
+    tree.write('prisma/schema.prisma', schema);
+    tree.write('prisma/migrations/20260830_init/migration.sql', 'SELECT 1;\n');
+    tree.write('apps/api/Dockerfile', 'RUN pnpm exec prisma generate\n');
+
+    await databaseGenerator(tree, {
+      name: 'primary',
+      adapter: 'prisma',
+      interactive: false,
+      yes: true,
+    });
+
+    expect(tree.read('prisma/schema.prisma', 'utf8')).toBe(schema);
+    expect(
+      tree.read('prisma/migrations/20260830_init/migration.sql', 'utf8'),
+    ).toBe('SELECT 1;\n');
+    expect(tree.read('apps/api/Dockerfile', 'utf8')).toBe(
+      'RUN pnpm exec prisma generate\n',
+    );
+    expect(readJson(tree, 'prisma/project.json')).toMatchObject({
+      projectType: 'library',
+      targets: {
+        validate: {
+          options: {
+            command: 'pnpm exec prisma validate --schema prisma/schema.prisma',
+          },
+        },
+      },
+    });
+    expect(readJson(tree, 'prisma/project.json').targets.generate).toBe(
+      undefined,
+    );
+    expect(readJson(tree, 'megamono.json').databases.primary).toEqual({
+      adapter: 'prisma',
+      project: 'fixture-workspace-database-primary',
+      schema: 'prisma/schema.prisma',
+    });
+    expect(readJson(tree, 'playstack.json').databases.primary).toEqual({
+      adapter: 'prisma',
+      target: 'prisma/models',
+    });
+    expect(readJson(tree, 'package.json').dependencies['@prisma/client']).toBe(
+      '^6.19.3',
+    );
+    expect(readJson(tree, 'package.json').devDependencies.prisma).toBe(
+      '^6.19.3',
+    );
+  });
+
+  it('reuses existing adapter and TypeScript versions for a new database project', async () => {
+    const tree = workspace();
+    writeJson(tree, 'package.json', {
+      name: '@fixture/workspace',
+      private: true,
+      dependencies: { '@prisma/client': '^6.19.3' },
+      devDependencies: { prisma: '^6.19.3', typescript: '~5.9.2' },
+    });
+    await databaseGenerator(tree, {
+      name: 'events',
+      adapter: 'prisma',
+      interactive: false,
+      yes: true,
+    });
+    expect(
+      readJson(tree, 'packages/database-events/package.json'),
+    ).toMatchObject({
+      dependencies: { '@prisma/client': '^6.19.3' },
+      devDependencies: { prisma: '^6.19.3', typescript: '~5.9.2' },
+    });
   });
 
   it('preserves an existing explicit Playstack package allowlist', async () => {
