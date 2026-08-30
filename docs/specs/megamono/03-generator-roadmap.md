@@ -86,7 +86,7 @@ Swift, SwiftUI, Xcode projects, Swift packages.
 - Targets: `xcodebuild` build/test, SwiftLint, archive + Fastlane deploy.
 - Validation surface: eight Apple targets in the portfolio (Synth, Synth Lens, Quickzones Mac + iOS companion, Casters, Portals, Springbar iOS companion, Termvisor iOS).
 
-The plugin accepts `scheme`, `configuration`, `destination`, `derivedDataPath`, and optional Fastlane lane overrides in its `nx.json` plugin options. If more than one shared scheme can build the project and no scheme is configured, graph creation still succeeds but executable targets are omitted with an actionable diagnostic from `megamono:check`.
+The plugin accepts `scheme`, `configuration`, `destination`, `derivedDataPath`, and optional Fastlane lane overrides in its `nx.json` plugin options. Mature Apple workspaces may instead define a `targets` map whose repository-chosen target names independently select `build`, `test`, `archive`, or `deploy`, an Xcode project/workspace, scheme, configuration, destination, derived-data path, Fastlane lane, and dependencies. This supports Mac, iOS, direct, App Store, performance, and other repository-defined schemes without Megamono inventing their vocabulary. Invalid mappings are omitted with an `apple-target` diagnostic. If more than one shared scheme can build the project and neither a default scheme nor named mappings are configured, graph creation still succeeds but executable targets are omitted with an actionable diagnostic from `megamono:check`.
 
 **Why first:** hardest, most differentiated, and the only one with a deep dogfooding surface. Prior art is essentially nonexistent for Swift/Xcode in Nx.
 

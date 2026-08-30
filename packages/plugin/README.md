@@ -10,6 +10,18 @@ repository structural checks, and deterministic repository health reporting.
 npm exec nx g @megamono/plugin:workspace-init --defaultPlatform=node
 ```
 
+For a mature mixed workspace, survey first and resolve only genuine ambiguity:
+
+```sh
+npm exec nx g @megamono/plugin:workspace-init --survey --format=json
+npm exec nx g @megamono/plugin:workspace-init \
+  --only=docs,agents,ci,lint \
+  --adoptionMap=.megamono/adoption.json \
+  --docsAdoptionMap=.megamono/docs-adoption.json \
+  --ciMode=auto \
+  --yes
+```
+
 Initialization writes `megamono.json`, adds the `megamono` and
 `megamono-docs` projects, tags existing Nx projects, scaffolds the documentation
 information architecture, and configures the shared agent-skills directory.
@@ -121,6 +133,7 @@ and squash carries only the approved snapshot. Filter-repo requires a compatible
 
 ```sh
 npm exec nx run megamono:check
+npm exec nx run megamono:check --ci
 npm exec nx run megamono-docs:validate
 npm exec nx run megamono-docs:index
 npm exec nx run megamono-docs:index --check
@@ -132,6 +145,9 @@ npm exec nx run megamono-docs:health
 Health checks cover npm, Expo SDK, SwiftPM, and Cargo dependency alignment,
 spec drift, stale plans, orphaned libraries, and integration-template drift.
 Findings are written deterministically to `.megamono/health.json`.
+The CI mode additionally rejects yalc/link/file dependency escape hatches,
+requires the selected manager's frozen lockfile, and validates non-secret scope
+routing configured through `--packageRegistries`.
 
 ## ESLint rules
 

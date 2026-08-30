@@ -86,7 +86,7 @@ When a terminal is interactive, a bare `--playstack-packages` opens a multiselec
 
 For a survey, no packages are installed. An already-installed Playstack CLI contributes its own read-only survey; otherwise the Megamono report lists the deferred package and command plan.
 
-Existing-workspace adoption uses the adoption baseline from `spec-megamono-0000`: Node `>=18.18 <25`, npm `>=9 <12` or pnpm `>=8 <12`, Nx `>=17 <24`, TypeScript `>=5.2 <7`, and macOS or Linux. Optional Playstack setup applies its narrower Node `>=20` gate only when requested, plus ESLint `^9` only when the explicit `@playstack/lint` package is selected; these constraints never narrow core Megamono adoption. Inference plugins require Nx 18 or newer; an Nx 17 workspace can adopt the core modules and receives an explicit capability reduction for detected Apple, Cargo, or Cloudflare manifests. An unsupported or ambiguous lockfile, unsupported toolchain, malformed project graph, dirty worktree, or execution on the default branch refuses before mutation. `--survey` is read-only and may run on a dirty or default-branch worktree.
+Existing-workspace adoption uses the adoption baseline from `spec-megamono-0000`: Node `>=18.18 <25`, npm `>=9 <12` or pnpm `>=8 <12`, Nx `>=17 <24`, TypeScript `>=5.2 <7`, and macOS or Linux. Optional Playstack setup applies its narrower Node `>=20` gate only when requested, plus ESLint `^9` only when the explicit `@playstack/lint` package is selected; these constraints never narrow core Megamono adoption. Inference plugins require Nx 18 or newer; an Nx 17 workspace can adopt the core modules and receives an explicit capability reduction for detected Apple, Cargo, or Cloudflare manifests. An unsupported or ambiguous lockfile, unsupported toolchain, malformed project graph, dirty worktree, or execution on the default branch refuses before mutation. The global dispatcher checks the actually active Node and package-manager binaries as well as committed manifests, so an unsupported global pnpm or Node 25+ cannot begin generation merely because CI uses a supported toolchain. `--toolchainPin=nvmrc|node-version|both --toolchainNode=<exact-version>` may add explicit repository-owned runtime pins after the same conflict preview. `--survey` is read-only and may run on a dirty or default-branch worktree.
 
 ## Additive and modular
 
@@ -94,16 +94,16 @@ Existing-workspace adoption uses the adoption baseline from `spec-megamono-0000`
 
 Every execution installs a small baseline: `megamono.json`, the `megamono` project with `check` and `import` targets, plugin compatibility metadata, and the selected module records. Modules are otherwise independently selectable:
 
-| Module      | Adds or configures                                                                                                                            |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs`      | Centralized corpus directories, Content Collections config, indexes, and `megamono-docs` targets (`spec-megamono-0004`, `spec-megamono-0011`) |
-| `agents`    | A managed section in `AGENTS.md`, a safe `CLAUDE.md` pointer when possible, and `docs/DESIGN.md`                                              |
-| `ci`        | A dedicated affected-CI workflow owned by Megamono; existing repository workflows remain untouched                                            |
-| `release`   | Nx Release groups and tag strategy for publishable packages, a private prerelease workflow, and yalc-from-dist local package vetting          |
-| `lint`      | Project-tag completion, structural checks, docs validation, and ESLint wiring (`spec-megamono-0006`)                                          |
-| `skills`    | Managed portable skills under `.agents/skills` and the `.claude/skills` projection (`spec-megamono-0005`)                                     |
-| `health`    | The deterministic scheduled health workflow and local health target (`spec-megamono-0008`)                                                    |
-| `inference` | Supported Apple, Cargo, or Cloudflare plugins when corresponding manifests are detected (`spec-megamono-0003`, `spec-megamono-0015`)          |
+| Module      | Adds or configures                                                                                                                                                |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs`      | Centralized corpus directories, collision-free Content Collections integration, indexes, and `megamono-docs` targets (`spec-megamono-0004`, `spec-megamono-0011`) |
+| `agents`    | A managed section in `AGENTS.md`, a safe `CLAUDE.md` pointer when possible, and `docs/DESIGN.md`                                                                  |
+| `ci`        | Retains equivalent repository CI by default, or adds a standalone/reusable affected-CI workflow owned by Megamono                                                 |
+| `release`   | Nx Release groups and tag strategy for publishable packages, a private prerelease workflow, and yalc-from-dist local package vetting                              |
+| `lint`      | Project-tag completion, structural checks, docs validation, and ESLint wiring (`spec-megamono-0006`)                                                              |
+| `skills`    | Managed portable skills under `.agents/skills` and the `.claude/skills` projection (`spec-megamono-0005`)                                                         |
+| `health`    | The deterministic scheduled health workflow and local health target (`spec-megamono-0008`)                                                                        |
+| `inference` | Supported Apple, Cargo, or Cloudflare plugins when corresponding manifests are detected (`spec-megamono-0003`, `spec-megamono-0015`)                              |
 
 ```text
 npm exec nx g @megamono/plugin:workspace-init --only=docs,agents
@@ -111,7 +111,7 @@ npm exec nx g @megamono/plugin:workspace-init --only=docs,agents
 
 `--only` accepts a comma-separated set of module names. Omitting it starts the guided flow. Selecting a module never silently selects another: when a capability is reduced because another module is absent, the preview names the reduction. For example, `health` without `docs` disables the spec-drift and stale-plan checks but can still run dependency-alignment and orphan checks.
 
-The `ci` module writes `.github/workflows/megamono-ci.yml`; it never replaces or inserts unbounded text into an existing general-purpose workflow. The generated workflow inherits the workspace's committed Node version from `.node-version`, `.nvmrc`, or `engines.node`, and its package-manager version from `packageManager`. When Node is undeclared, init chooses the tested fallback for the installed Nx major. When the survey finds equivalent affected-CI coverage, it recommends skipping the module and reports the retained repository-owned workflow. An occupied `megamono-ci.yml` path is an owned-path conflict, not permission to overwrite it.
+The `ci` module never replaces or inserts unbounded text into an existing general-purpose workflow. In the default `--ciMode=auto`, a repository workflow that runs lint, test, and build through either Nx affected commands or a mature full-workspace `run-many` is retained and no duplicate workflow is added. `--ciMode=standalone` writes `.github/workflows/megamono-ci.yml`; `--ciMode=reusable` writes the bounded `.github/workflows/megamono-ci-reusable.yml` with only `workflow_call`, leaving caller integration repository-owned. Generated workflows inherit the committed Node version from `.node-version`, `.nvmrc`, or `engines.node`, and the manager version from `packageManager`. When Node is undeclared, init chooses the tested fallback for the installed Nx major. An occupied selected target is an owned-path conflict, not permission to overwrite it.
 
 ## Artifact ownership and provenance
 
@@ -160,12 +160,12 @@ The command refuses unknown and `ejectable: false` artifacts before mutation. An
 
 Every run begins with the same deterministic survey:
 
-- resolved Nx project names, roots, types, targets, and tags;
+- resolved Nx project names, roots, evidence-backed application/library types, per-project platforms, targets, and tags;
 - npm, Node, Nx, and TypeScript versions;
 - supported and unsupported non-JavaScript manifests;
 - existing docs roots, corpus-like directories, and Markdown files;
 - existing `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, and skill directories;
-- existing CI, health, ESLint, Content Collections, and Megamono configuration;
+- existing CI, health, ESLint, nested Content Collections loaders, and Megamono configuration;
 - every path or config key a selected module would add or modify.
 
 ```text
@@ -192,8 +192,8 @@ The preview may be skipped only with `--yes`. `--yes` is not an answer to an amb
 
 Init adapts rather than normalizing for its own sake:
 
-- Existing project names, roots, target names, and library names remain unchanged.
-- Existing `type:`, `scope:`, `platform:`, and `visibility:` tags remain unchanged when valid. Missing required tags are proposed using `--defaultScope` and `--defaultPlatform`; conflicting vocabularies are reported rather than renamed.
+- Existing project names, roots, target names, and library names remain unchanged. Project classification considers Nx `projectType`, tags, `tsconfig.app.json`/`tsconfig.lib.json`, root placement, framework files, and lifecycle targets; a package-inferred library under `libs/` is never defaulted to an application.
+- Existing `type:`, `scope:`, `platform:`, and `visibility:` tags remain unchanged when valid. Missing required tags are proposed using `--defaultScope` and evidence-based per-project platform inference. `--defaultPlatform` is only a fallback. Conflicting or incomplete evidence requires an explicit `--adoptionMap=<json>` whose project entries resolve `type` and, for applications, `platform`; one workspace-wide platform answer never flattens a mixed repository.
 - The Nest feature-library convention applies to newly generated libraries only. Renaming existing libraries and imports is outside init.
 - Supported `Package.swift`, `Cargo.toml`, and Wrangler configuration surfaces produce an inference-plugin offer. A surface without a shipped plugin is reported as a graph-confidence gap.
 
@@ -201,11 +201,19 @@ Generated documentation is centralized under `--docsRoot=docs`, matching the set
 
 ## Existing documentation
 
-Existing docs are inventoried but never moved or rewritten by init. The survey classifies only high-confidence candidates—ADR/decision directories, RFC/research directories, and records already carrying lifecycle metadata—and emits a proposed stable-ID mapping. Low-confidence files remain listed as unclassified.
+Existing docs are inventoried but never moved automatically. The survey classifies high-confidence candidates—ADR/decision directories, RFC/research directories, records already carrying lifecycle metadata, and numbered records under recognized `specs`, `plans`, `decisions`, `audits`, `research`, or `reports` directories. Numbered specifications receive a deterministic stable-ID proposal derived from the workspace scope and ordinal. Low-confidence files remain listed as unclassified.
 
-Applying that mapping is a separate, explicitly reviewed docs-migration operation. This preserves init's no-moves guarantee and avoids a heuristic rewrite of repository-owned content. A partially adopted corpus is valid: existing docs may remain where they are while new Megamono records use the canonical corpus.
+`--docsAdoptionMap=<json>` applies an explicitly reviewed path-to-metadata map during the docs module. Every entry must provide a complete valid lifecycle record after merging with existing front matter; unsafe or missing paths, malformed lifecycle IDs, incomplete metadata, and duplicate IDs are plan conflicts. Application changes only front matter and preserves the document's stable path and body. A partially adopted corpus is valid: existing docs may remain where they are while new Megamono records use the canonical corpus.
 
-The `docs` module owns its repository-docs loader/configuration plumbing only when it creates those complete files. This does not include content-level emissions owned by Playstack. `docs/DESIGN.md` and every generated document skeleton are seeded and immediately repository-owned. Indexes are derived. The IA directories themselves confer no ownership over their contents.
+The docs plan discovers Content Collections loaders anywhere in the workspace and checks requested TypeScript aliases and output paths before acceptance. When an application already owns the conventional loader, Megamono selects or accepts separate `--docsLoader`, `--docsModule`, and `--docsOutput` values. `--docsLoaderMode=adopt` is allowed only for an explicitly selected loader that already exposes the compatible repository and archive collections; adopted loader bytes remain repository-owned. The `docs` module owns its repository-docs loader/configuration plumbing only when it creates those complete files. This does not include content-level emissions owned by Playstack. `docs/DESIGN.md` and every generated document skeleton are seeded and immediately repository-owned. Indexes are derived. The IA directories themselves confer no ownership over their contents.
+
+## Existing database projects
+
+`megamono add database <name> --adapter=prisma|drizzle` accepts `--schema=<path>` and otherwise detects established adapter layouts before proposing a new project. A root `prisma/schema.prisma` is adopted in place with its migration history, generated client ownership, package scripts, Docker commands, and CI commands untouched. Megamono adds only the bounded Nx validation project and named Playstack artifact destination. Existing Prisma and TypeScript specifiers are reused; adopting Prisma 6 never proposes Prisma 7. ORM upgrades are separate explicit repository work.
+
+## Package sources and CI
+
+Yalc is a development transport only. `--packageRegistries='{"@megamono":"https://…","@playstack":"https://…"}'` records scope routing in `megamono.json` and a managed, non-secret `.npmrc` section. Authentication tokens and environment bindings remain repository/CI-owned. `megamono:check --ci` (also selected by `CI=true`) requires the recorded manager's frozen lockfile, rejects `.yalc`, `yalc.lock`, `file:.yalc`, `link:`, `portal:`, and parent/absolute `file:` dependency addresses, and verifies that every configured scope route is present. It never contacts a registry or prints credentials.
 
 ## Existing agent files
 

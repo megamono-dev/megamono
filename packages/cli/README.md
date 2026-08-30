@@ -23,6 +23,17 @@ megamono add database events --adapter=drizzle
 megamono add database primary --adapter=prisma --interactive=false --yes
 ```
 
+Existing Prisma layouts can be adopted in place without moving migrations or
+changing the installed major:
+
+```sh
+megamono add database primary --adapter=prisma --schema=prisma/schema.prisma
+```
+
+All plugin options remain forwardable through `megamono init`, including
+per-project `--adoptionMap`, reviewed `--docsAdoptionMap`, `--ciMode`, optional
+toolchain pins, and non-secret `--packageRegistries` scope routing.
+
 A valueless `megamono add app` opens the application selector in an interactive
 terminal. Add commands preview before confirmation, install only missing
 compatible framework adapters, and preserve the workspace's Nx major. Mutating
