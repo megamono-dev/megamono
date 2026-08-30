@@ -204,6 +204,93 @@ describe('projects and dependencies', () => {
     });
   });
 
+  it('maps multiple shared schemes to explicit named Nx targets', () => {
+    const record: AppleManifestRecord = {
+      manifest: 'apps/Quickzones/Quickzones.xcodeproj/project.pbxproj',
+      root: 'apps/Quickzones',
+      kind: 'project',
+      name: 'Quickzones',
+      localPaths: [],
+      application: true,
+      schemes: [
+        'Quickzones',
+        'Quickzones Mac App Store',
+        'Quickzones Mac Direct',
+        'Quickzones Performance',
+      ],
+      swiftLint: false,
+      selected: true,
+    };
+    const [[, result]] = projectsFromAppleManifests([record], '/workspace', {
+      targets: {
+        'archive-app-store': {
+          action: 'archive',
+          scheme: 'Quickzones Mac App Store',
+          configuration: 'Release',
+        },
+        'build-direct': {
+          action: 'build',
+          scheme: 'Quickzones Mac Direct',
+        },
+        'test-ios': {
+          action: 'test',
+          scheme: 'Quickzones',
+          destination: 'platform=iOS Simulator,name=iPhone 17',
+        },
+        performance: {
+          action: 'test',
+          scheme: 'Quickzones Performance',
+        },
+      },
+    });
+    const project = result.projects['apps/Quickzones'];
+    expect(Object.keys(project.targets ?? {}).sort()).toEqual([
+      'archive-app-store',
+      'build-direct',
+      'performance',
+      'test-ios',
+    ]);
+    expect(project.targets?.['archive-app-store'].options?.command).toContain(
+      "'-scheme' 'Quickzones Mac App Store'",
+    );
+    expect(project.targets?.['archive-app-store'].options?.command).toContain(
+      "'-configuration' 'Release'",
+    );
+    expect(project.targets?.['test-ios'].options?.command).toContain(
+      "'-destination' 'platform=iOS Simulator,name=iPhone 17'",
+    );
+    expect(project.metadata?.['megamono:preflight']).toMatchObject({
+      diagnostics: [],
+    });
+  });
+
+  it('reports invalid named scheme mappings without emitting partial targets', () => {
+    const record: AppleManifestRecord = {
+      manifest: 'apps/Synth/Synth.xcodeproj/project.pbxproj',
+      root: 'apps/Synth',
+      kind: 'project',
+      name: 'Synth',
+      localPaths: [],
+      application: true,
+      schemes: ['Synth Debug', 'Synth Release'],
+      swiftLint: false,
+      selected: true,
+    };
+    const [[, result]] = projectsFromAppleManifests([record], '/workspace', {
+      targets: {
+        release: { action: 'archive', scheme: 'Missing' },
+        'deploy-beta': { action: 'deploy', scheme: 'Synth Release' },
+      },
+    });
+    const project = result.projects['apps/Synth'];
+    expect(project.targets).toEqual({});
+    expect(
+      project.metadata?.['megamono:preflight'].diagnostics.map(
+        ({ code }: { code: string }) => code,
+      ),
+    ).toEqual(['apple-target', 'apple-target']);
+  });
+
   it('creates static workspace and local-package edges with source manifests', async () => {
     const { root, runner } = await fixture();
     const { records } = await collectAppleManifests(

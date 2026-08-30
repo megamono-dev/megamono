@@ -28,6 +28,19 @@ export interface ApplePluginOptions {
   deployTargetName?: string;
   fastlaneLane?: string;
   fastlanePlatform?: string;
+  targets?: Readonly<Record<string, AppleNamedTargetOptions>>;
+}
+
+export interface AppleNamedTargetOptions {
+  action: 'build' | 'test' | 'archive' | 'deploy';
+  scheme: string;
+  project?: string;
+  configuration?: string;
+  destination?: string;
+  derivedDataPath?: string;
+  fastlaneLane?: string;
+  fastlanePlatform?: string;
+  dependsOn?: readonly string[];
 }
 
 export interface SwiftPackageDump {
@@ -287,6 +300,7 @@ function schemeDiagnostic(
   if (
     record.kind === 'package' ||
     options.scheme ||
+    applicableNamedTargets(record, options).length > 0 ||
     record.schemes.length === 1
   )
     return undefined;
@@ -298,6 +312,56 @@ function schemeDiagnostic(
     manifest: record.manifest,
     message: `${reason} Build, test, and archive targets were omitted; configure scheme in nx.json.`,
   };
+}
+
+function applicableNamedTargets(
+  record: AppleManifestRecord,
+  options: ApplePluginOptions,
+): Array<readonly [string, AppleNamedTargetOptions]> {
+  return Object.entries(options.targets ?? {})
+    .filter(([, target]) =>
+      target.project
+        ? [record.name, record.root, record.manifest].includes(target.project)
+        : true,
+    )
+    .sort(([left], [right]) => left.localeCompare(right));
+}
+
+function namedTargetDiagnostics(
+  record: AppleManifestRecord,
+  options: ApplePluginOptions,
+): ApplePreflightDiagnostic[] {
+  const defaultNames = new Set([
+    options.buildTargetName ?? 'build',
+    options.testTargetName ?? 'test',
+    options.archiveTargetName ?? 'archive',
+    options.deployTargetName ?? 'deploy',
+    options.lintTargetName ?? 'lint',
+  ]);
+  return applicableNamedTargets(record, options).flatMap(([name, target]) => {
+    const messages = [
+      ...(!/^[a-z0-9][a-z0-9:_-]*$/.test(name)
+        ? [`Named Apple target ${name} is not a valid Nx target name.`]
+        : []),
+      ...(defaultNames.has(name)
+        ? [`Named Apple target ${name} collides with a default target name.`]
+        : []),
+      ...(record.schemes.length > 0 && !record.schemes.includes(target.scheme)
+        ? [
+            `Named Apple target ${name} selects unknown scheme ${target.scheme}; detected: ${record.schemes.join(', ')}.`,
+          ]
+        : []),
+      ...(target.action === 'deploy' && !target.fastlaneLane
+        ? [`Named Apple deploy target ${name} requires fastlaneLane.`]
+        : []),
+    ];
+    return messages.map((message) => ({
+      severity: 'error' as const,
+      code: 'apple-target',
+      message,
+      path: record.manifest,
+    }));
+  });
 }
 
 function preflightMetadata(
@@ -329,15 +393,27 @@ function preflightMetadata(
       executable: 'bundle',
       reason: 'the configured Fastlane deploy target',
     });
+  if (
+    applicableNamedTargets(record, options).some(
+      ([, target]) => target.action === 'deploy',
+    )
+  )
+    requiredTools.push({
+      executable: 'bundle',
+      reason: 'a configured named Fastlane deploy target',
+    });
   return {
-    diagnostics: diagnostics.map((diagnostic) => ({
-      severity: 'error',
-      code: diagnostic === scheme ? 'apple-scheme' : 'apple-manifest',
-      message: diagnostic.message,
-      path: isAbsolute(diagnostic.manifest)
-        ? workspacePath(workspaceRoot, diagnostic.manifest)
-        : normalizePath(diagnostic.manifest),
-    })),
+    diagnostics: [
+      ...diagnostics.map((diagnostic) => ({
+        severity: 'error' as const,
+        code: diagnostic === scheme ? 'apple-scheme' : 'apple-manifest',
+        message: diagnostic.message,
+        path: isAbsolute(diagnostic.manifest)
+          ? workspacePath(workspaceRoot, diagnostic.manifest)
+          : normalizePath(diagnostic.manifest),
+      })),
+      ...namedTargetDiagnostics(record, options),
+    ],
     requiredTools: requiredTools.sort((left, right) =>
       left.executable.localeCompare(right.executable),
     ),
@@ -444,26 +520,24 @@ function createXcodeTargets(
   const scheme =
     options.scheme ??
     (record.schemes.length === 1 ? record.schemes[0] : undefined);
-  if (!scheme)
-    return lintTarget ? { [options.lintTargetName ?? 'lint']: lintTarget } : {};
-
   const outputRoot = normalizePath(
     options.derivedDataPath ?? `.nx/apple/${projectName}`,
   );
-  const common = [
-    ...xcodeSourceArguments(record),
-    '-scheme',
-    scheme,
-    '-configuration',
-    options.configuration ?? 'Debug',
-    '-destination',
-    options.destination ?? 'platform=macOS',
-    '-derivedDataPath',
-    outputRoot,
-  ];
   const archivePath = normalizePath(`${outputRoot}/${projectName}.xcarchive`);
-  const targets: NonNullable<ProjectConfiguration['targets']> = {
-    [options.buildTargetName ?? 'build']: {
+  const targets: NonNullable<ProjectConfiguration['targets']> = {};
+  if (scheme) {
+    const common = [
+      ...xcodeSourceArguments(record),
+      '-scheme',
+      scheme,
+      '-configuration',
+      options.configuration ?? 'Debug',
+      '-destination',
+      options.destination ?? 'platform=macOS',
+      '-derivedDataPath',
+      outputRoot,
+    ];
+    targets[options.buildTargetName ?? 'build'] = {
       executor: 'nx:run-commands',
       cache: true,
       inputs: ['default', '^default'],
@@ -473,8 +547,8 @@ function createXcodeTargets(
         cwd: '{workspaceRoot}',
       },
       metadata: { description: `Build Xcode scheme ${scheme}.` },
-    },
-    [options.testTargetName ?? 'test']: {
+    };
+    targets[options.testTargetName ?? 'test'] = {
       executor: 'nx:run-commands',
       cache: true,
       dependsOn: [options.buildTargetName ?? 'build'],
@@ -484,8 +558,8 @@ function createXcodeTargets(
         cwd: '{workspaceRoot}',
       },
       metadata: { description: `Test Xcode scheme ${scheme}.` },
-    },
-    [options.archiveTargetName ?? 'archive']: {
+    };
+    targets[options.archiveTargetName ?? 'archive'] = {
       executor: 'nx:run-commands',
       cache: true,
       inputs: ['default', '^default'],
@@ -501,10 +575,10 @@ function createXcodeTargets(
         cwd: '{workspaceRoot}',
       },
       metadata: { description: `Archive Xcode scheme ${scheme}.` },
-    },
-  };
+    };
+  }
   if (lintTarget) targets[options.lintTargetName ?? 'lint'] = lintTarget;
-  if (options.fastlaneLane) {
+  if (scheme && options.fastlaneLane) {
     targets[options.deployTargetName ?? 'deploy'] = {
       executor: 'nx:run-commands',
       cache: false,
@@ -522,6 +596,79 @@ function createXcodeTargets(
       },
       metadata: {
         description: `Deploy with Fastlane ${options.fastlaneLane}.`,
+      },
+    };
+  }
+  for (const [targetName, target] of applicableNamedTargets(record, options)) {
+    if (
+      targets[targetName] ||
+      !/^[a-z0-9][a-z0-9:_-]*$/.test(targetName) ||
+      (record.schemes.length > 0 && !record.schemes.includes(target.scheme)) ||
+      (target.action === 'deploy' && !target.fastlaneLane)
+    )
+      continue;
+    if (target.action === 'deploy') {
+      targets[targetName] = {
+        executor: 'nx:run-commands',
+        cache: false,
+        ...(target.dependsOn ? { dependsOn: [...target.dependsOn] } : {}),
+        inputs: ['default', '^default'],
+        options: {
+          command: command([
+            'bundle',
+            'exec',
+            'fastlane',
+            ...(target.fastlanePlatform ? [target.fastlanePlatform] : []),
+            target.fastlaneLane as string,
+          ]),
+          cwd: `{workspaceRoot}/${record.root}`,
+        },
+        metadata: {
+          description: `Deploy Xcode scheme ${target.scheme} with Fastlane ${target.fastlaneLane}.`,
+        },
+      };
+      continue;
+    }
+    const namedOutput = normalizePath(
+      target.derivedDataPath ?? `${outputRoot}/${targetName}`,
+    );
+    const namedArchive = normalizePath(
+      `${namedOutput}/${projectName}-${targetName}.xcarchive`,
+    );
+    const common = [
+      ...xcodeSourceArguments(record),
+      '-scheme',
+      target.scheme,
+      '-configuration',
+      target.configuration ?? 'Debug',
+      '-destination',
+      target.destination ?? 'platform=macOS',
+      '-derivedDataPath',
+      namedOutput,
+    ];
+    targets[targetName] = {
+      executor: 'nx:run-commands',
+      cache: true,
+      ...(target.dependsOn ? { dependsOn: [...target.dependsOn] } : {}),
+      inputs: ['default', '^default'],
+      outputs: [
+        `{workspaceRoot}/${
+          target.action === 'archive' ? namedArchive : namedOutput
+        }`,
+      ],
+      options: {
+        command: command([
+          'xcodebuild',
+          ...common,
+          ...(target.action === 'archive'
+            ? ['-archivePath', namedArchive]
+            : []),
+          target.action,
+        ]),
+        cwd: '{workspaceRoot}',
+      },
+      metadata: {
+        description: `${target.action[0].toUpperCase()}${target.action.slice(1)} Xcode scheme ${target.scheme}.`,
       },
     };
   }

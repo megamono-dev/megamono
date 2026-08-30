@@ -12,6 +12,7 @@ export {
 export type {
   AppleDiagnostic,
   AppleManifestRecord,
+  AppleNamedTargetOptions,
   ApplePluginOptions,
   ApplePreflightDiagnostic,
   AppleRequiredTool,

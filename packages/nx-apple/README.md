@@ -24,6 +24,32 @@ Swift packages receive `build` and `test` targets. A `lint` target appears only 
 
 `derivedDataPath` is workspace-relative so Nx can cache and restore declared outputs correctly.
 
+Repositories with several shared schemes can map each one to an independently named Nx target. `project` is optional and may select the discovered Xcode name, root, or manifest when the plugin covers multiple projects:
+
+```json
+{
+  "plugin": "@megamono/nx-apple",
+  "options": {
+    "targets": {
+      "build-direct": {
+        "action": "build",
+        "scheme": "MyApp Mac Direct"
+      },
+      "archive-app-store": {
+        "action": "archive",
+        "scheme": "MyApp Mac App Store",
+        "configuration": "Release"
+      },
+      "test-ios": {
+        "action": "test",
+        "scheme": "MyApp",
+        "destination": "platform=iOS Simulator,name=iPhone 17"
+      }
+    }
+  }
+}
+```
+
 ## Application generator
 
 The `application` generator creates a macOS SwiftUI app, an XCTest target, and a shared scheme that the plugin immediately infers as one Nx project:
