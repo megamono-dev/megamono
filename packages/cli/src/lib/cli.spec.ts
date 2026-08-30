@@ -1046,6 +1046,146 @@ describe('@megamono/cli', () => {
     ]);
   });
 
+  it('links the complete direct-package Playstack closure from yalc', async () => {
+    const root = await workspace('pnpm');
+    const store = await mkdtemp(join(tmpdir(), 'megamono-cli-yalc-closure-'));
+    fixtures.push(store);
+    const manifests = {
+      '@playstack/cli': { name: '@playstack/cli', version: '0.1.0' },
+      '@playstack/accounts': {
+        name: '@playstack/accounts',
+        version: '0.1.0',
+        dependencies: {
+          '@playstack/auth': '0.1.0',
+          '@playstack/core': '0.1.0',
+          zod: '^4.0.0',
+        },
+      },
+      '@playstack/auth': {
+        name: '@playstack/auth',
+        version: '0.1.0',
+        dependencies: { '@playstack/core': '0.1.0' },
+        peerDependencies: { argon2: '^0.45.0' },
+        peerDependenciesMeta: { argon2: { optional: true } },
+      },
+      '@playstack/core': { name: '@playstack/core', version: '0.1.0' },
+    } as const;
+    for (const [packageName, manifest] of Object.entries(manifests)) {
+      await json(
+        join(
+          store,
+          'packages',
+          ...packageName.split('/'),
+          manifest.version,
+          'package.json',
+        ),
+        manifest,
+      );
+      if (packageName !== '@playstack/cli') {
+        await json(
+          join(root, '.yalc', ...packageName.split('/'), 'package.json'),
+          manifest,
+        );
+      }
+    }
+    const harness = io(root, (invocation) =>
+      invocation.command === 'yalc' && invocation.args[0] === 'dir'
+        ? { exitCode: 0, stdout: store }
+        : { exitCode: 0 },
+    );
+
+    expect(
+      (
+        await runMegamonoCli(
+          [
+            'init',
+            '--playstack-packages=@playstack/accounts',
+            '--local-packages=yalc',
+          ],
+          harness.value,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      harness.invocations.map(({ command, args }) => [command, args]),
+    ).toEqual([
+      ['yalc', ['dir']],
+      ['pnpm', ['exec', 'nx', 'generate', '@megamono/plugin:workspace-init']],
+      ['yalc', ['add', '@playstack/cli', '--dev', '--no-pure']],
+      ['pnpm', ['add', 'zod@^4.0.0']],
+      [
+        'yalc',
+        [
+          'add',
+          '@playstack/accounts@0.1.0',
+          '@playstack/auth@0.1.0',
+          '@playstack/core@0.1.0',
+          '--no-pure',
+        ],
+      ],
+      ['pnpm', ['install']],
+      ['pnpm', ['exec', 'playstack', 'init']],
+    ]);
+    const accounts = JSON.parse(
+      await readFile(
+        join(root, '.yalc', '@playstack', 'accounts', 'package.json'),
+        'utf8',
+      ),
+    );
+    expect(accounts.dependencies).toEqual({
+      '@playstack/auth': 'file:../auth',
+      '@playstack/core': 'file:../core',
+      zod: '^4.0.0',
+    });
+  });
+
+  it('preflights transitive direct-package yalc artifacts before init', async () => {
+    const root = await workspace('npm');
+    const store = await mkdtemp(join(tmpdir(), 'megamono-cli-yalc-missing-'));
+    fixtures.push(store);
+    for (const manifest of [
+      { name: '@playstack/cli', version: '0.1.0' },
+      {
+        name: '@playstack/accounts',
+        version: '0.1.0',
+        dependencies: { '@playstack/auth': '0.1.0' },
+      },
+    ]) {
+      await json(
+        join(
+          store,
+          'packages',
+          ...manifest.name.split('/'),
+          manifest.version,
+          'package.json',
+        ),
+        manifest,
+      );
+    }
+    const harness = io(root, (invocation) =>
+      invocation.command === 'yalc' && invocation.args[0] === 'dir'
+        ? { exitCode: 0, stdout: store }
+        : { exitCode: 0 },
+    );
+
+    expect(
+      (
+        await runMegamonoCli(
+          [
+            'init',
+            '--playstack-packages=@playstack/accounts',
+            '--local-packages=yalc',
+          ],
+          harness.value,
+        )
+      ).exitCode,
+    ).toBe(3);
+    expect(harness.invocations).toHaveLength(1);
+    expect(harness.stderr.at(-1)).toContain(
+      'no @playstack/auth version compatible with 0.1.0',
+    );
+  });
+
   it('rejects invalid Playstack package names as CLI usage errors', async () => {
     const root = await workspace('pnpm');
     const harness = io(root);

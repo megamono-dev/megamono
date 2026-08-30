@@ -85,7 +85,12 @@ Non-interactive callers must provide the comma-separated value explicitly.
 
 `--local-packages=yalc` refuses a missing CLI or explicit package before
 initialization and never substitutes registry packages. Capability package
-closures are preflighted and installed by the Playstack CLI.
+closures are preflighted and installed by the Playstack CLI. For the explicit
+`@playstack/*` escape hatch, Megamono preflights every required local dependency
+and peer before mutation, installs required third-party packages first, links
+the complete local closure, and rewrites its copied internal edges to local
+files before npm or pnpm hydrates the workspace. Existing `file:.yalc/*`
+declarations are left in place.
 
 The packed transport fixture covers npm and pnpm. When the Playstack packages
 have been published to the local yalc store, run the real cross-repository

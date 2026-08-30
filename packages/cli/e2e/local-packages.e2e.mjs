@@ -245,9 +245,16 @@ const packages = args.slice(1).filter((value) => !value.startsWith('--'));
 const dev = args.includes('--dev');
 const manifestPath = resolve(process.cwd(), 'package.json');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-for (const packageName of packages) {
+for (const specifier of packages) {
+  const versionSeparator = specifier.lastIndexOf('@');
+  const packageName = specifier.startsWith('@') && versionSeparator > 0
+    ? specifier.slice(0, versionSeparator)
+    : specifier;
+  const requestedVersion = packageName === specifier
+    ? undefined
+    : specifier.slice(versionSeparator + 1);
   const sourceRoot = join(store, 'packages', ...packageName.split('/'));
-  const version = readdirSync(sourceRoot).sort().at(-1);
+  const version = requestedVersion || readdirSync(sourceRoot).sort().at(-1);
   const source = join(sourceRoot, version);
   const target = resolve(process.cwd(), '.yalc', ...packageName.split('/'));
   cpSync(source, target, { recursive: true });
@@ -347,6 +354,23 @@ try {
       }),
     ],
   ]);
+  const yalcOnlyDirectories = new Map([
+    [
+      '@playstack/accounts',
+      await createPackage(packageRoot, {
+        name: '@playstack/accounts',
+        version: '0.1.0',
+        dependencies: { '@playstack/core': '0.1.0' },
+      }),
+    ],
+    [
+      '@playstack/core',
+      await createPackage(packageRoot, {
+        name: '@playstack/core',
+        version: '0.1.0',
+      }),
+    ],
+  ]);
   await json(
     resolve(packageDirectories.get('@megamono/plugin'), 'availability.json'),
     {
@@ -426,6 +450,13 @@ try {
       { recursive: true },
     );
   }
+  for (const [packageName, directory] of yalcOnlyDirectories) {
+    await cp(
+      directory,
+      resolve(yalcStore, 'packages', ...packageName.split('/'), '0.1.0'),
+      { recursive: true },
+    );
+  }
   const shimDirectory = await createYalcShim(resolve(temporaryRoot, 'shims'));
   const yalcEnvironment = {
     ...environment,
@@ -464,6 +495,39 @@ try {
   assert(
     (await readInvocations(pnpmWorkspace))[0].includes('--interactive=false'),
     'pnpm did not forward generator options.',
+  );
+
+  await run(
+    megamono,
+    [
+      'init',
+      '--playstack-packages=@playstack/accounts',
+      '--local-packages=yalc',
+      '--interactive=false',
+    ],
+    { cwd: pnpmWorkspace, env: yalcEnvironment },
+  );
+  const directManifest = JSON.parse(
+    await readFile(resolve(pnpmWorkspace, 'package.json'), 'utf8'),
+  );
+  assert(
+    directManifest.dependencies['@playstack/accounts']?.includes(
+      '.yalc/@playstack/accounts',
+    ) &&
+      directManifest.dependencies['@playstack/core']?.includes(
+        '.yalc/@playstack/core',
+      ),
+    'Direct yalc setup did not link the complete Playstack closure.',
+  );
+  const linkedAccounts = JSON.parse(
+    await readFile(
+      resolve(pnpmWorkspace, '.yalc/@playstack/accounts/package.json'),
+      'utf8',
+    ),
+  );
+  assert(
+    linkedAccounts.dependencies['@playstack/core'] === 'file:../core',
+    'Direct yalc setup left a registry-resolved Playstack dependency edge.',
   );
 
   const surveyWorkspace = resolve(temporaryRoot, 'survey-workspace');

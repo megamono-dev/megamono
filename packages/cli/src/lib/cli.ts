@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
-import { access, readFile, readdir } from 'node:fs/promises';
+import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
-import { dirname, join, parse, resolve } from 'node:path';
+import { dirname, join, parse, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 export type PackageManager = 'npm' | 'pnpm';
@@ -918,12 +918,293 @@ async function yalcHasPackage(
   }
 }
 
+interface YalcPackageManifest {
+  readonly name: string;
+  readonly version: string;
+  readonly dependencies?: Readonly<Record<string, string>>;
+  readonly optionalDependencies?: Readonly<Record<string, string>>;
+  readonly peerDependencies?: Readonly<Record<string, string>>;
+  readonly peerDependenciesMeta?: Readonly<
+    Record<string, { readonly optional?: boolean }>
+  >;
+}
+
+interface YalcClosurePackage {
+  readonly name: string;
+  readonly version: string;
+  readonly manifest: YalcPackageManifest;
+}
+
+interface YalcClosurePlan {
+  readonly packages: readonly YalcClosurePackage[];
+  readonly externalPackages: readonly string[];
+}
+
+function parsedVersion(
+  value: string,
+): readonly (number | string)[] | undefined {
+  const match = value.match(
+    /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/,
+  );
+  if (!match) return undefined;
+  return [
+    Number(match[1]),
+    Number(match[2]),
+    Number(match[3]),
+    ...(match[4]
+      ? match[4]
+          .split('.')
+          .map((part) => (/^\d+$/.test(part) ? Number(part) : part))
+      : []),
+  ];
+}
+
+function compareVersions(left: string, right: string): number {
+  const a = parsedVersion(left);
+  const b = parsedVersion(right);
+  if (!a || !b) return left.localeCompare(right);
+  for (let index = 0; index < 3; index += 1) {
+    const difference = Number(a[index]) - Number(b[index]);
+    if (difference !== 0) return difference;
+  }
+  const aPre = a.slice(3);
+  const bPre = b.slice(3);
+  if (aPre.length === 0 || bPre.length === 0) {
+    return aPre.length === bPre.length ? 0 : aPre.length === 0 ? 1 : -1;
+  }
+  for (let index = 0; index < Math.max(aPre.length, bPre.length); index += 1) {
+    if (aPre[index] === undefined) return -1;
+    if (bPre[index] === undefined) return 1;
+    const aPart = aPre[index];
+    const bPart = bPre[index];
+    if (aPart === bPart) continue;
+    if (typeof aPart === 'number' && typeof bPart === 'number') {
+      return aPart - bPart;
+    }
+    if (typeof aPart === 'number') return -1;
+    if (typeof bPart === 'number') return 1;
+    return String(aPart).localeCompare(String(bPart));
+  }
+  return 0;
+}
+
+function versionSatisfies(version: string, rawRange: string): boolean {
+  const range = rawRange.replace(/^workspace:/, '');
+  if (range === '*' || range === 'latest') return true;
+  if (range.startsWith('^') || range.startsWith('~')) {
+    const requested = range.slice(1);
+    const current = parsedVersion(version);
+    const minimum = parsedVersion(requested);
+    if (!current || !minimum || compareVersions(version, requested) < 0)
+      return false;
+    const [major, minor] = minimum as readonly number[];
+    if (range.startsWith('~')) {
+      return current[0] === major && current[1] === minor;
+    }
+    if (major > 0) return current[0] === major;
+    if (minor > 0) return current[0] === 0 && current[1] === minor;
+    return current[0] === 0 && current[1] === 0 && current[2] === minimum[2];
+  }
+  return version === range;
+}
+
+async function readYalcPackage(
+  store: string,
+  packageName: string,
+  range?: string,
+): Promise<YalcClosurePackage> {
+  let versions: readonly string[];
+  try {
+    versions = (await readdir(yalcPackagePath(store, packageName))).sort(
+      compareVersions,
+    );
+  } catch {
+    versions = [];
+  }
+  const version = [...versions]
+    .reverse()
+    .find((candidate) => !range || versionSatisfies(candidate, range));
+  if (!version) {
+    throw new CliError(
+      `The yalc store has no ${packageName}${range ? ` version compatible with ${range}` : ''}. Publish a compatible package before retrying.`,
+      3,
+    );
+  }
+  const manifestPath = join(
+    yalcPackagePath(store, packageName),
+    version,
+    'package.json',
+  );
+  let manifest: YalcPackageManifest;
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  } catch {
+    throw new CliError(`Invalid yalc manifest at ${manifestPath}.`, 3);
+  }
+  if (manifest.name !== packageName || manifest.version !== version) {
+    throw new CliError(
+      `The yalc manifest at ${manifestPath} does not match ${packageName}@${version}.`,
+      3,
+    );
+  }
+  return { name: packageName, version, manifest };
+}
+
+function packageEntries(
+  manifest: YalcPackageManifest,
+): readonly (readonly [string, string, boolean])[] {
+  const entries: (readonly [string, string, boolean])[] = [];
+  for (const [name, range] of Object.entries(manifest.dependencies ?? {})) {
+    entries.push([name, range, true]);
+  }
+  for (const [name, range] of Object.entries(
+    manifest.optionalDependencies ?? {},
+  )) {
+    entries.push([name, range, false]);
+  }
+  for (const [name, range] of Object.entries(manifest.peerDependencies ?? {})) {
+    entries.push([
+      name,
+      range,
+      manifest.peerDependenciesMeta?.[name]?.optional !== true,
+    ]);
+  }
+  return entries;
+}
+
+async function resolveYalcClosure(
+  store: string,
+  roots: readonly string[],
+): Promise<YalcClosurePlan> {
+  const selected = new Map<string, YalcClosurePackage>();
+  const external = new Map<string, string>();
+
+  const visit = async (
+    packageName: string,
+    range?: string,
+    required = true,
+  ): Promise<void> => {
+    const existing = selected.get(packageName);
+    if (existing) {
+      if (range && !versionSatisfies(existing.version, range)) {
+        throw new CliError(
+          `The local Playstack closure requires incompatible ${packageName} versions (${existing.version} and ${range}).`,
+          3,
+        );
+      }
+      return;
+    }
+    let artifact: YalcClosurePackage;
+    try {
+      artifact = await readYalcPackage(store, packageName, range);
+    } catch (error) {
+      if (!required) return;
+      throw error;
+    }
+    selected.set(packageName, artifact);
+    for (const [
+      dependency,
+      dependencyRange,
+      dependencyRequired,
+    ] of packageEntries(artifact.manifest)) {
+      if (dependency.startsWith('@playstack/')) {
+        await visit(dependency, dependencyRange, dependencyRequired);
+        continue;
+      }
+      if (!dependencyRequired) continue;
+      const prior = external.get(dependency);
+      if (prior && prior !== dependencyRange) {
+        throw new CliError(
+          `The local Playstack closure requires conflicting ${dependency} ranges (${prior} and ${dependencyRange}).`,
+          3,
+        );
+      }
+      external.set(dependency, dependencyRange);
+    }
+  };
+
+  for (const root of [...roots].sort()) await visit(root);
+  return {
+    packages: [...selected.values()].sort((left, right) =>
+      left.name.localeCompare(right.name),
+    ),
+    externalPackages: [...external.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, range]) => `${name}@${range}`),
+  };
+}
+
+interface WorkspaceDependencyState {
+  readonly declared: ReadonlySet<string>;
+  readonly yalc: ReadonlySet<string>;
+}
+
+async function workspaceDependencyState(
+  root: string,
+): Promise<WorkspaceDependencyState> {
+  const manifest = JSON.parse(
+    await readFile(join(root, 'package.json'), 'utf8'),
+  ) as {
+    dependencies?: Readonly<Record<string, string>>;
+    devDependencies?: Readonly<Record<string, string>>;
+    optionalDependencies?: Readonly<Record<string, string>>;
+  };
+  const entries = [
+    ...Object.entries(manifest.dependencies ?? {}),
+    ...Object.entries(manifest.devDependencies ?? {}),
+    ...Object.entries(manifest.optionalDependencies ?? {}),
+  ];
+  return {
+    declared: new Set(entries.map(([name]) => name)),
+    yalc: new Set(
+      entries
+        .filter(([, specifier]) => specifier.startsWith('file:.yalc/'))
+        .map(([name]) => name),
+    ),
+  };
+}
+
+async function rewriteYalcClosureManifests(
+  workspaceRoot: string,
+  closure: YalcClosurePlan,
+  linkedPackages: ReadonlySet<string>,
+): Promise<void> {
+  for (const artifact of closure.packages) {
+    if (!linkedPackages.has(artifact.name)) continue;
+    const directory = join(workspaceRoot, '.yalc', ...artifact.name.split('/'));
+    const path = join(directory, 'package.json');
+    const manifest = JSON.parse(await readFile(path, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    for (const section of ['dependencies', 'optionalDependencies'] as const) {
+      const dependencies = manifest[section];
+      if (
+        typeof dependencies !== 'object' ||
+        dependencies === null ||
+        Array.isArray(dependencies)
+      ) {
+        continue;
+      }
+      const rewritten = { ...(dependencies as Record<string, string>) };
+      for (const dependency of Object.keys(rewritten)) {
+        if (!linkedPackages.has(dependency)) continue;
+        const target = join(workspaceRoot, '.yalc', ...dependency.split('/'));
+        rewritten[dependency] =
+          `file:${relative(directory, target).replaceAll('\\', '/')}`;
+      }
+      manifest[section] = rewritten;
+    }
+    await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  }
+}
+
 async function preflightYalc(
   io: MegamonoCliIo,
   workspace: Workspace,
   packages: readonly string[],
-): Promise<void> {
-  if (packages.length === 0) return;
+): Promise<string | undefined> {
+  if (packages.length === 0) return undefined;
   const store = await yalcRoot(io, workspace.root);
   const missing: string[] = [];
   for (const packageName of packages) {
@@ -935,6 +1216,7 @@ async function preflightYalc(
       3,
     );
   }
+  return store;
 }
 
 async function runRequired(
@@ -943,7 +1225,13 @@ async function runRequired(
   command: string,
   args: readonly string[],
   recovery: string,
+  completed?: string[],
 ): Promise<void> {
+  const rendered = `${command} ${args.join(' ')}`;
+  const completedMessage = () =>
+    completed && completed.length > 0
+      ? ` Completed commands: ${completed.join('; ')}.`
+      : '';
   let result: CommandResult;
   try {
     result = await io.runCommand(command, args, { cwd: workspace.root });
@@ -951,26 +1239,32 @@ async function runRequired(
     throw new CliError(
       `Megamono initialization completed, but Playstack setup could not run ${command}: ${
         error instanceof Error ? error.message : String(error)
-      }. Retry: ${recovery}`,
+      }.${completedMessage()} Retry: ${recovery}`,
       3,
     );
   }
   if (result.exitCode !== 0) {
     throw new CliError(
-      `Megamono initialization completed, but Playstack setup failed. Retry: ${recovery}`,
+      `Megamono initialization completed, but Playstack setup failed.${completedMessage()} Retry: ${recovery}`,
       3,
     );
   }
+  completed?.push(rendered);
 }
 
 async function installPlaystackPackages(
   io: MegamonoCliIo,
   workspace: Workspace,
   options: InitOptions,
+  directYalcClosure?: YalcClosurePlan,
 ): Promise<void> {
+  const completed: string[] = [];
   const needsCli = !localPackageAvailable(workspace.root, '@playstack/cli');
+  const dependencyState = await workspaceDependencyState(workspace.root);
   const products = options.playstackPackages.filter(
-    (packageName) => !localPackageAvailable(workspace.root, packageName),
+    (packageName) =>
+      !localPackageAvailable(workspace.root, packageName) &&
+      !dependencyState.yalc.has(packageName),
   );
   if (!needsCli && products.length === 0) return;
 
@@ -982,15 +1276,57 @@ async function installPlaystackPackages(
         'yalc',
         ['add', '@playstack/cli', '--dev', '--no-pure'],
         'yalc add @playstack/cli --dev --no-pure',
+        completed,
       );
     }
-    if (products.length > 0) {
+    const closure = directYalcClosure;
+    const externalPackages = (closure?.externalPackages ?? []).filter(
+      (specifier) => {
+        const separator = specifier.lastIndexOf('@');
+        const name = specifier.startsWith('@')
+          ? specifier.slice(0, separator)
+          : specifier.slice(0, separator === -1 ? undefined : separator);
+        return !dependencyState.declared.has(name);
+      },
+    );
+    if (externalPackages.length > 0) {
+      const install = workspace.packageManager === 'pnpm' ? 'add' : 'install';
+      await runRequired(
+        io,
+        workspace,
+        workspace.packageManager,
+        [install, ...externalPackages],
+        `${workspace.packageManager} ${install} ${externalPackages.join(' ')}`,
+        completed,
+      );
+    }
+    const closurePackages = (closure?.packages ?? [])
+      .filter(
+        ({ name }) =>
+          !localPackageAvailable(workspace.root, name) &&
+          !dependencyState.yalc.has(name),
+      )
+      .map(({ name, version }) => `${name}@${version}`);
+    if (closurePackages.length > 0) {
       await runRequired(
         io,
         workspace,
         'yalc',
-        ['add', ...products, '--no-pure'],
-        `yalc add ${products.join(' ')} --no-pure`,
+        ['add', ...closurePackages, '--no-pure'],
+        `yalc add ${closurePackages.join(' ')} --no-pure`,
+        completed,
+      );
+    }
+    if (closure) {
+      await rewriteYalcClosureManifests(
+        workspace.root,
+        closure,
+        new Set([
+          ...dependencyState.yalc,
+          ...closurePackages.map((specifier) =>
+            specifier.slice(0, specifier.lastIndexOf('@')),
+          ),
+        ]),
       );
     }
     await runRequired(
@@ -999,6 +1335,7 @@ async function installPlaystackPackages(
       workspace.packageManager,
       ['install'],
       `${workspace.packageManager} install`,
+      completed,
     );
     return;
   }
@@ -1011,6 +1348,7 @@ async function installPlaystackPackages(
       workspace.packageManager,
       [install, '--save-dev', '@playstack/cli'],
       `${workspace.packageManager} ${install} --save-dev @playstack/cli`,
+      completed,
     );
   }
   if (products.length > 0) {
@@ -1020,6 +1358,7 @@ async function installPlaystackPackages(
       workspace.packageManager,
       [install, ...products],
       `${workspace.packageManager} ${install} ${products.join(' ')}`,
+      completed,
     );
   }
 }
@@ -1571,7 +1910,14 @@ async function runInit(
 
   const pluginAvailable = localPackageAvailable(root, '@megamono/plugin');
   const options = await resolvePlaystackPackageSelection(io, parsedOptions);
+  let directYalcClosure: YalcClosurePlan | undefined;
   if (options.localPackages === 'yalc') {
+    const dependencyState = await workspaceDependencyState(root);
+    const directRoots = options.playstackPackages.filter(
+      (packageName) =>
+        !localPackageAvailable(root, packageName) &&
+        !dependencyState.yalc.has(packageName),
+    );
     const yalcPackages = [
       ...(!pluginAvailable ? ['@megamono/plugin'] : []),
       ...(options.playstack
@@ -1579,13 +1925,24 @@ async function runInit(
             ...(!localPackageAvailable(root, '@playstack/cli')
               ? ['@playstack/cli']
               : []),
-            ...options.playstackPackages.filter(
-              (packageName) => !localPackageAvailable(root, packageName),
-            ),
+            ...directRoots,
           ]
         : []),
     ];
-    await preflightYalc(io, workspace, [...new Set(yalcPackages)].sort());
+    const store = await preflightYalc(
+      io,
+      workspace,
+      [...new Set(yalcPackages)].sort(),
+    );
+    if (directRoots.length > 0) {
+      if (!store) {
+        throw new CliError(
+          'Unable to resolve the yalc store for direct Playstack packages.',
+          3,
+        );
+      }
+      directYalcClosure = await resolveYalcClosure(store, directRoots);
+    }
   }
   if (!pluginAvailable) {
     throw new CliError(
@@ -1621,7 +1978,7 @@ async function runInit(
       return { exitCode: 0 };
     }
   } else {
-    await installPlaystackPackages(io, workspace, options);
+    await installPlaystackPackages(io, workspace, options, directYalcClosure);
     await addPlaystackCapabilities(io, workspace, options, surfaces);
   }
 
