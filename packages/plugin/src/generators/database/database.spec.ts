@@ -92,6 +92,34 @@ describe('database generator', () => {
       readJson(tree, 'packages/database-analytics/project.json').targets
         .validate.options.command,
     ).toBe('npm exec tsc -- --noEmit -p tsconfig.json');
+    expect(readJson(tree, 'playstack.json').databases.analytics).toEqual({
+      adapter: 'drizzle',
+      dialect: 'postgresql',
+      target: 'packages/database-analytics/src/schema',
+      packages: {},
+    });
+  });
+
+  it('rejects an existing Drizzle target without the supported dialect', async () => {
+    const tree = workspace();
+    writeJson(tree, 'playstack.json', {
+      databases: {
+        events: {
+          adapter: 'drizzle',
+          target: 'packages/database-events/src/schema',
+          packages: {},
+        },
+      },
+    });
+
+    await expect(
+      databaseGenerator(tree, {
+        name: 'events',
+        adapter: 'drizzle',
+        interactive: false,
+        yes: true,
+      }),
+    ).rejects.toThrow(/different adapter, dialect, or path/);
   });
 
   it('keeps dry-run mutation-free and rejects conflicting names', async () => {

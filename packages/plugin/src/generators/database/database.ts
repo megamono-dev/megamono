@@ -318,13 +318,15 @@ function assertPlaystackTarget(
   const databases =
     (playstack.databases as Record<string, unknown> | undefined) ?? {};
   const existing = databases[options.name] as
-    { adapter?: unknown; target?: unknown } | undefined;
+    { adapter?: unknown; dialect?: unknown; target?: unknown } | undefined;
   if (
     existing &&
-    (existing.adapter !== options.adapter || existing.target !== options.target)
+    (existing.adapter !== options.adapter ||
+      existing.target !== options.target ||
+      (options.adapter === 'drizzle' && existing.dialect !== 'postgresql'))
   ) {
     throw new DatabaseGeneratorError(
-      `Playstack database ${options.name} already targets a different adapter or path.`,
+      `Playstack database ${options.name} already targets a different adapter, dialect, or path.`,
       3,
       'playstack-conflict',
     );
@@ -544,13 +546,16 @@ function writeConfigurations(
   const databases =
     (playstack.databases as Record<string, unknown> | undefined) ?? {};
   const existing = databases[options.name] as
-    { adapter?: unknown; target?: unknown } | undefined;
+    { adapter?: unknown; dialect?: unknown; target?: unknown } | undefined;
   writeJson(tree, 'playstack.json', {
     ...playstack,
     databases: {
       ...databases,
       [options.name]: existing ?? {
         adapter: options.adapter,
+        ...(options.adapter === 'drizzle'
+          ? { dialect: compatibility.databaseAdapters.drizzle.provider }
+          : {}),
         target: options.target,
         packages: {},
       },

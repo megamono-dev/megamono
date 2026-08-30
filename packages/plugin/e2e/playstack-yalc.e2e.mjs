@@ -108,6 +108,7 @@ async function snapshot(fixtureRoot, manager) {
     'playstack.json',
     '.playstack/skills.json',
     '.agents/skills',
+    'packages/database-analytics',
   ];
   return Object.fromEntries(
     await Promise.all(
@@ -326,6 +327,36 @@ async function createFixture(
     );
   }
 
+  await invoke(
+    manager,
+    'nx',
+    [
+      'generate',
+      '@megamono/plugin:database',
+      '--name=analytics',
+      '--adapter=drizzle',
+      '--interactive=false',
+      '--yes',
+    ],
+    { cwd: fixtureRoot, env: environment },
+  );
+  const playstackConfig = JSON.parse(
+    await readFile(resolve(fixtureRoot, 'playstack.json'), 'utf8'),
+  );
+  assert(
+    playstackConfig.databases?.analytics?.adapter === 'drizzle' &&
+      playstackConfig.databases.analytics.dialect === 'postgresql' &&
+      playstackConfig.databases.analytics.target ===
+        'packages/database-analytics/src/schema',
+    `${manager} database generator did not emit a Playstack-compatible Drizzle target.`,
+  );
+  await invoke(
+    manager,
+    'playstack',
+    ['database', 'sync', '--database=analytics', '--dry-run'],
+    { cwd: fixtureRoot, env: environment },
+  );
+
   const manifest = JSON.parse(
     await readFile(resolve(fixtureRoot, 'package.json'), 'utf8'),
   );
@@ -352,6 +383,19 @@ async function createFixture(
     manager,
     'nx',
     ['generate', '@megamono/plugin:playstack-skills', '--interactive=false'],
+    { cwd: fixtureRoot, env: environment },
+  );
+  await invoke(
+    manager,
+    'nx',
+    [
+      'generate',
+      '@megamono/plugin:database',
+      '--name=analytics',
+      '--adapter=drizzle',
+      '--interactive=false',
+      '--yes',
+    ],
     { cwd: fixtureRoot, env: environment },
   );
   assert(
@@ -470,7 +514,7 @@ try {
   }
   succeeded = true;
   process.stdout.write(
-    'Playstack yalc e2e passed: packed Megamono generators built content, wired lint, and synchronized skills idempotently with npm and pnpm.\n',
+    'Playstack yalc e2e passed: packed Megamono generators built content, wired lint, synchronized skills, and emitted compatible database targets idempotently with npm and pnpm.\n',
   );
 } finally {
   if (succeeded || process.env.MEGAMONO_E2E_KEEP !== 'true') {

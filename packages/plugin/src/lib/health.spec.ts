@@ -944,4 +944,68 @@ describe('repository health', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('reports a missing Drizzle dialect and accepts the Playstack contract', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-health-dialect-'));
+    try {
+      await mkdir(join(root, 'packages/database-events'), { recursive: true });
+      const graph: ProjectGraph = {
+        nodes: {
+          'database-events': {
+            name: 'database-events',
+            type: 'lib',
+            data: { root: 'packages/database-events' },
+          },
+        },
+        dependencies: { 'database-events': [] },
+      };
+      const config: MegamonoConfig = {
+        ...DEFAULT_MEGAMONO_CONFIG,
+        databases: {
+          events: { adapter: 'drizzle', project: 'database-events' },
+        },
+      };
+      const writePlaystack = async (dialect?: string) =>
+        writeFile(
+          join(root, 'playstack.json'),
+          JSON.stringify({
+            databases: {
+              events: {
+                adapter: 'drizzle',
+                ...(dialect ? { dialect } : {}),
+                target: 'packages/database-events/src/schema',
+              },
+            },
+          }),
+        );
+
+      await writePlaystack();
+      const missing = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph,
+        config,
+        documents: [],
+        checks: ['spec-drift'],
+      });
+      expect(missing.findings.map(({ fingerprint }) => fingerprint)).toContain(
+        'database:dialect-disagreement:events',
+      );
+
+      await writePlaystack('postgresql');
+      const aligned = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph,
+        config,
+        documents: [],
+        checks: ['spec-drift'],
+      });
+      expect(
+        aligned.findings.filter(({ fingerprint }) =>
+          fingerprint.startsWith('database:'),
+        ),
+      ).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

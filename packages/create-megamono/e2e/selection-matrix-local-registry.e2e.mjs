@@ -262,7 +262,12 @@ async function verifyCase(root, testCase, environment, createCliPath) {
         : `${expectedRoot}/src/schema`;
     assert(
       JSON.stringify(playstack.databases?.[name]) ===
-        JSON.stringify({ adapter, target: expectedTarget, packages: {} }),
+        JSON.stringify({
+          adapter,
+          ...(adapter === 'drizzle' ? { dialect: 'postgresql' } : {}),
+          target: expectedTarget,
+          packages: {},
+        }),
       `${testCase.id}: Playstack database target is incorrect.`,
     );
     const showDatabase = nxInvocation(packageManager, [

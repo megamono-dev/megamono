@@ -82,6 +82,7 @@ interface ExpoConfig {
 
 interface PlaystackDatabaseTarget {
   readonly adapter?: unknown;
+  readonly dialect?: unknown;
   readonly target?: unknown;
 }
 
@@ -972,6 +973,22 @@ async function databaseTargetFindings(
         ],
         recommendation:
           'Choose one adapter explicitly and align both configuration files; Megamono will not translate between ORM formats.',
+      });
+    }
+
+    if (database.adapter === 'drizzle' && target.dialect !== 'postgresql') {
+      findings.push({
+        check: 'spec-drift',
+        fingerprint: `database:dialect-disagreement:${name}`,
+        state: 'constrained',
+        confidence: 'complete',
+        summary: `Database ${name} has no supported Drizzle dialect.`,
+        evidence: [
+          'megamono.json: drizzle',
+          `playstack.json: ${String(target.dialect ?? 'missing')}`,
+        ],
+        recommendation:
+          'Set the Playstack database dialect to postgresql so it matches the Megamono adapter contract.',
       });
     }
 
