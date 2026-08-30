@@ -60,7 +60,8 @@ When code runs is incidental. Build-time schema fragments and transforms are Pla
 | CI workflow generation                       | Megamono  | Structural; makes `affected` pay off           |
 | Release / versioning / yalc                  | Megamono  | Repo mechanics                                 |
 | `@playstack/auth` implementation             | Playstack | Runs in production                             |
-| Auth wiring into a repo                      | Megamono  | Generator                                      |
+| Product capability recipes and app bindings  | Playstack | Product behavior and its prerequisites         |
+| Database project/path selection              | Megamono  | Repository structure                           |
 | Chakra theme package                         | Playstack | Ships to the browser                           |
 | Where the theme lives + who consumes it      | Megamono  | Structure                                      |
 | ORM-specific database-schema artifacts       | Playstack | Define product data behavior                   |
@@ -72,41 +73,41 @@ When code runs is incidental. Build-time schema fragments and transforms are Pla
 
 It was genuinely ambiguous. The `User` / `Account` / `AccountMember` pattern is a _convention_ — which sounds like Megamono. But the Nest implementation is runtime code — which is Playstack.
 
-Resolution: **Megamono generates the wiring; Playstack provides the package it wires to.**
+Resolution: **Playstack owns product-capability recipes and runtime wiring; Megamono creates the application and database structure those recipes target.**
 
-Same for the Chakra theme, and same for database adapters. The selected adapter remains visible; neither product promises portable queries across ORMs.
+The same ownership test applies to Chakra and database adapters: Playstack owns runtime behavior and package artifacts, while Megamono owns repository placement and target configuration. The selected adapter remains visible; neither product promises portable queries across ORMs.
 
 The command sequence makes this boundary visible: `megamono add app api` creates and governs the composition root; `playstack add auth` adds product behavior within it. The optional Playstack handoff retained by `megamono init` is a compatibility shortcut that delegates to the package-owned CLI after Megamono completes. It does not make Playstack capability installation part of the `app` generator.
 
-## What Megamono actually emits
+## What Megamono may emit or delegate
 
 **Megamono depends on nothing in Playstack.** No `@megamono/*` package lists a Playstack package in its own dependencies. Generators _emit_ code that imports Playstack — a template string, not a dependency edge.
 
-That distinction is what keeps the direction rule true in practice rather than only on paper. An agent auditing this should check `package.json`, not grep for the string.
+That distinction is what keeps the direction rule true in practice rather than only on paper. An agent auditing this should check `package.json`, not grep for the string. The registry also retains reserved legacy generator records for stable diagnostics; those entries do not mean Megamono installs the corresponding package.
 
 ### The canonical list
 
-| Playstack package          | Generator                               | Purpose                                               | Required tier | V1 state                                             |
-| -------------------------- | --------------------------------------- | ----------------------------------------------------- | ------------- | ---------------------------------------------------- |
-| `@playstack/chakra`        | `@megamono/plugin:theme`                | Semantic tokens and Chakra composition API            | Free          | Gated on external fixture contract                   |
-| `@playstack/content`       | `@megamono/plugin:content-lib`          | Content transforms                                    | Free          | Available; packed npm/pnpm yalc fixture passed       |
-| `@playstack/observability` | `@megamono/plugin:integration-sentry`   | Shared Sentry conventions                             | Free          | Gated on external fixture contract                   |
-| `@playstack/extension`     | `@megamono/nx-extension`                | Auth handoff, messaging, storage                      | Free          | Gated on external fixture contract                   |
-| `@playstack/auth`          | `@megamono/plugin:playstack-auth`       | Identity runtime and database-schema artifacts        | Free          | Gated on external fixture contract                   |
-| `@playstack/accounts`      | `@megamono/plugin:playstack-accounts`   | Tenancy runtime and database-schema artifacts         | Free          | Gated on external fixture contract                   |
-| `@playstack/webhooks`      | `@megamono/plugin:playstack-webhooks`   | Webhook receipt runtime and database-schema artifacts | Free          | Gated on external fixture contract                   |
-| `@playstack/cache`         | `@megamono/plugin:playstack-cache`      | Cache provider wiring                                 | Free          | Gated on external fixture contract                   |
-| `@playstack/media`         | `@megamono/plugin:playstack-media`      | Media runtime and database-schema artifacts           | Free          | Gated on external fixture contract                   |
-| `@playstack/mail`          | `@megamono/plugin:integration-postmark` | Postmark mail driver wiring                           | Free          | Gated on external fixture contract                   |
-| `@playstack/notifications` | `@megamono/plugin:emails`               | Typed delivery request and recipient locale           | Free          | Gated on external fixture contract                   |
-| `@playstack/validation`    | `@megamono/plugin:emails`               | Runtime props validation                              | Free          | Gated on external fixture contract                   |
-| `@playstack/i18n`          | `@megamono/plugin:emails`               | Recipient-locale catalog rendering                    | Free          | Gated on external fixture contract                   |
-| `@playstack/cli`           | Playstack-wiring generators             | Package-owned artifact sync and merge                 | Free          | Available for verified skills sync; other uses gated |
-| `@playstack/lint`          | `@megamono/plugin:playstack-lint`       | Playstack-specific ESLint presets                     | Free          | Available; packed npm/pnpm yalc fixture passed       |
-| `@playstack/skills`        | `@megamono/plugin:playstack-skills`     | Playstack product guidance                            | Free          | Available; packed npm/pnpm yalc fixture passed       |
-| `@playstack/admin`         | Reserved `playstack-admin` generator    | Headless admin runtime                                | Free          | Not published in v1                                  |
-| `@playstack/admin-ui`      | `playstack-admin --ui=chakra`           | Optional compositions                                 | Pro allowed   | Not published in v1                                  |
-| `@playstack/queues`        | Reserved `playstack-queues` generator   | Queue runtime                                         | Free          | No accepted external package contract; not published |
+| Playstack package          | Generator                               | Purpose                                               | Required tier | V1 state                                              |
+| -------------------------- | --------------------------------------- | ----------------------------------------------------- | ------------- | ----------------------------------------------------- |
+| `@playstack/chakra`        | `@megamono/plugin:theme`                | Semantic tokens and Chakra composition API            | Free          | Gated on external fixture contract                    |
+| `@playstack/content`       | `@megamono/plugin:content-lib`          | Content transforms                                    | Free          | Available; packed npm/pnpm yalc fixture passed        |
+| `@playstack/observability` | `@megamono/plugin:integration-sentry`   | Shared Sentry conventions                             | Free          | Gated on external fixture contract                    |
+| `@playstack/extension`     | `@megamono/nx-extension`                | Auth handoff, messaging, storage                      | Free          | Gated on external fixture contract                    |
+| `@playstack/auth`          | Package-owned `playstack add auth`      | Identity runtime and database-schema artifacts        | Free          | Megamono legacy name reserved; delegated to Playstack |
+| `@playstack/accounts`      | Package-owned `playstack add accounts`  | Tenancy runtime and database-schema artifacts         | Free          | Megamono legacy name reserved; delegated to Playstack |
+| `@playstack/webhooks`      | Future package-owned capability         | Webhook receipt runtime and database-schema artifacts | Free          | Megamono legacy name reserved                         |
+| `@playstack/cache`         | Future package-owned capability         | Cache provider wiring                                 | Free          | Megamono legacy name reserved                         |
+| `@playstack/media`         | Future package-owned capability         | Media runtime and database-schema artifacts           | Free          | Megamono legacy name reserved                         |
+| `@playstack/mail`          | `@megamono/plugin:integration-postmark` | Postmark mail driver wiring                           | Free          | Gated on external fixture contract                    |
+| `@playstack/notifications` | `@megamono/plugin:emails`               | Typed delivery request and recipient locale           | Free          | Gated on external fixture contract                    |
+| `@playstack/validation`    | `@megamono/plugin:emails`               | Runtime props validation                              | Free          | Gated on external fixture contract                    |
+| `@playstack/i18n`          | `@megamono/plugin:emails`               | Recipient-locale catalog rendering                    | Free          | Gated on external fixture contract                    |
+| `@playstack/cli`           | Playstack-wiring generators             | Package-owned artifact sync and merge                 | Free          | Available for verified skills sync; other uses gated  |
+| `@playstack/lint`          | `@megamono/plugin:playstack-lint`       | Playstack-specific ESLint presets                     | Free          | Available; packed npm/pnpm yalc fixture passed        |
+| `@playstack/skills`        | `@megamono/plugin:playstack-skills`     | Playstack product guidance                            | Free          | Available; packed npm/pnpm yalc fixture passed        |
+| `@playstack/admin`         | Reserved `playstack-admin` generator    | Headless admin runtime                                | Free          | Not published in v1                                   |
+| `@playstack/admin-ui`      | `playstack-admin --ui=chakra`           | Optional compositions                                 | Pro allowed   | Not published in v1                                   |
+| `@playstack/queues`        | Reserved `playstack-queues` generator   | Queue runtime                                         | Free          | No accepted external package contract; not published  |
 
 ### Delegating package-owned mutations
 
@@ -118,6 +119,8 @@ Package-owned emissions remain entirely outside the Megamono artifact registry f
 
 The same rule applies to Playstack lint and skill integrations. Megamono may install `@playstack/lint`, add its preset to repository ESLint configuration, or invoke `playstack skills sync`; Playstack owns the rules, skill corpus, sync output, and update behavior. Megamono owns only the deterministic workspace plan and surrounding Nx wiring.
 
+The same rule now governs product-capability installation. A concise `--playstack-packages=auth,accounts` selection is dispatched as package-owned `playstack add` commands; Megamono does not translate those names into direct package installs or carry a private copy of their recipes. A fully qualified `@playstack/*` value remains an explicit direct-install escape hatch for compatibility testing and intentionally skips recipe behavior.
+
 A generator that requires a package-owned artifact remains outside the published collection until `playstack:45-cli` supplies the installable package, compatible command contract, stable exit classifications, and fixture used by the Megamono acceptance suite. Gated generators must not carry a private copy of the missing mutation logic.
 
 ### The tier constraint
@@ -128,7 +131,7 @@ A generator that requires a package-owned artifact remains outside the published
 
 This is a real constraint on Playstack's tiering decisions, not a preference. Moving `@playstack/content` to Plus would silently break every scaffolded content library.
 
-**This table and its packaged projection in `@megamono/plugin/emissions.json` are the enforcement point.** A generator cannot enter the published collection until its row is present, its external fixture contract passes, and every default dependency is available without authentication or payment. The packaged registry is authoritative for tooling; this table explains the same contract to maintainers.
+**This table and its packaged projection in `@megamono/plugin/emissions.json` are the enforcement point.** A generator cannot enter the published collection until its row is present, its external fixture contract passes, and every default dependency is available without authentication or payment. Reserved records preserve diagnostics and boundary intent but authorize no emission. The packaged registry is authoritative for tooling; this table explains the same contract to maintainers.
 
 ### The admin generator is the case to watch
 
@@ -151,27 +154,19 @@ Violating this couples a runtime library to a build tool, and anyone using Plays
 
 Enforce it in `megamono:check` against package manifests and the Nx graph, not by grepping template source.
 
-## Integration generators
+## Capability handoff
 
-Megamono ships generators that install and wire Playstack packages. This is a nice proof of the boundary: Playstack ships the runtime; Megamono knows how to place it in a repo.
+Megamono exposes Playstack setup only as an optional orchestration handoff:
 
-```
-npm exec nx g @megamono/plugin:playstack-auth
-npm exec nx g @megamono/plugin:playstack-accounts
-npm exec nx g @megamono/plugin:playstack-webhooks
-npm exec nx g @megamono/plugin:playstack-cache
-npm exec nx g @megamono/plugin:playstack-media
+```text
+megamono init --playstack-packages=auth,accounts
+playstack add auth
+playstack add accounts
 ```
 
-Each generator, typically:
+The first form completes Megamono initialization, installs the local Playstack CLI when needed, delegates the concise selections to the latter package-owned commands, and then runs `playstack init`. Playstack installs capability packages, creates product libraries, binds application surfaces, synchronizes package-owned artifacts, and reports its own recovery steps. Megamono does not duplicate those mutations under Nx generator names.
 
-1. Installs the package
-2. Generates the Nest feature library (`@[repo]/nest-[feature]`)
-3. Wires the module into the API app
-4. Calls `playstack database sync --database=<name>` to synchronize the package-owned artifact in its declared format
-5. Validates the materialized schema with the selected adapter's repository-local static command
-6. Prints the exact migration command but never applies or creates a database migration automatically
-7. Creates a proposed decision record noting what will be installed and why; the user accepts it explicitly
+The legacy canonical names `playstack-auth`, `playstack-accounts`, `playstack-webhooks`, `playstack-cache`, and `playstack-media` remain reserved only so old automation receives a stable boundary diagnostic. They are absent from the published Nx collection and are not an implementation backlog for Megamono.
 
 ### Database targeting
 
@@ -181,7 +176,7 @@ The adaptive-prompting rule in practice:
 - **Two or more** → ask which
 - `--database=<name>` skips the prompt for scripting
 
-Recorded in `megamono.json` so subsequent generators don't re-ask.
+Megamono records the selected target in `megamono.json` for repository-owned operations. Playstack records its artifact destination under the same logical name and owns any capability-time prompt or selection; neither tool infers a business-purpose name beyond the `primary` setup default.
 
 Megamono records the logical name, adapter, and Nx project in `megamono.json`; Playstack records the exact artifact destination under the same logical name. Prisma v1 targets require Prisma `>=6.7` native multi-file support. Drizzle targets require exported TypeScript schema modules compatible with the configured dialect. Repositories configured for a custom compose or cross-ORM translation step fail preflight rather than receiving a second composition mechanism.
 
@@ -217,7 +212,7 @@ In each case the left side is thinner than it wants to be, and holding that line
 
 - The emitted-package registry contains every `@playstack/*` import or install produced by a template, including dev-only lint and skill packages; a fixture scans generated output and fails on an unregistered package.
 - A generator with a default dependency above the Free tier is excluded from the published collection.
-- Every published Playstack generator passes against the package's external fixture contract and supported version range.
+- Every available Megamono generator that wires a Playstack package passes against the package's external fixture contract and supported version range; product capabilities remain delegated to Playstack.
 - Package-owned artifacts are produced through `@playstack/cli`; Megamono adds graph-aware target selection and Nx wiring without duplicating package merge or update logic.
 - Megamono never registers or manages a Playstack-owned emission in `.megamono/artifacts.json`.
 - No published `@playstack/*` package manifest or graph node depends on `@megamono/*`.

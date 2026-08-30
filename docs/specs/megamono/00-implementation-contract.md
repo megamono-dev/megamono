@@ -36,6 +36,7 @@ Megamono distinguishes a pinned scaffold baseline from a broader adoption range.
 | Nx core adoption                   | `>=23.1 <24`                                    | `>=17 <24`                                |
 | TypeScript                         | `>=6.0 <6.1`                                    | `>=5.2 <7`                                |
 | Apple/Cargo/Cloudflare inference   | `>=23.1 <24`                                    | `>=18 <24`                                |
+| Optional Playstack handoff         | Node `>=20`; ESLint `^9` when lint is selected  | Same per-capability gate                  |
 | Operating systems for core tooling | macOS and Linux                                 | macOS and Linux                           |
 | Windows                            | Unsupported; actionable preflight refusal       | Unsupported; actionable preflight refusal |
 
@@ -103,12 +104,12 @@ Later scoped packages enter the same restricted validation channel before public
 
 These are stable names, not a promise that every generator ships in the first collection. V1 availability is explicit:
 
-| Availability                         | Generators                                                                                                                                                              |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unconditional core                   | `workspace-init`, `workspace-eject`, `app`, `database`, `convert`, `skill-eject`, `docs-init`, `docs-spec`, `docs-decision`, `docs-plan`, `docs-research`, `docs-audit` |
-| Published after external fixtures    | `content-lib`, `content-type`, `playstack-lint`, `playstack-skills`                                                                                                     |
-| Conditional on external fixture gate | `playstack-auth`, `playstack-accounts`, `playstack-webhooks`, `playstack-cache`, `playstack-media`, `integration-sentry`, `theme`, `emails`                             |
-| Reserved for later wave              | `integration-fathom`, `integration-postmark`, `integration-stripe`, `playstack-admin`, `playstack-queues`                                                               |
+| Availability                         | Generators                                                                                                                                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unconditional core                   | `workspace-init`, `workspace-eject`, `app`, `database`, `convert`, `skill-eject`, `docs-init`, `docs-spec`, `docs-decision`, `docs-plan`, `docs-research`, `docs-audit`                                       |
+| Available                            | `content-lib`, `content-type`, `playstack-lint`, `playstack-skills`                                                                                                                                           |
+| Conditional on external fixture gate | `integration-sentry`, `theme`, `emails`                                                                                                                                                                       |
+| Reserved boundary or later wave      | `playstack-auth`, `playstack-accounts`, `playstack-webhooks`, `playstack-cache`, `playstack-media`, `integration-fathom`, `integration-postmark`, `integration-stripe`, `playstack-admin`, `playstack-queues` |
 
 The published collection is generated from this availability registry. Requesting a reserved or gated generator returns a diagnostic naming the unsatisfied gate; it never falls through to a partial implementation.
 
@@ -148,12 +149,12 @@ Every add command is interactive by default, accepts `--dry-run`, and accepts `-
 The CLI consumes three init-only options before delegation:
 
 - `--playstack` runs package-owned `playstack init` after Megamono initialization succeeds.
-- `--playstack-packages=<comma-separated names>` accepts concise product names such as `auth,accounts` or full `@playstack/*` package names, normalizes them to canonical package IDs, installs them before invoking Playstack init, and implies `--playstack`. In an interactive terminal, a bare `--playstack-packages` opens the supported-product multiselect; without an interactive prompt, omitting the value is a usage error and never blocks automation.
+- `--playstack-packages=<comma-separated names>` accepts concise capabilities such as `auth,accounts` or full `@playstack/*` package names and implies `--playstack`. Concise names delegate to `playstack add <capability> --yes`, allowing Playstack to own recipes, prerequisites, surface bindings, and transitive packages. Full package IDs are an explicit compatibility escape hatch installed directly before Playstack init; they do not invoke a capability recipe. In an interactive terminal, a bare `--playstack-packages` opens the supported-capability multiselect; without an interactive prompt, omitting the value is a usage error and never blocks automation.
 - `--local-packages=registry|yalc` selects the source for missing Megamono and Playstack packages; registry is the default.
 
-The local `@megamono/plugin` remains a prerequisite because installing it would dirty the worktree before the generator's safety check. When it is absent, the CLI exits `3` with the exact registry or yalc installation command, and the user commits that dependency change before retrying. `--local-packages=yalc` verifies all requested exact packages in the user-wide yalc store before running workspace-init, so a missing local Playstack artifact cannot leave a half-initialized repository.
+The local `@megamono/plugin` remains a prerequisite because installing it would dirty the worktree before the generator's safety check. When it is absent, the CLI exits `3` with the exact registry or yalc installation command, and the user commits that dependency change before retrying. `--local-packages=yalc` verifies the missing Megamono plugin, Playstack CLI, and any explicitly named full package in the user-wide yalc store before running workspace-init. Playstack preflights and installs the transitive closure for concise capabilities after Megamono completes; a failure there preserves the initialized repository and prints the exact capability retry command.
 
-After workspace-init succeeds, Playstack setup installs a missing `@playstack/cli` as a dev dependency and requested product packages as application dependencies from the selected source, hydrates the lockfile with the recorded package manager, and invokes the repository-local `playstack init`. Yalc mode uses `yalc add --no-pure` followed by the local package manager's install; it never substitutes a registry version. Playstack owns `playstack.json`, package detection, artifact targets, and all later sync/update behavior.
+After workspace-init succeeds, Playstack setup installs a missing `@playstack/cli` as a dev dependency, directly installs only explicitly named full package IDs, delegates each concise capability to the repository-local `playstack add`, and finally invokes `playstack init`. Yalc mode uses `yalc add --no-pure` for the CLI and explicit packages and forwards `--local-packages=yalc` to capability commands; it never substitutes a registry version. Playstack owns capability recipes, their package closure, `playstack.json`, package detection, artifact targets, and all later sync/update behavior.
 
 `--survey` remains write-free. With `--playstack`, it runs `playstack init --survey` only when the local Playstack CLI already exists; otherwise it reports the package additions and command that a real run would perform. It never installs from either source during a survey.
 
@@ -245,7 +246,7 @@ A spec is build-ready when it has `status: accepted`, no unresolved decision tha
 - A packed `@megamono/cli` installed globally delegates `megamono init --survey` through both pnpm and npm fixtures, refuses missing or ambiguous workspace prerequisites before spawn, forwards generator arguments unchanged, and propagates delegated exit status.
 - Packed npm and pnpm fixtures prove `megamono add app web` and `megamono add app api` produce the same project contracts as `create-megamono`, are stable on rerun, preview without writes, reject incompatible occupied roots, and support a second named instance.
 - Packed npm and pnpm fixtures prove named Prisma and Drizzle database projects use the shared create/add primitive, validate in their native formats, retain the canonical `type:data` graph contract, and keep Playstack artifact targets inside their selected Nx projects.
-- Registry and yalc Playstack fixtures prove init-only options are consumed rather than forwarded, requested product packages use the selected source, `@playstack/cli` remains a dev dependency, the local `playstack` binary performs configuration, survey writes nothing, and missing yalc artifacts fail before workspace-init.
+- Registry and yalc Playstack fixtures prove init-only options are consumed rather than forwarded, concise capabilities delegate to package-owned recipes, explicit packages use the selected source, `@playstack/cli` remains a dev dependency, the local `playstack` binary performs configuration, survey writes nothing, preflighted yalc artifacts fail before workspace-init, and a capability-closure failure after init reports an exact recovery command.
 - Generator fixtures prove deterministic planning, dry-run parity, idempotency, conflict handling, stable exit codes, and absence of secret values.
 - Language-plugin fixtures prove the Nx 18–23 API bridge, deterministic project discovery, and affected graph propagation.
 - Gated generators are absent from the published collection until their external contract fixtures pass.
