@@ -93,7 +93,11 @@ async function waitForRegistry(registry, child, log) {
 const nxBin = `#!/usr/bin/env node
 const { appendFileSync } = require('node:fs');
 const { resolve } = require('node:path');
-appendFileSync(resolve(process.cwd(), '.fixture-nx.jsonl'), JSON.stringify(process.argv.slice(2)) + '\\n');
+const args = process.argv.slice(2);
+appendFileSync(resolve(process.cwd(), '.fixture-nx.jsonl'), JSON.stringify(args) + '\\n');
+if (args[0] === 'show' && args[1] === 'projects' && args.includes('--json')) {
+  process.stdout.write('[]\\n');
+}
 process.exit(Number(process.env.FIXTURE_NX_EXIT || 0));
 `;
 

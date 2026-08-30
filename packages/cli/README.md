@@ -55,6 +55,25 @@ Playstack owns recipes, prerequisites, surface bindings, and transitive yalc
 resolution. Full package names such as `@playstack/cache` remain accepted as a
 compatibility escape hatch for direct package installation.
 
+For capability handoff, Megamono inspects the local Nx project graph and passes
+explicit `--web=<project-root>` and `--api=<project-root>` paths to Playstack.
+The conventional `apps/web` and `apps/api` roots win automatically; otherwise a
+sole tagged application is selected. Multiple candidates prompt in an
+interactive terminal and require an explicit path in automation:
+
+```sh
+megamono init \
+  --playstack-packages=auth \
+  --playstack-web=apps/storefront \
+  --playstack-api=apps/gateway \
+  --interactive=false \
+  --yes
+```
+
+Pass `--playstack-web=false` or `--playstack-api=false` to deliberately omit a
+surface. These routing flags are consumed by Megamono and are not forwarded to
+the workspace-init generator.
+
 In an interactive terminal, omit the value to toggle capabilities from the
 supported catalog:
 

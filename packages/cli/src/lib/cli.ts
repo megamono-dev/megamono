@@ -22,6 +22,10 @@ export interface MegamonoCliIo {
   selectPlaystackPackages?(
     choices: readonly PlaystackProductChoice[],
   ): Promise<readonly string[]>;
+  selectPlaystackSurface?(
+    kind: PlaystackSurfaceKind,
+    choices: readonly PlaystackSurfaceChoice[],
+  ): Promise<string>;
   selectAppType?(choices: readonly AppTypeChoice[]): Promise<string>;
   inputDatabaseName?(initial: string): Promise<string>;
   selectDatabaseAdapter?(
@@ -53,12 +57,23 @@ interface InitOptions {
   readonly playstack: boolean;
   readonly playstackCapabilities: readonly string[];
   readonly playstackPackages: readonly string[];
+  readonly playstackSurfaces: Readonly<
+    Record<PlaystackSurfaceKind, string | false | undefined>
+  >;
   readonly selectPlaystackPackages: boolean;
   readonly survey: boolean;
 }
 
 export interface PlaystackProductChoice {
   readonly name: string;
+  readonly message: string;
+}
+
+export type PlaystackSurfaceKind = 'web' | 'api';
+
+export interface PlaystackSurfaceChoice {
+  readonly name: string;
+  readonly root: string;
   readonly message: string;
 }
 
@@ -144,6 +159,9 @@ Init-only options:
   --playstack          Run package-owned Playstack setup after Megamono
   --playstack-packages[=<names>]
                        Select capabilities, or pass capabilities/package names
+  --playstack-web=<path|false>
+  --playstack-api=<path|false>
+                       Select or suppress adopted application surface paths
   --local-packages=registry|yalc
                        Package source for missing local packages
 
@@ -174,6 +192,7 @@ Examples:
   megamono init --survey
   megamono init --only=docs,agents --interactive=false --yes
   megamono init --playstack --playstack-packages=auth
+  megamono init --playstack-packages=auth --playstack-web=apps/storefront --playstack-api=apps/gateway
   megamono init --playstack --local-packages=yalc
 
 The workspace must contain local nx and @megamono/plugin installations.`;
@@ -390,6 +409,10 @@ function parseInitOptions(args: readonly string[]): InitOptions {
   let playstack = false;
   let playstackCapabilities: readonly string[] = [];
   let playstackPackages: readonly string[] = [];
+  const playstackSurfaces: Record<
+    PlaystackSurfaceKind,
+    string | false | undefined
+  > = { web: undefined, api: undefined };
   let selectPlaystackPackages = false;
   let passthrough = false;
   for (let index = 0; index < args.length;) {
@@ -438,6 +461,18 @@ function parseInitOptions(args: readonly string[]): InitOptions {
       index += source.consumed;
       continue;
     }
+    let matchedSurface = false;
+    for (const kind of ['web', 'api'] as const) {
+      const surface = optionValue(args, index, `--playstack-${kind}`);
+      if (!surface) continue;
+      playstackSurfaces[kind] =
+        surface.value === 'false' ? false : surface.value;
+      playstack = true;
+      index += surface.consumed;
+      matchedSurface = true;
+      break;
+    }
+    if (matchedSurface) continue;
     const products = optionValue(args, index, '--playstack-packages');
     if (products) {
       const selection = parsePlaystackPackages(products.value);
@@ -456,6 +491,7 @@ function parseInitOptions(args: readonly string[]): InitOptions {
     playstack,
     playstackCapabilities,
     playstackPackages,
+    playstackSurfaces,
     selectPlaystackPackages,
     survey: forwarded.some(
       (argument) => argument === '--survey' || argument === '--survey=true',
@@ -500,6 +536,15 @@ async function resolvePlaystackPackageSelection(
   };
 }
 
+function interactionDisabled(args: readonly string[]): boolean {
+  return args.some(
+    (argument, index) =>
+      argument === '--no-interactive' ||
+      argument === '--interactive=false' ||
+      (argument === '--interactive' && args[index + 1] === 'false'),
+  );
+}
+
 function nxInvocation(
   manager: PackageManager,
   generatorArgs: readonly string[],
@@ -527,6 +572,229 @@ function nxInvocation(
           ...generatorArgs,
         ],
       ];
+}
+
+function nxCommandInvocation(
+  manager: PackageManager,
+  args: readonly string[],
+): readonly [string, readonly string[]] {
+  return manager === 'pnpm'
+    ? ['pnpm', ['exec', 'nx', ...args]]
+    : ['npm', ['exec', 'nx', '--', ...args]];
+}
+
+interface NxSurfaceProject {
+  readonly name: string;
+  readonly root: string;
+  readonly projectType?: string;
+  readonly tags: readonly string[];
+}
+
+function normalizedSurfacePath(value: string, option: string): string {
+  const normalized = value.replace(/^\.\//, '').replace(/\/$/, '');
+  if (
+    !normalized ||
+    normalized.startsWith('/') ||
+    normalized.includes('\\') ||
+    normalized.split('/').includes('..')
+  ) {
+    throw new CliError(
+      `${option} must be a workspace-relative Nx project root or false.`,
+      2,
+    );
+  }
+  return normalized;
+}
+
+async function inspectNxSurfaceProjects(
+  io: MegamonoCliIo,
+  workspace: Workspace,
+): Promise<readonly NxSurfaceProject[]> {
+  const [listCommand, listArgs] = nxCommandInvocation(
+    workspace.packageManager,
+    ['show', 'projects', '--json'],
+  );
+  const listed = await io.runCommand(listCommand, listArgs, {
+    cwd: workspace.root,
+    capture: true,
+  });
+  if (listed.exitCode !== 0 || !listed.stdout) {
+    throw new CliError(
+      'Megamono initialization completed, but the Nx project graph could not be inspected for Playstack surfaces.',
+      3,
+    );
+  }
+  let names: unknown;
+  try {
+    names = JSON.parse(listed.stdout);
+  } catch {
+    throw new CliError(
+      'Megamono initialization completed, but Nx returned invalid project-list JSON while resolving Playstack surfaces.',
+      3,
+    );
+  }
+  if (
+    !Array.isArray(names) ||
+    !names.every((name) => typeof name === 'string')
+  ) {
+    throw new CliError(
+      'Megamono initialization completed, but Nx returned an invalid project list while resolving Playstack surfaces.',
+      3,
+    );
+  }
+
+  const projects: NxSurfaceProject[] = [];
+  for (const name of [...names].sort()) {
+    const [showCommand, showArgs] = nxCommandInvocation(
+      workspace.packageManager,
+      ['show', 'project', name, '--json'],
+    );
+    const shown = await io.runCommand(showCommand, showArgs, {
+      cwd: workspace.root,
+      capture: true,
+    });
+    if (shown.exitCode !== 0 || !shown.stdout) {
+      throw new CliError(
+        `Megamono initialization completed, but Nx project ${name} could not be inspected for Playstack surfaces.`,
+        3,
+      );
+    }
+    let project: unknown;
+    try {
+      project = JSON.parse(shown.stdout);
+    } catch {
+      throw new CliError(
+        `Megamono initialization completed, but Nx returned invalid JSON for project ${name}.`,
+        3,
+      );
+    }
+    if (
+      typeof project !== 'object' ||
+      project === null ||
+      typeof (project as { root?: unknown }).root !== 'string'
+    ) {
+      throw new CliError(
+        `Megamono initialization completed, but Nx project ${name} has no project root.`,
+        3,
+      );
+    }
+    const value = project as {
+      root: string;
+      projectType?: unknown;
+      tags?: unknown;
+    };
+    projects.push({
+      name,
+      root: normalizedSurfacePath(value.root, `Nx project ${name}`),
+      ...(typeof value.projectType === 'string'
+        ? { projectType: value.projectType }
+        : {}),
+      tags: Array.isArray(value.tags)
+        ? value.tags.filter((tag): tag is string => typeof tag === 'string')
+        : [],
+    });
+  }
+  return projects;
+}
+
+function surfaceCandidates(
+  kind: PlaystackSurfaceKind,
+  projects: readonly NxSurfaceProject[],
+): readonly NxSurfaceProject[] {
+  return projects.filter((project) => {
+    const tags = new Set(project.tags);
+    const application =
+      project.projectType === 'application' ||
+      tags.has('type:app') ||
+      project.root.startsWith('apps/');
+    if (!application || project.root === '.megamono') return false;
+    if (kind === 'web') {
+      return (
+        tags.has('platform:web') ||
+        project.root === 'apps/web' ||
+        project.root === 'apps/site'
+      );
+    }
+    return tags.has('platform:node') || project.root === 'apps/api';
+  });
+}
+
+async function resolvePlaystackSurface(
+  kind: PlaystackSurfaceKind,
+  projects: readonly NxSurfaceProject[],
+  override: string | false | undefined,
+  interactive: boolean,
+  io: MegamonoCliIo,
+): Promise<string | undefined> {
+  if (override === false) return undefined;
+  if (typeof override === 'string') {
+    const root = normalizedSurfacePath(override, `--playstack-${kind}`);
+    if (!projects.some((project) => project.root === root)) {
+      throw new CliError(
+        `--playstack-${kind}=${root} does not match an Nx project root.`,
+        3,
+      );
+    }
+    return root;
+  }
+
+  const candidates = surfaceCandidates(kind, projects);
+  if (candidates.length === 0) return undefined;
+  const conventional = candidates.find(
+    (project) => project.root === `apps/${kind}`,
+  );
+  if (conventional) return conventional.root;
+  if (candidates.length === 1) return candidates[0].root;
+
+  const choices = candidates.map((project) => ({
+    name: project.name,
+    root: project.root,
+    message: `${project.name} — ${project.root}`,
+  }));
+  if (!interactive || !io.selectPlaystackSurface) {
+    throw new CliError(
+      `Multiple Playstack ${kind} surfaces were found: ${choices
+        .map(({ root }) => root)
+        .join(', ')}. Pass --playstack-${kind}=<path> in automation.`,
+      4,
+    );
+  }
+  const selected = await io.selectPlaystackSurface(kind, choices);
+  const choice = choices.find(
+    ({ root, name }) => selected === root || selected === name,
+  );
+  if (!choice) {
+    throw new CliError(
+      `Playstack ${kind} surface selection returned an unknown project.`,
+      2,
+    );
+  }
+  return choice.root;
+}
+
+async function resolvePlaystackSurfaces(
+  io: MegamonoCliIo,
+  workspace: Workspace,
+  options: InitOptions,
+): Promise<Readonly<Partial<Record<PlaystackSurfaceKind, string>>>> {
+  if (options.playstackCapabilities.length === 0) return {};
+  const projects = await inspectNxSurfaceProjects(io, workspace);
+  const interactive = !interactionDisabled(options.generatorArgs);
+  const web = await resolvePlaystackSurface(
+    'web',
+    projects,
+    options.playstackSurfaces.web,
+    interactive,
+    io,
+  );
+  const api = await resolvePlaystackSurface(
+    'api',
+    projects,
+    options.playstackSurfaces.api,
+    interactive,
+    io,
+  );
+  return { ...(web ? { web } : {}), ...(api ? { api } : {}) };
 }
 
 interface LocalGeneratorAvailability {
@@ -760,12 +1028,15 @@ async function addPlaystackCapabilities(
   io: MegamonoCliIo,
   workspace: Workspace,
   options: InitOptions,
+  surfaces: Readonly<Partial<Record<PlaystackSurfaceKind, string>>>,
 ): Promise<void> {
   for (const capability of options.playstackCapabilities) {
     const args = [
       'add',
       capability,
       '--yes',
+      ...(surfaces.web ? [`--web=${surfaces.web}`] : []),
+      ...(surfaces.api ? [`--api=${surfaces.api}`] : []),
       ...(options.localPackages === 'yalc' ? ['--local-packages=yalc'] : []),
     ];
     const [command, commandArgs] = playstackInvocation(
@@ -1257,6 +1528,7 @@ async function runAdd(
 function renderPlaystackSurveyPlan(
   manager: PackageManager,
   options: InitOptions,
+  surfaces: Readonly<Partial<Record<PlaystackSurfaceKind, string>>>,
 ): string {
   const products = options.playstackPackages.join(' ');
   const install = manager === 'pnpm' ? 'add' : 'install';
@@ -1272,6 +1544,8 @@ function renderPlaystackSurveyPlan(
     .map(
       (capability) =>
         `playstack add ${capability} --yes${
+          surfaces.web ? ` --web=${surfaces.web}` : ''
+        }${surfaces.api ? ` --api=${surfaces.api}` : ''}${
           options.localPackages === 'yalc' ? ' --local-packages=yalc' : ''
         }`,
     )
@@ -1338,14 +1612,17 @@ async function runInit(
   }
 
   const playstackAvailable = localPackageAvailable(root, '@playstack/cli');
+  const surfaces = await resolvePlaystackSurfaces(io, workspace, options);
   if (options.survey) {
     if (!playstackAvailable) {
-      io.stdout(renderPlaystackSurveyPlan(workspace.packageManager, options));
+      io.stdout(
+        renderPlaystackSurveyPlan(workspace.packageManager, options, surfaces),
+      );
       return { exitCode: 0 };
     }
   } else {
     await installPlaystackPackages(io, workspace, options);
-    await addPlaystackCapabilities(io, workspace, options);
+    await addPlaystackCapabilities(io, workspace, options, surfaces);
   }
 
   const [playstackCommand, playstackArgs] = playstackInvocation(

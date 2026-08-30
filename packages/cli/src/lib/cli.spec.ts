@@ -102,6 +102,7 @@ function io(
     branch: 'feat/add-capability',
     defaultBranch: 'main',
   },
+  selectedPlaystackSurfaces?: Readonly<Partial<Record<'web' | 'api', string>>>,
 ): {
   readonly value: MegamonoCliIo;
   readonly invocations: Invocation[];
@@ -124,6 +125,12 @@ function io(
       ...(selectedPlaystackPackages
         ? {
             selectPlaystackPackages: async () => selectedPlaystackPackages,
+          }
+        : {}),
+      ...(selectedPlaystackSurfaces
+        ? {
+            selectPlaystackSurface: async (kind: 'web' | 'api') =>
+              selectedPlaystackSurfaces[kind] ?? '',
           }
         : {}),
       ...(selectedAppType
@@ -150,6 +157,33 @@ function io(
       },
     },
   };
+}
+
+function surfaceGraphResult(
+  invocation: Invocation,
+  projects: Readonly<
+    Record<
+      string,
+      {
+        readonly root: string;
+        readonly projectType?: string;
+        readonly tags?: readonly string[];
+      }
+    >
+  >,
+): CommandResult | undefined {
+  const showIndex = invocation.args.indexOf('show');
+  if (showIndex === -1) return undefined;
+  if (invocation.args[showIndex + 1] === 'projects') {
+    return { exitCode: 0, stdout: JSON.stringify(Object.keys(projects)) };
+  }
+  if (invocation.args[showIndex + 1] === 'project') {
+    const project = projects[invocation.args[showIndex + 2] ?? ''];
+    return project
+      ? { exitCode: 0, stdout: JSON.stringify(project) }
+      : { exitCode: 1 };
+  }
+  return undefined;
 }
 
 afterEach(async () => {
@@ -566,11 +600,24 @@ describe('@megamono/cli', () => {
         { name: packageName, version: '0.1.0' },
       );
     }
-    const harness = io(root, (invocation) =>
-      invocation.command === 'yalc' && invocation.args[0] === 'dir'
-        ? { exitCode: 0, stdout: store }
-        : { exitCode: 0 },
-    );
+    const projects = {
+      web: {
+        root: 'apps/web',
+        projectType: 'application',
+        tags: ['platform:web', 'type:app'],
+      },
+      api: {
+        root: 'apps/api',
+        projectType: 'application',
+        tags: ['platform:node', 'type:app'],
+      },
+    } as const;
+    const harness = io(root, (invocation) => {
+      if (invocation.command === 'yalc' && invocation.args[0] === 'dir') {
+        return { exitCode: 0, stdout: store };
+      }
+      return surfaceGraphResult(invocation, projects) ?? { exitCode: 0 };
+    });
 
     const result = await runMegamonoCli(
       [
@@ -603,6 +650,24 @@ describe('@megamono/cli', () => {
         capture: false,
       },
       {
+        command: 'pnpm',
+        args: ['exec', 'nx', 'show', 'projects', '--json'],
+        cwd: root,
+        capture: true,
+      },
+      {
+        command: 'pnpm',
+        args: ['exec', 'nx', 'show', 'project', 'api', '--json'],
+        cwd: root,
+        capture: true,
+      },
+      {
+        command: 'pnpm',
+        args: ['exec', 'nx', 'show', 'project', 'web', '--json'],
+        cwd: root,
+        capture: true,
+      },
+      {
         command: 'yalc',
         args: ['add', '@playstack/cli', '--dev', '--no-pure'],
         cwd: root,
@@ -622,6 +687,8 @@ describe('@megamono/cli', () => {
           'add',
           'auth',
           '--yes',
+          '--web=apps/web',
+          '--api=apps/api',
           '--local-packages=yalc',
         ],
         cwd: root,
@@ -705,7 +772,24 @@ describe('@megamono/cli', () => {
 
   it('prompts for capabilities when playstack-packages has no value', async () => {
     const root = await workspace('npm');
-    const harness = io(root, undefined, ['auth', 'billing']);
+    const projects = {
+      storefront: {
+        root: 'apps/storefront',
+        projectType: 'application',
+        tags: ['platform:web', 'type:app'],
+      },
+      gateway: {
+        root: 'apps/gateway',
+        projectType: 'application',
+        tags: ['platform:node', 'type:app'],
+      },
+    } as const;
+    const harness = io(
+      root,
+      (invocation) =>
+        surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
+      ['auth', 'billing'],
+    );
 
     const result = await runMegamonoCli(
       ['init', '--playstack-packages'],
@@ -728,19 +812,55 @@ describe('@megamono/cli', () => {
       },
       {
         command: 'npm',
+        args: ['exec', 'nx', '--', 'show', 'projects', '--json'],
+        cwd: root,
+        capture: true,
+      },
+      {
+        command: 'npm',
+        args: ['exec', 'nx', '--', 'show', 'project', 'gateway', '--json'],
+        cwd: root,
+        capture: true,
+      },
+      {
+        command: 'npm',
+        args: ['exec', 'nx', '--', 'show', 'project', 'storefront', '--json'],
+        cwd: root,
+        capture: true,
+      },
+      {
+        command: 'npm',
         args: ['install', '--save-dev', '@playstack/cli'],
         cwd: root,
         capture: false,
       },
       {
         command: 'npm',
-        args: ['exec', 'playstack', '--', 'add', 'auth', '--yes'],
+        args: [
+          'exec',
+          'playstack',
+          '--',
+          'add',
+          'auth',
+          '--yes',
+          '--web=apps/storefront',
+          '--api=apps/gateway',
+        ],
         cwd: root,
         capture: false,
       },
       {
         command: 'npm',
-        args: ['exec', 'playstack', '--', 'add', 'billing', '--yes'],
+        args: [
+          'exec',
+          'playstack',
+          '--',
+          'add',
+          'billing',
+          '--yes',
+          '--web=apps/storefront',
+          '--api=apps/gateway',
+        ],
         cwd: root,
         capture: false,
       },
@@ -751,6 +871,116 @@ describe('@megamono/cli', () => {
         capture: false,
       },
     ]);
+  });
+
+  it('requires an explicit Playstack path for ambiguous automated surfaces', async () => {
+    const root = await workspace('pnpm');
+    const projects = {
+      shop: {
+        root: 'apps/shop',
+        projectType: 'application',
+        tags: ['platform:web', 'type:app'],
+      },
+      admin: {
+        root: 'apps/admin',
+        projectType: 'application',
+        tags: ['platform:web', 'type:app'],
+      },
+    } as const;
+    const ambiguous = io(
+      root,
+      (invocation) =>
+        surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
+    );
+
+    expect(
+      (
+        await runMegamonoCli(
+          [
+            'init',
+            '--playstack-packages=content',
+            '--interactive=false',
+            '--yes',
+          ],
+          ambiguous.value,
+        )
+      ).exitCode,
+    ).toBe(4);
+    expect(ambiguous.stderr.at(-1)).toContain(
+      'Pass --playstack-web=<path> in automation',
+    );
+    expect(
+      ambiguous.invocations.some(({ args }) => args.includes('playstack')),
+    ).toBe(false);
+
+    const explicit = io(
+      root,
+      (invocation) =>
+        surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
+    );
+    expect(
+      (
+        await runMegamonoCli(
+          [
+            'init',
+            '--playstack-packages=content',
+            '--playstack-web=apps/shop',
+            '--playstack-api=false',
+            '--interactive=false',
+            '--yes',
+          ],
+          explicit.value,
+        )
+      ).exitCode,
+    ).toBe(0);
+    const delegated = explicit.invocations.find(({ args }) =>
+      args.includes('playstack'),
+    );
+    expect(delegated?.args).toContain('--web=apps/shop');
+    expect(delegated?.args).not.toContain('--api=false');
+    expect(explicit.invocations[0]?.args).not.toContain(
+      '--playstack-web=apps/shop',
+    );
+  });
+
+  it('asks which tagged application should receive an ambiguous surface', async () => {
+    const root = await workspace('npm');
+    const projects = {
+      shop: {
+        root: 'apps/shop',
+        projectType: 'application',
+        tags: ['platform:web', 'type:app'],
+      },
+      admin: {
+        root: 'apps/admin',
+        projectType: 'application',
+        tags: ['platform:web', 'type:app'],
+      },
+    } as const;
+    const harness = io(
+      root,
+      (invocation) =>
+        surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
+    );
+    const selections: string[] = [];
+
+    expect(
+      (
+        await runMegamonoCli(['init', '--playstack-packages=content'], {
+          ...harness.value,
+          selectPlaystackSurface: async (kind, choices) => {
+            selections.push(
+              `${kind}:${choices.map(({ root }) => root).join(',')}`,
+            );
+            return 'apps/admin';
+          },
+        })
+      ).exitCode,
+    ).toBe(0);
+    expect(selections).toEqual(['web:apps/admin,apps/shop']);
+    expect(
+      harness.invocations.find(({ args }) => args.includes('playstack'))?.args,
+    ).toContain('--web=apps/admin');
   });
 
   it('refuses a valueless package selector without an interactive prompt', async () => {

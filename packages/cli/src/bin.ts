@@ -130,6 +130,25 @@ const result = await runMegamonoCli(process.argv.slice(2), {
           });
           return response.products;
         },
+        selectPlaystackSurface: async (
+          kind: 'web' | 'api',
+          choices: readonly {
+            readonly name: string;
+            readonly root: string;
+            readonly message: string;
+          }[],
+        ) => {
+          const response = await prompt<{ surface: string }>({
+            type: 'select',
+            name: 'surface',
+            message: `Which ${kind} application should Playstack bind?`,
+            choices: choices.map((choice) => ({
+              name: choice.root,
+              message: choice.message,
+            })),
+          });
+          return response.surface;
+        },
       }
     : {}),
   runCommand,
