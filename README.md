@@ -48,6 +48,11 @@ npm exec -- create-megamono <name> \
   --local-packages=yalc
 ```
 
+The guided flow selects applications, a named database adapter, optional local
+services, and finally whether Springbar should configure the requested apps and
+services. Automation can provide the same decisions with `--apps`,
+`--database-adapter`, `--database-name`, `--services`, and `--service-runner`.
+
 Install both global development commands from their yalc artifacts:
 
 ```bash

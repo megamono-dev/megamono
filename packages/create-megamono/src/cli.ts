@@ -9,10 +9,17 @@ import {
   APP_IDS,
   CreateMegamonoError,
   DATABASE_ADAPTERS,
+  SERVICE_IDS,
+  SERVICE_RUNNERS,
   createMegamono,
   renderPlan,
   type CreateMegamonoInput,
 } from './lib/create-megamono.js';
+
+export interface InteractivePrompt {
+  question(message: string): Promise<string>;
+  close(): void;
+}
 
 function commaList(value: string | undefined): string[] | undefined {
   return value
@@ -32,11 +39,13 @@ function booleanValue(
   throw new CreateMegamonoError(`${label} must be true or false.`, 2);
 }
 
-async function resolveInteractive(
+export async function resolveInteractive(
   input: CreateMegamonoInput,
+  interactivePrompt?: InteractivePrompt,
 ): Promise<CreateMegamonoInput> {
   if (!input.interactive) return input;
-  const prompt = createInterface({ input: stdin, output: stdout });
+  const prompt =
+    interactivePrompt ?? createInterface({ input: stdin, output: stdout });
   try {
     const name = input.name ?? (await prompt.question('Workspace name: '));
     const apps = input.apps?.length
@@ -58,7 +67,29 @@ async function resolveInteractive(
         : (input.databaseName ??
             (await prompt.question('Database name [primary]: '))) ||
           'primary';
-    return { ...input, name, apps, databaseAdapter, databaseName };
+    const services =
+      input.services !== undefined
+        ? input.services
+        : commaList(
+            await prompt.question(
+              `Services (${SERVICE_IDS.join(', ')}; comma-separated, optional): `,
+            ),
+          );
+    const serviceRunner =
+      (input.serviceRunner ??
+        (await prompt.question(
+          `Service runner (${SERVICE_RUNNERS.join(', ')}) [none]: `,
+        ))) ||
+      'none';
+    return {
+      ...input,
+      name,
+      apps,
+      services,
+      databaseAdapter,
+      databaseName,
+      serviceRunner,
+    };
   } finally {
     prompt.close();
   }

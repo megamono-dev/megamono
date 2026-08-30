@@ -2,9 +2,66 @@ import { mkdir, mkdtemp, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { isMainModule, main } from './cli.js';
+import { isMainModule, main, resolveInteractive } from './cli.js';
 
 describe('CLI entrypoint', () => {
+  it('ends the guided flow with services and optional Springbar setup', async () => {
+    const questions: string[] = [];
+    const answers = [
+      'web, api',
+      'drizzle',
+      'events',
+      'postgres, redis',
+      'springbar',
+    ];
+    const resolved = await resolveInteractive(
+      { name: 'guided-workspace', interactive: true },
+      {
+        question: async (message) => {
+          questions.push(message);
+          return answers.shift() ?? '';
+        },
+        close: () => undefined,
+      },
+    );
+
+    expect(resolved).toMatchObject({
+      name: 'guided-workspace',
+      apps: ['web', 'api'],
+      services: ['postgres', 'redis'],
+      databaseAdapter: 'drizzle',
+      databaseName: 'events',
+      serviceRunner: 'springbar',
+    });
+    expect(questions.at(-2)).toContain('Services (postgres, redis');
+    expect(questions.at(-1)).toContain('Service runner (none, springbar)');
+  });
+
+  it('retains explicit service choices without prompting for them', async () => {
+    const questions: string[] = [];
+    const resolved = await resolveInteractive(
+      {
+        name: 'explicit-services',
+        apps: ['api'],
+        services: ['typesense'],
+        databaseAdapter: 'none',
+        serviceRunner: 'springbar',
+        interactive: true,
+      },
+      {
+        question: async (message) => {
+          questions.push(message);
+          return '';
+        },
+        close: () => undefined,
+      },
+    );
+
+    expect(resolved.services).toEqual(['typesense']);
+    expect(resolved.serviceRunner).toBe('springbar');
+    expect(questions).toEqual([]);
+  });
+
   it('recognizes an npm-style symlink to the executable module', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'create-megamono-cli-'));
     const modulePath = resolve(root, 'dist/cli.js');
