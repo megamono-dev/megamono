@@ -149,7 +149,7 @@ describe('content collection generators', () => {
     expect(config).toContain('playstackContentTransforms.extractToc');
     expect(config).toContain('playstackContentTransforms.slugify');
     expect(tree.read('packages/articles/schemas/blog-post.ts', 'utf8')).toBe(
-      `import { contentBase } from '@playstack/content/schema';
+      `import { contentBase } from '@playstack/content/zod';
 import { z } from 'zod';
 
 export const blogPostSchema = z.object({

@@ -143,7 +143,7 @@ export default defineConfig({ content: [${variables}] });
 
 function renderContentSchema(name: string): string {
   const variable = contentVariable(name);
-  return `import { contentBase } from '@playstack/content/schema';
+  return `import { contentBase } from '@playstack/content/zod';
 import { z } from 'zod';
 
 export const ${variable}Schema = z.object({
