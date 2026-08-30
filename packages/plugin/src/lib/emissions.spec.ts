@@ -56,7 +56,7 @@ describe('Playstack emission registry', () => {
     ).toBe('0.1.0-beta.1');
     expect(() =>
       compatiblePlaystackPackageVersion('theme', '@playstack/chakra'),
-    ).toThrow(/no compatible version/);
+    ).toThrow(/marks it gated/);
     expect(
       compatiblePlaystackPackageVersion('playstack-lint', '@playstack/lint'),
     ).toBe('0.1.0-beta.1');
@@ -81,5 +81,8 @@ describe('Playstack emission registry', () => {
     ]) {
       expect(getPlaystackEmission(packageName)?.availability).toBe('reserved');
     }
+    expect(() =>
+      compatiblePlaystackPackageVersion('playstack-auth', '@playstack/auth'),
+    ).toThrow(/marks it reserved/);
   });
 });

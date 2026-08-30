@@ -68,9 +68,14 @@ export function compatiblePlaystackPackageVersion(
       `${generator} emits unregistered Playstack package ${packageName}.`,
     );
   }
+  if (emission.availability !== 'available') {
+    throw new Error(
+      `${generator} cannot emit ${packageName} because the emission registry marks it ${emission.availability}.`,
+    );
+  }
   if (!emission.compatibleVersion) {
     throw new Error(
-      `${generator} is gated because ${packageName} has no compatible version.`,
+      `${generator} cannot emit ${packageName} because no compatible version is registered.`,
     );
   }
   return emission.compatibleVersion;

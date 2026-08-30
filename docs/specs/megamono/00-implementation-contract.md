@@ -113,7 +113,7 @@ These are stable names, not a promise that every generator ships in the first co
 
 The published collection is generated from this availability registry. Requesting a reserved or gated generator returns a diagnostic naming the unsatisfied gate; it never falls through to a partial implementation.
 
-`@megamono/plugin/emissions.json` is the machine-readable enforcement point for every `@playstack/*` package a generator may place in a consumer. Each record names its owning generator, dependency class, required tier, compatible version when one has passed fixtures, and current availability. Generator source and packed-output fixtures fail when they encounter an unregistered package. A null compatible version keeps the owning generator gated; generators never embed a substitute version in template code.
+`@megamono/plugin/emissions.json` is the machine-readable enforcement point for every `@playstack/*` package a generator may place in a consumer. Each record names its owning generator, dependency class, required tier, compatible version when one has passed fixtures, and current availability. Generator source and packed-output fixtures fail when they encounter an unregistered package. Only an `available` record with a compatible version authorizes emission; gated and reserved records remain non-emittable even when a version is retained for compatibility evidence. Generators never embed a substitute version in template code.
 
 ## Dedicated CLI contract
 
