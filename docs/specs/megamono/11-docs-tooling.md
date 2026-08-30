@@ -150,7 +150,7 @@ Generators own record shape at creation time, not record content afterward. Once
 
 `content-lib` scaffolds a content-level library: directory layout, `content-collections.ts` config, tsconfig path mapping for the generated import, the Nx target with `outputs` wired, and `.content-collections/` gitignored.
 
-`content-type` adds a document type to an existing lib — collection definition, content directory, schema stub.
+`content-type` adds a document type to an existing lib — collection definition, content directory, and a schema stub importing Zod from the published `@playstack/content/zod` export. Megamono never targets an unpublished or private `schema` subpath.
 
 The emitted config imports transforms from `@playstack/content` (slug, reading time, TOC, date normalization). **This is the allowed direction:** Megamono generates, Playstack provides. A generator emitting a runtime import is not a violation; the reverse — Playstack importing anything Megamono — remains prohibited (`spec-megamono-0007`).
 

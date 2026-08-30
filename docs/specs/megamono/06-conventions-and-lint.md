@@ -211,7 +211,7 @@ Repo-level config recording the choices made at scaffold time, so generators add
 }
 ```
 
-Database names are stable identifiers shared with the corresponding Playstack configuration. `megamono.json` owns the Nx project mapping; `playstack.json` owns the package-artifact target within that project. Megamono health rejects adapter disagreement or a Playstack target outside the selected project rather than guessing which configuration wins.
+Database names are stable identifiers shared with the corresponding Playstack configuration. `megamono.json` owns the Nx project mapping; `playstack.json` owns the package-artifact target within that project. A generated Playstack target omits `packages` so installed artifact packages are discovered; a repository may later add a non-empty `packages` object as an explicit allowlist. Megamono never emits an empty allowlist because Playstack correctly interprets it as no packages. Megamono health rejects adapter disagreement or a Playstack target outside the selected project rather than guessing which configuration wins.
 
 Prisma uses native multi-file schema support and requires Prisma `>=6.7`; each Playstack fragment remains an independent `.prisma` file. Drizzle uses exported TypeScript schema modules under a configured schema directory. Megamono scaffolds those native formats and never implements a cross-ORM composition or translation layer.
 

@@ -50,7 +50,7 @@ The direct generator invocation remains supported for repository-local automatio
 npm exec nx -- generate @megamono/plugin:workspace-init
 ```
 
-`megamono init` is a thin global dispatcher. It requires the repository-local plugin, selects the local package manager from the lockfile, forwards all init options, and returns the local Nx process status. It does not install dependencies or weaken the preflight below. After initialization, the same dispatcher exposes additive repository and application operations without duplicating generator behavior.
+`megamono init` is a thin global dispatcher. It requires the repository-local plugin, selects the local package manager from the lockfile, consumes only its documented Playstack routing options, forwards every other init option, and returns the local Nx process status. The core path does not install dependencies or weaken the preflight below; explicitly requested post-init Playstack setup may install the packages described in its separate handoff contract. After initialization, the same dispatcher exposes additive repository and application operations without duplicating generator behavior.
 
 ```text
 megamono add app web
@@ -71,12 +71,16 @@ Existing monorepos may adopt repository governance and then run Playstack's pack
 megamono init \
   --playstack \
   --playstack-packages=auth,accounts \
+  --playstack-web=apps/web \
+  --playstack-api=apps/api \
   --local-packages=yalc
 ```
 
-Megamono completes first. The dispatcher treats concise names as Playstack capabilities and delegates each to `playstack add <name> --yes`; Playstack therefore owns the recipe, prerequisites, application bindings, and transitive package closure. Full `@playstack/*` names are an explicit direct-package escape hatch and do not invoke capability recipes. The dispatcher then invokes the repository-local `playstack init`. It does not interpret Playstack artifacts or write `playstack.json`.
+Megamono completes first. The dispatcher treats concise names as Playstack capabilities and delegates each to `playstack add <name> --yes`; Playstack therefore owns the recipe, prerequisites, application mutations, and transitive package closure. Before delegation, Megamono reads the local Nx project graph and passes explicit `--web=<root>` and `--api=<root>` bindings. It selects conventional `apps/web` and `apps/api` roots first, otherwise selects a sole tagged application, and prompts when multiple candidates remain. Non-interactive ambiguity exits `4` and requires `--playstack-web=<root>` or `--playstack-api=<root>`; either flag accepts `false` to omit that surface deliberately. These flags are consumed by the dispatcher and never reach `workspace-init`.
 
-Registry is the default source. In yalc mode Megamono preflights the missing Playstack CLI and any explicit full package before workspace-init, then forwards `--local-packages=yalc` to every capability command. Playstack owns preflight of each capability's transitive closure. A closure or capability failure after Megamono initialization leaves the adopted repository intact and prints the exact `playstack add` retry command rather than claiming that the repository was rolled back.
+Full `@playstack/*` names are an explicit direct-package escape hatch and do not invoke capability recipes. The dispatcher then invokes the repository-local `playstack init`. It does not interpret Playstack artifacts or write `playstack.json`.
+
+Registry is the default source. In yalc mode Megamono preflights the missing Playstack CLI before workspace-init and forwards `--local-packages=yalc` to every capability command. Playstack owns preflight of each capability's transitive closure. For an explicit full package, Megamono instead preflights all required local Playstack dependencies and peers before init, installs the closure's required third-party dependencies first, links every missing local package at the validated version, converts copied internal dependency edges to local `file:` references, and then hydrates the selected package manager. Existing `file:.yalc/*` declarations are satisfied and never replaced. A closure or capability failure after Megamono initialization leaves the adopted repository intact and prints completed commands plus the exact retry rather than claiming that the repository was rolled back.
 
 When a terminal is interactive, a bare `--playstack-packages` opens a multiselect of supported Playstack capabilities. The chosen short names enter the same delegation path as explicit values. Non-interactive callers must provide a comma-separated value; a valueless selector exits `2` instead of waiting for input.
 
@@ -259,3 +263,5 @@ The completion summary lists modules adopted or skipped, paths added or modified
 - Init never moves an existing path, and docs classification never applies during init.
 - Temporary structural warnings remain visible to health until ratcheted or covered by an accepted decision.
 - A failed external command writes recovery guidance without committing, pushing, or rolling back repository-owned changes.
+- Playstack capability handoff passes explicit Nx project roots, resolves a sole candidate deterministically, and exits `4` before Playstack mutation when automated selection is ambiguous.
+- A direct-package yalc handoff validates the complete local closure before init and hydrates it under npm and pnpm without requesting an unpublished Playstack dependency from the registry.

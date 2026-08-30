@@ -119,7 +119,9 @@ Package-owned emissions remain entirely outside the Megamono artifact registry f
 
 The same rule applies to Playstack lint and skill integrations. Megamono may install `@playstack/lint`, add its preset to repository ESLint configuration, or invoke `playstack skills sync`; Playstack owns the rules, skill corpus, sync output, and update behavior. Megamono owns only the deterministic workspace plan and surrounding Nx wiring.
 
-The same rule now governs product-capability installation. A concise `--playstack-packages=auth,accounts` selection is dispatched as package-owned `playstack add` commands; Megamono does not translate those names into direct package installs or carry a private copy of their recipes. A fully qualified `@playstack/*` value remains an explicit direct-install escape hatch for compatibility testing and intentionally skips recipe behavior.
+The same rule now governs product-capability installation. A concise `--playstack-packages=auth,accounts` selection is dispatched as package-owned `playstack add` commands; Megamono does not translate those names into direct package installs or carry a private copy of their recipes. Megamono does resolve the repository information Playstack intentionally does not understand: the exact web and API project roots from the Nx graph. It passes those roots as `--web=<root>` and `--api=<root>` on each delegated command. Conventional `apps/web` and `apps/api` roots win, a sole tagged candidate is automatic, and ambiguity prompts or requires `--playstack-web|api=<root>` in automation. `false` deliberately omits a surface.
+
+A fully qualified `@playstack/*` value remains an explicit direct-install escape hatch for compatibility testing and intentionally skips recipe behavior. In registry mode the selected package manager owns ordinary dependency resolution. In yalc mode Megamono owns only this escape hatch's transport safety: before mutation it validates the complete required local Playstack dependency/peer closure, then installs required third-party packages, links every missing local artifact at its validated version, and converts copied internal dependency edges to sibling `file:` references before hydration. Concise capabilities still delegate their entire closure to Playstack.
 
 A generator that requires a package-owned artifact remains outside the published collection until `playstack:45-cli` supplies the installable package, compatible command contract, stable exit classifications, and fixture used by the Megamono acceptance suite. Gated generators must not carry a private copy of the missing mutation logic.
 
@@ -164,7 +166,7 @@ playstack add auth
 playstack add accounts
 ```
 
-The first form completes Megamono initialization, installs the local Playstack CLI when needed, delegates the concise selections to the latter package-owned commands, and then runs `playstack init`. Playstack installs capability packages, creates product libraries, binds application surfaces, synchronizes package-owned artifacts, and reports its own recovery steps. Megamono does not duplicate those mutations under Nx generator names.
+The first form completes Megamono initialization, installs the local Playstack CLI when needed, resolves the selected application roots from the local Nx graph, delegates the concise selections and explicit roots to the latter package-owned commands, and then runs `playstack init`. Playstack installs capability packages, creates product libraries, binds application surfaces, synchronizes package-owned artifacts, and reports its own recovery steps. Megamono does not duplicate those mutations under Nx generator names.
 
 The legacy canonical names `playstack-auth`, `playstack-accounts`, `playstack-webhooks`, `playstack-cache`, and `playstack-media` remain reserved only so old automation receives a stable boundary diagnostic. They are absent from the published Nx collection and are not an implementation backlog for Megamono.
 
@@ -178,7 +180,7 @@ The adaptive-prompting rule in practice:
 
 Megamono records the selected target in `megamono.json` for repository-owned operations. Playstack records its artifact destination under the same logical name and owns any capability-time prompt or selection; neither tool infers a business-purpose name beyond the `primary` setup default.
 
-Megamono records the logical name, adapter, and Nx project in `megamono.json`; Playstack records the exact artifact destination under the same logical name. Prisma v1 targets require Prisma `>=6.7` native multi-file support. Drizzle targets require exported TypeScript schema modules compatible with the configured dialect. Repositories configured for a custom compose or cross-ORM translation step fail preflight rather than receiving a second composition mechanism.
+Megamono records the logical name, adapter, and Nx project in `megamono.json`; Playstack records the exact artifact destination under the same logical name. New Playstack targets omit `packages`, so installed schema-bearing packages are discovered by default. An explicit non-empty `packages` object is a repository-authored allowlist and Megamono preserves it; an empty object must never be generated because it means “synchronize nothing.” Prisma v1 targets require Prisma `>=6.7` native multi-file support. Drizzle targets require exported TypeScript schema modules compatible with the configured dialect. Repositories configured for a custom compose or cross-ORM translation step fail preflight rather than receiving a second composition mechanism.
 
 ## The Springbar boundary (adjacent, same shape)
 
@@ -214,8 +216,10 @@ In each case the left side is thinner than it wants to be, and holding that line
 - A generator with a default dependency above the Free tier is excluded from the published collection.
 - Every available Megamono generator that wires a Playstack package passes against the package's external fixture contract and supported version range; product capabilities remain delegated to Playstack.
 - Package-owned artifacts are produced through `@playstack/cli`; Megamono adds graph-aware target selection and Nx wiring without duplicating package merge or update logic.
+- Capability handoff passes explicit Nx-resolved surface roots, prompts on ambiguity, and requires the corresponding path flag in automation rather than guessing.
+- Direct-package yalc fixtures fail on any registry fallback and prove every required local Playstack edge is linked before package-manager hydration.
 - Megamono never registers or manages a Playstack-owned emission in `.megamono/artifacts.json`.
 - No published `@playstack/*` package manifest or graph node depends on `@megamono/*`.
-- Database-aware generators are idempotent, select or require a compatible named target deterministically, validate only through the configured adapter's static contract, and never connect to a database.
+- Database-aware generators are idempotent, select or require a compatible named target deterministically, omit package allowlists for discovery by default, validate only through the configured adapter's static contract, and never connect to a database.
 - Springbar selection performs the MCP handoff after successful workspace creation, while Megamono never writes Springbar configuration directly; handoff failure is non-fatal and retryable.
 - The reserved queues and admin generators are absent from the v1 generator collection.
