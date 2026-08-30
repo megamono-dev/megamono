@@ -15,6 +15,11 @@
       "description": "Workspace-relative Content Collections configuration path.",
       "default": "content-collections.ts"
     },
+    "outputDir": {
+      "type": "string",
+      "description": "Workspace-relative Content Collections output directory.",
+      "default": ".content-collections"
+    },
     "docsRoot": {
       "type": "string",
       "description": "Override the configured documentation root."

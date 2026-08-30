@@ -53,6 +53,73 @@ describe('workspace-init generator', () => {
     ).toEqual(before);
   });
 
+  it('creates a separate repository-doc loader beside an existing app loader', async () => {
+    tree.write('apps/site/content-collections.ts', 'export default {};\n');
+    tree.write(
+      'tsconfig.base.json',
+      JSON.stringify({
+        compilerOptions: {
+          paths: {
+            'content-collections': ['apps/site/.content-collections/generated'],
+          },
+        },
+      }),
+    );
+    await workspaceInitGenerator(tree, {
+      only: 'docs',
+      yes: true,
+      bootstrap: true,
+      docsLoader: '.megamono/content-collections.ts',
+      docsModule: 'megamono-docs',
+      docsOutput: '.megamono/content-collections',
+    });
+
+    expect(tree.read('apps/site/content-collections.ts', 'utf8')).toBe(
+      'export default {};\n',
+    );
+    expect(tree.exists('.megamono/content-collections.ts')).toBe(true);
+    expect(readJson(tree, 'tsconfig.base.json').compilerOptions.paths).toEqual(
+      expect.objectContaining({
+        'content-collections': ['apps/site/.content-collections/generated'],
+        'megamono-docs': ['./.megamono/content-collections/index.js'],
+        'megamono-docs/*': ['./.megamono/content-collections/*.js'],
+      }),
+    );
+    expect(
+      readProjectConfiguration(tree, 'megamono-docs').targets?.validate,
+    ).toMatchObject({
+      options: {
+        contentConfig: '.megamono/content-collections.ts',
+        outputDir: '.megamono/content-collections',
+      },
+    });
+    expect(readJson(tree, 'megamono.json').docs).toMatchObject({
+      loader: '.megamono/content-collections.ts',
+      module: 'megamono-docs',
+      output: '.megamono/content-collections',
+      loaderMode: 'create',
+    });
+  });
+
+  it('retains an adopted compatible docs loader as repository-owned', async () => {
+    const loader = `const repoDocs = { name: 'repoDocs' };\nconst archivedDocs = { name: 'archivedDocs' };\nexport default { repoDocs, archivedDocs };\n`;
+    tree.write('apps/site/content-collections.ts', loader);
+    await workspaceInitGenerator(tree, {
+      only: 'docs',
+      yes: true,
+      bootstrap: true,
+      docsLoader: 'apps/site/content-collections.ts',
+      docsLoaderMode: 'adopt',
+    });
+
+    expect(tree.read('apps/site/content-collections.ts', 'utf8')).toBe(loader);
+    expect(
+      readJson(tree, '.megamono/artifacts.json').artifacts.some(
+        (artifact: { id: string }) => artifact.id === 'docs.loader',
+      ),
+    ).toBe(false);
+  });
+
   it('should run successfully', async () => {
     await workspaceInitGenerator(tree, options);
     const config = readProjectConfiguration(tree, 'megamono');

@@ -1,7 +1,10 @@
 import { logger, type PromiseExecutor } from '@nx/devkit';
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { readMegamonoConfig } from '../../lib/config';
+import {
+  isSafeWorkspaceRelativePath,
+  readMegamonoConfig,
+} from '../../lib/config';
 import { formatDiagnostic, hasErrors } from '../../lib/diagnostics';
 import {
   collectPreviousDocumentSources,
@@ -82,10 +85,19 @@ const runExecutor: PromiseExecutor<DocsValidateExecutorSchema> = async (
   context,
 ) => {
   try {
+    const contentConfig = options.contentConfig ?? 'content-collections.ts';
+    const outputDir = options.outputDir ?? '.content-collections';
+    if (
+      !isSafeWorkspaceRelativePath(contentConfig) ||
+      !isSafeWorkspaceRelativePath(outputDir)
+    )
+      throw new Error(
+        'contentConfig and outputDir must be safe workspace-relative paths.',
+      );
     const { createBuilder } = await loadContentCollections();
-    const outputDirectory = resolve(context.root, '.content-collections');
+    const outputDirectory = resolve(context.root, outputDir);
     const builder = await createBuilder(
-      resolve(context.root, options.contentConfig ?? 'content-collections.ts'),
+      resolve(context.root, contentConfig),
       {
         configName: 'content-collections',
         outputDir: outputDirectory,

@@ -13,6 +13,10 @@ export interface WorkspaceInitGeneratorSchema {
   readonly serviceRequirements?: string;
   readonly packageManager?: 'pnpm' | 'npm';
   readonly docsRoot?: string;
+  readonly docsLoader?: string;
+  readonly docsModule?: string;
+  readonly docsOutput?: string;
+  readonly docsLoaderMode?: 'create' | 'adopt';
   readonly defaultScope?: string;
   readonly defaultPlatform?:
     'web' | 'node' | 'worker' | 'apple' | 'rust' | 'php' | 'extension';

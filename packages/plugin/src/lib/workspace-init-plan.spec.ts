@@ -286,9 +286,64 @@ describe('workspace init survey and plan', () => {
     const plan = createWorkspaceInitPlan(tree, { only: 'ci,docs' });
 
     expect(plan.conflicts).toEqual([
-      'content-collections.ts is occupied by a repository-owned configuration.',
+      'content-collections.ts is occupied by a repository-owned configuration. Select it with --docsLoaderMode=adopt when compatible, or choose a separate --docsLoader, --docsModule, and --docsOutput.',
       '.github/workflows/megamono-ci.yml is occupied without Megamono ownership metadata.',
     ]);
+  });
+
+  it('detects nested Content Collections and plans a collision-free separate loader', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      'apps/site/content-collections.ts',
+      `export default { existing: true };\n`,
+    );
+    tree.write(
+      'tsconfig.base.json',
+      JSON.stringify({
+        compilerOptions: {
+          paths: {
+            'content-collections': ['apps/site/.content-collections/generated'],
+          },
+        },
+      }),
+    );
+    expect(surveyWorkspaceInit(tree).existing.contentCollections).toEqual([
+      'apps/site/content-collections.ts',
+    ]);
+
+    const plan = createWorkspaceInitPlan(tree, {
+      only: 'docs',
+      docsLoader: '.megamono/content-collections.ts',
+      docsModule: 'megamono-docs',
+      docsOutput: '.megamono/content-collections',
+    });
+    expect(plan.conflicts).toEqual([]);
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          target: '.megamono/content-collections.ts',
+          action: 'add',
+        }),
+        expect.objectContaining({
+          target: 'tsconfig.base.json#compilerOptions.paths.megamono-docs',
+        }),
+      ]),
+    );
+  });
+
+  it('adopts only an explicitly compatible repository docs loader', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      'apps/site/content-collections.ts',
+      `const repoDocs = { name: 'repoDocs' };\nconst archivedDocs = { name: 'archivedDocs' };\nexport default { repoDocs, archivedDocs };\n`,
+    );
+    expect(
+      createWorkspaceInitPlan(tree, {
+        only: 'docs',
+        docsLoader: 'apps/site/content-collections.ts',
+        docsLoaderMode: 'adopt',
+      }).conflicts,
+    ).toEqual([]);
   });
 
   it('does not report current or ejected registered artifacts as conflicts', () => {

@@ -268,6 +268,23 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 3650
+        },
+        "loader": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+        },
+        "module": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._/-]*$"
+        },
+        "output": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+        },
+        "loaderMode": {
+          "enum": ["create", "adopt"]
         }
       }
     },

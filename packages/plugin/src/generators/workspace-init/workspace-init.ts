@@ -46,6 +46,7 @@ import {
   renderWorkspaceInitCompletion,
   renderWorkspaceInitPlan,
   renderWorkspaceInitSurvey,
+  resolveWorkspaceDocsContract,
   surveyWorkspaceInit,
 } from '../../lib/workspace-init-plan';
 import {
@@ -1098,7 +1099,12 @@ function parseServiceRequirements(
   return requirements as Record<string, string>;
 }
 
-function docsProjectConfiguration(docsRoot: string, includeHealth: boolean) {
+function docsProjectConfiguration(
+  docsRoot: string,
+  includeHealth: boolean,
+  docsLoader = 'content-collections.ts',
+  docsOutput = '.content-collections',
+) {
   return {
     root: docsRoot,
     projectType: 'library' as const,
@@ -1109,10 +1115,11 @@ function docsProjectConfiguration(docsRoot: string, includeHealth: boolean) {
         cache: false,
         inputs: [
           '{workspaceRoot}/megamono.json',
-          '{workspaceRoot}/content-collections.ts',
+          `{workspaceRoot}/${docsLoader}`,
           `{workspaceRoot}/${docsRoot}/**/*.md`,
         ],
-        outputs: ['{workspaceRoot}/.content-collections'],
+        outputs: [`{workspaceRoot}/${docsOutput}`],
+        options: { contentConfig: docsLoader, outputDir: docsOutput },
       },
       index: { executor: '@megamono/plugin:docs-index', cache: false },
       archive: { executor: '@megamono/plugin:docs-archive', cache: false },
@@ -1307,7 +1314,8 @@ export async function workspaceInitGenerator(
   const serviceRequirements = parseServiceRequirements(
     options.serviceRequirements,
   );
-  const docsRoot = existingConfig?.docs.root ?? options.docsRoot ?? 'docs';
+  const docsContract = resolveWorkspaceDocsContract(tree, options);
+  const docsRoot = docsContract.root;
   const docsStructureArtifacts = [
     ['docs.structure.specs', `${docsRoot}/specs/.gitkeep`],
     ['docs.structure.plans', `${docsRoot}/plans/.gitkeep`],
@@ -1332,7 +1340,8 @@ export async function workspaceInitGenerator(
     config: !tree.exists('megamono.json'),
     project: !tree.exists('.megamono/project.json'),
     docsProject: !tree.exists(`${docsRoot}/project.json`),
-    docsLoader: !tree.exists('content-collections.ts'),
+    docsLoader:
+      docsContract.loaderMode === 'create' && !tree.exists(docsContract.loader),
     docsIndex: !tree.exists(`${docsRoot}/INDEX.md`),
     docsArchiveIndex: !tree.exists(`${docsRoot}/archives/INDEX.md`),
     design: !tree.exists(`${docsRoot}/DESIGN.md`),
@@ -1355,10 +1364,11 @@ export async function workspaceInitGenerator(
   if (
     !existingConfig &&
     modules.has('docs') &&
-    tree.exists('content-collections.ts')
+    docsContract.loaderMode === 'create' &&
+    tree.exists(docsContract.loader)
   ) {
     throw new Error(
-      'content-collections.ts already exists. Merge the repository-document collections before running workspace-init.',
+      `${docsContract.loader} already exists. Adopt a compatible loader or select separate docs loader/module/output paths before running workspace-init.`,
     );
   }
   for (const [module, path] of [
@@ -1578,13 +1588,23 @@ export async function workspaceInitGenerator(
       updateProjectConfiguration(
         tree,
         'megamono-docs',
-        docsProjectConfiguration(docsRoot, modules.has('health')),
+        docsProjectConfiguration(
+          docsRoot,
+          modules.has('health'),
+          docsContract.loader,
+          docsContract.output,
+        ),
       );
     } else {
       addProjectConfiguration(
         tree,
         'megamono-docs',
-        docsProjectConfiguration(docsRoot, modules.has('health')),
+        docsProjectConfiguration(
+          docsRoot,
+          modules.has('health'),
+          docsContract.loader,
+          docsContract.output,
+        ),
       );
     }
   } else if (modules.has('docs') && artifactEntry(tree, 'docs.project')) {
@@ -1693,6 +1713,10 @@ export async function workspaceInitGenerator(
     docs: {
       ...(existingConfig?.docs ?? DEFAULT_MEGAMONO_CONFIG.docs),
       root: docsRoot,
+      loader: docsContract.loader,
+      module: docsContract.module,
+      output: docsContract.output,
+      loaderMode: docsContract.loaderMode,
     },
     adoption: {
       ...(existingConfig?.adoption ?? DEFAULT_MEGAMONO_CONFIG.adoption),
@@ -1784,17 +1808,18 @@ export async function workspaceInitGenerator(
       ? wireEslintConfig(tree)
       : { imports: false, rules: false };
   const docsLoaderTemplate = renderContentCollectionsConfig(docsRoot);
-  const docsLoaderCanUpdate = modules.has('docs')
-    ? applyManagedFileTemplate(
-        tree,
-        'docs.loader',
-        'content-collections.ts',
-        docsLoaderTemplate,
-        planConfirmed,
-      )
-    : false;
+  const docsLoaderCanUpdate =
+    modules.has('docs') && docsContract.loaderMode === 'create'
+      ? applyManagedFileTemplate(
+          tree,
+          'docs.loader',
+          docsContract.loader,
+          docsLoaderTemplate,
+          planConfirmed,
+        )
+      : false;
   const ignored = [
-    ...(modules.has('docs') ? ['.content-collections/'] : []),
+    ...(modules.has('docs') ? [`${docsContract.output}/`] : []),
     '.megamono/graph.json',
     ...(modules.has('health') ? ['.megamono/health.json'] : []),
     ...(configuredReleaseProjects.length > 0 ? ['.yalc/', 'yalc.lock'] : []),
@@ -1816,13 +1841,16 @@ export async function workspaceInitGenerator(
     IGNORE_SECTION_START,
     IGNORE_SECTION_END,
   );
-  if (modules.has('docs'))
-    updateJson(tree, 'tsconfig.base.json', (value) => {
+  if (modules.has('docs')) {
+    const docsTsconfig = tree.exists('tsconfig.base.json')
+      ? 'tsconfig.base.json'
+      : 'tsconfig.json';
+    updateJson(tree, docsTsconfig, (value) => {
       const compilerOptions = value.compilerOptions ?? {};
       const paths = compilerOptions.paths ?? {};
       const generatedPaths = {
-        'content-collections': ['./.content-collections/index.js'],
-        'content-collections/*': ['./.content-collections/*.js'],
+        [docsContract.module]: [`./${docsContract.output}/index.js`],
+        [`${docsContract.module}/*`]: [`./${docsContract.output}/*.js`],
       };
       for (const [name, mapping] of Object.entries(generatedPaths)) {
         const current = paths[name];
@@ -1840,6 +1868,7 @@ export async function workspaceInitGenerator(
         },
       };
     });
+  }
   const files: Readonly<Record<string, string>> = {
     ...(modules.has('docs')
       ? {
@@ -2137,20 +2166,22 @@ export async function workspaceInitGenerator(
       },
       pluginVersion,
     );
-    registerFileArtifact(
-      tree,
-      {
-        id: 'docs.loader',
-        module: 'docs',
-        mode: 'managed',
-        target: 'content-collections.ts',
-        ejectable: true,
-        templateContent: docsLoaderTemplate,
-        claimExisting: created.docsLoader,
-        allowManagedUpdate: docsLoaderCanUpdate,
-      },
-      pluginVersion,
-    );
+    if (docsContract.loaderMode === 'create') {
+      registerFileArtifact(
+        tree,
+        {
+          id: 'docs.loader',
+          module: 'docs',
+          mode: 'managed',
+          target: docsContract.loader,
+          ejectable: true,
+          templateContent: docsLoaderTemplate,
+          claimExisting: created.docsLoader,
+          allowManagedUpdate: docsLoaderCanUpdate,
+        },
+        pluginVersion,
+      );
+    }
     for (const [id, target, wasCreated] of [
       ['docs.index', `${docsRoot}/INDEX.md`, created.docsIndex],
       [

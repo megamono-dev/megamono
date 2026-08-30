@@ -59,6 +59,7 @@ export {
   renderWorkspaceInitPlan,
   renderWorkspaceInitCompletion,
   renderWorkspaceInitSurvey,
+  resolveWorkspaceDocsContract,
   surveyWorkspaceInit,
   type WorkspaceInitErrorKind,
   type WorkspaceInitModule,
@@ -69,6 +70,7 @@ export {
   type WorkspaceInitReduction,
   type WorkspaceInitSurvey,
   type WorkspaceInitSurveyProject,
+  type WorkspaceDocsContract,
 } from './lib/workspace-init-plan';
 export {
   PROJECT_ADOPTION_PLATFORMS,

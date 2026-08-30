@@ -279,9 +279,31 @@ export const megamonoConfigSchema = z
           })
           .default('docs'),
         reportRetentionDays: z.number().int().min(1).max(3650).default(84),
+        loader: z
+          .string()
+          .min(1)
+          .refine(isSafeWorkspaceRelativePath)
+          .default('content-collections.ts'),
+        module: z
+          .string()
+          .regex(/^[a-z0-9][a-z0-9._/-]*$/)
+          .default('content-collections'),
+        output: z
+          .string()
+          .min(1)
+          .refine(isSafeWorkspaceRelativePath)
+          .default('.content-collections'),
+        loaderMode: z.enum(['create', 'adopt']).default('create'),
       })
       .strict()
-      .default({ root: 'docs', reportRetentionDays: 84 }),
+      .default({
+        root: 'docs',
+        reportRetentionDays: 84,
+        loader: 'content-collections.ts',
+        module: 'content-collections',
+        output: '.content-collections',
+        loaderMode: 'create',
+      }),
     health: z
       .object({
         cadence: z.enum(['disabled', 'weekly', 'daily']).default('weekly'),
@@ -408,7 +430,14 @@ export const DEFAULT_MEGAMONO_CONFIG: MegamonoConfig =
     platforms: [],
     ports: {},
     topics: { extend: [] },
-    docs: { root: 'docs', reportRetentionDays: 84 },
+    docs: {
+      root: 'docs',
+      reportRetentionDays: 84,
+      loader: 'content-collections.ts',
+      module: 'content-collections',
+      output: '.content-collections',
+      loaderMode: 'create',
+    },
     health: {
       cadence: 'weekly',
       stalePlanDays: 30,

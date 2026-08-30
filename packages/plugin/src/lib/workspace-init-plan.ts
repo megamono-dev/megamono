@@ -154,6 +154,10 @@ export interface WorkspaceInitPlan {
 export interface WorkspaceInitPlanOptions {
   readonly only?: string | readonly WorkspaceInitModule[];
   readonly docsRoot?: string;
+  readonly docsLoader?: string;
+  readonly docsModule?: string;
+  readonly docsOutput?: string;
+  readonly docsLoaderMode?: 'create' | 'adopt';
   readonly defaultScope?: string;
   readonly defaultPlatform?: string;
   readonly adoptionMap?: string;
@@ -161,6 +165,70 @@ export interface WorkspaceInitPlanOptions {
   readonly toolchainNode?: string;
   readonly yes?: boolean;
   readonly packageManager?: 'pnpm' | 'npm';
+}
+
+export interface WorkspaceDocsContract {
+  readonly root: string;
+  readonly loader: string;
+  readonly module: string;
+  readonly output: string;
+  readonly loaderMode: 'create' | 'adopt';
+}
+
+export function resolveWorkspaceDocsContract(
+  tree: Tree,
+  options: Pick<
+    WorkspaceInitPlanOptions,
+    'docsRoot' | 'docsLoader' | 'docsModule' | 'docsOutput' | 'docsLoaderMode'
+  > = {},
+): WorkspaceDocsContract {
+  const configured = readJsonObject(tree, 'megamono.json').docs as
+    Record<string, unknown> | undefined;
+  const contract = {
+    root:
+      options.docsRoot ??
+      (typeof configured?.root === 'string' ? configured.root : 'docs'),
+    loader:
+      options.docsLoader ??
+      (typeof configured?.loader === 'string'
+        ? configured.loader
+        : 'content-collections.ts'),
+    module:
+      options.docsModule ??
+      (typeof configured?.module === 'string'
+        ? configured.module
+        : 'content-collections'),
+    output:
+      options.docsOutput ??
+      (typeof configured?.output === 'string'
+        ? configured.output
+        : '.content-collections'),
+    loaderMode:
+      options.docsLoaderMode ??
+      (configured?.loaderMode === 'adopt' ? 'adopt' : 'create'),
+  } as const;
+  for (const [name, value] of [
+    ['docsRoot', contract.root],
+    ['docsLoader', contract.loader],
+    ['docsOutput', contract.output],
+  ] as const) {
+    if (
+      !value ||
+      value.startsWith('/') ||
+      value.includes('\\') ||
+      value.split('/').includes('..')
+    )
+      throw new WorkspaceInitError(
+        'options',
+        `${name} must be a safe workspace-relative path.`,
+      );
+  }
+  if (!/^[a-z0-9][a-z0-9._/-]*$/.test(contract.module))
+    throw new WorkspaceInitError(
+      'options',
+      'docsModule is not a valid import alias.',
+    );
+  return contract;
 }
 
 function compare(left: string, right: string): number {
@@ -495,10 +563,9 @@ export function surveyWorkspaceInit(
         '.eslintrc.yml',
         '.eslintrc.yaml',
       ].filter((path) => files.includes(path)),
-      contentCollections: [
-        'content-collections.ts',
-        'content-collections.js',
-      ].filter((path) => files.includes(path)),
+      contentCollections: files.filter((path) =>
+        /(?:^|\/)content-collections\.(?:ts|js|mts|mjs)$/.test(path),
+      ),
       megamono: ['megamono.json', '.megamono/artifacts.json'].filter((path) =>
         files.includes(path),
       ),
@@ -546,7 +613,8 @@ export function createWorkspaceInitPlan(
   const packageManager =
     options.packageManager ??
     (survey.baseline.packageManager?.startsWith('npm') ? 'npm' : 'pnpm');
-  const docsRoot = options.docsRoot ?? 'docs';
+  const docs = resolveWorkspaceDocsContract(tree, options);
+  const docsRoot = docs.root;
   const operations: WorkspaceInitPlanOperation[] = [];
   const reductions: WorkspaceInitReduction[] = [];
   const conflicts: string[] = [];
@@ -681,9 +749,15 @@ export function createWorkspaceInitPlan(
     operation(
       operations,
       'docs',
-      managedAction('docs.loader', 'content-collections.ts'),
-      'content-collections.ts',
-      'Configure the repository docs loader.',
+      docs.loaderMode === 'adopt'
+        ? tree.exists(docs.loader)
+          ? 'retain'
+          : 'skip'
+        : managedAction('docs.loader', docs.loader),
+      docs.loader,
+      docs.loaderMode === 'adopt'
+        ? 'Retain the explicitly adopted repository-owned docs loader.'
+        : 'Configure the repository docs loader.',
     );
     operation(
       operations,
@@ -725,7 +799,7 @@ export function createWorkspaceInitPlan(
         'Keep the canonical documentation directory in the repository.',
       );
     }
-    for (const key of ['content-collections', 'content-collections/*']) {
+    for (const key of [docs.module, `${docs.module}/*`]) {
       operation(
         operations,
         'docs',
@@ -742,13 +816,43 @@ export function createWorkspaceInitPlan(
       'Add @content-collections/core and zod at their compatibility-pinned ranges.',
     );
     if (
-      survey.existing.contentCollections.includes('content-collections.ts') &&
-      !owned('docs.loader', 'content-collections.ts') &&
-      !ejected('docs.loader', 'content-collections.ts')
+      docs.loaderMode === 'create' &&
+      tree.exists(docs.loader) &&
+      !owned('docs.loader', docs.loader) &&
+      !ejected('docs.loader', docs.loader)
     ) {
       conflicts.push(
-        'content-collections.ts is occupied by a repository-owned configuration.',
+        `${docs.loader} is occupied by a repository-owned configuration. Select it with --docsLoaderMode=adopt when compatible, or choose a separate --docsLoader, --docsModule, and --docsOutput.`,
       );
+    }
+    if (docs.loaderMode === 'adopt') {
+      const source = tree.read(docs.loader, 'utf8');
+      if (!source) {
+        conflicts.push(`${docs.loader} does not exist and cannot be adopted.`);
+      } else if (
+        !/name\s*:\s*['"]repoDocs['"]/.test(source) ||
+        !/name\s*:\s*['"]archivedDocs['"]/.test(source)
+      ) {
+        conflicts.push(
+          `${docs.loader} does not expose the repoDocs and archivedDocs collections required by Megamono. Choose a separate generated loader instead of adopting it.`,
+        );
+      }
+    }
+    const tsconfigPath = tree.exists('tsconfig.base.json')
+      ? 'tsconfig.base.json'
+      : 'tsconfig.json';
+    const compilerOptions = readJsonObject(tree, tsconfigPath)
+      .compilerOptions as Record<string, unknown> | undefined;
+    const paths = compilerOptions?.paths as Record<string, unknown> | undefined;
+    for (const [key, expected] of [
+      [docs.module, [`./${docs.output}/index.js`]],
+      [`${docs.module}/*`, [`./${docs.output}/*.js`]],
+    ] as const) {
+      const current = paths?.[key];
+      if (current && JSON.stringify(current) !== JSON.stringify(expected))
+        conflicts.push(
+          `${tsconfigPath} already defines ${key} as ${JSON.stringify(current)}; requested ${JSON.stringify(expected)}.`,
+        );
     }
   }
   if (modules.includes('agents')) {
