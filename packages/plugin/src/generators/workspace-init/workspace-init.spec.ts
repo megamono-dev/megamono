@@ -120,6 +120,69 @@ describe('workspace-init generator', () => {
     ).toBe(false);
   });
 
+  it('applies a reviewed documentation map without moving existing records', async () => {
+    tree.write('docs/specs/0012-routing.md', '# Routing\n\nStable body.\n');
+    tree.write(
+      'docs-adoption.json',
+      JSON.stringify({
+        documents: {
+          'docs/specs/0012-routing.md': {
+            id: 'spec-workspace-0012',
+            type: 'spec',
+            status: 'accepted',
+            visibility: 'internal',
+            projects: ['workspace'],
+            topics: [],
+            summary: 'Routing contract.',
+            date: '2026-08-30',
+            supersedes: null,
+            references: [],
+            external_references: [],
+          },
+        },
+      }),
+    );
+
+    await workspaceInitGenerator(tree, {
+      only: 'docs',
+      docsAdoptionMap: 'docs-adoption.json',
+      bootstrap: true,
+      yes: true,
+    });
+
+    const adopted = tree.read('docs/specs/0012-routing.md', 'utf8');
+    expect(adopted).toContain('id: spec-workspace-0012');
+    expect(adopted).toContain('# Routing');
+    expect(adopted).toContain('Stable body.');
+    expect(tree.exists('docs/specs/0012-routing.md')).toBe(true);
+  });
+
+  it('rejects incomplete documentation adoption maps before mutation', async () => {
+    tree.write('docs/specs/0012-routing.md', '# Routing\n');
+    tree.write(
+      'docs-adoption.json',
+      JSON.stringify({
+        documents: {
+          'docs/specs/0012-routing.md': {
+            id: 'spec-workspace-0012',
+            type: 'spec',
+          },
+        },
+      }),
+    );
+    const before = tree.listChanges();
+
+    await expect(
+      workspaceInitGenerator(tree, {
+        only: 'docs',
+        docsAdoptionMap: 'docs-adoption.json',
+        bootstrap: true,
+        yes: true,
+      }),
+    ).rejects.toMatchObject({ diagnosticCode: 'workspace-init-conflict' });
+    expect(tree.listChanges()).toEqual(before);
+  });
+
   it('should run successfully', async () => {
     await workspaceInitGenerator(tree, options);
     const config = readProjectConfiguration(tree, 'megamono');

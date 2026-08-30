@@ -2,6 +2,7 @@ import { getProjects, type Tree } from '@nx/devkit';
 import { readArtifactRegistry } from './managed-artifacts';
 import { MANAGED_SKILL_NAMES } from './managed-skills';
 import { nxWorkspaceCapabilities } from './workspace-compatibility';
+import { readDocsAdoptionMap } from './docs-adoption';
 import {
   classifyProjectForAdoption,
   readProjectAdoptionResolutions,
@@ -81,7 +82,10 @@ export interface WorkspaceInitDocumentationClassification {
   readonly type: 'spec' | 'plan' | 'decision' | 'audit' | 'research' | 'report';
   readonly proposedId: string | null;
   readonly basis:
-    'lifecycle-metadata' | 'decision-directory' | 'research-directory';
+    | 'lifecycle-metadata'
+    | 'decision-directory'
+    | 'research-directory'
+    | 'numbered-corpus';
 }
 
 export interface WorkspaceInitSurvey {
@@ -158,6 +162,7 @@ export interface WorkspaceInitPlanOptions {
   readonly docsModule?: string;
   readonly docsOutput?: string;
   readonly docsLoaderMode?: 'create' | 'adopt';
+  readonly docsAdoptionMap?: string;
   readonly defaultScope?: string;
   readonly defaultPlatform?: string;
   readonly adoptionMap?: string;
@@ -300,6 +305,35 @@ const DOCUMENT_TYPES = new Set([
 ]);
 const DECISION_DIRECTORIES = new Set(['adr', 'adrs', 'decision', 'decisions']);
 const RESEARCH_DIRECTORIES = new Set(['rfc', 'rfcs', 'research']);
+const DOCUMENT_DIRECTORIES: Readonly<Record<string, WorkspaceInitDocumentationClassification['type']>> = {
+  specs: 'spec',
+  plans: 'plan',
+  decisions: 'decision',
+  audits: 'audit',
+  research: 'research',
+  reports: 'report',
+};
+
+function workspaceDocumentScope(tree: Tree): string {
+  try {
+    const name = (JSON.parse(tree.read('package.json', 'utf8') ?? '{}') as {
+      name?: unknown;
+    }).name;
+    if (typeof name === 'string') {
+      const candidate = name.startsWith('@')
+        ? name.slice(1).split('/')[0]
+        : name;
+      const scope = candidate
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      if (scope) return scope;
+    }
+  } catch {
+    // Invalid package manifests are diagnosed by the baseline preflight.
+  }
+  return 'repository';
+}
 
 function frontmatterField(source: string, field: string): string | undefined {
   const newline = source.indexOf('\n');
@@ -325,6 +359,7 @@ function classifyDocumentation(
   const corpusDirectories = new Set<string>();
   const classifications: WorkspaceInitDocumentationClassification[] = [];
   const classified = new Set<string>();
+  const workspaceScope = workspaceDocumentScope(tree);
   for (const path of markdown) {
     const segments = path.split('/');
     const directories = segments.slice(0, -1);
@@ -350,13 +385,23 @@ function classifyDocumentation(
     ) {
       type = 'research';
       basis = 'research-directory';
+    } else {
+      const numbered = /^(\d{1,4})[-_ ].+\.md$/i.exec(segments.at(-1) ?? '');
+      const directoryType = directories
+        .map((directory) => DOCUMENT_DIRECTORIES[directory.toLowerCase()])
+        .find(Boolean);
+      if (numbered && directoryType) {
+        type = directoryType;
+        basis = 'numbered-corpus';
+      }
     }
     for (let index = 0; index < directories.length; index += 1) {
       const directory = directories[index].toLowerCase();
       if (
         DECISION_DIRECTORIES.has(directory) ||
         RESEARCH_DIRECTORIES.has(directory) ||
-        DOCUMENT_TYPES.has(directory)
+        DOCUMENT_TYPES.has(directory) ||
+        Boolean(DOCUMENT_DIRECTORIES[directory])
       ) {
         corpusDirectories.add(directories.slice(0, index + 1).join('/'));
       }
@@ -365,7 +410,11 @@ function classifyDocumentation(
     classifications.push({
       path,
       type,
-      proposedId: metadataId ?? null,
+      proposedId:
+        metadataId ??
+        (basis === 'numbered-corpus' && type === 'spec'
+          ? `spec-${workspaceScope}-${(segments.at(-1)?.match(/^\d{1,4}/)?.[0] ?? '').padStart(4, '0')}`
+          : null),
       basis,
     });
     classified.add(path);
@@ -626,6 +675,14 @@ export function createWorkspaceInitPlan(
   const reductions: WorkspaceInitReduction[] = [];
   const conflicts: string[] = [];
   const decisions: string[] = [];
+  let docsAdoptionEntries: ReturnType<typeof readDocsAdoptionMap> = [];
+  if (modules.includes('docs') && options.docsAdoptionMap) {
+    try {
+      docsAdoptionEntries = readDocsAdoptionMap(tree, options.docsAdoptionMap);
+    } catch (error) {
+      conflicts.push(error instanceof Error ? error.message : String(error));
+    }
+  }
   let ownedArtifacts = new Map<
     string,
     { readonly target: string; readonly state: string }
@@ -753,6 +810,15 @@ export function createWorkspaceInitPlan(
     );
   }
   if (modules.includes('docs')) {
+    for (const { path } of docsAdoptionEntries) {
+      operation(
+        operations,
+        'docs',
+        'modify',
+        path,
+        'Apply explicitly reviewed Megamono lifecycle metadata without moving the document.',
+      );
+    }
     operation(
       operations,
       'docs',

@@ -60,6 +60,10 @@ import {
 import { createWorkspaceInitPostFlushCallback } from '../../lib/workspace-init-execution';
 import { ensureManagedSkillsProjection } from '../../lib/skills-projection';
 import { nxWorkspaceCapabilities } from '../../lib/workspace-compatibility';
+import {
+  applyDocsAdoptionMap,
+  readDocsAdoptionMap,
+} from '../../lib/docs-adoption';
 
 const compatibility = JSON.parse(
   readFileSync(join(__dirname, '../../../compatibility.json'), 'utf8'),
@@ -1307,6 +1311,9 @@ export async function workspaceInitGenerator(
   }
   const planConfirmed = true;
   const modules = new Set(requestedModules);
+  const docsAdoptionEntries = modules.has('docs')
+    ? readDocsAdoptionMap(tree, options.docsAdoptionMap)
+    : [];
   const ciMode = options.ciMode ?? 'auto';
   const equivalentCi = workspaceSurvey.recommendations.find(
     (recommendation) => recommendation.module === 'ci',
@@ -1814,6 +1821,7 @@ export async function workspaceInitGenerator(
     });
   }
   tree.write('megamono.json', `${JSON.stringify(config, null, 2)}\n`);
+  await applyDocsAdoptionMap(tree, docsAdoptionEntries);
   const eslintWiring =
     modules.has('lint') && lintCanWire
       ? wireEslintConfig(tree)

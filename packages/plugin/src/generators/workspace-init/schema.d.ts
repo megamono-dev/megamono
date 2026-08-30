@@ -18,6 +18,7 @@ export interface WorkspaceInitGeneratorSchema {
   readonly docsModule?: string;
   readonly docsOutput?: string;
   readonly docsLoaderMode?: 'create' | 'adopt';
+  readonly docsAdoptionMap?: string;
   readonly defaultScope?: string;
   readonly defaultPlatform?:
     'web' | 'node' | 'worker' | 'apple' | 'rust' | 'php' | 'extension';

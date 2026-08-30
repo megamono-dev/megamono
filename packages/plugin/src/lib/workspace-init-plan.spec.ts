@@ -101,6 +101,25 @@ describe('workspace init survey and plan', () => {
     expect(renderWorkspaceInitPlan(plan)).toContain('health.spec-drift');
   });
 
+  it('classifies numbered specification corpora with stable path-preserving IDs', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write('package.json', JSON.stringify({ name: '@quickzones/workspace' }));
+    tree.write('docs/specs/0012-routing.md', '# Routing\n');
+
+    expect(surveyWorkspaceInit(tree).documentation).toMatchObject({
+      corpusDirectories: ['docs/specs'],
+      classifications: [
+        {
+          path: 'docs/specs/0012-routing.md',
+          type: 'spec',
+          proposedId: 'spec-quickzones-0012',
+          basis: 'numbered-corpus',
+        },
+      ],
+      unclassified: [],
+    });
+  });
+
   it('plans explicit repository-owned Node pin files without overwriting conflicts', () => {
     const tree = createTreeWithEmptyWorkspace();
     const plan = createWorkspaceInitPlan(tree, {

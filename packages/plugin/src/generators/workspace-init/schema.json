@@ -95,6 +95,10 @@
       "enum": ["create", "adopt"],
       "description": "Create a Megamono-owned loader or adopt an explicitly selected compatible repository loader."
     },
+    "docsAdoptionMap": {
+      "type": "string",
+      "description": "Workspace-relative reviewed JSON map of existing Markdown paths to complete Megamono lifecycle metadata; paths remain unchanged."
+    },
     "defaultScope": {
       "type": "string",
       "description": "Scope tag value assigned to projects that have no scope tag.",
