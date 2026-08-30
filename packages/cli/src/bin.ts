@@ -118,7 +118,7 @@ const result = await runMegamonoCli(process.argv.slice(2), {
           const response = await prompt<{ products: string[] }>({
             type: 'multiselect',
             name: 'products',
-            message: 'Which Playstack products should this workspace use?',
+            message: 'Which Playstack capabilities should this workspace use?',
             choices: choices.map((choice) => ({
               name: choice.name,
               message: choice.message,
@@ -126,7 +126,7 @@ const result = await runMegamonoCli(process.argv.slice(2), {
             validate: (value) =>
               Array.isArray(value) && value.length > 0
                 ? true
-                : 'Select at least one Playstack product.',
+                : 'Select at least one Playstack capability.',
           });
           return response.products;
         },

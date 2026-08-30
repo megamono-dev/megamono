@@ -433,11 +433,11 @@ describe('@megamono/cli', () => {
     });
   });
 
-  it('installs requested Playstack packages from yalc after Megamono init', async () => {
+  it('delegates requested Playstack capabilities to yalc-aware Playstack after Megamono init', async () => {
     const root = await workspace('pnpm');
     const store = await mkdtemp(join(tmpdir(), 'megamono-cli-yalc-'));
     fixtures.push(store);
-    for (const packageName of ['@playstack/cli', '@playstack/auth']) {
+    for (const packageName of ['@playstack/cli']) {
       await json(
         join(
           store,
@@ -458,7 +458,7 @@ describe('@megamono/cli', () => {
     const result = await runMegamonoCli(
       [
         'init',
-        '--playstack-packages=auth,@playstack/auth',
+        '--playstack-packages=auth',
         '--local-packages=yalc',
         '--only=docs',
       ],
@@ -492,14 +492,21 @@ describe('@megamono/cli', () => {
         capture: false,
       },
       {
-        command: 'yalc',
-        args: ['add', '@playstack/auth', '--no-pure'],
+        command: 'pnpm',
+        args: ['install'],
         cwd: root,
         capture: false,
       },
       {
         command: 'pnpm',
-        args: ['install'],
+        args: [
+          'exec',
+          'playstack',
+          'add',
+          'auth',
+          '--yes',
+          '--local-packages=yalc',
+        ],
         cwd: root,
         capture: false,
       },
@@ -527,9 +534,9 @@ describe('@megamono/cli', () => {
     expect(harness.stdout.join('\n')).toContain('Playstack survey deferred');
   });
 
-  it('prompts for products when playstack-packages has no value', async () => {
+  it('prompts for capabilities when playstack-packages has no value', async () => {
     const root = await workspace('npm');
-    const harness = io(root, undefined, ['auth', 'cache']);
+    const harness = io(root, undefined, ['auth', 'billing']);
 
     const result = await runMegamonoCli(
       ['init', '--playstack-packages'],
@@ -558,7 +565,13 @@ describe('@megamono/cli', () => {
       },
       {
         command: 'npm',
-        args: ['install', '@playstack/auth', '@playstack/cache'],
+        args: ['exec', 'playstack', '--', 'add', 'auth', '--yes'],
+        cwd: root,
+        capture: false,
+      },
+      {
+        command: 'npm',
+        args: ['exec', 'playstack', '--', 'add', 'billing', '--yes'],
         cwd: root,
         capture: false,
       },
@@ -609,6 +622,29 @@ describe('@megamono/cli', () => {
     expect(harness.stderr.join('\n')).toContain(
       'pnpm add --save-dev @megamono/plugin',
     );
+  });
+
+  it('retains explicit package names as a direct-install escape hatch', async () => {
+    const root = await workspace('npm');
+    const harness = io(root);
+
+    const result = await runMegamonoCli(
+      ['init', '--playstack-packages=@playstack/cache'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(
+      harness.invocations.map(({ command, args }) => [command, args]),
+    ).toEqual([
+      [
+        'npm',
+        ['exec', 'nx', '--', 'generate', '@megamono/plugin:workspace-init'],
+      ],
+      ['npm', ['install', '--save-dev', '@playstack/cli']],
+      ['npm', ['install', '@playstack/cache']],
+      ['npm', ['exec', 'playstack', '--', 'init']],
+    ]);
   });
 
   it('rejects invalid Playstack package names as CLI usage errors', async () => {

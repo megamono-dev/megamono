@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
 import {
-  access,
   chmod,
   cp,
   mkdtemp,
@@ -53,15 +52,6 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-async function exists(path) {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function json(path, value) {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
@@ -108,9 +98,30 @@ process.exit(Number(process.env.FIXTURE_NX_EXIT || 0));
 `;
 
 const playstackBin = `#!/usr/bin/env node
-const { writeFileSync } = require('node:fs');
+const { appendFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { resolve } = require('node:path');
-writeFileSync(resolve(process.cwd(), '.fixture-playstack.json'), JSON.stringify(process.argv.slice(2)) + '\\n');
+const args = process.argv.slice(2);
+appendFileSync(resolve(process.cwd(), '.fixture-playstack.jsonl'), JSON.stringify(args) + '\\n');
+if (args[0] === 'add' && args[1]) {
+  const manifestPath = resolve(process.cwd(), 'package.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const packageName = '@playstack/' + args[1];
+  if (args.includes('--local-packages=yalc')) {
+    const localPackage = resolve(process.cwd(), '.yalc', packageName);
+    mkdirSync(localPackage, { recursive: true });
+    writeFileSync(
+      resolve(localPackage, 'package.json'),
+      JSON.stringify({ name: packageName, version: '0.1.0' }) + '\\n',
+    );
+  }
+  manifest.dependencies = {
+    ...(manifest.dependencies || {}),
+    [packageName]: args.includes('--local-packages=yalc')
+      ? 'file:' + resolve(process.cwd(), '.yalc', packageName)
+      : '^0.1.0',
+  };
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\\n');
+}
 `;
 
 async function createPackage(root, manifest, executable, source) {
@@ -164,6 +175,14 @@ async function createWorkspace(root, manager, registry, environment) {
 
 async function readInvocations(root) {
   return (await readFile(resolve(root, '.fixture-nx.jsonl'), 'utf8'))
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+async function readPlaystackInvocations(root) {
+  return (await readFile(resolve(root, '.fixture-playstack.jsonl'), 'utf8'))
     .trim()
     .split('\n')
     .filter(Boolean)
@@ -358,10 +377,9 @@ try {
     'Registry setup did not install the requested runtime package.',
   );
   assert(
-    JSON.parse(
-      await readFile(resolve(npmWorkspace, '.fixture-playstack.json'), 'utf8'),
-    ).join(' ') === 'init',
-    'Registry setup did not invoke the local Playstack CLI.',
+    JSON.stringify(await readPlaystackInvocations(npmWorkspace)) ===
+      JSON.stringify([['add', 'auth', '--yes'], ['init']]),
+    'Registry setup did not delegate the capability and init to the local Playstack CLI.',
   );
   const npmNx = await readInvocations(npmWorkspace);
   assert(
@@ -425,7 +443,11 @@ try {
     'Yalc setup did not retain the requested runtime package.',
   );
   assert(
-    await exists(resolve(pnpmWorkspace, '.fixture-playstack.json')),
+    JSON.stringify(await readPlaystackInvocations(pnpmWorkspace)) ===
+      JSON.stringify([
+        ['add', 'auth', '--yes', '--local-packages=yalc'],
+        ['init'],
+      ]),
     'Yalc setup did not invoke the local Playstack CLI.',
   );
   assert(

@@ -41,6 +41,7 @@ interface InitOptions {
   readonly generatorArgs: readonly string[];
   readonly localPackages: LocalPackageSource;
   readonly playstack: boolean;
+  readonly playstackCapabilities: readonly string[];
   readonly playstackPackages: readonly string[];
   readonly selectPlaystackPackages: boolean;
   readonly survey: boolean;
@@ -95,9 +96,8 @@ const DATABASE_ADAPTER_SET = new Set(
 export const PLAYSTACK_PRODUCT_CHOICES: readonly PlaystackProductChoice[] = [
   { name: 'accounts', message: 'Accounts — tenancy and membership' },
   { name: 'auth', message: 'Auth — identity and sessions' },
-  { name: 'cache', message: 'Cache — provider-backed caching' },
+  { name: 'billing', message: 'Billing — plans and subscriptions' },
   { name: 'content', message: 'Content — transforms and schemas' },
-  { name: 'webhooks', message: 'Webhooks — durable webhook receipts' },
 ];
 
 interface Workspace {
@@ -131,7 +131,7 @@ Global options:
 Init-only options:
   --playstack          Run package-owned Playstack setup after Megamono
   --playstack-packages[=<names>]
-                       Select products, or pass comma-separated names
+                       Select capabilities, or pass capabilities/package names
   --local-packages=registry|yalc
                        Package source for missing local packages
 
@@ -244,7 +244,12 @@ function optionValue(
   return undefined;
 }
 
-function parsePlaystackPackages(value: string): readonly string[] {
+interface PlaystackSelection {
+  readonly capabilities: readonly string[];
+  readonly packages: readonly string[];
+}
+
+function parsePlaystackPackages(value: string): PlaystackSelection {
   const requested = [
     ...new Set(
       value
@@ -259,27 +264,41 @@ function parsePlaystackPackages(value: string): readonly string[] {
       2,
     );
   }
-  const packages = requested.map((name) =>
-    /^@playstack\//.test(name) ? name : `@playstack/${name}`,
-  );
-  for (const packageName of packages) {
-    if (
-      !/^@playstack\/[a-z0-9][a-z0-9._-]*$/.test(packageName) ||
-      packageName === '@playstack/cli'
-    ) {
+  const capabilities: string[] = [];
+  const packages: string[] = [];
+  for (const name of requested) {
+    if (name.startsWith('@')) {
+      if (
+        !/^@playstack\/[a-z0-9][a-z0-9._-]*$/.test(name) ||
+        name === '@playstack/cli'
+      ) {
+        throw new CliError(
+          `Invalid Playstack package ${name}; expected @playstack/<name>.`,
+          2,
+        );
+      }
+      packages.push(name);
+      continue;
+    }
+    if (!/^[a-z0-9][a-z0-9._-]*$/.test(name)) {
       throw new CliError(
-        `Invalid Playstack product package ${packageName}; expected <name> or @playstack/<name>.`,
+        `Invalid Playstack capability ${name}; expected a capability name or @playstack/<name>.`,
         2,
       );
     }
+    capabilities.push(name);
   }
-  return [...new Set(packages)].sort();
+  return {
+    capabilities: [...new Set(capabilities)].sort(),
+    packages: [...new Set(packages)].sort(),
+  };
 }
 
 function parseInitOptions(args: readonly string[]): InitOptions {
   const forwarded: string[] = [];
   let localPackages: LocalPackageSource = 'registry';
   let playstack = false;
+  let playstackCapabilities: readonly string[] = [];
   let playstackPackages: readonly string[] = [];
   let selectPlaystackPackages = false;
   let passthrough = false;
@@ -331,7 +350,9 @@ function parseInitOptions(args: readonly string[]): InitOptions {
     }
     const products = optionValue(args, index, '--playstack-packages');
     if (products) {
-      playstackPackages = parsePlaystackPackages(products.value);
+      const selection = parsePlaystackPackages(products.value);
+      playstackCapabilities = selection.capabilities;
+      playstackPackages = selection.packages;
       playstack = true;
       index += products.consumed;
       continue;
@@ -343,6 +364,7 @@ function parseInitOptions(args: readonly string[]): InitOptions {
     generatorArgs: forwarded,
     localPackages,
     playstack,
+    playstackCapabilities,
     playstackPackages,
     selectPlaystackPackages,
     survey: forwarded.some(
@@ -381,7 +403,9 @@ async function resolvePlaystackPackageSelection(
   }
   return {
     ...options,
-    playstackPackages: parsePlaystackPackages(selected.join(',')),
+    playstackCapabilities: parsePlaystackPackages(selected.join(','))
+      .capabilities,
+    playstackPackages: [],
     selectPlaystackPackages: false,
   };
 }
@@ -477,12 +501,11 @@ async function runGenerate(
 
 function playstackInvocation(
   manager: PackageManager,
-  survey: boolean,
+  args: readonly string[],
 ): readonly [string, readonly string[]] {
-  const command = ['playstack', 'init', ...(survey ? ['--survey'] : [])];
   return manager === 'pnpm'
-    ? ['pnpm', ['exec', ...command]]
-    : ['npm', ['exec', 'playstack', '--', ...command.slice(1)]];
+    ? ['pnpm', ['exec', 'playstack', ...args]]
+    : ['npm', ['exec', 'playstack', '--', ...args]];
 }
 
 function pluginInstallInstruction(
@@ -639,6 +662,32 @@ async function installPlaystackPackages(
       workspace.packageManager,
       [install, ...products],
       `${workspace.packageManager} ${install} ${products.join(' ')}`,
+    );
+  }
+}
+
+async function addPlaystackCapabilities(
+  io: MegamonoCliIo,
+  workspace: Workspace,
+  options: InitOptions,
+): Promise<void> {
+  for (const capability of options.playstackCapabilities) {
+    const args = [
+      'add',
+      capability,
+      '--yes',
+      ...(options.localPackages === 'yalc' ? ['--local-packages=yalc'] : []),
+    ];
+    const [command, commandArgs] = playstackInvocation(
+      workspace.packageManager,
+      args,
+    );
+    await runRequired(
+      io,
+      workspace,
+      command,
+      commandArgs,
+      `${command} ${commandArgs.join(' ')}`,
     );
   }
 }
@@ -1023,7 +1072,17 @@ function renderPlaystackSurveyPlan(
       : `${manager} ${install} --save-dev @playstack/cli${
           products ? `; ${manager} ${install} ${products}` : ''
         }`;
-  return `Playstack survey deferred: @playstack/cli is not installed. A real run would use ${source}.`;
+  const capabilities = options.playstackCapabilities
+    .map(
+      (capability) =>
+        `playstack add ${capability} --yes${
+          options.localPackages === 'yalc' ? ' --local-packages=yalc' : ''
+        }`,
+    )
+    .join('; ');
+  return `Playstack survey deferred: @playstack/cli is not installed. A real run would use ${source}${
+    capabilities ? `; ${capabilities}` : ''
+  }.`;
 }
 
 async function runInit(
@@ -1087,11 +1146,12 @@ async function runInit(
     }
   } else {
     await installPlaystackPackages(io, workspace, options);
+    await addPlaystackCapabilities(io, workspace, options);
   }
 
   const [playstackCommand, playstackArgs] = playstackInvocation(
     workspace.packageManager,
-    options.survey,
+    ['init', ...(options.survey ? ['--survey'] : [])],
   );
   const configured = await io.runCommand(playstackCommand, playstackArgs, {
     cwd: workspace.root,

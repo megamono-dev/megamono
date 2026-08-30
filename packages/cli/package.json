@@ -48,6 +48,18 @@
           "command": "node packages/cli/e2e/local-packages.e2e.mjs",
           "cwd": "."
         }
+      },
+      "e2e-playstack-yalc": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "node packages/cli/e2e/playstack-yalc.e2e.mjs",
+          "cwd": "."
+        }
       }
     },
     "tags": [

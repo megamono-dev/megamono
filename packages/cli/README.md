@@ -44,10 +44,12 @@ megamono init \
   --local-packages=yalc
 ```
 
-Full package names such as `@playstack/auth` remain accepted and normalize to
-the same canonical package request.
+Bare names are Playstack capabilities and are delegated to `playstack add`, so
+Playstack owns recipes, prerequisites, surface bindings, and transitive yalc
+resolution. Full package names such as `@playstack/cache` remain accepted as a
+compatibility escape hatch for direct package installation.
 
-In an interactive terminal, omit the value to toggle products from the
+In an interactive terminal, omit the value to toggle capabilities from the
 supported catalog:
 
 ```sh
@@ -56,5 +58,14 @@ megamono init --playstack-packages
 
 Non-interactive callers must provide the comma-separated value explicitly.
 
-`--local-packages=yalc` refuses missing local artifacts before initialization
-and never substitutes registry packages.
+`--local-packages=yalc` refuses a missing CLI or explicit package before
+initialization and never substitutes registry packages. Capability package
+closures are preflighted and installed by the Playstack CLI.
+
+The packed transport fixture covers npm and pnpm. When the Playstack packages
+have been published to the local yalc store, run the real cross-repository
+contract fixture with:
+
+```sh
+npm exec nx -- run @megamono/cli:e2e-playstack-yalc
+```
