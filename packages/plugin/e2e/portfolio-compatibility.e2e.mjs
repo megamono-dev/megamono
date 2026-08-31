@@ -407,11 +407,12 @@ try {
   throw error;
 } finally {
   const expectedPrefix = join(tmpdir(), 'megamono-portfolio-');
-  if (!temporaryRoot.startsWith(expectedPrefix))
-    throw new Error(
+  if (!temporaryRoot.startsWith(expectedPrefix)) {
+    console.error(
       `Refusing to remove unexpected fixture path ${temporaryRoot}.`,
     );
-  if (process.env.MEGAMONO_KEEP_FIXTURE === 'true') {
+    process.exitCode = 1;
+  } else if (process.env.MEGAMONO_KEEP_FIXTURE === 'true') {
     console.error(`Retained portfolio fixture at ${fixtureRoot}`);
     process.exitCode = 1;
   } else {

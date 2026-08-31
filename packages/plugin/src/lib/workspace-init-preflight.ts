@@ -445,17 +445,18 @@ export function assertWorkspaceInitPreflight(
     declaredName === packageManager
       ? declaredPackageManager?.slice(declaredName.length + 1)
       : undefined;
+  const activePackageManagerVersion = state[packageManager];
   if (
     declaredVersion &&
-    state[packageManager] &&
+    activePackageManagerVersion &&
     semver.validRange(declaredVersion) &&
-    !semver.satisfies(state[packageManager]!, declaredVersion, {
+    !semver.satisfies(activePackageManagerVersion, declaredVersion, {
       includePrerelease: true,
     })
   ) {
     throw new WorkspaceInitError(
       'preflight',
-      `Active ${packageManager} ${state[packageManager]} does not satisfy the repository declaration ${declaredPackageManager}.`,
+      `Active ${packageManager} ${activePackageManagerVersion} does not satisfy the repository declaration ${declaredPackageManager}.`,
     );
   }
   requireVersionRange(
