@@ -123,6 +123,38 @@ describe('workspace init survey and plan', () => {
     });
   });
 
+  it('preflights module dependency and peer compatibility before mutation', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        devDependencies: {
+          nx: '22.2.3',
+          typescript: '5.9.3',
+          eslint: '^7.32.0',
+          '@content-collections/core': '^0.15.0',
+          zod: '^3.25.0',
+        },
+      }),
+    );
+
+    const plan = createWorkspaceInitPlan(tree, { only: 'docs,lint' });
+    expect(plan.conflicts).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('eslint@^7.32.0'),
+        expect.stringContaining('zod@^3.25.0'),
+      ]),
+    );
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: 'retain',
+          target: 'package.json#devDependencies.@content-collections/core',
+        }),
+      ]),
+    );
+  });
+
   it('plans explicit repository-owned Node pin files without overwriting conflicts', () => {
     const tree = createTreeWithEmptyWorkspace();
     const plan = createWorkspaceInitPlan(tree, {

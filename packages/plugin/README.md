@@ -28,6 +28,11 @@ information architecture, and configures the shared agent-skills directory.
 It also wires `@megamono/plugin/eslint` into the workspace flat config and emits
 the scheduled repository-health issue workflow.
 
+The plan preflights selected-module dependencies and peers before writing. It
+retains compatible existing ranges, lists missing dependencies individually,
+and refuses incompatible, duplicate, or non-semver declarations instead of
+silently upgrading an adopted workspace.
+
 ## Generator availability
 
 `@megamono/plugin/availability.json` is the canonical registry for available,

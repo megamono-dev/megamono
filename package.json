@@ -32,6 +32,7 @@
     "@swc/jest": "0.2.38",
     "@types/jest": "30.0.0",
     "@types/node": "24.13.3",
+    "@types/semver": "7.7.1",
     "@vitest/coverage-v8": "~4.1.10",
     "@vitest/ui": "~4.1.10",
     "eslint": "~10.6.0",

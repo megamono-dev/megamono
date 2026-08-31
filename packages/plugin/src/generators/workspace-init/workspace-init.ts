@@ -73,6 +73,7 @@ import {
   packageManagerAdapter,
   type PackageManager,
 } from '../../lib/package-manager';
+import { workspaceInitDependencyAssessments } from '../../lib/dependency-compatibility';
 
 const compatibility = JSON.parse(
   readFileSync(join(__dirname, '../../../compatibility.json'), 'utf8'),
@@ -2105,13 +2106,16 @@ export async function workspaceInitGenerator(
     tree.write('CLAUDE.md', '@AGENTS.md\n');
   }
   const pluginVersion = readPluginVersion();
+  const dependencyAssessments = workspaceInitDependencyAssessments(
+    tree,
+    modules,
+  );
   const developmentDependencies = {
-    ...(modules.has('docs')
-      ? {
-          '@content-collections/core': '0.15.2',
-          zod: '>=4.1 <5',
-        }
-      : {}),
+    ...Object.fromEntries(
+      dependencyAssessments
+        .filter(({ action }) => action === 'add')
+        .map(({ name, range }) => [name, range]),
+    ),
     ...(modules.has('inference') && 'apple' in inference
       ? {
           '@megamono/nx-apple': inferenceDependencyVersion(

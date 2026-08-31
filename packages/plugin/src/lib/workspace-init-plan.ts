@@ -16,6 +16,7 @@ import {
   packageManagerAdapter,
   type PackageManager,
 } from './package-manager';
+import { workspaceInitDependencyAssessments } from './dependency-compatibility';
 
 export const WORKSPACE_INIT_MODULES = [
   'docs',
@@ -699,6 +700,15 @@ export function createWorkspaceInitPlan(
   const reductions: WorkspaceInitReduction[] = [];
   const conflicts: string[] = [];
   const decisions: string[] = [];
+  const dependencyAssessments = workspaceInitDependencyAssessments(
+    tree,
+    new Set(modules),
+  );
+  for (const assessment of dependencyAssessments) {
+    if (assessment.action === 'conflict') {
+      conflicts.push(assessment.message);
+    }
+  }
   let packageRegistries: Readonly<Record<string, string>> = {};
   if (options.packageRegistries !== undefined) {
     try {
@@ -949,13 +959,21 @@ export function createWorkspaceInitPlan(
         'Map generated Content Collections modules for TypeScript.',
       );
     }
-    operation(
-      operations,
-      'docs',
-      'modify',
-      'package.json#devDependencies',
-      'Add @content-collections/core and zod at their compatibility-pinned ranges.',
-    );
+    for (const dependency of dependencyAssessments.filter(
+      ({ name }) => name === '@content-collections/core' || name === 'zod',
+    )) {
+      if (dependency.action === 'absent' || dependency.action === 'conflict')
+        continue;
+      operation(
+        operations,
+        'docs',
+        dependency.action === 'add' ? 'modify' : 'retain',
+        dependency.action === 'add'
+          ? `package.json#devDependencies.${dependency.name}`
+          : `package.json#${dependency.section}.${dependency.name}`,
+        dependency.message,
+      );
+    }
     if (
       docs.loaderMode === 'create' &&
       tree.exists(docs.loader) &&

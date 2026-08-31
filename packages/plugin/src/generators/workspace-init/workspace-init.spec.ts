@@ -612,7 +612,7 @@ describe('workspace-init generator', () => {
 
     const report = tree.read('.megamono/init-report.md', 'utf8') ?? '';
     expect(report).toContain('# Megamono workspace initialization complete');
-    expect(report).toContain('`npm exec nx run megamono:health`');
+    expect(report).toContain('`npm exec nx -- run megamono:health`');
 
     const invalidTree = createTreeWithEmptyWorkspace();
     const changes = invalidTree.listChanges();

@@ -190,6 +190,8 @@ Inference is never a prompt. Root lockfiles and `packageManager` declarations id
 
 The preview may be skipped only with `--yes`. `--yes` is not an answer to an ambiguity: non-interactive execution must also provide `--only` and every option named as unresolved by the survey. Missing input exits with programmatic classification `4` and the stable diagnostic `workspace-init-decision-required`.
 
+Before any tree mutation, init compares every selected module's required dependencies and peers with all declarations in the root `dependencies`, `devDependencies`, and `peerDependencies`. Compatible existing ranges are retained exactly. Missing installable dependencies are listed individually in the plan and added only after all conflicts pass. Incompatible ranges, non-semver protocols where a registry range is required, or duplicate declarations across dependency sections block adoption with the current and required ranges in the diagnostic. Init never treats an adoption run as permission to upgrade an existing major.
+
 ## Existing conventions
 
 Init adapts rather than normalizing for its own sake:
