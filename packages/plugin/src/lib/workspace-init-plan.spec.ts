@@ -179,6 +179,34 @@ describe('workspace init survey and plan', () => {
     );
   });
 
+  it('carries active host readiness failures into dry-run planning', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const host = {
+      platform: 'darwin' as const,
+      active: { node: 'v26.5.0', pnpm: '6.35.1' },
+      selectedPackageManager: 'pnpm' as const,
+      ready: false,
+      issues: ['Node.js v26.5.0 is unsupported for adoption.'],
+      activation: ['Run `nvm use` from the workspace root.'],
+    };
+    const survey = surveyWorkspaceInit(tree, { host });
+    const plan = createWorkspaceInitPlan(tree, {
+      only: 'agents',
+      packageManager: 'pnpm',
+      host,
+    });
+
+    expect(plan.conflicts).toContain(
+      'Node.js v26.5.0 is unsupported for adoption.',
+    );
+    expect(renderWorkspaceInitSurvey(survey)).toContain(
+      '- Active package-manager version: 6.35.1',
+    );
+    expect(renderWorkspaceInitSurvey(survey)).toContain(
+      'Run `nvm use` from the workspace root.',
+    );
+  });
+
   it('plans explicit repository-owned Node pin files without overwriting conflicts', () => {
     const tree = createTreeWithEmptyWorkspace();
     const plan = createWorkspaceInitPlan(tree, {

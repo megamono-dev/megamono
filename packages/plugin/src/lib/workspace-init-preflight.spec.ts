@@ -1,5 +1,6 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import {
+  assessWorkspaceInitHostReadiness,
   assertWorkspaceMutationGitPreflight,
   assertWorkspaceInitPreflight,
   type WorkspaceInitHostState,
@@ -43,6 +44,41 @@ const featureBranch: WorkspaceInitHostState = {
 };
 
 describe('workspace init preflight', () => {
+  it('reports active host drift with exact activation guidance', () => {
+    const tree = supportedTree();
+    tree.delete('package-lock.json');
+    tree.write('pnpm-lock.yaml', 'lockfileVersion: 9');
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        packageManager: 'pnpm@11.24.0',
+        engines: { node: '>=22 <23' },
+        devDependencies: { nx: '22.2.3', typescript: '5.9.3' },
+      }),
+    );
+    const readiness = assessWorkspaceInitHostReadiness(tree, {
+      ...featureBranch,
+      node: 'v26.5.0',
+      pnpm: '6.35.1',
+    });
+
+    expect(readiness).toMatchObject({
+      selectedPackageManager: 'pnpm',
+      ready: false,
+      active: { node: 'v26.5.0', pnpm: '6.35.1' },
+    });
+    expect(readiness.issues).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Node.js v26.5.0'),
+        expect.stringContaining('pnpm 6.35.1'),
+        expect.stringContaining('repository declaration pnpm@11.24.0'),
+      ]),
+    );
+    expect(readiness.activation).toContain(
+      'Run `corepack enable`, then `corepack prepare pnpm@11.24.0 --activate`.',
+    );
+  });
+
   it('shares operation-specific Git mutation safety', () => {
     expect(() =>
       assertWorkspaceMutationGitPreflight(
@@ -112,6 +148,25 @@ describe('workspace init preflight', () => {
         packageManager: 'pnpm',
       }),
     ).not.toThrow();
+  });
+
+  it('refuses an active manager that differs from the committed declaration', () => {
+    const pnpm = supportedTree();
+    pnpm.delete('package-lock.json');
+    pnpm.write('pnpm-lock.yaml', 'lockfileVersion: 9');
+    pnpm.write(
+      'package.json',
+      JSON.stringify({
+        packageManager: 'pnpm@11.24.0',
+        devDependencies: { nx: '23.1.1', typescript: '6.0.3' },
+      }),
+    );
+    expect(() =>
+      assertWorkspaceInitPreflight(pnpm, {
+        ...featureBranch,
+        pnpm: '10.30.0',
+      }),
+    ).toThrow(/Active pnpm 10\.30\.0.*pnpm@11\.24\.0/);
   });
 
   it('refuses conflicting and mismatched package-manager ownership', () => {

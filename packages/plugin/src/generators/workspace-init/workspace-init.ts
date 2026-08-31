@@ -54,6 +54,7 @@ import {
   readProjectAdoptionResolutions,
 } from '../../lib/project-adoption';
 import {
+  assessWorkspaceInitHostReadiness,
   assertWorkspaceInitPreflight,
   collectWorkspaceInitHostState,
 } from '../../lib/workspace-init-preflight';
@@ -1219,9 +1220,20 @@ export async function workspaceInitGenerator(
   options: WorkspaceInitGeneratorSchema,
 ): Promise<GeneratorCallback> {
   const outputFormat = options.format ?? 'markdown';
+  const hostState =
+    tree.root === '/virtual'
+      ? undefined
+      : await collectWorkspaceInitHostState(tree.root);
   const initialSurvey = surveyWorkspaceInit(tree, {
     adoptionMap: options.adoptionMap,
     defaultPlatform: options.defaultPlatform,
+    ...(hostState
+      ? {
+          host: assessWorkspaceInitHostReadiness(tree, hostState, {
+            packageManager: options.packageManager,
+          }),
+        }
+      : {}),
   });
   const declaredPackageManager =
     initialSurvey.baseline.packageManager?.split('@')[0];
@@ -1251,7 +1263,7 @@ export async function workspaceInitGenerator(
   ) {
     assertWorkspaceInitPreflight(
       tree,
-      await collectWorkspaceInitHostState(tree.root),
+      hostState ?? (await collectWorkspaceInitHostState(tree.root)),
       { bootstrap: options.bootstrap, packageManager },
     );
   }
@@ -1306,6 +1318,7 @@ export async function workspaceInitGenerator(
     only: requestedModules,
     defaultPlatform,
     packageManager,
+    host: initialSurvey.host,
   });
   if (
     adoptionPlan.decisions.length > 0 &&
@@ -1327,6 +1340,7 @@ export async function workspaceInitGenerator(
       only: requestedModules,
       defaultPlatform,
       packageManager,
+      host: initialSurvey.host,
     });
   }
   if (adoptionPlan.decisions.length > 0) {

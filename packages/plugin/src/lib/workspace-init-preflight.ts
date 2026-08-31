@@ -1,7 +1,11 @@
 import type { Tree } from '@nx/devkit';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { WorkspaceInitError } from './workspace-init-plan';
+import semver = require('semver');
+import {
+  WorkspaceInitError,
+  type WorkspaceInitHostReadiness,
+} from './workspace-init-plan';
 import {
   parseVersionNumber,
   workspaceDependencyVersion,
@@ -183,6 +187,158 @@ function requireVersionRange(
   }
 }
 
+function versionRangeIssue(
+  label: string,
+  version: string | undefined,
+  minimum: VersionNumber,
+  maximumExclusive: VersionNumber,
+): string | undefined {
+  const parsed = parseVersionNumber(version);
+  return !parsed ||
+    compareVersion(parsed, minimum) < 0 ||
+    compareVersion(parsed, maximumExclusive) >= 0
+    ? `${label} ${version ?? 'unknown'} is unsupported for adoption; expected >=${minimum.major}.${minimum.minor}.${minimum.patch} <${maximumExclusive.major}.${maximumExclusive.minor}.${maximumExclusive.patch}.`
+    : undefined;
+}
+
+export function assessWorkspaceInitHostReadiness(
+  tree: Tree,
+  state: WorkspaceInitHostState,
+  options: { readonly packageManager?: PackageManager } = {},
+): WorkspaceInitHostReadiness {
+  const manifest = (() => {
+    try {
+      return JSON.parse(tree.read('package.json', 'utf8') ?? '{}') as {
+        packageManager?: unknown;
+        engines?: Record<string, unknown>;
+      };
+    } catch {
+      return {};
+    }
+  })();
+  const declaration =
+    typeof manifest.packageManager === 'string'
+      ? manifest.packageManager
+      : undefined;
+  const declaredName = declaration?.split('@')[0];
+  const detected = lockfileManagers((path) => tree.exists(path));
+  const selectedPackageManager =
+    options.packageManager ??
+    detected[0] ??
+    (declaredName && isPackageManager(declaredName) ? declaredName : null);
+  const issues: string[] = [];
+  const activation: string[] = [];
+  if (detected.length > 1) {
+    issues.push(
+      `Conflicting root package-manager lockfiles are present: ${detected.join(', ')}.`,
+    );
+  }
+  if (declaredName && !isPackageManager(declaredName)) {
+    issues.push(
+      `The repository declares unsupported package manager ${declaration}.`,
+    );
+  }
+  if (
+    declaredName &&
+    isPackageManager(declaredName) &&
+    detected.length === 1 &&
+    detected[0] !== declaredName
+  ) {
+    issues.push(
+      `The repository declares ${declaration}, but its root lockfile belongs to ${detected[0]}.`,
+    );
+  }
+  const nodeIssue = versionRangeIssue(
+    'Node.js',
+    state.node,
+    { major: 18, minor: 18, patch: 0 },
+    { major: 25, minor: 0, patch: 0 },
+  );
+  if (nodeIssue) {
+    issues.push(nodeIssue);
+    if (tree.exists('.nvmrc'))
+      activation.push('Run `nvm use` from the workspace root.');
+    else if (tree.exists('.node-version'))
+      activation.push('Activate the Node version recorded in `.node-version`.');
+    else
+      activation.push(
+        'Activate Node >=18.18 <25; after switching, optionally rerun init with `--toolchainPin` and an exact `--toolchainNode`.',
+      );
+  }
+  const declaredNode = manifest.engines?.node;
+  const coercedNode = semver.coerce(state.node);
+  if (
+    typeof declaredNode === 'string' &&
+    semver.validRange(declaredNode) &&
+    coercedNode &&
+    !semver.satisfies(coercedNode, declaredNode)
+  ) {
+    issues.push(
+      `Active Node ${state.node} does not satisfy the repository declaration ${declaredNode}.`,
+    );
+  }
+  if (!selectedPackageManager) {
+    issues.push(
+      'The root package manager is unresolved; add one supported root lockfile or a packageManager declaration.',
+    );
+  } else {
+    const adapter = packageManagerAdapter(selectedPackageManager);
+    const activeVersion = state[selectedPackageManager];
+    const managerIssue = versionRangeIssue(
+      selectedPackageManager,
+      activeVersion,
+      {
+        major: adapter.minimumVersion[0],
+        minor: adapter.minimumVersion[1],
+        patch: 0,
+      },
+      { major: adapter.maximumMajorExclusive, minor: 0, patch: 0 },
+    );
+    if (managerIssue) issues.push(managerIssue);
+    const declaredVersion =
+      declaredName === selectedPackageManager
+        ? declaration?.slice(declaredName.length + 1)
+        : undefined;
+    const managerDeclarationIssue =
+      activeVersion &&
+      declaredVersion &&
+      semver.validRange(declaredVersion) &&
+      !semver.satisfies(activeVersion, declaredVersion, {
+        includePrerelease: true,
+      });
+    if (managerDeclarationIssue) {
+      issues.push(
+        `Active ${selectedPackageManager} ${activeVersion} does not satisfy the repository declaration ${declaration}.`,
+      );
+    }
+    if (managerIssue || managerDeclarationIssue) {
+      if (declaration && ['pnpm', 'yarn'].includes(selectedPackageManager)) {
+        activation.push(
+          `Run \`corepack enable\`, then \`corepack prepare ${declaration} --activate\`.`,
+        );
+      } else {
+        activation.push(
+          `Activate a ${selectedPackageManager} version compatible with the repository before rerunning init.`,
+        );
+      }
+    }
+  }
+  return {
+    platform: state.platform,
+    active: {
+      node: state.node,
+      ...(state.npm ? { npm: state.npm } : {}),
+      ...(state.pnpm ? { pnpm: state.pnpm } : {}),
+      ...(state.yarn ? { yarn: state.yarn } : {}),
+      ...(state.bun ? { bun: state.bun } : {}),
+    },
+    selectedPackageManager,
+    ready: issues.length === 0,
+    issues,
+    activation,
+  };
+}
+
 export function assertWorkspaceInitPreflight(
   tree: Tree,
   state: WorkspaceInitHostState,
@@ -197,11 +353,27 @@ export function assertWorkspaceInitPreflight(
   }
   let declaredPackageManager: string | undefined;
   try {
-    const manifest = JSON.parse(manifestSource) as { packageManager?: unknown };
+    const manifest = JSON.parse(manifestSource) as {
+      packageManager?: unknown;
+      engines?: Record<string, unknown>;
+    };
     declaredPackageManager =
       typeof manifest.packageManager === 'string'
         ? manifest.packageManager
         : undefined;
+    const declaredNode = manifest.engines?.node;
+    const activeNode = semver.coerce(state.node);
+    if (
+      typeof declaredNode === 'string' &&
+      semver.validRange(declaredNode) &&
+      activeNode &&
+      !semver.satisfies(activeNode, declaredNode)
+    ) {
+      throw new WorkspaceInitError(
+        'preflight',
+        `Active Node ${state.node} does not satisfy the repository declaration ${declaredNode}.`,
+      );
+    }
   } catch (error) {
     if (error instanceof WorkspaceInitError) throw error;
     throw new WorkspaceInitError(
@@ -269,6 +441,23 @@ export function assertWorkspaceInitPreflight(
     },
     { major: adapter.maximumMajorExclusive, minor: 0, patch: 0 },
   );
+  const declaredVersion =
+    declaredName === packageManager
+      ? declaredPackageManager?.slice(declaredName.length + 1)
+      : undefined;
+  if (
+    declaredVersion &&
+    state[packageManager] &&
+    semver.validRange(declaredVersion) &&
+    !semver.satisfies(state[packageManager]!, declaredVersion, {
+      includePrerelease: true,
+    })
+  ) {
+    throw new WorkspaceInitError(
+      'preflight',
+      `Active ${packageManager} ${state[packageManager]} does not satisfy the repository declaration ${declaredPackageManager}.`,
+    );
+  }
   requireVersionRange(
     'Nx',
     workspaceDependencyVersion(tree, 'nx'),

@@ -105,6 +105,7 @@ export interface WorkspaceInitSurvey {
     readonly typescript: string | null;
     readonly lockfiles: readonly string[];
   };
+  readonly host: WorkspaceInitHostReadiness | null;
   readonly projects: readonly WorkspaceInitSurveyProject[];
   readonly manifests: {
     readonly apple: readonly string[];
@@ -149,6 +150,21 @@ export interface WorkspaceInitSurvey {
       >;
     };
   };
+}
+
+export interface WorkspaceInitHostReadiness {
+  readonly platform: NodeJS.Platform;
+  readonly active: {
+    readonly node: string;
+    readonly npm?: string;
+    readonly pnpm?: string;
+    readonly yarn?: string;
+    readonly bun?: string;
+  };
+  readonly selectedPackageManager: PackageManager | null;
+  readonly ready: boolean;
+  readonly issues: readonly string[];
+  readonly activation: readonly string[];
 }
 
 export interface WorkspaceInitSurveyRecommendation {
@@ -200,6 +216,7 @@ export interface WorkspaceInitPlanOptions {
   readonly packageManager?: PackageManager;
   readonly ciMode?: 'auto' | 'standalone' | 'reusable';
   readonly packageRegistries?: string;
+  readonly host?: WorkspaceInitHostReadiness | null;
 }
 
 export interface WorkspaceDocsContract {
@@ -641,6 +658,7 @@ export function surveyWorkspaceInit(
     readonly adoptionMap?: string;
     readonly defaultPlatform?: string;
     readonly resolutions?: ProjectAdoptionResolutions;
+    readonly host?: WorkspaceInitHostReadiness;
   } = {},
 ): WorkspaceInitSurvey {
   const files = listFiles(tree);
@@ -731,6 +749,7 @@ export function surveyWorkspaceInit(
         'bun.lockb',
       ].filter((path) => files.includes(path)),
     },
+    host: options.host ?? null,
     projects,
     manifests: {
       apple: files.filter((path) => path.endsWith('Package.swift')),
@@ -831,6 +850,9 @@ export function createWorkspaceInitPlan(
   const reductions: WorkspaceInitReduction[] = [];
   const conflicts: string[] = [];
   const decisions: string[] = [];
+  if (options.host && !options.host.ready) {
+    conflicts.push(...options.host.issues);
+  }
   const dependencyAssessments = workspaceInitDependencyAssessments(
     tree,
     new Set(modules),
@@ -1500,6 +1522,26 @@ export function renderWorkspaceInitSurvey(
 - Nx: ${survey.baseline.nx ?? 'unknown'}
 - TypeScript: ${survey.baseline.typescript ?? 'unknown'}
 - Lockfiles: ${survey.baseline.lockfiles.join(', ') || 'none'}
+
+## Active host readiness
+
+${
+  survey.host
+    ? `- Platform: ${survey.host.platform}
+- Active Node: ${survey.host.active.node}
+- Selected package manager: ${survey.host.selectedPackageManager ?? 'unresolved'}
+- Active package-manager version: ${survey.host.selectedPackageManager ? (survey.host.active[survey.host.selectedPackageManager] ?? 'unavailable') : 'unresolved'}
+- Ready: ${survey.host.ready ? 'yes' : 'no'}
+
+### Readiness issues
+
+${values(survey.host.issues)}
+
+### Activation guidance
+
+${values(survey.host.activation)}`
+    : '- Not collected by this caller.'
+}
 
 ## Projects
 

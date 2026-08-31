@@ -27,6 +27,11 @@ The survey includes `adoptionTemplates.projects` and
 file, replace any `<review-…>` placeholders, and pass that file with
 `--adoptionMap` or `--docsAdoptionMap`.
 
+On a real workspace, the same survey also separates committed toolchain
+requirements from active Node and package-manager binaries. It reports whether
+the host is mutation-ready and gives Corepack or repository-pin activation
+guidance when it is not.
+
 Initialization writes `megamono.json`, adds the `megamono` and
 `megamono-docs` projects, tags existing Nx projects, scaffolds the documentation
 information architecture, and configures the shared agent-skills directory.

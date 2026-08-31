@@ -68,6 +68,7 @@ export {
   type WorkspaceInitPlanOperation,
   type WorkspaceInitPlanOptions,
   type WorkspaceInitReduction,
+  type WorkspaceInitHostReadiness,
   type WorkspaceInitSurvey,
   type WorkspaceInitSurveyProject,
   type WorkspaceDocsContract,
@@ -84,6 +85,7 @@ export {
   type ProjectAdoptionType,
 } from './lib/project-adoption';
 export {
+  assessWorkspaceInitHostReadiness,
   assertWorkspaceMutationGitPreflight,
   assertWorkspaceInitPreflight,
   collectWorkspaceInitHostState,

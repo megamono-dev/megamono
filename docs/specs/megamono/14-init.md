@@ -174,7 +174,7 @@ Every run begins with the same deterministic survey:
 megamono init --survey
 ```
 
-`--survey` prints the report and exits with zero writes, no dependency installation, no generated cache, and no Git operation. `--format=json` emits a stable machine-readable form for portfolio triage; the default is human-readable Markdown. Both forms include copy-ready project and documentation adoption-map templates. Inferred values are populated, while unresolved types, platforms, lifecycle IDs, and dates use conspicuous review placeholders that must be replaced before the map can pass init validation.
+`--survey` prints the report and exits with zero writes, no dependency installation, no generated cache, and no Git operation. When invoked through the real generator it reports the active host platform, Node, and all discoverable package-manager versions separately from the committed workspace baseline. It marks the selected manager ready or not ready and supplies exact activation guidance when a committed Corepack declaration or Node pin exists. `--format=json` emits the same readiness data in a stable machine-readable form for portfolio triage; the default is human-readable Markdown. Both forms include copy-ready project and documentation adoption-map templates. Inferred values are populated, while unresolved types, platforms, lifecycle IDs, and dates use conspicuous review placeholders that must be replaced before the map can pass init validation.
 
 ## Guided flow
 
@@ -237,7 +237,7 @@ The adoption decision records the affected rules, initial counts, and the intend
 
 The `health` module emits the local target and scheduled workflow but does not run or publish health findings during initialization. The completion report prints the exact local command and offers it as a separate next step.
 
-All file/config preflight completes before the Nx tree is flushed. Package installation and any ecosystem command run last, as required by `spec-megamono-0000`. Init never commits, pushes, opens a pull request, invokes a model, contacts Springbar, runs a database migration, or deploys.
+All file/config preflight completes before the Nx tree is flushed. Mutation requires the active Node and selected package-manager versions to satisfy both Megamono's supported ranges and valid repository declarations; a dry run carries the same host-readiness issues into its conflict report. Package installation and any ecosystem command run last, as required by `spec-megamono-0000`. Init never commits, pushes, opens a pull request, invokes a model, contacts Springbar, runs a database migration, or deploys.
 
 ## Re-running and recovery
 
