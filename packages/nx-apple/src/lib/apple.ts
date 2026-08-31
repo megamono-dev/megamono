@@ -208,6 +208,12 @@ const precedence: Record<AppleManifestRecord['kind'], number> = {
   package: 2,
 };
 
+function isEmbeddedProjectWorkspace(path: string): boolean {
+  return /(?:^|\/)[^/]+\.xcodeproj\/project\.xcworkspace\/contents\.xcworkspacedata$/.test(
+    normalizePath(path),
+  );
+}
+
 export async function collectAppleManifests(
   configFiles: readonly string[],
   workspaceRoot: string,
@@ -218,7 +224,9 @@ export async function collectAppleManifests(
 }> {
   const records: AppleManifestRecord[] = [];
   const collectedDiagnostics: AppleDiagnostic[] = [];
-  for (const file of [...configFiles].sort()) {
+  for (const file of [...configFiles]
+    .filter((path) => !isEmbeddedProjectWorkspace(path))
+    .sort()) {
     const manifest = resolve(workspaceRoot, file);
     const kind = manifestKind(manifest);
     const root = manifestRoot(manifest, kind);

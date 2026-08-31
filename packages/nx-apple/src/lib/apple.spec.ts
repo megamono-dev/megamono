@@ -37,6 +37,28 @@ describe('Apple createNodes compatibility', () => {
       projectType: 'library',
     });
   });
+
+  it('ignores an Xcode project internal workspace under the single-file contract', async () => {
+    const workspaceRoot = await mkdtemp(
+      resolve(tmpdir(), 'nx-apple-v1-internal-workspace-'),
+    );
+    const manifest =
+      'apps/Quickzones/Quickzones.xcodeproj/project.xcworkspace/contents.xcworkspacedata';
+    await mkdir(resolve(workspaceRoot, manifest, '..'), { recursive: true });
+    await writeFile(
+      resolve(workspaceRoot, manifest),
+      '<Workspace version="1.0" />',
+    );
+    const singleFileCallback = createNodes[1] as unknown as (
+      configFile: string,
+      options: Record<string, never>,
+      context: { workspaceRoot: string },
+    ) => Promise<{ projects: Record<string, ProjectConfiguration> }>;
+
+    await expect(
+      singleFileCallback(manifest, {}, { workspaceRoot }),
+    ).resolves.toEqual({ projects: {} });
+  });
 });
 
 describe('Apple manifest parsers', () => {
@@ -74,6 +96,10 @@ async function fixture() {
       recursive: true,
     }),
     mkdir(resolve(root, 'Apps/Portfolio.xcodeproj'), { recursive: true }),
+    mkdir(
+      resolve(root, 'Apps/Portfolio.xcodeproj/project.xcworkspace'),
+      { recursive: true },
+    ),
     mkdir(resolve(root, 'Apps/Synth/Synth.xcodeproj'), { recursive: true }),
     mkdir(resolve(root, 'Packages/Core'), { recursive: true }),
   ]);
@@ -92,6 +118,13 @@ async function fixture() {
   await writeFile(
     resolve(root, 'Apps/Portfolio.xcodeproj/project.pbxproj'),
     'isa = PBXProject;',
+  );
+  await writeFile(
+    resolve(
+      root,
+      'Apps/Portfolio.xcodeproj/project.xcworkspace/contents.xcworkspacedata',
+    ),
+    '<Workspace version="1.0" />',
   );
   await writeFile(
     resolve(root, 'Apps/Synth/Synth.xcodeproj/project.pbxproj'),
@@ -121,6 +154,7 @@ describe('collectAppleManifests', () => {
       [
         'Apps/Package.swift',
         'Apps/Portfolio.xcodeproj/project.pbxproj',
+        'Apps/Portfolio.xcodeproj/project.xcworkspace/contents.xcworkspacedata',
         'Apps/Portfolio.xcworkspace/contents.xcworkspacedata',
         'Apps/Synth/Synth.xcodeproj/project.pbxproj',
         'Packages/Core/Package.swift',
@@ -138,6 +172,7 @@ describe('collectAppleManifests', () => {
       ['Packages/Core', 'package'],
     ]);
     expect(collected.diagnostics).toEqual([]);
+    expect(collected.records.map(({ name }) => name)).not.toContain('project');
     expect(
       collected.records.find(({ kind }) => kind === 'workspace')?.schemes,
     ).toEqual(['Portfolio']);

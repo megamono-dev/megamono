@@ -263,5 +263,6 @@ A spec is build-ready when it has `status: accepted`, no unresolved decision tha
 - Registry and yalc Playstack fixtures prove init-only options are consumed rather than forwarded, concise capabilities receive explicit Nx-resolved web/API roots, ambiguous automation refuses before Playstack mutation, explicit yalc packages install their complete local closure without registry fallback, `@playstack/cli` remains a dev dependency, the local `playstack` binary performs configuration, survey writes nothing, missing closure artifacts fail before workspace-init, and a post-init failure reports completed commands plus an exact recovery command.
 - Generator fixtures prove deterministic planning, dry-run parity, idempotency, conflict handling, stable exit codes, and absence of secret values.
 - Language-plugin fixtures prove the Nx 18–23 API bridge, deterministic project discovery, and affected graph propagation.
+- Apple discovery ignores Xcode's generated `<name>.xcodeproj/project.xcworkspace` bundle and indexes the owning `.xcodeproj` only; standalone `.xcworkspace` manifests remain independently discoverable.
 - Gated generators are absent from the published collection until their external contract fixtures pass.
 - No core package has a runtime dependency on Playstack, an application framework, or Nx Enterprise.
