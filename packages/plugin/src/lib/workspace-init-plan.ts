@@ -10,7 +10,12 @@ import {
   type ProjectAdoptionPlatform,
   type ProjectAdoptionResolutions,
 } from './project-adoption';
-import type { PackageManager } from './package-manager';
+import {
+  isPackageManager,
+  lockfileManagers,
+  packageManagerAdapter,
+  type PackageManager,
+} from './package-manager';
 
 export const WORKSPACE_INIT_MODULES = [
   'docs',
@@ -150,6 +155,7 @@ export interface WorkspaceInitPlanOperation {
 
 export interface WorkspaceInitPlan {
   readonly schemaVersion: 1;
+  readonly packageManager: PackageManager;
   readonly modules: readonly WorkspaceInitModule[];
   readonly operations: readonly WorkspaceInitPlanOperation[];
   readonly reductions: readonly WorkspaceInitReduction[];
@@ -679,9 +685,14 @@ export function createWorkspaceInitPlan(
     adoptionMap: options.adoptionMap,
     defaultPlatform: options.defaultPlatform,
   });
+  const declaredManager = survey.baseline.packageManager?.split('@')[0];
+  const detectedManagers = lockfileManagers((path) => tree.exists(path));
   const packageManager =
     options.packageManager ??
-    (survey.baseline.packageManager?.startsWith('npm') ? 'npm' : 'pnpm');
+    (declaredManager && isPackageManager(declaredManager)
+      ? declaredManager
+      : detectedManagers[0]) ??
+    'npm';
   const docs = resolveWorkspaceDocsContract(tree, options);
   const docsRoot = docs.root;
   const operations: WorkspaceInitPlanOperation[] = [];
@@ -1315,6 +1326,7 @@ export function createWorkspaceInitPlan(
   }
   return {
     schemaVersion: 1,
+    packageManager,
     modules,
     operations,
     reductions,
@@ -1433,6 +1445,7 @@ export function renderWorkspaceInitPlan(
     : ['- None'];
   return `# Megamono workspace initialization plan
 
+- Package manager: ${plan.packageManager}
 - Modules: ${plan.modules.join(', ')}
 
 ## Ordered operations
@@ -1469,12 +1482,7 @@ export function renderWorkspaceInitCompletion(plan: WorkspaceInitPlan): string {
       .filter(({ action }) => action === 'skip')
       .map(({ module, target, detail }) => `${module}.${target}: ${detail}`),
   ];
-  const packageManager = plan.operations.some(
-    ({ action, target }) => action === 'run-last' && target === 'npm install',
-  )
-    ? 'npm'
-    : 'pnpm';
-  const nx = `${packageManager} exec nx`;
+  const nx = packageManagerAdapter(plan.packageManager).nx;
   const followUps = [
     `${nx} run megamono:check`,
     ...(plan.modules.includes('docs')

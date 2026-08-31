@@ -103,7 +103,10 @@ describe('workspace init survey and plan', () => {
 
   it('classifies numbered specification corpora with stable path-preserving IDs', () => {
     const tree = createTreeWithEmptyWorkspace();
-    tree.write('package.json', JSON.stringify({ name: '@quickzones/workspace' }));
+    tree.write(
+      'package.json',
+      JSON.stringify({ name: '@quickzones/workspace' }),
+    );
     tree.write('docs/specs/0012-routing.md', '# Routing\n');
 
     expect(surveyWorkspaceInit(tree).documentation).toMatchObject({
@@ -181,10 +184,10 @@ describe('workspace init survey and plan', () => {
     const automatic = createWorkspaceInitPlan(tree, { only: 'ci' });
     expect(automatic.operations).toEqual(
       expect.arrayContaining([
-      expect.objectContaining({
-        action: 'retain',
-        target: '.github/workflows/repository-ci.yml',
-      }),
+        expect.objectContaining({
+          action: 'retain',
+          target: '.github/workflows/repository-ci.yml',
+        }),
       ]),
     );
     expect(automatic.conflicts).toEqual([]);
@@ -446,8 +449,30 @@ describe('workspace init survey and plan', () => {
     expect(summary).toContain('## Modules adopted\n\n- health');
     expect(summary).toContain('- docs');
     expect(summary).toContain('health.spec-drift');
-    expect(summary).toContain('`pnpm exec nx run megamono:check`');
-    expect(summary).toContain('`pnpm exec nx run megamono:health`');
+    expect(summary).toContain('`npm exec nx -- run megamono:check`');
+    expect(summary).toContain('`npm exec nx -- run megamono:health`');
     expect(summary).not.toContain('megamono-docs:validate');
   });
+
+  it.each([
+    ['npm', 'package-lock.json', 'npm exec nx --'],
+    ['pnpm', 'pnpm-lock.yaml', 'pnpm exec nx'],
+    ['yarn', 'yarn.lock', 'yarn nx'],
+    ['bun', 'bun.lock', 'bunx nx'],
+  ] as const)(
+    'renders %s planning and completion commands without manager leakage',
+    (manager, lockfile, nx) => {
+      const tree = createTreeWithEmptyWorkspace();
+      tree.write(lockfile, '');
+      const plan = createWorkspaceInitPlan(tree, { only: 'health' });
+
+      expect(plan.packageManager).toBe(manager);
+      expect(renderWorkspaceInitPlan(plan)).toContain(
+        `Package manager: ${manager}`,
+      );
+      expect(renderWorkspaceInitCompletion(plan)).toContain(
+        `\`${nx} run megamono:check\``,
+      );
+    },
+  );
 });
