@@ -169,7 +169,7 @@ export interface WorkspaceInitHostReadiness {
 
 export interface WorkspaceInitSurveyRecommendation {
   readonly module: WorkspaceInitModule;
-  readonly action: 'skip';
+  readonly action: 'skip' | 'configure';
   readonly paths: readonly string[];
   readonly reason: string;
 }
@@ -733,6 +733,21 @@ export function surveyWorkspaceInit(
         '.github/workflows/megamono-ci-reusable.yml',
       ].includes(path) && detectsEquivalentCi(tree.read(path, 'utf8') ?? ''),
   );
+  const contentCollections = files.filter((path) =>
+    /(?:^|\/)content-collections\.(?:ts|js|mts|mjs)$/.test(path),
+  );
+  const configuredMegamono = readJsonObject(tree, 'megamono.json');
+  const configuredDocs =
+    configuredMegamono.docs &&
+    typeof configuredMegamono.docs === 'object' &&
+    !Array.isArray(configuredMegamono.docs)
+      ? (configuredMegamono.docs as Record<string, unknown>)
+      : undefined;
+  const managedDocsLoader =
+    typeof configuredDocs?.loader === 'string' ? configuredDocs.loader : null;
+  const coexistingContentCollections = contentCollections.filter(
+    (path) => path !== managedDocsLoader,
+  );
   return {
     schemaVersion: 1,
     baseline: {
@@ -788,25 +803,35 @@ export function surveyWorkspaceInit(
         '.eslintrc.yml',
         '.eslintrc.yaml',
       ].filter((path) => files.includes(path)),
-      contentCollections: files.filter((path) =>
-        /(?:^|\/)content-collections\.(?:ts|js|mts|mjs)$/.test(path),
-      ),
+      contentCollections,
       megamono: ['megamono.json', '.megamono/artifacts.json'].filter((path) =>
         files.includes(path),
       ),
     },
-    recommendations:
-      equivalentAffectedCi.length > 0
+    recommendations: [
+      ...(equivalentAffectedCi.length > 0
         ? [
             {
-              module: 'ci',
-              action: 'skip',
+              module: 'ci' as const,
+              action: 'skip' as const,
               paths: equivalentAffectedCi,
               reason:
                 'Existing repository-owned CI runs lint, test, and build through Nx affected or full-workspace run-many.',
             },
           ]
-        : [],
+        : []),
+      ...(coexistingContentCollections.length > 0
+        ? [
+            {
+              module: 'docs' as const,
+              action: 'configure' as const,
+              paths: coexistingContentCollections,
+              reason:
+                'Keep the existing Content Collections setup separate by passing --docsLoader=.megamono/content-collections.ts --docsModule=megamono-docs --docsOutput=.megamono/content-collections, or explicitly adopt a compatible loader with --docsLoaderMode=adopt.',
+            },
+          ]
+        : []),
+    ],
     adoptionTemplates: adoptionTemplates(tree, projects, documentation),
   };
 }
@@ -1606,7 +1631,7 @@ ${values([...survey.agents.files, ...survey.agents.skillRoots])}
 ${values(
   survey.recommendations.map(
     ({ module, action, paths, reason }) =>
-      `${module}: ${action}; retain ${paths.join(', ')} — ${reason}`,
+      `${module}: ${action}; ${action === 'skip' ? 'retain' : 'resolve around'} ${paths.join(', ')} — ${reason}`,
   ),
 )}
 

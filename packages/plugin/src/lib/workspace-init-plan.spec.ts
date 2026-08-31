@@ -445,9 +445,20 @@ describe('workspace init survey and plan', () => {
         },
       }),
     );
-    expect(surveyWorkspaceInit(tree).existing.contentCollections).toEqual([
+    const survey = surveyWorkspaceInit(tree);
+    expect(survey.existing.contentCollections).toEqual([
       'apps/site/content-collections.ts',
     ]);
+    expect(survey.recommendations).toContainEqual({
+      module: 'docs',
+      action: 'configure',
+      paths: ['apps/site/content-collections.ts'],
+      reason:
+        'Keep the existing Content Collections setup separate by passing --docsLoader=.megamono/content-collections.ts --docsModule=megamono-docs --docsOutput=.megamono/content-collections, or explicitly adopt a compatible loader with --docsLoaderMode=adopt.',
+    });
+    expect(renderWorkspaceInitSurvey(survey)).toContain(
+      '--docsLoader=.megamono/content-collections.ts --docsModule=megamono-docs --docsOutput=.megamono/content-collections',
+    );
 
     const plan = createWorkspaceInitPlan(tree, {
       only: 'docs',
@@ -467,6 +478,26 @@ describe('workspace init survey and plan', () => {
         }),
       ]),
     );
+  });
+
+  it('does not recommend configuring around the recorded Megamono docs loader', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      'megamono.json',
+      JSON.stringify({
+        docs: {
+          loader: '.megamono/content-collections.ts',
+          module: 'megamono-docs',
+          output: '.megamono/content-collections',
+        },
+      }),
+    );
+    tree.write(
+      '.megamono/content-collections.ts',
+      'export default { collections: [] };\n',
+    );
+
+    expect(surveyWorkspaceInit(tree).recommendations).toEqual([]);
   });
 
   it('adopts only an explicitly compatible repository docs loader', () => {
