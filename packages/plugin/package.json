@@ -124,6 +124,25 @@
           "command": "node packages/plugin/e2e/nx-compatibility.e2e.mjs",
           "cwd": "."
         }
+      },
+      "e2e-portfolio-compatibility": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build",
+          {
+            "projects": [
+              "nx-apple",
+              "nx-cargo",
+              "nx-cloudflare"
+            ],
+            "target": "build"
+          }
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/portfolio-compatibility.e2e.mjs",
+          "cwd": "."
+        }
       }
     },
     "tags": [

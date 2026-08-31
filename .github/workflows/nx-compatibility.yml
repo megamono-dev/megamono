@@ -67,6 +67,22 @@ jobs:
           MEGAMONO_NX_VERSION: ${{ matrix.nx }}
           MEGAMONO_TYPESCRIPT_VERSION: ${{ matrix.typescript }}
 
+  portfolio:
+    name: Mixed portfolio / Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm exec nx -- run @megamono/plugin:e2e-portfolio-compatibility --output-style=static
+
   future:
     name: Nx next canary
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

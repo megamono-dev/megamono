@@ -32,6 +32,13 @@ requirements from active Node and package-manager binaries. It reports whether
 the host is mutation-ready and gives Corepack or repository-pin activation
 guidance when it is not.
 
+The packed mixed-platform adoption fixture exercises this flow against the Nx
+22.2/TypeScript 5.9/pnpm 11 portfolio anchor used by established repositories:
+
+```sh
+npm exec nx -- run @megamono/plugin:e2e-portfolio-compatibility
+```
+
 Initialization writes `megamono.json`, adds the `megamono` and
 `megamono-docs` projects, tags existing Nx projects, scaffolds the documentation
 information architecture, and configures the shared agent-skills directory.
