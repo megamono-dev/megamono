@@ -743,8 +743,19 @@ export function surveyWorkspaceInit(
     !Array.isArray(configuredMegamono.docs)
       ? (configuredMegamono.docs as Record<string, unknown>)
       : undefined;
-  const managedDocsLoader =
+  let managedDocsLoader =
     typeof configuredDocs?.loader === 'string' ? configuredDocs.loader : null;
+  if (!managedDocsLoader && tree.exists('.megamono/artifacts.json')) {
+    try {
+      const loaderArtifact = readArtifactRegistry(tree).artifacts.find(
+        (artifact) => artifact.id === 'docs.loader' && artifact.state !== 'ejected',
+      );
+      managedDocsLoader = loaderArtifact?.target ?? null;
+    } catch {
+      // Mutation preflight reports malformed ownership registries. Survey keeps
+      // inventory available and treats an unreadable loader as repository-owned.
+    }
+  }
   const coexistingContentCollections = contentCollections.filter(
     (path) => path !== managedDocsLoader,
   );

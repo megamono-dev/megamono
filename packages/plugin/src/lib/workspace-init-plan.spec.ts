@@ -500,6 +500,36 @@ describe('workspace init survey and plan', () => {
     expect(surveyWorkspaceInit(tree).recommendations).toEqual([]);
   });
 
+  it('recognizes the managed docs loader in an older artifact-only workspace', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write('megamono.json', JSON.stringify({ docs: { root: 'docs' } }));
+    tree.write(
+      '.megamono/artifacts.json',
+      JSON.stringify({
+        schemaVersion: 1,
+        artifacts: [
+          {
+            id: 'docs.loader',
+            module: 'docs',
+            mode: 'managed',
+            target: 'content-collections.ts',
+            sourceVersion: '0.0.1',
+            templateHash: `sha256:${'a'.repeat(64)}`,
+            installedHash: `sha256:${'a'.repeat(64)}`,
+            state: 'managed',
+            ejectable: true,
+          },
+        ],
+      }),
+    );
+    tree.write(
+      'content-collections.ts',
+      'export default { collections: [] };\n',
+    );
+
+    expect(surveyWorkspaceInit(tree).recommendations).toEqual([]);
+  });
+
   it('adopts only an explicitly compatible repository docs loader', () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write(
