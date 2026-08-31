@@ -26,7 +26,7 @@ external_references: []
 
 Wrangler-aware inference for Nx. Cloudflare bindings are dependency edges the JavaScript import graph cannot see; this plugin puts the local ones in the project graph and preserves the rest as typed metadata.
 
-`@megamono/nx-cloudflare` is an implemented devDependency-only, MIT package in the restricted validation channel defined by `spec-megamono-0000`. It is included in the fixed-version `megamono` release group, whose release workflow reruns its packed local-registry fixture before publishing. Public promotion is separate and requires that release gate to remain green; acceptance of this spec alone never implies public availability.
+`@megamono/nx-cloudflare` is an implemented devDependency-only, MIT package in the public validation channel defined by `spec-megamono-0000`. It is included in the fixed-version `megamono` release group, whose release workflow reruns its packed local-registry fixture before publishing to `next` or `latest`. Acceptance of this spec alone never implies that a registry version has already been published.
 
 ## Purpose
 
