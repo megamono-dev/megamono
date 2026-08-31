@@ -174,7 +174,7 @@ Every run begins with the same deterministic survey:
 megamono init --survey
 ```
 
-`--survey` prints the report and exits with zero writes, no dependency installation, no generated cache, and no Git operation. `--format=json` emits a stable machine-readable form for portfolio triage; the default is human-readable Markdown.
+`--survey` prints the report and exits with zero writes, no dependency installation, no generated cache, and no Git operation. `--format=json` emits a stable machine-readable form for portfolio triage; the default is human-readable Markdown. Both forms include copy-ready project and documentation adoption-map templates. Inferred values are populated, while unresolved types, platforms, lifecycle IDs, and dates use conspicuous review placeholders that must be replaced before the map can pass init validation.
 
 ## Guided flow
 
@@ -207,7 +207,7 @@ Generated documentation is centralized under `--docsRoot=docs`, matching the set
 
 Existing docs are inventoried but never moved automatically. The survey classifies high-confidence candidates—ADR/decision directories, RFC/research directories, records already carrying lifecycle metadata, and numbered records under recognized `specs`, `plans`, `decisions`, `audits`, `research`, or `reports` directories. Numbered specifications receive a deterministic stable-ID proposal derived from the workspace scope and ordinal. Low-confidence files remain listed as unclassified.
 
-`--docsAdoptionMap=<json>` applies an explicitly reviewed path-to-metadata map during the docs module. Every entry must provide a complete valid lifecycle record after merging with existing front matter; unsafe or missing paths, malformed lifecycle IDs, incomplete metadata, and duplicate IDs are plan conflicts. Application changes only front matter and preserves the document's stable path and body. A partially adopted corpus is valid: existing docs may remain where they are while new Megamono records use the canonical corpus.
+`--docsAdoptionMap=<json>` applies an explicitly reviewed path-to-metadata map during the docs module. The survey's `adoptionTemplates.documentation` object has the accepted outer shape and provides deterministic starter metadata for every high-confidence classification. Every entry must provide a complete valid lifecycle record after merging with existing front matter; unsafe or missing paths, malformed lifecycle IDs, incomplete metadata, and duplicate IDs are plan conflicts. Application changes only front matter and preserves the document's stable path and body. A partially adopted corpus is valid: existing docs may remain where they are while new Megamono records use the canonical corpus.
 
 The docs plan discovers Content Collections loaders anywhere in the workspace and checks requested TypeScript aliases and output paths before acceptance. When an application already owns the conventional loader, Megamono selects or accepts separate `--docsLoader`, `--docsModule`, and `--docsOutput` values. `--docsLoaderMode=adopt` is allowed only for an explicitly selected loader that already exposes the compatible repository and archive collections; adopted loader bytes remain repository-owned. The `docs` module owns its repository-docs loader/configuration plumbing only when it creates those complete files. This does not include content-level emissions owned by Playstack. `docs/DESIGN.md` and every generated document skeleton are seeded and immediately repository-owned. Indexes are derived. The IA directories themselves confer no ownership over their contents.
 

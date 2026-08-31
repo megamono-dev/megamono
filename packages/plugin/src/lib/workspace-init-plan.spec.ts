@@ -69,6 +69,27 @@ describe('workspace init survey and plan', () => {
         ],
         unclassified: ['docs/legacy.md'],
       },
+      adoptionTemplates: {
+        projects: {
+          projects: {
+            web: { type: 'app', platform: '<review-platform>' },
+          },
+        },
+        documentation: {
+          documents: {
+            'architecture/decisions/decision.md': {
+              id: 'decision-platform-20260825-runtime',
+              type: 'decision',
+              date: '<review-date>',
+            },
+            'rfcs/cache.md': {
+              id: '<review-research-id>',
+              type: 'research',
+              summary: 'Cache RFC',
+            },
+          },
+        },
+      },
     });
     expect(JSON.parse(first).documentation.markdown).not.toContain(
       '.agents/skills/review/SKILL.md',
@@ -76,6 +97,9 @@ describe('workspace init survey and plan', () => {
     expect(JSON.parse(first).documentation.markdown).not.toContain('AGENTS.md');
     expect(renderWorkspaceInitSurvey(surveyWorkspaceInit(tree))).toContain(
       'stable ID: requires reviewed migration',
+    );
+    expect(renderWorkspaceInitSurvey(surveyWorkspaceInit(tree))).toContain(
+      '## Copy-ready adoption maps',
     );
     expect(tree.listChanges()).toEqual(changes);
   });

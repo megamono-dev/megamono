@@ -131,6 +131,24 @@ export interface WorkspaceInitSurvey {
     readonly megamono: readonly string[];
   };
   readonly recommendations: readonly WorkspaceInitSurveyRecommendation[];
+  readonly adoptionTemplates: {
+    readonly projects: {
+      readonly projects: Readonly<
+        Record<
+          string,
+          {
+            readonly type: string;
+            readonly platform?: string;
+          }
+        >
+      >;
+    };
+    readonly documentation: {
+      readonly documents: Readonly<
+        Record<string, Readonly<Record<string, unknown>>>
+      >;
+    };
+  };
 }
 
 export interface WorkspaceInitSurveyRecommendation {
@@ -443,6 +461,118 @@ function classifyDocumentation(
   };
 }
 
+function documentTitle(tree: Tree, path: string): string {
+  const source = tree.read(path, 'utf8') ?? '';
+  return (
+    /^#\s+(.+)$/m.exec(source)?.[1]?.trim() ??
+    path
+      .split('/')
+      .at(-1)
+      ?.replace(/\.md$/i, '')
+      .replace(/^\d{1,8}[-_ ]*/, '')
+      .replace(/[-_]+/g, ' ') ??
+    path
+  );
+}
+
+function documentDate(tree: Tree, path: string): string {
+  const source = tree.read(path, 'utf8') ?? '';
+  const existing = frontmatterField(source, 'date');
+  if (existing) return existing;
+  const match = /(?:^|[^0-9])(\d{4})-?(\d{2})-?(\d{2})(?:[^0-9]|$)/.exec(path);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : '<review-date>';
+}
+
+function documentId(
+  classification: WorkspaceInitDocumentationClassification,
+  scope: string,
+  date: string,
+  title: string,
+): string {
+  if (classification.proposedId) return classification.proposedId;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+    return `<review-${classification.type}-id>`;
+  const compactDate = date.replaceAll('-', '');
+  const slug =
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'record';
+  switch (classification.type) {
+    case 'plan':
+      return `plan-${scope}-${compactDate}-${slug}`;
+    case 'decision':
+      return `decision-${compactDate}-${slug}`;
+    case 'audit':
+      return `audit-${scope}-${compactDate}`;
+    case 'research':
+      return `research-${compactDate}-${slug}`;
+    case 'report':
+      return `report-${scope}-${compactDate}T000000Z`;
+    case 'spec':
+      return '<review-spec-id>';
+  }
+}
+
+function adoptionTemplates(
+  tree: Tree,
+  projects: readonly WorkspaceInitSurveyProject[],
+  documentation: ReturnType<typeof classifyDocumentation>,
+): WorkspaceInitSurvey['adoptionTemplates'] {
+  const projectEntries = projects.flatMap((project) => {
+    const missingType = !project.tags.some((tag) => tag.startsWith('type:'));
+    const missingPlatform =
+      project.type !== 'library' &&
+      !project.tags.some((tag) => tag.startsWith('platform:'));
+    if (!missingType && !missingPlatform && project.type !== 'ambiguous')
+      return [];
+    return [
+      [
+        project.name,
+        {
+          type:
+            project.tagType ??
+            (project.type === 'application'
+              ? 'app'
+              : project.type === 'library'
+                ? 'util'
+                : '<review-type>'),
+          ...(missingPlatform
+            ? { platform: project.platform ?? '<review-platform>' }
+            : {}),
+        },
+      ] as const,
+    ];
+  });
+  const scope = workspaceDocumentScope(tree);
+  const documentEntries = documentation.classifications.map(
+    (classification) => {
+      const title = documentTitle(tree, classification.path);
+      const date = documentDate(tree, classification.path);
+      return [
+        classification.path,
+        {
+          id: documentId(classification, scope, date, title),
+          type: classification.type,
+          status: 'draft',
+          visibility: 'internal',
+          projects: [scope],
+          topics: [],
+          summary: title,
+          date,
+          supersedes: null,
+          references: [],
+          external_references: [],
+        },
+      ] as const;
+    },
+  );
+  return {
+    projects: { projects: Object.fromEntries(projectEntries) },
+    documentation: { documents: Object.fromEntries(documentEntries) },
+  };
+}
+
 function detectsEquivalentCi(source: string): boolean {
   const invokesAffected = /\bnx\s+(?:--\s+)?affected\b/.test(source);
   const invokesRunMany = /\bnx\s+(?:--\s+)?run-many\b/.test(source);
@@ -658,6 +788,7 @@ export function surveyWorkspaceInit(
             },
           ]
         : [],
+    adoptionTemplates: adoptionTemplates(tree, projects, documentation),
   };
 }
 
@@ -1436,6 +1567,22 @@ ${values(
       `${module}: ${action}; retain ${paths.join(', ')} — ${reason}`,
   ),
 )}
+
+## Copy-ready adoption maps
+
+Review placeholder values before passing either map back to init.
+
+### Project adoption map
+
+\`\`\`json
+${JSON.stringify(survey.adoptionTemplates.projects, null, 2)}
+\`\`\`
+
+### Documentation adoption map
+
+\`\`\`json
+${JSON.stringify(survey.adoptionTemplates.documentation, null, 2)}
+\`\`\`
 `;
 }
 

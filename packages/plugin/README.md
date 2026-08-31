@@ -22,6 +22,11 @@ npm exec nx g @megamono/plugin:workspace-init \
   --yes
 ```
 
+The survey includes `adoptionTemplates.projects` and
+`adoptionTemplates.documentation`. Copy either JSON object into a workspace
+file, replace any `<review-…>` placeholders, and pass that file with
+`--adoptionMap` or `--docsAdoptionMap`.
+
 Initialization writes `megamono.json`, adds the `megamono` and
 `megamono-docs` projects, tags existing Nx projects, scaffolds the documentation
 information architecture, and configures the shared agent-skills directory.
