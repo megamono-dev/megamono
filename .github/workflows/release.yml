@@ -1,38 +1,34 @@
-name: Release private packages
+name: Release npm packages
 
 on:
   workflow_dispatch:
     inputs:
-      specifier:
-        description: Semver keyword or exact version
-        required: true
-        default: prerelease
-        type: string
-      preid:
-        description: Prerelease identifier (for example, next)
-        required: false
-        default: next
-        type: string
-      dist-tag:
-        description: Private npm distribution tag
+      channel:
+        description: npm distribution channel
         required: true
         default: next
         type: choice
         options:
           - next
-      first-release:
-        description: Resolve versions from the manifests for the first release
-        required: true
-        default: true
-        type: boolean
+          - latest
+      specifier:
+        description: Optional exact version or channel-compatible semver keyword
+        required: false
+        type: string
 
 permissions:
   contents: write
+  id-token: write
+
+concurrency:
+  group: megamono-npm-release
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: macos-latest
-    environment: npm-private-${{ inputs.dist-tag }}
+    timeout-minutes: 120
+    environment: npm-${{ inputs.channel }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -40,18 +36,31 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
           registry-url: https://registry.npmjs.org
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
-      - run: npm run release:check-private
+      - name: Require an OIDC-capable npm CLI
+        run: |
+          npm_version="$(npm --version)"
+          node -e 'const [major, minor, patch] = process.argv[1].split(".").map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) { throw new Error("npm 11.5.1 or newer is required for trusted publishing"); }' "$npm_version"
+      - name: Resolve and validate release channel
+        id: release
+        env:
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+          RELEASE_SPECIFIER: ${{ inputs.specifier }}
+        run: node tools/resolve-release-channel.mjs
+      - run: npm run release:check
+      - run: npm run release:test
+      - name: Verify tested next versions before stable promotion
+        if: inputs.channel == 'latest'
+        run: node tools/check-next-promotion.mjs
       - name: Preview version changes
         env:
-          FIRST_RELEASE: ${{ inputs.first-release }}
-          PREID: ${{ inputs.preid }}
-          SPECIFIER: ${{ inputs.specifier }}
+          FIRST_RELEASE: ${{ steps.release.outputs.first_release }}
+          PREID: ${{ steps.release.outputs.preid }}
+          SPECIFIER: ${{ steps.release.outputs.specifier }}
         run: |
-          args=(release version "$SPECIFIER" --groups megamono --dry-run)
+          args=(release version "$SPECIFIER" --groups=megamono,create-megamono --dry-run)
           if [ -n "$PREID" ]; then args+=(--preid "$PREID"); fi
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
           npm exec nx -- "${args[@]}"
@@ -68,23 +77,55 @@ jobs:
           MEGAMONO_MATRIX_CASES: web-npm,api
           MEGAMONO_MATRIX_VERIFY: build
         run: npm exec nx -- run create-megamono:e2e-selection-matrix-local-registry --skip-nx-cache
-      - name: Version packages
-        env:
-          FIRST_RELEASE: ${{ inputs.first-release }}
-          PREID: ${{ inputs.preid }}
-          SPECIFIER: ${{ inputs.specifier }}
+      - name: Require a clean release checkout
         run: |
-          args=(release version "$SPECIFIER" --groups megamono --git-commit --git-tag)
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            git status --short
+            exit 1
+          fi
+      - name: Configure release commit identity
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+      - name: Version and tag packages
+        env:
+          FIRST_RELEASE: ${{ steps.release.outputs.first_release }}
+          PREID: ${{ steps.release.outputs.preid }}
+          SPECIFIER: ${{ steps.release.outputs.specifier }}
+        run: |
+          args=(release version "$SPECIFIER" --groups=megamono,create-megamono --git-commit --git-tag)
           if [ -n "$PREID" ]; then args+=(--preid "$PREID"); fi
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
           npm exec nx -- "${args[@]}"
-      - name: Publish packages
+      - name: Publish public packages to npm
         env:
-          DIST_TAG: ${{ inputs.dist-tag }}
-          FIRST_RELEASE: ${{ inputs.first-release }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ steps.release.outputs.dist_tag }}
+          FIRST_RELEASE: ${{ steps.release.outputs.first_release }}
         run: |
-          args=(release publish --groups megamono --tag "$DIST_TAG" --access restricted)
+          args=(release publish --groups=megamono,create-megamono --tag "$DIST_TAG" --access public)
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
           npm exec nx -- "${args[@]}"
-      - run: git push --follow-tags origin HEAD:main
+      - name: Read released versions
+        id: versions
+        run: |
+          echo "megamono=$(node -p "require('./packages/plugin/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "create=$(node -p "require('./packages/create-megamono/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Push release commit and tags
+        env:
+          RELEASE_BRANCH: ${{ github.ref_name }}
+        run: git push --follow-tags origin "HEAD:refs/heads/$RELEASE_BRANCH"
+      - name: Create GitHub release
+        env:
+          CHANNEL: ${{ steps.release.outputs.channel }}
+          CREATE_VERSION: ${{ steps.versions.outputs.create }}
+          GH_TOKEN: ${{ github.token }}
+          MEGAMONO_VERSION: ${{ steps.versions.outputs.megamono }}
+        run: |
+          tag="megamono@$MEGAMONO_VERSION"
+          args=(release create "$tag" --verify-tag --generate-notes --title "Megamono $MEGAMONO_VERSION" --notes "Includes create-megamono@$CREATE_VERSION.")
+          if [ "$CHANNEL" = "next" ]; then
+            args+=(--prerelease --latest=false)
+          else
+            args+=(--latest)
+          fi
+          gh "${args[@]}"
