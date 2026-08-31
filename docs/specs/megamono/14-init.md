@@ -211,7 +211,7 @@ The docs plan discovers Content Collections loaders anywhere in the workspace an
 
 ## Existing database projects
 
-`megamono add database <name> --adapter=prisma|drizzle` accepts `--schema=<path>` and otherwise detects established adapter layouts before proposing a new project. A root `prisma/schema.prisma` is adopted in place with its migration history, generated client ownership, package scripts, Docker commands, and CI commands untouched. Megamono adds only the bounded Nx validation project and named Playstack artifact destination. Existing Prisma and TypeScript specifiers are reused; adopting Prisma 6 never proposes Prisma 7. ORM upgrades are separate explicit repository work.
+`megamono add database <name> --adapter=prisma|drizzle` accepts `--schema=<path>` and otherwise detects established adapter layouts before proposing a new project. A root `prisma/schema.prisma` is adopted in place with its migration history, generated client ownership, package scripts, Docker commands, and CI commands untouched. Megamono adds only the bounded Nx validation project. For an established Prisma layout, Playstack artifact composition remains deferred unless an existing target is retained or the repository explicitly supplies a compatible `--target`; structural adoption alone never implies that a new fragments directory participates in the Prisma schema input. Existing Prisma and TypeScript specifiers are reused; adopting Prisma 6 never proposes Prisma 7. ORM upgrades are separate explicit repository work.
 
 ## Package sources and CI
 

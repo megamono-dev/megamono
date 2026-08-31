@@ -174,5 +174,6 @@ describe('mixed-platform portfolio adoption fixture', () => {
     expect(readJson(tree, 'megamono.json').databases.primary.schema).toBe(
       'prisma/schema.prisma',
     );
+    expect(tree.exists('playstack.json')).toBe(false);
   });
 });

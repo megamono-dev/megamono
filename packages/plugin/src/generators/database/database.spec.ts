@@ -242,16 +242,40 @@ describe('database generator', () => {
       project: 'fixture-workspace-database-primary',
       schema: 'prisma/schema.prisma',
     });
-    expect(readJson(tree, 'playstack.json').databases.primary).toEqual({
-      adapter: 'prisma',
-      target: 'prisma/models',
-    });
+    expect(tree.exists('playstack.json')).toBe(false);
     expect(readJson(tree, 'package.json').dependencies['@prisma/client']).toBe(
       '^6.19.3',
     );
     expect(readJson(tree, 'package.json').devDependencies.prisma).toBe(
       '^6.19.3',
     );
+  });
+
+  it('enables existing Prisma artifact composition only with an explicit target', async () => {
+    const tree = workspace();
+    writeJson(tree, 'package.json', {
+      name: '@fixture/workspace',
+      private: true,
+      dependencies: { '@prisma/client': '^6.19.3' },
+      devDependencies: { prisma: '^6.19.3', typescript: '~5.9.2' },
+    });
+    tree.write(
+      'prisma/schema.prisma',
+      'generator client {\n  provider = "prisma-client-js"\n}\n',
+    );
+
+    await databaseGenerator(tree, {
+      name: 'primary',
+      adapter: 'prisma',
+      target: 'prisma/models',
+      interactive: false,
+      yes: true,
+    });
+
+    expect(readJson(tree, 'playstack.json').databases.primary).toEqual({
+      adapter: 'prisma',
+      target: 'prisma/models',
+    });
   });
 
   it('reuses existing adapter and TypeScript versions for a new database project', async () => {

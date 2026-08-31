@@ -56,7 +56,7 @@ interface NormalizedDatabaseOptions {
   readonly packageName: string;
   readonly scope: string;
   readonly packageManager: PackageManager;
-  readonly target: string;
+  readonly target?: string;
   readonly schema: string;
   readonly existingLayout: boolean;
   readonly dryRun: boolean;
@@ -261,16 +261,33 @@ async function normalizeOptions(
     );
   }
   const project = raw.project?.trim() || `${scope}-database-${name}`;
+  const existingPlaystackTarget = tree.exists('playstack.json')
+    ? (
+        (
+          readJson<Record<string, unknown>>(tree, 'playstack.json')
+            .databases as Record<string, unknown> | undefined
+        )?.[name] as { target?: unknown } | undefined
+      )?.target
+    : undefined;
+  const existingLayout = tree.exists(
+    adapter === 'prisma'
+      ? (schema ?? `${directory}/prisma/schema.prisma`)
+      : `${directory}/drizzle.config.ts`,
+  );
   const target =
     raw.target?.replace(/^\.\//, '').replace(/\/$/, '') ??
+    (typeof existingPlaystackTarget === 'string'
+      ? existingPlaystackTarget
+      : undefined) ??
     (adapter === 'prisma'
-      ? schema
-        ? `${directory}/models`
+      ? existingLayout
+        ? undefined
         : `${directory}/prisma/models`
       : `${directory}/src/schema`);
   if (
-    !isSafeWorkspaceRelativePath(target) ||
-    !target.startsWith(`${directory}/`)
+    target !== undefined &&
+    (!isSafeWorkspaceRelativePath(target) ||
+      !target.startsWith(`${directory}/`))
   ) {
     throw new DatabaseGeneratorError(
       `Database target must be a safe path inside ${directory}; received ${target}.`,
@@ -302,7 +319,7 @@ async function normalizeOptions(
     packageManager: packageManager(tree),
     target,
     schema: normalizedSchema,
-    existingLayout: tree.exists(normalizedSchema),
+    existingLayout,
     dryRun: raw.dryRun === true || process.env.NX_DRY_RUN === 'true',
     bootstrap: raw.bootstrap === true,
   };
@@ -388,7 +405,8 @@ function assertPlaystackTarget(
     { adapter?: unknown; dialect?: unknown; target?: unknown } | undefined;
   if (
     existing &&
-    (existing.adapter !== options.adapter ||
+    (options.target === undefined ||
+      existing.adapter !== options.adapter ||
       existing.target !== options.target ||
       (options.adapter === 'drizzle' && existing.dialect !== 'postgresql'))
   ) {
@@ -407,13 +425,13 @@ function renderPlan(options: NormalizedDatabaseOptions): string {
 - Adapter: ${options.adapter}
 - Project: ${options.project}
 - Root: ${options.directory}
-- Playstack target: ${options.target}
+- Playstack target: ${options.target ?? 'deferred until an explicit compatible artifact target is selected'}
 - Existing schema: ${options.existingLayout ? options.schema : 'none'}
 
 ## Ordered operations
 
 1. Create or adopt the adapter-native database project.
-2. Record the named target in megamono.json and playstack.json.
+2. Record the database in megamono.json${options.target ? ' and its explicit artifact target in playstack.json' : '; leave Playstack artifact composition deferred'}.
 3. Install compatibility-pinned adapter packages.
 4. Expose static validation without connecting to a database.
 `;
@@ -656,6 +674,7 @@ function writeConfigurations(
       },
     }));
   }
+  if (!options.target) return;
   const playstack = tree.exists('playstack.json')
     ? readJson<Record<string, unknown>>(tree, 'playstack.json')
     : {
