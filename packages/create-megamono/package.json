@@ -2,6 +2,15 @@
   "name": "create-megamono",
   "version": "0.0.1",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/megamono-dev/megamono.git",
+    "directory": "packages/create-megamono"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "create-megamono": "./dist/cli.js"

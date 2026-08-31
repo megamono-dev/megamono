@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "release:check-private": "node tools/check-private-publish.mjs",
+    "release:check": "node tools/check-release-policy.mjs",
     "yalc:publish": "node tools/publish-yalc.mjs",
     "yalc:install-cli": "node tools/install-yalc-cli.mjs",
     "yalc:install-clis": "node tools/install-yalc-cli.mjs"

@@ -89,10 +89,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/megamono-dev/megamono.git"
+    "url": "git+https://github.com/megamono-dev/megamono.git",
+    "directory": "packages/nx-cloudflare"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
-    "access": "restricted"
+    "access": "public"
   }
 }

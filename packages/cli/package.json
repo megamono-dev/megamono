@@ -81,10 +81,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/megamono-dev/megamono.git"
+    "url": "git+https://github.com/megamono-dev/megamono.git",
+    "directory": "packages/cli"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
-    "access": "restricted"
+    "access": "public"
   }
 }
