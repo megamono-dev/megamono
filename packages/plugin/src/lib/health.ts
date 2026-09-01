@@ -742,8 +742,14 @@ function specDriftFindings(
   const specs = documents.filter(
     (document) => document.data.type === 'spec' && !document.archived,
   );
-  const documented = new Set(specs.flatMap(({ data }) => data.projects));
   const projectNames = new Set(Object.keys(graph.nodes));
+  const referenced = new Set(specs.flatMap(({ data }) => data.projects));
+  const documented = new Set<string>();
+  for (const project of referenced) {
+    const aliases = config.health.projectAliases[project];
+    if (aliases) aliases.forEach((candidate) => documented.add(candidate));
+    else documented.add(project);
+  }
   const findings: HealthFinding[] = [];
   for (const ratchet of config.adoption.ratchets) {
     const override = config.conventions.rules[ratchet.rule];
@@ -776,7 +782,13 @@ function specDriftFindings(
       confidence: 'complete',
       summary: `Specifications reference missing project ${project}.`,
       evidence: specs
-        .filter(({ data }) => data.projects.includes(project))
+        .filter(({ data }) =>
+          data.projects.some(
+            (reference) =>
+              reference === project ||
+              config.health.projectAliases[reference]?.includes(project),
+          ),
+        )
         .map(({ data }) => data.id)
         .sort(),
     });

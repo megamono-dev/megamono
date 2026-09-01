@@ -483,6 +483,62 @@ describe('repository health', () => {
     }
   });
 
+  it('expands explicit product aliases into documented Nx projects', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-health-'));
+    try {
+      const specification = document(root, {
+        id: 'spec-quickzones-0001',
+        type: 'spec',
+        status: 'accepted',
+        projects: ['quickzones'],
+      });
+      const graph: ProjectGraph = {
+        nodes: {
+          'quickzones-int-api': {
+            name: 'quickzones-int-api',
+            type: 'app',
+            data: { root: 'apps/api', tags: ['type:app'] },
+          },
+          'quickzones-int-site': {
+            name: 'quickzones-int-site',
+            type: 'app',
+            data: { root: 'apps/site', tags: ['type:app'] },
+          },
+        },
+        dependencies: {
+          'quickzones-int-api': [],
+          'quickzones-int-site': [],
+        },
+      };
+      const config: MegamonoConfig = {
+        ...DEFAULT_MEGAMONO_CONFIG,
+        health: {
+          ...DEFAULT_MEGAMONO_CONFIG.health,
+          projectAliases: {
+            quickzones: ['quickzones-int-api', 'quickzones-int-site'],
+          },
+        },
+      };
+
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph,
+        config,
+        documents: [specification],
+        checks: ['spec-drift'],
+      });
+
+      expect(report.findings).not.toContainEqual(
+        expect.objectContaining({ state: 'missing-project' }),
+      );
+      expect(report.findings).not.toContainEqual(
+        expect.objectContaining({ state: 'undocumented-project' }),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('reports missing managed skills while excluding ejected skills', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-health-'));
     try {

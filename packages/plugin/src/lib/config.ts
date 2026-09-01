@@ -321,6 +321,17 @@ export const megamonoConfigSchema = z
             z.boolean(),
           )
           .default({}),
+        projectAliases: z
+          .record(
+            z.string().regex(topicPattern),
+            z
+              .array(z.string().min(1))
+              .min(1)
+              .refine((projects) => new Set(projects).size === projects.length, {
+                message: 'Health project alias members must be unique.',
+              }),
+          )
+          .default({}),
         suppressions: z
           .array(
             z
@@ -351,6 +362,7 @@ export const megamonoConfigSchema = z
         cadence: 'weekly',
         stalePlanDays: 30,
         checks: {},
+        projectAliases: {},
         suppressions: [],
       }),
     databases: z
@@ -461,6 +473,7 @@ export const DEFAULT_MEGAMONO_CONFIG: MegamonoConfig =
         'orphaned-libraries': true,
         'integration-template-drift': true,
       },
+      projectAliases: {},
       suppressions: [],
     },
     databases: {},
