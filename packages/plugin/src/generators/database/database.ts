@@ -14,7 +14,7 @@ import {
 } from '@nx/devkit';
 import { prompt } from 'enquirer';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import {
   DATABASE_ADAPTERS,
   isSafeWorkspaceRelativePath,
@@ -29,7 +29,6 @@ import type { DatabaseGeneratorSchema } from './schema';
 import {
   isPackageManager,
   lockfileManagers,
-  packageManagerAdapter,
   type PackageManager,
 } from '../../lib/package-manager';
 
@@ -252,7 +251,7 @@ async function normalizeOptions(
       : undefined;
   const directory =
     raw.directory?.replace(/^\.\//, '').replace(/\/$/, '') ??
-    (schema ? dirname(schema) : `packages/database-${name}`);
+    (schema ? dirname(schema) : `libs/${adapter}/${name}`);
   if (!isSafeWorkspaceRelativePath(directory)) {
     throw new DatabaseGeneratorError(
       `Database directory must stay inside the workspace; received ${directory}.`,
@@ -260,7 +259,7 @@ async function normalizeOptions(
       'options',
     );
   }
-  const project = raw.project?.trim() || `${scope}-database-${name}`;
+  const project = raw.project?.trim() || `${scope}-${adapter}-${name}`;
   const existingPlaystackTarget = tree.exists('playstack.json')
     ? (
         (
@@ -326,7 +325,7 @@ async function normalizeOptions(
     adapter,
     directory,
     project,
-    packageName: `@${scope}/database-${name}`,
+    packageName: `@${scope}/${adapter}-${name}`,
     scope,
     packageManager: packageManager(tree),
     target,
@@ -449,12 +448,8 @@ function renderPlan(options: NormalizedDatabaseOptions): string {
 `;
 }
 
-function command(
-  options: NormalizedDatabaseOptions,
-  executable: string,
-  args: readonly string[],
-): string {
-  return packageManagerAdapter(options.packageManager).exec(executable, args);
+function workspacePattern(options: NormalizedDatabaseOptions): string {
+  return options.directory;
 }
 
 function ensureWorkspacePackagePath(
@@ -473,7 +468,9 @@ function ensureWorkspacePackagePath(
       }
       return {
         ...value,
-        workspaces: [...new Set([...(workspaces ?? []), 'packages/*'])].sort(),
+        workspaces: [
+          ...new Set([...(workspaces ?? []), workspacePattern(options)]),
+        ].sort(),
       };
     });
     return;
@@ -487,8 +484,12 @@ function ensureWorkspacePackagePath(
       'package-manager',
     );
   }
-  if (!/^\s*-\s*['"]?packages\/\*['"]?\s*$/m.test(current)) {
-    tree.write(path, `${current.replace(/\s*$/, '')}\n  - 'packages/*'\n`);
+  const pattern = workspacePattern(options);
+  const entries = [...current.matchAll(/^\s*-\s*['"]?([^'"\s]+)['"]?\s*$/gm)].map(
+    (match) => match[1],
+  );
+  if (!entries.includes(pattern)) {
+    tree.write(path, `${current.replace(/\s*$/, '')}\n  - '${pattern}'\n`);
   }
 }
 
@@ -508,11 +509,7 @@ function projectConfiguration(
           cache: true,
           options: {
             cwd: options.directory,
-            command: command(options, 'prisma', [
-              'validate',
-              '--schema',
-              'prisma',
-            ]),
+            command: 'prisma validate --schema prisma',
           },
         },
         generate: {
@@ -521,11 +518,7 @@ function projectConfiguration(
           outputs: ['{projectRoot}/src/generated'],
           options: {
             cwd: options.directory,
-            command: command(options, 'prisma', [
-              'generate',
-              '--schema',
-              'prisma',
-            ]),
+            command: 'prisma generate --schema prisma',
           },
         },
       },
@@ -543,7 +536,7 @@ function projectConfiguration(
         outputs: ['{projectRoot}/dist'],
         options: {
           cwd: options.directory,
-          command: command(options, 'tsc', ['-p', 'tsconfig.json']),
+          command: 'tsc -p tsconfig.json',
         },
       },
       validate: {
@@ -551,7 +544,7 @@ function projectConfiguration(
         cache: true,
         options: {
           cwd: options.directory,
-          command: command(options, 'tsc', ['--noEmit', '-p', 'tsconfig.json']),
+          command: 'tsc --noEmit -p tsconfig.json',
         },
       },
     },
@@ -573,12 +566,8 @@ function adoptedProjectConfiguration(
           cwd: '.',
           command:
             options.adapter === 'prisma'
-              ? command(options, 'prisma', [
-                  'validate',
-                  '--schema',
-                  options.schema,
-                ])
-              : command(options, 'drizzle-kit', ['check']),
+              ? `prisma validate --schema ${options.schema}`
+              : 'drizzle-kit check',
         },
       },
     },
@@ -657,7 +646,7 @@ function writeDrizzle(tree: Tree, options: NormalizedDatabaseOptions): void {
     `import { defineConfig } from 'drizzle-kit';\n\nexport default defineConfig({\n  dialect: 'postgresql',\n  schema: './src/schema',\n  out: './drizzle',\n});\n`,
   );
   writeJson(tree, `${options.directory}/tsconfig.json`, {
-    extends: '../../tsconfig.base.json',
+    extends: relative(options.directory, 'tsconfig.base.json'),
     compilerOptions: {
       declaration: true,
       module: 'NodeNext',

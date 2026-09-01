@@ -358,7 +358,7 @@ try {
   );
   assert(
     existsSync(join(fixtureRoot, 'prisma/project.json')) &&
-      !existsSync(join(fixtureRoot, 'packages/database-primary')),
+      !existsSync(join(fixtureRoot, 'libs/prisma/primary')),
     'Root Prisma adoption introduced a replacement database project.',
   );
   assert(

@@ -171,7 +171,7 @@ try {
   ];
   run('npm', databaseCommand);
   const databaseConfig = readFileSync(
-    join(fixtureRoot, 'packages/database-compatibility/package.json'),
+    join(fixtureRoot, 'libs/drizzle/compatibility/package.json'),
     'utf8',
   );
   const playstackConfig = JSON.parse(
@@ -185,7 +185,7 @@ try {
   run('npm', databaseCommand);
   assert(
     readFileSync(
-      join(fixtureRoot, 'packages/database-compatibility/package.json'),
+      join(fixtureRoot, 'libs/drizzle/compatibility/package.json'),
       'utf8',
     ) === databaseConfig,
     `Nx ${nxVersion} changed the database project during an idempotent rerun.`,

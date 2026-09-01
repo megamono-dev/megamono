@@ -17,7 +17,7 @@
     },
     "directory": {
       "type": "string",
-      "description": "Workspace-relative project root; defaults to packages/database-<name>."
+      "description": "Workspace-relative project root; defaults to libs/<adapter>/<name>."
     },
     "project": {
       "type": "string",

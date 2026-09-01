@@ -109,7 +109,7 @@ async function snapshot(fixtureRoot, manager) {
     'playstack.json',
     '.playstack/skills.json',
     '.agents/skills',
-    'packages/database-analytics',
+    'libs/drizzle/analytics',
   ];
   return Object.fromEntries(
     await Promise.all(
@@ -407,7 +407,7 @@ async function createFixture(
     playstackConfig.databases?.analytics?.adapter === 'drizzle' &&
       playstackConfig.databases.analytics.dialect === 'postgresql' &&
       playstackConfig.databases.analytics.target ===
-        'packages/database-analytics/src/schema' &&
+        'libs/drizzle/analytics/src/schema' &&
       playstackConfig.databases.analytics.packages === undefined,
     `${manager} database generator did not emit a Playstack-compatible Drizzle target.`,
   );
@@ -427,7 +427,7 @@ async function createFixture(
   );
   const synchronizedSchema = resolve(
     fixtureRoot,
-    'packages/database-analytics/src/schema/playstack-accounts.ts',
+    'libs/drizzle/analytics/src/schema/playstack-accounts.ts',
   );
   assert(
     (await exists(synchronizedSchema)) &&

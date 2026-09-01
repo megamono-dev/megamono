@@ -41,23 +41,26 @@ describe('database generator', () => {
     expect(readJson(tree, 'megamono.json').databases).toEqual({
       events: {
         adapter: 'prisma',
-        project: 'fixture-workspace-database-events',
-        schema: 'packages/database-events/prisma/schema.prisma',
+        project: 'fixture-workspace-prisma-events',
+        schema: 'libs/prisma/events/prisma/schema.prisma',
       },
     });
     expect(readJson(tree, 'playstack.json').databases).toEqual({
       events: {
         adapter: 'prisma',
-        target: 'packages/database-events/prisma',
+        target: 'libs/prisma/events/prisma',
       },
     });
     expect(
-      tree.read('packages/database-events/prisma/schema.prisma', 'utf8'),
+      tree.read('libs/prisma/events/prisma/schema.prisma', 'utf8'),
     ).toContain('provider = "prisma-client"');
     expect(
-      readJson(tree, 'packages/database-events/project.json').targets.validate
+      readJson(tree, 'libs/prisma/events/project.json').targets.validate
         .options.command,
-    ).toBe('pnpm exec prisma validate --schema prisma');
+    ).toBe('prisma validate --schema prisma');
+    expect(tree.read('pnpm-workspace.yaml', 'utf8')).toContain(
+      "- 'libs/prisma/events'",
+    );
 
     const before = tree
       .listChanges()
@@ -85,20 +88,27 @@ describe('database generator', () => {
     });
 
     expect(
-      tree.read('packages/database-analytics/drizzle.config.ts', 'utf8'),
+      tree.read('libs/drizzle/analytics/drizzle.config.ts', 'utf8'),
     ).toContain("schema: './src/schema'");
     expect(
-      readJson(tree, 'packages/database-analytics/package.json').dependencies,
+      readJson(tree, 'libs/drizzle/analytics/package.json').dependencies,
     ).toEqual({ 'drizzle-orm': '0.45.2' });
     expect(
-      readJson(tree, 'packages/database-analytics/project.json').targets
+      readJson(tree, 'libs/drizzle/analytics/project.json').targets
         .validate.options.command,
-    ).toBe('npm exec tsc -- --noEmit -p tsconfig.json');
+    ).toBe('tsc --noEmit -p tsconfig.json');
     expect(readJson(tree, 'playstack.json').databases.analytics).toEqual({
       adapter: 'drizzle',
       dialect: 'postgresql',
-      target: 'packages/database-analytics/src/schema',
+      target: 'libs/drizzle/analytics/src/schema',
     });
+    expect(readJson(tree, 'package.json').workspaces).toEqual([
+      'libs/drizzle/analytics',
+      'packages/*',
+    ]);
+    expect(readJson(tree, 'libs/drizzle/analytics/tsconfig.json').extends).toBe(
+      '../../../tsconfig.base.json',
+    );
   });
 
   it('rejects an existing Drizzle target without the supported dialect', async () => {
@@ -107,7 +117,7 @@ describe('database generator', () => {
       databases: {
         events: {
           adapter: 'drizzle',
-          target: 'packages/database-events/src/schema',
+          target: 'libs/drizzle/events/src/schema',
           packages: {},
         },
       },
@@ -229,7 +239,7 @@ describe('database generator', () => {
       targets: {
         validate: {
           options: {
-            command: 'pnpm exec prisma validate --schema prisma/schema.prisma',
+            command: 'prisma validate --schema prisma/schema.prisma',
           },
         },
       },
@@ -239,7 +249,7 @@ describe('database generator', () => {
     );
     expect(readJson(tree, 'megamono.json').databases.primary).toEqual({
       adapter: 'prisma',
-      project: 'fixture-workspace-database-primary',
+      project: 'fixture-workspace-prisma-primary',
       schema: 'prisma/schema.prisma',
     });
     expect(tree.exists('playstack.json')).toBe(false);
@@ -313,8 +323,9 @@ describe('database generator', () => {
       yes: true,
     });
     expect(
-      readJson(tree, 'packages/database-events/package.json'),
+      readJson(tree, 'libs/prisma/events/package.json'),
     ).toMatchObject({
+      name: '@fixture-workspace/prisma-events',
       dependencies: { '@prisma/client': '^6.19.3' },
       devDependencies: { prisma: '^6.19.3', typescript: '~5.9.2' },
     });
@@ -326,7 +337,7 @@ describe('database generator', () => {
       databases: {
         events: {
           adapter: 'prisma',
-          target: 'packages/database-events/prisma',
+          target: 'libs/prisma/events/prisma',
           packages: { '@playstack/auth': {} },
         },
       },
