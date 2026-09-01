@@ -35,6 +35,8 @@ During the private-package validation phase, install the optional
 `@playstack/client-auth` peer alongside the CLI (or link both through Yalc).
 Once that client package is public, ordinary package-manager installation owns
 the peer in the same way.
+`npm run yalc:install-cli` installs the matching peer globally when it is
+available in the local Yalc store and otherwise leaves core commands usable.
 
 Once initialized, repository modules and applications can be added through the
 same workspace-local generators used by `create-megamono`:

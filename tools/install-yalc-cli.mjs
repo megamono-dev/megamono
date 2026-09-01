@@ -70,6 +70,50 @@ try {
   const globalPrefix = await run(npm, ['prefix', '--global'], {
     capture: true,
   });
+  const cliManifest = JSON.parse(
+    await readFile(join(root, 'packages/cli/package.json'), 'utf8'),
+  );
+  const hostedPeerRange = cliManifest.peerDependencies?.['@playstack/client-auth'];
+  const hostedPeerVersion = hostedPeerRange?.match(
+    /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/,
+  )?.[0];
+  if (hostedPeerVersion) {
+    const hostedPeerDirectory = join(
+      yalcDirectory,
+      'packages',
+      '@playstack',
+      'client-auth',
+      hostedPeerVersion,
+    );
+    try {
+      await access(join(hostedPeerDirectory, 'package.json'));
+      const packedPeer = JSON.parse(
+        await run(
+          npm,
+          [
+            'pack',
+            hostedPeerDirectory,
+            '--pack-destination',
+            packDirectory,
+            '--json',
+          ],
+          { capture: true },
+        ),
+      );
+      await run(npm, [
+        'install',
+        '--global',
+        join(packDirectory, packedPeer[0].filename),
+      ]);
+      process.stdout.write(
+        `\nInstalled @playstack/client-auth@${hostedPeerVersion} globally for optional hosted commands.\n`,
+      );
+    } catch {
+      process.stdout.write(
+        '\n@playstack/client-auth is not published in yalc; core Megamono commands remain available, but hosted auth commands require that optional peer.\n',
+      );
+    }
+  }
   for (const entry of globalPackages) {
     const packageJson = JSON.parse(
       await readFile(join(root, entry.directory, 'package.json'), 'utf8'),
