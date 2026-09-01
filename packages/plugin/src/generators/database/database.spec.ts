@@ -78,6 +78,44 @@ describe('database generator', () => {
     ).toEqual(before);
   });
 
+  it('adds nested projects only to the pnpm packages block', async () => {
+    const tree = workspace();
+    tree.write(
+      'pnpm-workspace.yaml',
+      [
+        'packages:',
+        "  - 'apps/*'",
+        "  - 'packages/*'",
+        'autoInstallPeers: true',
+        'allowBuilds:',
+        "  '@swc/core': true",
+        '  nx: true',
+        '',
+      ].join('\n'),
+    );
+
+    await databaseGenerator(tree, {
+      name: 'primary',
+      adapter: 'prisma',
+      interactive: false,
+      yes: true,
+    });
+
+    expect(tree.read('pnpm-workspace.yaml', 'utf8')).toBe(
+      [
+        'packages:',
+        "  - 'apps/*'",
+        "  - 'packages/*'",
+        "  - 'libs/prisma/primary'",
+        'autoInstallPeers: true',
+        'allowBuilds:',
+        "  '@swc/core': true",
+        '  nx: true',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('creates a Drizzle target with npm-aware static validation', async () => {
     const tree = workspace('npm');
     await databaseGenerator(tree, {

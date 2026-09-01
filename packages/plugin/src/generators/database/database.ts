@@ -799,7 +799,10 @@ function ensureWorkspacePackagePath(
   }
   const path = 'pnpm-workspace.yaml';
   const current = tree.read(path, 'utf8') ?? 'packages:\n';
-  if (!/^packages:\s*$/m.test(current)) {
+  const newline = current.includes('\r\n') ? '\r\n' : '\n';
+  const lines = current.split(/\r?\n/);
+  const packagesIndex = lines.findIndex((line) => /^packages:\s*$/.test(line));
+  if (packagesIndex === -1) {
     throw new DatabaseGeneratorError(
       'pnpm-workspace.yaml must contain a packages list.',
       3,
@@ -807,11 +810,19 @@ function ensureWorkspacePackagePath(
     );
   }
   const pattern = workspacePattern(options);
-  const entries = [
-    ...current.matchAll(/^\s*-\s*['"]?([^'"\s]+)['"]?\s*$/gm),
-  ].map((match) => match[1]);
+  let packagesEnd = packagesIndex + 1;
+  while (packagesEnd < lines.length && /^\s+\S/.test(lines[packagesEnd])) {
+    packagesEnd += 1;
+  }
+  const entries = lines
+    .slice(packagesIndex + 1, packagesEnd)
+    .map((line) =>
+      line.match(/^\s*-\s*['"]?([^'"#]+?)['"]?\s*(?:#.*)?$/)?.[1].trim(),
+    )
+    .filter((entry): entry is string => Boolean(entry));
   if (!entries.includes(pattern)) {
-    tree.write(path, `${current.replace(/\s*$/, '')}\n  - '${pattern}'\n`);
+    lines.splice(packagesEnd, 0, `  - '${pattern}'`);
+    tree.write(path, lines.join(newline));
   }
 }
 
