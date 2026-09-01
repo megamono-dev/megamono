@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://megamono.dev/schemas/artifacts.schema.json",
+  "$id": "https://megamono.com/schemas/artifacts.schema.json",
   "title": "Megamono artifact registry",
   "type": "object",
   "additionalProperties": false,
