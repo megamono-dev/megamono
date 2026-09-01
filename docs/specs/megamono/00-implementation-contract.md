@@ -60,7 +60,7 @@ Megamono distinguishes a pinned scaffold baseline from a broader adoption range.
 | Package                   | Responsibility                                                                                      | Runtime dependency?                   | Repository status                 |
 | ------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------- | --------------------------------- |
 | `create-megamono`         | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `npx` or equivalent | Implemented; public release group |
-| `@megamono/cli`           | Global `megamono` command that delegates existing-workspace operations to the local Nx plugin       | Global development tool               | Implemented; public release group |
+| `@megamono/cli`           | Global dispatcher for local Nx operations, optional Playstack handoff, and optional hosted auth/account commands | Global development tool; optional `@playstack/client-auth` peer | Implemented; public release group |
 | `@megamono/plugin`        | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                   | Implemented; public release group |
 | `@megamono/nx-apple`      | Apple project inference, targets, and graph edges                                                   | Dev dependency only                   | Implemented; public release group |
 | `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                   | Implemented; public release group |
@@ -139,6 +139,9 @@ megamono add app api --name=admin-api
 megamono add database primary --adapter=prisma
 megamono add database analytics --adapter=drizzle
 megamono add docs|agents|ci|release|lint|skills|health|inference
+megamono auth login|status|logout
+megamono account list
+megamono account use <id|slug|name>
 megamono generate <name> [...generator options]
 megamono help
 megamono --version
@@ -147,6 +150,26 @@ megamono --version
 `megamono init [...options]` finds the workspace from the current directory, resolves root package-manager ownership from the committed lockfile or `packageManager` declaration, verifies that the corresponding local package manager, Nx, and `@megamono/plugin` are installed, and delegates to the local `@megamono/plugin:workspace-init` generator through the recorded manager's adapter. A core-only `--survey` is the exception: it invokes the repository-local Nx binary directly through Node, so an unsupported or unavailable global package manager does not prevent read-only inspection. Every option not owned by the Playstack orchestration families below is forwarded as its own argument without reinterpretation, including `--survey`, `--only`, `--interactive`, `--yes`, and generator options added by a compatible local plugin.
 
 `megamono generate <name> [...options]` reads the workspace-local plugin availability registry before delegation. Available names run through the local Nx and package manager; gated and reserved names exit `3` with the registry's exact unsatisfied gate and never reach Nx. This preserves an available-only published collection while giving the dedicated CLI a stable diagnostic for canonical names that are not yet buildable.
+
+`megamono auth login` is the only browser-launching command. It uses the
+Playstack public-client implementation with S256 PKCE, callback-state
+validation, an ephemeral loopback port, one-time authorization codes, rotating
+refresh tokens, and explicit registered scopes. Credentials are stored per
+service origin in a user-only configuration file; the service URL defaults to
+`https://app.megamono.com` and may be selected with `--service-url` or
+`MEGAMONO_SERVICE_URL`. Non-loopback HTTP origins are rejected. `auth status`
+and `auth logout` work outside a repository, and no local command attempts an
+implicit login. The hosted command family applies the Playstack client's Node
+`>=20` gate only when invoked; it does not narrow the core CLI's Node 18.18
+adoption baseline.
+
+`megamono account list` shows every personal or organization membership and the
+active account. `megamono account use` accepts an exact ID, slug, or unambiguous
+name and otherwise prompts in an interactive terminal. Account switching uses
+Playstack session replacement, preserves the public-client binding and scopes,
+and stores the rotated token family before any subsequent hosted request. A
+hosted mutation requires an active account; the CLI never selects one from the
+current directory, package scope, Git remote, or GitHub organization.
 
 `megamono add app <type> [...options]` delegates to the local `@megamono/plugin:app` generator. The supported v1 types are `web`, `site`, `api`, `worker`, `mobile`, `desktop`, and `apple`. The type is also the default project basename; `--name` and `--directory` allow additional instances without changing the maintained preset. A valueless `megamono add app` opens the type selector in an interactive terminal and exits `4` without mutation in non-interactive mode. The generator owns application structure, project registration, conventional tags, stable port allocation, lint and test setup, Nest feature-library composition, Chakra starter composition, and the repository onboarding billboard where applicable.
 
@@ -276,4 +299,7 @@ A spec is build-ready when it has `status: accepted`, no unresolved decision tha
 - Language-plugin fixtures prove the Nx 18–23 API bridge, deterministic project discovery, and affected graph propagation.
 - Apple discovery ignores Xcode's generated `<name>.xcodeproj/project.xcworkspace` bundle and indexes the owning `.xcodeproj` only; standalone `.xcworkspace` manifests remain independently discoverable.
 - Gated generators are absent from the published collection until their external contract fixtures pass.
-- No core package has a runtime dependency on Playstack, an application framework, or Nx Enterprise.
+- No repository-shaping path has a runtime dependency on Playstack, an
+  application framework, or Nx Enterprise. The global CLI dynamically loads
+  the optional `@playstack/client-auth` peer only for explicit hosted `auth` and
+  `account` commands.

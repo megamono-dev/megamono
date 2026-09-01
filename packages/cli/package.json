@@ -72,6 +72,14 @@
     "enquirer": "2.3.6",
     "tslib": "^2.3.0"
   },
+  "peerDependencies": {
+    "@playstack/client-auth": ">=0.1.0-beta.1 <0.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@playstack/client-auth": {
+      "optional": true
+    }
+  },
   "engines": {
     "node": ">=18.18 <25",
     "pnpm": ">=8 <12",

@@ -60,6 +60,8 @@ When code runs is incidental. Build-time schema fragments and transforms are Pla
 | CI workflow generation                       | Megamono  | Structural; makes `affected` pay off           |
 | Release / versioning / yalc                  | Megamono  | Repo mechanics                                 |
 | `@playstack/auth` implementation             | Playstack | Runs in production                             |
+| Hosted CLI PKCE client                       | Playstack | OAuth client security and token rotation       |
+| Hosted CLI command UX and credential path    | Megamono  | Megamono service and terminal integration      |
 | Product capability recipes and app bindings  | Playstack | Product behavior and its prerequisites         |
 | Database project/path selection              | Megamono  | Repository structure                           |
 | Chakra theme package                         | Playstack | Ships to the browser                           |
@@ -81,7 +83,14 @@ The command sequence makes this boundary visible: `megamono add app api` creates
 
 ## What Megamono may emit or delegate
 
-**Megamono depends on nothing in Playstack.** No `@megamono/*` package lists a Playstack package in its own dependencies. Generators _emit_ code that imports Playstack — a template string, not a dependency edge.
+Repository-shaping Megamono code depends on nothing in Playstack. Generators
+_emit_ code that imports Playstack — a template string, not a dependency edge.
+The single narrow exception is the global CLI's optional hosted-auth surface:
+it dynamically loads the Free `@playstack/client-auth` peer only for `auth` and
+`account` commands. That package owns PKCE, callback-state verification,
+loopback handling, token exchange, rotation, and revocation. It is never loaded
+by `init`, `add`, `generate`, or repository checks, and a missing peer cannot
+degrade local behavior.
 
 That distinction is what keeps the direction rule true in practice rather than only on paper. An agent auditing this should check `package.json`, not grep for the string. The registry also retains reserved legacy generator records for stable diagnostics; those entries do not mean Megamono installs the corresponding package.
 
@@ -220,6 +229,9 @@ In each case the left side is thinner than it wants to be, and holding that line
 - Direct-package yalc fixtures fail on any registry fallback and prove every required local Playstack edge is linked before package-manager hydration.
 - Megamono never registers or manages a Playstack-owned emission in `.megamono/artifacts.json`.
 - No published `@playstack/*` package manifest or graph node depends on `@megamono/*`.
+- Hosted `auth` and `account` commands use the optional Playstack public-client
+  peer, while every repository command runs unchanged without that peer or a
+  Megamono account.
 - Database-aware generators are idempotent, select or require a compatible named target deterministically, omit package allowlists for discovery by default, validate only through the configured adapter's static contract, and never connect to a database.
 - Springbar selection performs the MCP handoff after successful workspace creation, while Megamono never writes Springbar configuration directly; handoff failure is non-fatal and retryable.
 - The reserved queues and admin generators are absent from the v1 generator collection.

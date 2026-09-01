@@ -11,6 +11,31 @@ megamono init
 The target workspace must install `@megamono/plugin` as a development
 dependency. The CLI always delegates to the workspace-local Nx and plugin.
 
+Hosted authentication is optional and independent of repository discovery:
+
+```sh
+megamono auth login
+megamono auth status
+megamono account list
+megamono account use commune
+megamono auth logout
+```
+
+Login opens `app.megamono.com` in the browser and uses the Playstack public
+client's S256 PKCE and loopback callback flow. Credentials are stored with
+user-only permissions under the Megamono configuration directory. A user may
+belong to personal and organization accounts; switching accounts rotates the
+session and scopes later hosted operations to that account. For a local
+Springbar environment, pass `--service-url=https://app.megamono.test` or set
+`MEGAMONO_SERVICE_URL`. Structural commands never require a login.
+Hosted auth commands require Node.js 20 or newer; this does not narrow the
+Node.js 18.18 baseline for repository-only CLI operations.
+
+During the private-package validation phase, install the optional
+`@playstack/client-auth` peer alongside the CLI (or link both through Yalc).
+Once that client package is public, ordinary package-manager installation owns
+the peer in the same way.
+
 Once initialized, repository modules and applications can be added through the
 same workspace-local generators used by `create-megamono`:
 

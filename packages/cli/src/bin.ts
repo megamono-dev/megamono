@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { stdin, stdout } from 'node:process';
 import enquirer from 'enquirer';
 import { runMegamonoCli, type CommandResult } from './lib/cli.js';
+import { createHostedAuthOperations } from './lib/hosted-auth.js';
 
 const { prompt } = enquirer;
 
@@ -46,6 +47,24 @@ async function runCommand(
   });
 }
 
+async function openExternal(url: string): Promise<void> {
+  const invocation =
+    process.platform === 'darwin'
+      ? { command: 'open', args: [url] }
+      : process.platform === 'win32'
+        ? { command: 'rundll32', args: ['url.dll,FileProtocolHandler', url] }
+        : { command: 'xdg-open', args: [url] };
+  const result = await runCommand(invocation.command, invocation.args, {
+    cwd: process.cwd(),
+    capture: true,
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `Could not open the authorization URL: ${result.stderr ?? `exit ${result.exitCode}`}`,
+    );
+  }
+}
+
 const packageJson = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
 ) as { version: string };
@@ -55,6 +74,10 @@ const result = await runMegamonoCli(process.argv.slice(2), {
   version: packageJson.version,
   stdout: (message) => process.stdout.write(`${message}\n`),
   stderr: (message) => process.stderr.write(`${message}\n`),
+  hostedAuth: createHostedAuthOperations({ open: openExternal }),
+  ...(process.env.MEGAMONO_SERVICE_URL
+    ? { hostedServiceUrl: process.env.MEGAMONO_SERVICE_URL }
+    : {}),
   ...(stdin.isTTY && stdout.isTTY
     ? {
         selectAppType: async (
@@ -108,6 +131,25 @@ const result = await runMegamonoCli(process.argv.slice(2), {
             initial: false,
           });
           return response.confirmed;
+        },
+        selectHostedAccount: async (
+          accounts: readonly {
+            readonly id: string;
+            readonly name: string;
+            readonly slug: string;
+            readonly role: string;
+          }[],
+        ) => {
+          const response = await prompt<{ account: string }>({
+            type: 'select',
+            name: 'account',
+            message: 'Which account should this terminal use?',
+            choices: accounts.map((account) => ({
+              name: account.id,
+              message: `${account.name} (${account.slug}) — ${account.role}`,
+            })),
+          });
+          return response.account;
         },
         selectPlaystackPackages: async (
           choices: readonly {

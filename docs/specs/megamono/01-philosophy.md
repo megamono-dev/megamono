@@ -164,6 +164,13 @@ reruns, and pull-request delivery. A hosted run pins a released public version
 and emits a locally replayable manifest and command. Service-only repository
 semantics are prohibited.
 
+The public CLI may authenticate to that optional service through an explicit
+`megamono auth login` command. Login uses the service's Playstack public-client
+authorization flow, never gates local commands, and keeps personal and
+organization memberships distinct through an explicit active-account switch.
+The CLI can inspect or change the active hosted account without requiring an Nx
+workspace. It does not infer an organization from the current Git remote.
+
 Pricing, plans, metering, entitlements, billing, and service data-retention
 policy belong to the private hosted-service specification, not this public
 package contract. The public contract owns the portable manifest and execution

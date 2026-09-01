@@ -8,6 +8,11 @@ import {
   packageManagerAdapter,
   type PackageManager,
 } from './package-manager.js';
+import type {
+  HostedAccount,
+  HostedAuthOperations,
+  HostedProfile,
+} from './hosted-auth.js';
 
 export type { PackageManager } from './package-manager.js';
 export type LocalPackageSource = 'registry' | 'yalc';
@@ -37,6 +42,9 @@ export interface MegamonoCliIo {
     choices: readonly DatabaseAdapterChoice[],
   ): Promise<string>;
   confirmAddPlan?(message: string): Promise<boolean>;
+  selectHostedAccount?(accounts: readonly HostedAccount[]): Promise<string>;
+  readonly hostedAuth?: HostedAuthOperations;
+  readonly hostedServiceUrl?: string;
   workspaceMutationState?(): Promise<WorkspaceMutationState>;
   activeToolchainState?(): Promise<ActiveToolchainState>;
   runCommand(
@@ -163,6 +171,9 @@ Commands:
   add app [type]       Add a convention-aligned application
   add database [name]  Add a named Prisma or Drizzle database project
   add <module>         Add one repository-governance module
+  auth login|status|logout
+                       Manage optional hosted-service authentication
+  account list|use     List or switch personal and organization accounts
   generate <name>      Run an available local Megamono generator
   help                 Show this help
 
@@ -181,6 +192,23 @@ Init-only options:
                        Package source for missing local packages
 
 All other init options are forwarded to @megamono/plugin:workspace-init.`;
+
+const AUTH_HELP = `Usage: megamono auth <login|status|logout> [options]
+
+Options:
+  --service-url=<url>  Select the hosted service (default: https://app.megamono.com)
+  --account=<id|slug>  Select an account immediately after login
+
+Login opens a browser, uses S256 PKCE with a loopback callback, and stores
+rotating credentials in the user configuration directory. Repository commands
+continue to work without a hosted login.`;
+
+const ACCOUNT_HELP = `Usage: megamono account list [--service-url=<url>]
+       megamono account use [id|slug|name] [--service-url=<url>]
+
+Account membership is user-scoped. Switching replaces the current bearer
+session so later hosted operations are isolated to the selected personal or
+organization account.`;
 
 const ADD_HELP = `Usage: megamono add app [type] [options]
        megamono add database [name] [options]
@@ -2202,6 +2230,191 @@ async function runInit(
   return { exitCode: configured.exitCode };
 }
 
+interface HostedCommandOptions {
+  readonly serviceUrl: string;
+  readonly account?: string;
+  readonly positional: readonly string[];
+}
+
+function parseHostedOptions(
+  args: readonly string[],
+  io: MegamonoCliIo,
+): HostedCommandOptions {
+  let serviceUrl = io.hostedServiceUrl ?? 'https://app.megamono.com';
+  let account: string | undefined;
+  const positional: string[] = [];
+  for (const argument of args) {
+    if (argument.startsWith('--service-url=')) {
+      serviceUrl = argument.slice('--service-url='.length);
+    } else if (argument.startsWith('--account=')) {
+      account = argument.slice('--account='.length);
+    } else if (argument.startsWith('-')) {
+      throw new CliError(`Unknown hosted-service option ${argument}.`, 2);
+    } else {
+      positional.push(argument);
+    }
+  }
+  if (!serviceUrl.trim()) {
+    throw new CliError('--service-url requires a value.', 2);
+  }
+  if (account !== undefined && !account.trim()) {
+    throw new CliError('--account requires a value.', 2);
+  }
+  return { serviceUrl, ...(account ? { account } : {}), positional };
+}
+
+function hostedAuth(io: MegamonoCliIo): HostedAuthOperations {
+  if (!io.hostedAuth) {
+    throw new CliError(
+      'Hosted authentication is unavailable in this CLI build. Install @playstack/client-auth alongside @megamono/cli and retry.',
+      3,
+    );
+  }
+  return io.hostedAuth;
+}
+
+function matchingAccount(
+  accounts: readonly HostedAccount[],
+  selector: string,
+): HostedAccount {
+  const normalized = selector.trim().toLowerCase();
+  const matches = accounts.filter(
+    (account) =>
+      account.id === selector ||
+      account.slug.toLowerCase() === normalized ||
+      account.name.toLowerCase() === normalized,
+  );
+  if (matches.length !== 1) {
+    throw new CliError(
+      matches.length === 0
+        ? `No account matches ${selector}.`
+        : `Account selector ${selector} is ambiguous; use an account ID.`,
+      4,
+    );
+  }
+  return matches[0] as HostedAccount;
+}
+
+async function selectHostedAccount(
+  io: MegamonoCliIo,
+  profile: HostedProfile,
+  selector?: string,
+): Promise<HostedAccount | undefined> {
+  if (selector) return matchingAccount(profile.accounts, selector);
+  if (profile.accounts.length === 1) return profile.accounts[0];
+  if (profile.accounts.length > 1 && io.selectHostedAccount) {
+    return matchingAccount(
+      profile.accounts,
+      await io.selectHostedAccount(profile.accounts),
+    );
+  }
+  return undefined;
+}
+
+function printHostedProfile(
+  io: MegamonoCliIo,
+  serviceUrl: string,
+  profile: HostedProfile,
+): void {
+  const active = profile.accounts.find(
+    (account) => account.id === profile.account?.id,
+  );
+  io.stdout(`Signed in to ${serviceUrl} as ${profile.user.email}.`);
+  io.stdout(
+    active
+      ? `Active account: ${active.name} (${active.slug}, ${active.role}).`
+      : 'No active account. Run megamono account use to select one.',
+  );
+}
+
+async function runAuth(
+  args: readonly string[],
+  io: MegamonoCliIo,
+): Promise<MegamonoCliResult> {
+  const action = args[0];
+  if (!action || action === '--help' || action === '-h') {
+    io.stdout(AUTH_HELP);
+    return { exitCode: 0 };
+  }
+  const options = parseHostedOptions(args.slice(1), io);
+  if (options.positional.length > 0) {
+    throw new CliError(AUTH_HELP, 2);
+  }
+  const auth = hostedAuth(io);
+  if (action === 'login') {
+    let profile = await auth.login(options.serviceUrl);
+    const account = await selectHostedAccount(io, profile, options.account);
+    if (account && account.id !== profile.account?.id) {
+      profile = await auth.switchAccount(options.serviceUrl, account.id);
+    }
+    printHostedProfile(io, options.serviceUrl, profile);
+    return { exitCode: 0 };
+  }
+  if (options.account) throw new CliError(AUTH_HELP, 2);
+  if (action === 'status') {
+    const profile = await auth.profile(options.serviceUrl);
+    if (!profile) {
+      io.stdout(`Not signed in to ${options.serviceUrl}.`);
+    } else {
+      printHostedProfile(io, options.serviceUrl, profile);
+    }
+    return { exitCode: 0 };
+  }
+  if (action === 'logout') {
+    await auth.logout(options.serviceUrl);
+    io.stdout(`Signed out of ${options.serviceUrl}.`);
+    return { exitCode: 0 };
+  }
+  throw new CliError(`Unknown auth command ${action}.\n\n${AUTH_HELP}`, 2);
+}
+
+async function runAccount(
+  args: readonly string[],
+  io: MegamonoCliIo,
+): Promise<MegamonoCliResult> {
+  const action = args[0];
+  if (!action || action === '--help' || action === '-h') {
+    io.stdout(ACCOUNT_HELP);
+    return { exitCode: 0 };
+  }
+  const options = parseHostedOptions(args.slice(1), io);
+  if (options.account) throw new CliError(ACCOUNT_HELP, 2);
+  const auth = hostedAuth(io);
+  const profile = await auth.profile(options.serviceUrl);
+  if (!profile) {
+    throw new CliError(
+      `Not signed in to ${options.serviceUrl}. Run megamono auth login first.`,
+      3,
+    );
+  }
+  if (action === 'list') {
+    if (options.positional.length > 0) throw new CliError(ACCOUNT_HELP, 2);
+    for (const account of profile.accounts) {
+      const marker = account.id === profile.account?.id ? '*' : ' ';
+      io.stdout(`${marker} ${account.name} (${account.slug}) — ${account.role}`);
+    }
+    return { exitCode: 0 };
+  }
+  if (action === 'use') {
+    if (options.positional.length > 1) throw new CliError(ACCOUNT_HELP, 2);
+    const account = await selectHostedAccount(
+      io,
+      profile,
+      options.positional[0],
+    );
+    if (!account) {
+      throw new CliError(
+        'Multiple accounts are available. Pass an ID or slug, or run interactively.',
+        4,
+      );
+    }
+    const switched = await auth.switchAccount(options.serviceUrl, account.id);
+    printHostedProfile(io, options.serviceUrl, switched);
+    return { exitCode: 0 };
+  }
+  throw new CliError(`Unknown account command ${action}.\n\n${ACCOUNT_HELP}`, 2);
+}
+
 export async function runMegamonoCli(
   args: readonly string[],
   io: MegamonoCliIo,
@@ -2240,6 +2453,12 @@ export async function runMegamonoCli(
         return { exitCode: 0 };
       }
       return await runAdd(args.slice(1), io);
+    }
+    if (args[0] === 'auth') {
+      return await runAuth(args.slice(1), io);
+    }
+    if (args[0] === 'account') {
+      return await runAccount(args.slice(1), io);
     }
     if (args[0] === 'generate') {
       return await runGenerate(args.slice(1), io);

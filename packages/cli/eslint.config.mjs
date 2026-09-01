@@ -12,7 +12,7 @@ export default [
             '{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}',
             '{projectRoot}/vitest.config.{js,ts,mjs,mts}',
           ],
-          ignoredDependencies: ['vitest'],
+          ignoredDependencies: ['@playstack/client-auth', 'vitest'],
         },
       ],
     },

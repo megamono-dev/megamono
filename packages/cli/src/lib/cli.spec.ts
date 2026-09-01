@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   runMegamonoCli,
   type CommandResult,
@@ -9,6 +9,7 @@ import {
   type PackageManager,
   type WorkspaceMutationState,
 } from './cli.js';
+import type { HostedAuthOperations, HostedProfile } from './hosted-auth.js';
 
 interface Invocation {
   readonly command: string;
@@ -206,6 +207,103 @@ afterEach(async () => {
 });
 
 describe('@megamono/cli', () => {
+  it('logs in through hosted auth and selects a personal or organization account', async () => {
+    const harness = io('/not-a-workspace');
+    const initial: HostedProfile = {
+      user: { id: 'user-1', email: 'developer@megamono.test' },
+      account: null,
+      accounts: [
+        { id: 'personal-1', name: 'Personal', slug: 'personal', role: 'owner' },
+        { id: 'commune-1', name: 'Commune', slug: 'commune', role: 'member' },
+      ],
+    };
+    const selected: HostedProfile = {
+      ...initial,
+      account: { id: 'commune-1', role: 'member' },
+    };
+    const auth: HostedAuthOperations = {
+      login: vi.fn(async () => initial),
+      profile: vi.fn(async () => selected),
+      logout: vi.fn(async () => undefined),
+      switchAccount: vi.fn(async () => selected),
+    };
+
+    const result = await runMegamonoCli(
+      ['auth', 'login', '--service-url=https://app.megamono.test'],
+      {
+        ...harness.value,
+        hostedAuth: auth,
+        selectHostedAccount: async () => 'commune-1',
+      },
+    );
+
+    expect(result).toEqual({ exitCode: 0 });
+    expect(auth.login).toHaveBeenCalledWith('https://app.megamono.test');
+    expect(auth.switchAccount).toHaveBeenCalledWith(
+      'https://app.megamono.test',
+      'commune-1',
+    );
+    expect(harness.stdout.join('\n')).toContain(
+      'Active account: Commune (commune, member).',
+    );
+    expect(harness.invocations).toEqual([]);
+  });
+
+  it('lists accounts and switches by slug without requiring an Nx workspace', async () => {
+    const harness = io('/not-a-workspace');
+    const initial: HostedProfile = {
+      user: { id: 'user-1', email: 'developer@megamono.test' },
+      account: { id: 'personal-1', role: 'owner' },
+      accounts: [
+        { id: 'personal-1', name: 'Personal', slug: 'personal', role: 'owner' },
+        { id: 'commune-1', name: 'Commune', slug: 'commune', role: 'member' },
+      ],
+    };
+    const auth: HostedAuthOperations = {
+      login: vi.fn(async () => initial),
+      profile: vi.fn(async () => initial),
+      logout: vi.fn(async () => undefined),
+      switchAccount: vi.fn(async () => ({
+        ...initial,
+        account: { id: 'commune-1', role: 'member' },
+      })),
+    };
+    const value = { ...harness.value, hostedAuth: auth };
+
+    await expect(runMegamonoCli(['account', 'list'], value)).resolves.toEqual({
+      exitCode: 0,
+    });
+    await expect(
+      runMegamonoCli(['account', 'use', 'commune'], value),
+    ).resolves.toEqual({ exitCode: 0 });
+
+    expect(harness.stdout.join('\n')).toContain('* Personal (personal) — owner');
+    expect(auth.switchAccount).toHaveBeenCalledWith(
+      'https://app.megamono.com',
+      'commune-1',
+    );
+  });
+
+  it('reports hosted status cleanly when no credentials are stored', async () => {
+    const harness = io('/not-a-workspace');
+    const auth: HostedAuthOperations = {
+      login: vi.fn(),
+      profile: vi.fn(async () => null),
+      logout: vi.fn(async () => undefined),
+      switchAccount: vi.fn(),
+    };
+
+    await expect(
+      runMegamonoCli(['auth', 'status'], {
+        ...harness.value,
+        hostedAuth: auth,
+      }),
+    ).resolves.toEqual({ exitCode: 0 });
+    expect(harness.stdout).toEqual([
+      'Not signed in to https://app.megamono.com.',
+    ]);
+  });
+
   it('shows database help without resolving a name, adapter, or workspace', async () => {
     const harness = io('/missing-workspace');
 
