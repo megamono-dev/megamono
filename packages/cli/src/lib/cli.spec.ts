@@ -206,6 +206,20 @@ afterEach(async () => {
 });
 
 describe('@megamono/cli', () => {
+  it('shows database help without resolving a name, adapter, or workspace', async () => {
+    const harness = io('/missing-workspace');
+
+    await expect(
+      runMegamonoCli(['add', 'database', '--help'], harness.value),
+    ).resolves.toEqual({ exitCode: 0 });
+    expect(harness.stdout.join('\n')).toContain(
+      'Usage: megamono add database [name] [options]',
+    );
+    expect(harness.stdout.join('\n')).toContain('--adapter=prisma|drizzle');
+    expect(harness.invocations).toEqual([]);
+    expect(harness.stderr).toEqual([]);
+  });
+
   it('rejects the active runtime and package manager before invoking Nx', async () => {
     const root = await workspace('pnpm');
     await json(join(root, 'package.json'), {

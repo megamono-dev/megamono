@@ -166,6 +166,8 @@ Playstack setup installs a missing `@playstack/cli` as a dev dependency, handles
 
 The global CLI never upgrades the plugin, runs a global Nx or Playstack binary, bypasses generator preflight, or contains a copy of either product's init logic. Unknown commands, invalid CLI-only values, and invalid Playstack package names exit `2`. Preflight/source failures exit `3`. Otherwise the CLI returns the delegated process status, including signal failures, without translating generator diagnostics. A failure after workspace-init prints the completed steps and exact retry command; it does not roll back Megamono-owned files.
 
+Nested help is resolved before workspace discovery or interactive decisions. In particular, `megamono add database --help` prints the database generator options without requiring a database name, adapter, initialized workspace, or active package-manager preflight.
+
 This design deliberately allows the globally installed CLI and repository-local plugin to update independently. The local plugin and local Nx version remain authoritative for workspace behavior; the CLI owns only command discovery, prompting, dependency preflight, package-manager selection, delegation, help, and version output. `create-megamono` invokes the same local `app` and `workspace-init` generators after it establishes the Nx workspace; it contains no second copy of an application preset or post-processing template.
 
 ## Canonical executor targets

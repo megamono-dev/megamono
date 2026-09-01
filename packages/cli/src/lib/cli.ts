@@ -200,6 +200,22 @@ Modules: ${ADD_MODULES.join(', ')}
 
 Add commands require an initialized workspace with local nx and @megamono/plugin.`;
 
+const DATABASE_HELP = `Usage: megamono add database [name] [options]
+
+Options:
+  --adapter=prisma|drizzle
+                       Select the database toolkit
+  --directory=<path>   Select the Nx project root
+  --project=<name>     Select the Nx project name
+  --schema=<path>      Adopt an existing Prisma schema entry
+  --target=<path>      Select the complete Playstack artifact target
+  --scope=<scope>      Select the package and tag scope
+  --dry-run            Preview without mutation
+  --interactive=false  Disable prompts for automation
+  --yes                Confirm a fully resolved non-interactive plan
+
+Fresh projects default to libs/<adapter>/<name>. Existing Prisma layouts are adopted in place unless an explicit relocation operation is requested.`;
+
 const INIT_HELP = `Usage: megamono init [generator options]
 
 Examples:
@@ -2209,6 +2225,13 @@ export async function runMegamonoCli(
     if (args[0] === 'add') {
       if (args[1] === '--help' || args[1] === '-h') {
         io.stdout(ADD_HELP);
+        return { exitCode: 0 };
+      }
+      if (
+        args[1] === 'database' &&
+        (args[2] === '--help' || args[2] === '-h')
+      ) {
+        io.stdout(DATABASE_HELP);
         return { exitCode: 0 };
       }
       return await runAdd(args.slice(1), io);
