@@ -75,6 +75,7 @@ const APP_DIRECTORIES: Record<AppId, string> = {
   desktop: 'apps/desktop',
   apple: 'apps/apple',
   site: 'apps/site',
+  extension: 'apps/extension',
 };
 
 const SERVICE_REGISTRY_NAMES: Record<ServiceId, string> = {

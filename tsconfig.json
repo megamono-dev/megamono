@@ -20,6 +20,9 @@
     },
     {
       "path": "./packages/cli"
+    },
+    {
+      "path": "./packages/nx-extension"
     }
   ],
   "compilerOptions": {}

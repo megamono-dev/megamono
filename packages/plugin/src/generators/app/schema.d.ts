@@ -5,7 +5,8 @@ export type AppType =
   | 'worker'
   | 'mobile'
   | 'desktop'
-  | 'apple';
+  | 'apple'
+  | 'extension';
 
 export interface AppGeneratorSchema {
   readonly type?: AppType;

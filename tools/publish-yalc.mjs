@@ -13,6 +13,7 @@ const packages = [
   { project: 'nx-apple', directory: 'packages/nx-apple' },
   { project: 'nx-cargo', directory: 'packages/nx-cargo' },
   { project: 'nx-cloudflare', directory: 'packages/nx-cloudflare' },
+  { project: 'nx-extension', directory: 'packages/nx-extension' },
   { project: 'create-megamono', directory: 'packages/create-megamono' },
 ];
 

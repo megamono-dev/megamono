@@ -36,6 +36,10 @@ const packageRoots = {
           workspaceRoot,
           'packages/nx-cloudflare',
         ),
+        '@megamono/nx-extension': resolve(
+          workspaceRoot,
+          'packages/nx-extension',
+        ),
       }
     : {}),
 };
@@ -113,6 +117,7 @@ try {
             '@megamono/nx-apple',
             '@megamono/nx-cargo',
             '@megamono/nx-cloudflare',
+            '@megamono/nx-extension',
           ],
         }
       : {},
@@ -242,7 +247,7 @@ try {
     'The fixture application is missing from the Nx project graph.',
   );
   assert(
-    projects.includes('compat-database-compatibility'),
+    projects.includes('compat-drizzle-compatibility'),
     `Nx ${nxVersion} did not register the generated database project.`,
   );
   if (supportsInferencePlugins) {
@@ -313,6 +318,15 @@ process.stdout.write(JSON.stringify({
       join(fixtureRoot, 'apps/worker/src/index.ts'),
       'export default {};\n',
     );
+    mkdirSync(join(fixtureRoot, 'apps/extension'), { recursive: true });
+    writeJson(join(fixtureRoot, 'apps/extension/package.json'), {
+      name: 'fixture-extension',
+      private: true,
+    });
+    writeFileSync(
+      join(fixtureRoot, 'apps/extension/wxt.config.ts'),
+      'export default {};\n',
+    );
     run('npm', ['exec', 'nx', '--', 'reset']);
     const inferredProjects = run('npm', [
       'exec',
@@ -332,6 +346,10 @@ process.stdout.write(JSON.stringify({
     assert(
       inferredProjects.includes('fixture-cargo'),
       `The packed Cargo plugin did not infer the Rust project. Projects:\n${inferredProjects}`,
+    );
+    assert(
+      inferredProjects.includes('fixture-extension'),
+      `The packed extension plugin did not infer the WXT project. Projects:\n${inferredProjects}`,
     );
     const apple = JSON.parse(
       run('npm', ['exec', 'nx', '--', 'show', 'project', 'Fixture', '--json']),
@@ -419,6 +437,7 @@ process.stdout.write(JSON.stringify({
             "import type { ApplePluginOptions } from '@megamono/nx-apple';",
             "import type { CargoPluginOptions } from '@megamono/nx-cargo';",
             "import type { CloudflarePluginOptions } from '@megamono/nx-cloudflare';",
+            "import type { ExtensionPluginOptions } from '@megamono/nx-extension';",
           ]
         : []),
       'const survey: WorkspaceInitSurvey | undefined = undefined;',
@@ -427,7 +446,8 @@ process.stdout.write(JSON.stringify({
             'const apple: ApplePluginOptions = {};',
             'const cargo: CargoPluginOptions = {};',
             'const cloudflare: CloudflarePluginOptions = {};',
-            'void apple; void cargo; void cloudflare;',
+            'const extension: ExtensionPluginOptions = {};',
+            'void apple; void cargo; void cloudflare; void extension;',
           ]
         : []),
       'void survey;',

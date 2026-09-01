@@ -7,7 +7,16 @@
   "properties": {
     "type": {
       "type": "string",
-      "enum": ["web", "site", "api", "worker", "mobile", "desktop", "apple"],
+      "enum": [
+        "web",
+        "site",
+        "api",
+        "worker",
+        "mobile",
+        "desktop",
+        "apple",
+        "extension"
+      ],
       "description": "Application preset to create."
     },
     "name": {

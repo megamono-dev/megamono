@@ -575,6 +575,7 @@ try {
     './packages/nx-apple',
     './packages/nx-cargo',
     './packages/nx-cloudflare',
+    './packages/nx-extension',
     './packages/create-megamono',
   ]) {
     await run(

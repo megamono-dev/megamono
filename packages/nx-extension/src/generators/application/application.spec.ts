@@ -1,0 +1,65 @@
+import { readJson, writeJson } from '@nx/devkit';
+import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
+import { extensionApplicationGenerator } from './application';
+
+describe('extension application generator', () => {
+  it('creates a WXT project with Chrome and Firefox targets', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    writeJson(tree, 'package.json', {
+      name: '@fixture/workspace',
+      private: true,
+      workspaces: ['packages/*'],
+    });
+    tree.write('package-lock.json', '{"lockfileVersion":3}\n');
+
+    await extensionApplicationGenerator(tree, {
+      name: 'browser-extension',
+      directory: 'apps/browser-extension',
+      scope: 'fixture',
+      displayName: 'Fixture Extension',
+      skipFormat: true,
+    });
+
+    expect(tree.read('apps/browser-extension/wxt.config.ts', 'utf8')).toContain(
+      "import { defineConfig } from 'wxt'",
+    );
+    expect(
+      readJson(tree, 'apps/browser-extension/package.json').devDependencies.wxt,
+    ).toBe('0.21.4');
+    expect(
+      readJson(tree, 'apps/browser-extension/project.json').targets.build
+        .dependsOn,
+    ).toEqual(['build-chrome', 'build-firefox']);
+    expect(readJson(tree, 'package.json').workspaces).toEqual([
+      'apps/browser-extension',
+      'packages/*',
+    ]);
+    expect(tree.read('apps/browser-extension/README.md', 'utf8')).toContain(
+      'Safari requires a separate Apple wrapper project',
+    );
+  });
+
+  it('preserves an explicitly delegated Nx project identity', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    writeJson(tree, 'package.json', {
+      name: '@fixture/workspace',
+      private: true,
+      workspaces: ['apps/*'],
+    });
+
+    await extensionApplicationGenerator(tree, {
+      name: 'extension',
+      projectName: 'fixture-extension',
+      directory: 'apps/extension',
+      scope: 'fixture',
+      skipFormat: true,
+    });
+
+    expect(readJson(tree, 'apps/extension/project.json').name).toBe(
+      'fixture-extension',
+    );
+    expect(readJson(tree, 'apps/extension/package.json').name).toBe(
+      '@fixture/extension',
+    );
+  });
+});

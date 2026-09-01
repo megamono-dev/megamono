@@ -82,7 +82,7 @@ All six packages publish publicly from `megamono-dev/megamono`. The manual relea
 - `next` publishes `X.Y.Z-next.N` packages to npm's `next` dist-tag from `main` or a `release/*` branch and creates a GitHub prerelease.
 - `latest` publishes stable packages to npm's `latest` dist-tag from `main` only and creates the latest GitHub release. Promotion refuses unless every current manifest exactly matches that package's published npm `next` version.
 
-The fixed `megamono` release group contains the five `@megamono/*` packages. `create-megamono` retains an independent version and tag while participating in the same guarded workflow. The workflow serializes every channel, reruns packed consumer fixtures, derives first-release behavior from Git tags, and publishes with npm trusted publishing rather than a long-lived token.
+The fixed `megamono` release group contains the six `@megamono/*` packages. `create-megamono` retains an independent version and tag while participating in the same guarded workflow. The workflow serializes every channel, reruns packed consumer fixtures, derives first-release behavior from Git tags, and publishes with npm trusted publishing rather than a long-lived token.
 
 Create protected GitHub environments named `npm-next` and `npm-latest`. Permit `main` and `release/*` for `npm-next`; permit only `main` and require reviewers for `npm-latest`. Configure each npm package's trusted publisher for organization `megamono-dev`, repository `megamono`, and workflow `release.yml`. Leave the npm publisher's environment field unset so the one publisher can serve both protected GitHub environments.
 

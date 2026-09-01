@@ -36,7 +36,8 @@
     "@megamono/plugin": { "nx": ">=17 <24" },
     "@megamono/nx-apple": { "nx": ">=18 <24" },
     "@megamono/nx-cargo": { "nx": ">=18 <24" },
-    "@megamono/nx-cloudflare": { "nx": ">=18 <24" }
+    "@megamono/nx-cloudflare": { "nx": ">=18 <24" },
+    "@megamono/nx-extension": { "nx": ">=18 <24" }
   },
   "playstackIntegration": {
     "node": ">=20",
@@ -97,12 +98,14 @@
     "vitest": "4.1.10",
     "create-cloudflare": "2.72.2",
     "wrangler": "4.125.0",
+    "wxt": "0.21.4",
     "@cloudflare/vitest-plugin": "1.0.0",
     "typescript": "6.0.3",
     "@megamono/plugin": "0.0.1",
     "@megamono/nx-apple": "0.0.1",
     "@megamono/nx-cargo": "0.0.1",
-    "@megamono/nx-cloudflare": "0.0.1"
+    "@megamono/nx-cloudflare": "0.0.1",
+    "@megamono/nx-extension": "0.0.1"
   },
   "cloudflare": {
     "wrangler": ">=4.125 <5",

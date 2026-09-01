@@ -36,6 +36,7 @@ export const APP_TYPES = [
   'mobile',
   'desktop',
   'apple',
+  'extension',
 ] as const satisfies readonly AppType[];
 
 const APP_TYPE_SET = new Set<string>(APP_TYPES);
@@ -47,6 +48,7 @@ const APP_LABELS: Record<AppType, string> = {
   mobile: 'Expo mobile app',
   desktop: 'Tauri desktop app',
   apple: 'Apple native app',
+  extension: 'WXT browser extension',
 };
 const compatibility = JSON.parse(
   readFileSync(join(__dirname, '../../../compatibility.json'), 'utf8'),
@@ -86,7 +88,7 @@ interface NormalizedAppOptions {
   readonly scope: string;
   readonly projectName: string;
   readonly packageName: string;
-  readonly platform: 'web' | 'node' | 'worker' | 'apple' | 'rust';
+  readonly platform: 'web' | 'node' | 'worker' | 'apple' | 'rust' | 'extension';
   readonly tags: readonly string[];
   readonly port?: number;
   readonly packageManager: PackageManager;
@@ -221,6 +223,7 @@ function platform(type: AppType): NormalizedAppOptions['platform'] {
   if (type === 'worker') return 'worker';
   if (type === 'apple') return 'apple';
   if (type === 'desktop') return 'rust';
+  if (type === 'extension') return 'extension';
   return 'web';
 }
 
@@ -916,6 +919,19 @@ async function createDelegatedApp(
         ...common,
         displayName: options.workspaceName,
         bundleIdentifier: `com.${options.scope}.${options.name}`,
+      }),
+    ];
+  }
+  if (options.type === 'extension') {
+    return [
+      await generator(
+        '@megamono/nx-extension',
+        'extensionApplicationGenerator',
+      )(tree, {
+        ...common,
+        name: options.name,
+        projectName: options.projectName,
+        displayName: options.workspaceName,
       }),
     ];
   }

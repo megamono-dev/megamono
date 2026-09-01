@@ -31,7 +31,7 @@
     },
     {
       "package": "@playstack/extension",
-      "generators": ["@megamono/nx-extension"],
+      "generators": ["@megamono/nx-extension:playstack"],
       "purpose": "Extension auth handoff, messaging, and storage",
       "dependencyType": "runtime",
       "requiredTier": "free",

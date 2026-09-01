@@ -35,6 +35,13 @@ const publicPackages = new Map([
     },
   ],
   [
+    '@megamono/nx-extension',
+    {
+      manifest: 'packages/nx-extension/package.json',
+      directory: 'packages/nx-extension',
+    },
+  ],
+  [
     'create-megamono',
     {
       manifest: 'packages/create-megamono/package.json',
@@ -48,6 +55,7 @@ const expectedProjects = [
   'nx-apple',
   'nx-cargo',
   'nx-cloudflare',
+  'nx-extension',
 ];
 const expectedRepository = 'git+https://github.com/megamono-dev/megamono.git';
 const expectedRegistry = 'https://registry.npmjs.org';
@@ -107,4 +115,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Public release policy passed for all 6 Megamono packages.');
+console.log('Public release policy passed for all 7 Megamono packages.');

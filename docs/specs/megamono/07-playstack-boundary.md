@@ -87,27 +87,27 @@ That distinction is what keeps the direction rule true in practice rather than o
 
 ### The canonical list
 
-| Playstack package          | Generator                               | Purpose                                               | Required tier | V1 state                                              |
-| -------------------------- | --------------------------------------- | ----------------------------------------------------- | ------------- | ----------------------------------------------------- |
-| `@playstack/chakra`        | `@megamono/plugin:theme`                | Semantic tokens and Chakra composition API            | Free          | Gated on external fixture contract                    |
-| `@playstack/content`       | `@megamono/plugin:content-lib`          | Content transforms                                    | Free          | Available; packed npm/pnpm yalc fixture passed        |
-| `@playstack/observability` | `@megamono/plugin:integration-sentry`   | Shared Sentry conventions                             | Free          | Gated on external fixture contract                    |
-| `@playstack/extension`     | `@megamono/nx-extension`                | Auth handoff, messaging, storage                      | Free          | Gated on external fixture contract                    |
-| `@playstack/auth`          | Package-owned `playstack add auth`      | Identity runtime and database-schema artifacts        | Free          | Megamono legacy name reserved; delegated to Playstack |
-| `@playstack/accounts`      | Package-owned `playstack add accounts`  | Tenancy runtime and database-schema artifacts         | Free          | Megamono legacy name reserved; delegated to Playstack |
-| `@playstack/webhooks`      | Future package-owned capability         | Webhook receipt runtime and database-schema artifacts | Free          | Megamono legacy name reserved                         |
-| `@playstack/cache`         | Future package-owned capability         | Cache provider wiring                                 | Free          | Megamono legacy name reserved                         |
-| `@playstack/media`         | Future package-owned capability         | Media runtime and database-schema artifacts           | Free          | Megamono legacy name reserved                         |
-| `@playstack/mail`          | `@megamono/plugin:integration-postmark` | Postmark mail driver wiring                           | Free          | Gated on external fixture contract                    |
-| `@playstack/notifications` | `@megamono/plugin:emails`               | Typed delivery request and recipient locale           | Free          | Gated on external fixture contract                    |
-| `@playstack/validation`    | `@megamono/plugin:emails`               | Runtime props validation                              | Free          | Gated on external fixture contract                    |
-| `@playstack/i18n`          | `@megamono/plugin:emails`               | Recipient-locale catalog rendering                    | Free          | Gated on external fixture contract                    |
-| `@playstack/cli`           | Playstack-wiring generators             | Package-owned artifact sync and merge                 | Free          | Available for verified skills sync; other uses gated  |
-| `@playstack/lint`          | `@megamono/plugin:playstack-lint`       | Playstack-specific ESLint presets                     | Free          | Available; packed npm/pnpm yalc fixture passed        |
-| `@playstack/skills`        | `@megamono/plugin:playstack-skills`     | Playstack product guidance                            | Free          | Available; packed npm/pnpm yalc fixture passed        |
-| `@playstack/admin`         | Reserved `playstack-admin` generator    | Headless admin runtime                                | Free          | Not published in v1                                   |
-| `@playstack/admin-ui`      | `playstack-admin --ui=chakra`           | Optional compositions                                 | Pro allowed   | Not published in v1                                   |
-| `@playstack/queues`        | Reserved `playstack-queues` generator   | Queue runtime                                         | Free          | No accepted external package contract; not published  |
+| Playstack package          | Generator                                             | Purpose                                               | Required tier | V1 state                                               |
+| -------------------------- | ----------------------------------------------------- | ----------------------------------------------------- | ------------- | ------------------------------------------------------ |
+| `@playstack/chakra`        | `@megamono/plugin:theme`                              | Semantic tokens and Chakra composition API            | Free          | Gated on external fixture contract                     |
+| `@playstack/content`       | `@megamono/plugin:content-lib`                        | Content transforms                                    | Free          | Available; packed npm/pnpm yalc fixture passed         |
+| `@playstack/observability` | `@megamono/plugin:integration-sentry`                 | Shared Sentry conventions                             | Free          | Gated on external fixture contract                     |
+| `@playstack/extension`     | Future `@megamono/nx-extension:playstack` integration | Auth handoff, messaging, storage                      | Free          | Gated; base WXT generation has no Playstack dependency |
+| `@playstack/auth`          | Package-owned `playstack add auth`                    | Identity runtime and database-schema artifacts        | Free          | Megamono legacy name reserved; delegated to Playstack  |
+| `@playstack/accounts`      | Package-owned `playstack add accounts`                | Tenancy runtime and database-schema artifacts         | Free          | Megamono legacy name reserved; delegated to Playstack  |
+| `@playstack/webhooks`      | Future package-owned capability                       | Webhook receipt runtime and database-schema artifacts | Free          | Megamono legacy name reserved                          |
+| `@playstack/cache`         | Future package-owned capability                       | Cache provider wiring                                 | Free          | Megamono legacy name reserved                          |
+| `@playstack/media`         | Future package-owned capability                       | Media runtime and database-schema artifacts           | Free          | Megamono legacy name reserved                          |
+| `@playstack/mail`          | `@megamono/plugin:integration-postmark`               | Postmark mail driver wiring                           | Free          | Gated on external fixture contract                     |
+| `@playstack/notifications` | `@megamono/plugin:emails`                             | Typed delivery request and recipient locale           | Free          | Gated on external fixture contract                     |
+| `@playstack/validation`    | `@megamono/plugin:emails`                             | Runtime props validation                              | Free          | Gated on external fixture contract                     |
+| `@playstack/i18n`          | `@megamono/plugin:emails`                             | Recipient-locale catalog rendering                    | Free          | Gated on external fixture contract                     |
+| `@playstack/cli`           | Playstack-wiring generators                           | Package-owned artifact sync and merge                 | Free          | Available for verified skills sync; other uses gated   |
+| `@playstack/lint`          | `@megamono/plugin:playstack-lint`                     | Playstack-specific ESLint presets                     | Free          | Available; packed npm/pnpm yalc fixture passed         |
+| `@playstack/skills`        | `@megamono/plugin:playstack-skills`                   | Playstack product guidance                            | Free          | Available; packed npm/pnpm yalc fixture passed         |
+| `@playstack/admin`         | Reserved `playstack-admin` generator                  | Headless admin runtime                                | Free          | Not published in v1                                    |
+| `@playstack/admin-ui`      | `playstack-admin --ui=chakra`                         | Optional compositions                                 | Pro allowed   | Not published in v1                                    |
+| `@playstack/queues`        | Reserved `playstack-queues` generator                 | Queue runtime                                         | Free          | No accepted external package contract; not published   |
 
 ### Delegating package-owned mutations
 

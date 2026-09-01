@@ -10,6 +10,7 @@ on:
       - 'packages/nx-apple/**'
       - 'packages/nx-cargo/**'
       - 'packages/nx-cloudflare/**'
+      - 'packages/nx-extension/**'
   pull_request:
     paths:
       - '.github/workflows/nx-compatibility.yml'
@@ -18,6 +19,7 @@ on:
       - 'packages/nx-apple/**'
       - 'packages/nx-cargo/**'
       - 'packages/nx-cloudflare/**'
+      - 'packages/nx-extension/**'
   merge_group:
   schedule:
     - cron: '43 8 * * 1'

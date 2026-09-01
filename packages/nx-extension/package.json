@@ -1,0 +1,91 @@
+{
+  "name": "@megamono/nx-extension",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@megamono/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo",
+    "generators.json"
+  ],
+  "generators": "./generators.json",
+  "nx": {
+    "name": "nx-extension",
+    "targets": {
+      "build": {
+        "executor": "@nx/js:tsc",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "outputPath": "packages/nx-extension/dist",
+          "main": "packages/nx-extension/src/index.ts",
+          "tsConfig": "packages/nx-extension/tsconfig.lib.json",
+          "rootDir": "packages/nx-extension/src",
+          "generatePackageJson": false,
+          "assets": [
+            {
+              "input": "./packages/nx-extension/src",
+              "glob": "**/!(*.ts)",
+              "output": "."
+            },
+            {
+              "input": "./packages/nx-extension/src",
+              "glob": "**/*.d.ts",
+              "output": "."
+            }
+          ]
+        }
+      },
+      "e2e-local-registry": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/nx-extension/e2e/local-registry.e2e.mjs",
+          "cwd": "."
+        }
+      }
+    },
+    "tags": [
+      "platform:node",
+      "scope:shared",
+      "type:util"
+    ]
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "peerDependencies": {
+    "@nx/devkit": ">=18 <24",
+    "nx": ">=18 <24"
+  },
+  "engines": {
+    "node": ">=18.18 <25",
+    "pnpm": ">=8 <12",
+    "npm": ">=9 <12"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/megamono-dev/megamono.git",
+    "directory": "packages/nx-extension"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  }
+}

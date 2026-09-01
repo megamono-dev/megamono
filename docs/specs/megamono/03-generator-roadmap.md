@@ -189,7 +189,7 @@ WXT is the accepted framework contract (`playstack:26-extension`): Vite-based, c
 - Scaffolds a WXT project as an Nx app with `build`, `test`, and `lint`; `deploy` appears only when a store configuration exists.
 - `build` is an aggregate target depending on `build-chrome` and `build-firefox`, each with distinct outputs.
 - `package` depends on `package-chrome`, `package-firefox`, and `package-firefox-source`, producing store-ready archives.
-- Wires `@playstack/extension` for auth handoff, messaging, and storage
+- Leaves product behavior optional; a future compatible `@playstack/extension` capability is added separately through Playstack rather than required by the structural generator.
 - CI declares store credential secret names and protected environments; it never writes credential values.
 
 ### Why the graph edge matters
@@ -208,7 +208,7 @@ The generator should emit the Chrome and Firefox targets, and **say plainly that
 
 OpenGraphs (shipping, 200+ users), Timespans, and Basemarks. Horizens is not a committed v1 consumer.
 
-**Wave 2.** Real demand, but it does not block anything the way the Apple and Cargo plugins do.
+**Implemented public-validation package.** The plugin discovers hand-authored `wxt.config.*` projects on Nx 18–23 and the generator creates WXT 0.21.4 projects through `megamono add app extension`. WXT 0.21 application generation requires Node 22 or newer even though adoption-time inference remains available on the package's wider Node range. A packed local-registry fixture gates release participation.
 
 ## Implemented public-validation package — `@megamono/nx-cloudflare`
 

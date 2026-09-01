@@ -109,6 +109,7 @@ export const APP_TYPE_CHOICES: readonly AppTypeChoice[] = [
   { name: 'mobile', message: 'Mobile — Expo application' },
   { name: 'desktop', message: 'Desktop — Tauri application' },
   { name: 'apple', message: 'Apple — native SwiftUI application' },
+  { name: 'extension', message: 'Extension — WXT browser extension' },
 ];
 
 export const DATABASE_ADAPTER_CHOICES: readonly DatabaseAdapterChoice[] = [
@@ -1724,6 +1725,7 @@ function requiredAppPlugins(type: string): readonly string[] {
   if (type === 'worker') return ['@megamono/nx-cloudflare'];
   if (type === 'apple') return ['@megamono/nx-apple'];
   if (type === 'desktop') return ['@megamono/nx-cargo'];
+  if (type === 'extension') return ['@megamono/nx-extension'];
   return [];
 }
 

@@ -59,7 +59,8 @@
           "@megamono/plugin",
           "nx-apple",
           "nx-cargo",
-          "nx-cloudflare"
+          "nx-cloudflare",
+          "nx-extension"
         ],
         "projectsRelationship": "fixed",
         "releaseTag": {

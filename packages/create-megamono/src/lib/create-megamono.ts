@@ -33,6 +33,7 @@ export const APP_IDS = [
   'desktop',
   'apple',
   'site',
+  'extension',
 ] as const;
 export const SERVICE_IDS = [
   'postgres',
@@ -168,6 +169,7 @@ const appPlugin: Partial<Record<AppId, string>> = {
   worker: '@megamono/nx-cloudflare',
   mobile: '@nx/expo',
   site: '@nx/next',
+  extension: '@megamono/nx-extension',
 };
 
 function normalizedList(values: readonly string[] | undefined): string[] {
@@ -325,6 +327,7 @@ export function requiredMegamonoPackages(
     ...(options.apps.includes('apple') ? ['@megamono/nx-apple'] : []),
     ...(options.apps.includes('desktop') ? ['@megamono/nx-cargo'] : []),
     ...(options.apps.includes('worker') ? ['@megamono/nx-cloudflare'] : []),
+    ...(options.apps.includes('extension') ? ['@megamono/nx-extension'] : []),
   ].sort();
 }
 
@@ -367,6 +370,7 @@ function requestedPlatforms(options: NormalizedCreateOptions): string[] {
         if (app === 'worker') return 'worker';
         if (app === 'desktop') return 'rust';
         if (app === 'apple') return 'apple';
+        if (app === 'extension') return 'extension';
         return 'web';
       }),
     ),
@@ -471,6 +475,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     }
     if (app === 'desktop') plugins.add('@megamono/nx-cargo');
     if (app === 'apple') plugins.add('@megamono/nx-apple');
+    if (app === 'extension') plugins.add('@megamono/nx-extension');
   }
   const localPackages = new Set(
     options.localPackages === 'yalc' ? requiredMegamonoPackages(options) : [],

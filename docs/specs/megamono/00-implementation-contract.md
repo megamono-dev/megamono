@@ -50,18 +50,18 @@ Megamono distinguishes a pinned scaffold baseline from a broader adoption range.
 
 ## Package and release map
 
-| Package                   | Responsibility                                                                                      | Runtime dependency?                   | Repository status                     |
-| ------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------- |
-| `create-megamono`         | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `npx` or equivalent | Implemented; public release group      |
-| `@megamono/cli`           | Global `megamono` command that delegates existing-workspace operations to the local Nx plugin       | Global development tool               | Implemented; public release group      |
-| `@megamono/plugin`        | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                   | Implemented; public release group      |
-| `@megamono/nx-apple`      | Apple project inference, targets, and graph edges                                                   | Dev dependency only                   | Implemented; public release group      |
-| `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                   | Implemented; public release group      |
-| `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators                                    | Dev dependency only                   | Implemented; public release group      |
-| `@megamono/nx-extension`  | WXT extension inference and generators                                                              | Dev dependency only                   | Reserved; no package directory        |
-| `@megamono/nx-laravel`    | Composer/Laravel inference and generators                                                           | Dev dependency only                   | Reserved; no package directory        |
+| Package                   | Responsibility                                                                                      | Runtime dependency?                   | Repository status                 |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------- | --------------------------------- |
+| `create-megamono`         | Bootstrap a new workspace before Nx is installed                                                    | No; executed with `npx` or equivalent | Implemented; public release group |
+| `@megamono/cli`           | Global `megamono` command that delegates existing-workspace operations to the local Nx plugin       | Global development tool               | Implemented; public release group |
+| `@megamono/plugin`        | Workspace, docs, conventions, health, integration, Playstack-wiring, and email generators/executors | Dev dependency only                   | Implemented; public release group |
+| `@megamono/nx-apple`      | Apple project inference, targets, and graph edges                                                   | Dev dependency only                   | Implemented; public release group |
+| `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                     | Dev dependency only                   | Implemented; public release group |
+| `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators                                    | Dev dependency only                   | Implemented; public release group |
+| `@megamono/nx-extension`  | WXT extension inference and generators                                                              | Dev dependency only                   | Implemented; public release group |
+| `@megamono/nx-laravel`    | Composer/Laravel inference and generators                                                           | Dev dependency only                   | Reserved; no package directory    |
 
-The `megamono` Nx release group publishes `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, `@megamono/nx-cargo`, and `@megamono/nx-cloudflare` as fixed-version public packages on npm from `megamono-dev/megamono`. The unscoped `create-megamono` entry package remains independently versioned and tagged, but the guarded workflow validates and publishes both groups together so new-workspace and existing-workspace entry points are exercised in the same release.
+The `megamono` Nx release group publishes `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, `@megamono/nx-cargo`, `@megamono/nx-cloudflare`, and `@megamono/nx-extension` as fixed-version public packages on npm from `megamono-dev/megamono`. The unscoped `create-megamono` entry package remains independently versioned and tagged, but the guarded workflow validates and publishes both groups together so new-workspace and existing-workspace entry points are exercised in the same release.
 
 These labels deliberately distinguish specification state from software and distribution state. `accepted` means the behavioral contract is build-ready; `implemented` means a package directory and tested implementation exist; membership in a public release group means CI is authorized to publish it after its gates pass, not that a registry version already exists. A reserved row is neither implemented nor published. Later packages enter a public validation group only after their accepted spec, implementation, and packed-package fixture are complete.
 

@@ -70,6 +70,7 @@ try {
       ['@megamono/nx-apple', 'packages/nx-apple'],
       ['@megamono/nx-cargo', 'packages/nx-cargo'],
       ['@megamono/nx-cloudflare', 'packages/nx-cloudflare'],
+      ['@megamono/nx-extension', 'packages/nx-extension'],
     ].map(([name, directory]) => {
       const packed = JSON.parse(
         run(
@@ -140,6 +141,7 @@ try {
       },
       '@megamono/nx-cargo',
       '@megamono/nx-cloudflare',
+      '@megamono/nx-extension',
     ],
   });
   writeJson(join(fixtureRoot, 'tsconfig.base.json'), {
@@ -166,6 +168,14 @@ try {
   );
   write(
     join(fixtureRoot, 'apps/site/content-collections.ts'),
+    'export default {};\n',
+  );
+  writeJson(join(fixtureRoot, 'apps/extension/package.json'), {
+    name: '@portfolio/extension',
+    private: true,
+  });
+  write(
+    join(fixtureRoot, 'apps/extension/wxt.config.ts'),
     'export default {};\n',
   );
   writeJson(join(fixtureRoot, 'apps/api/project.json'), {
@@ -395,6 +405,26 @@ try {
       `Apple named target ${target} was not inferred.`,
     );
   }
+  const extension = JSON.parse(
+    run('pnpm', [
+      'exec',
+      'nx',
+      'show',
+      'project',
+      '@portfolio/extension',
+      '--json',
+    ]),
+  );
+  assert(
+    extension.targets['build-chrome'] &&
+      extension.targets['build-firefox'] &&
+      extension.targets['package-firefox-source'],
+    'WXT browser-specific build and package targets were not inferred.',
+  );
+  assert(
+    !extension.targets.deploy,
+    'WXT deploy target was inferred without repository-owned store commands.',
+  );
 
   console.log(
     `Verified the packed mixed-platform adoption portfolio with Node ${process.versions.node}, Nx 22.2.3, TypeScript 5.9.3, and pnpm 11.24.0.`,

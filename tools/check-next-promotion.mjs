@@ -14,6 +14,7 @@ const manifests = [
   'packages/nx-apple/package.json',
   'packages/nx-cargo/package.json',
   'packages/nx-cloudflare/package.json',
+  'packages/nx-extension/package.json',
   'packages/create-megamono/package.json',
 ];
 
@@ -32,7 +33,9 @@ export function validateNextPromotion(packages) {
     }
   }
   if (failures.length > 0) {
-    throw new Error(`Stable promotion preflight failed:\n- ${failures.join('\n- ')}`);
+    throw new Error(
+      `Stable promotion preflight failed:\n- ${failures.join('\n- ')}`,
+    );
   }
 }
 

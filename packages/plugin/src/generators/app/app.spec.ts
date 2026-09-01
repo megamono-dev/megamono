@@ -21,7 +21,14 @@ function workspace() {
 }
 
 function snapshot(tree: ReturnType<typeof workspace>): string {
-  return tree.listChanges().map((change) => `${change.type}:${change.path}:${change.content?.toString('utf8') ?? ''}`).sort().join('\n');
+  return tree
+    .listChanges()
+    .map(
+      (change) =>
+        `${change.type}:${change.path}:${change.content?.toString('utf8') ?? ''}`,
+    )
+    .sort()
+    .join('\n');
 }
 
 describe('app generator', () => {
@@ -130,7 +137,9 @@ describe('app generator', () => {
       interactive: false,
       yes: true,
     });
-    expect(JSON.parse(tree.read('megamono.json', 'utf8') ?? '{}').ports).toEqual({
+    expect(
+      JSON.parse(tree.read('megamono.json', 'utf8') ?? '{}').ports,
+    ).toEqual({
       web: 45451,
       admin: 45461,
     });
@@ -162,19 +171,23 @@ describe('app generator', () => {
     ['apple', 'apps/apple/project.json'],
     ['mobile', 'apps/mobile/package.json'],
     ['desktop', 'apps/desktop/src-tauri/Cargo.toml'],
-  ] as const)('creates and reruns the %s adapter', async (type, expectedPath) => {
-    const tree = workspace();
-    const options = {
-      type,
-      scope: 'fixture',
-      workspaceName: 'Fixture',
-      interactive: false,
-      yes: true,
-    } as const;
-    await appGenerator(tree, options);
-    expect(tree.exists(expectedPath)).toBe(true);
-    const first = snapshot(tree);
-    await appGenerator(tree, options);
-    expect(snapshot(tree)).toBe(first);
-  });
+    ['extension', 'apps/extension/wxt.config.ts'],
+  ] as const)(
+    'creates and reruns the %s adapter',
+    async (type, expectedPath) => {
+      const tree = workspace();
+      const options = {
+        type,
+        scope: 'fixture',
+        workspaceName: 'Fixture',
+        interactive: false,
+        yes: true,
+      } as const;
+      await appGenerator(tree, options);
+      expect(tree.exists(expectedPath)).toBe(true);
+      const first = snapshot(tree);
+      await appGenerator(tree, options);
+      expect(snapshot(tree)).toBe(first);
+    },
+  );
 });

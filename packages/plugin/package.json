@@ -115,7 +115,8 @@
             "projects": [
               "nx-apple",
               "nx-cargo",
-              "nx-cloudflare"
+              "nx-cloudflare",
+              "nx-extension"
             ],
             "target": "build"
           }
@@ -134,7 +135,8 @@
             "projects": [
               "nx-apple",
               "nx-cargo",
-              "nx-cloudflare"
+              "nx-cloudflare",
+              "nx-extension"
             ],
             "target": "build"
           }
