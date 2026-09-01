@@ -32,8 +32,11 @@ It is a devDependency. It never ships to production. It shapes the repo; it does
 
 ## What Megamono is not
 
-- Not a hosted service.
-- Not a paid product.
+- The public Megamono packages are not a hosted service and do not require one.
+- The public Megamono packages and CLI are not paid products. An optional hosted
+  delivery service may charge for its compute, orchestration, durable history,
+  and pull-request delivery, but never for repository-shaping capability that is
+  absent from the local path.
 - Not a replacement for Nx. It is a layer on top of Nx.
 - Not a "manage your monorepo" platform. That space is being taken (see Competitive, below).
 
@@ -132,19 +135,39 @@ The funnel logic: **the philosophy essay travels, the generators convert.** `mon
 
 Honest cross-promotion is the docs and the philosophy content — not the setup wizard. See `spec-megamono-0002`, "Integrations."
 
-### Paid tier / hosted GitHub App — declined, with reasoning
+### Optional hosted GitHub App — accepted as packaged convenience
 
 The question was raised whether scheduled health workflows (`spec-megamono-0008`) could support a paid subscription or a hosted GitHub App.
 
-The commercial logic is real: scheduled runs need compute, and a GitHub App is a clean install story. It is a legitimate product shape in the abstract. It is declined here for two reasons.
+The original answer was to decline that direction until adopters demonstrated a
+need for hosted delivery. The direction has expanded: a separately operated
+GitHub App may now authenticate a repository owner, run the released public
+engine, retain reports, and deliver a reviewable draft pull request. This is a
+service around Megamono, not a private implementation of Megamono.
 
-**It walks into Polygraph.** Custom workflows — scheduled, triggered, agentic — are already one of Polygraph's three pillars, backed by Nx's funding and Enterprise sales motion. A paid hosted Megamono service competes there directly, on their terms, in the exact fight this document scopes Megamono to avoid.
+The reasons for the original restraint remain product constraints:
 
-**It corrupts the funnel.** Free-and-MIT is what makes Megamono's opinionated defaults readable as opinions. The moment a paid tier exists, every default reads as an upsell path — including the Springbar and Queuebert placements that `spec-megamono-0002` is deliberately careful about. The credibility is the asset; a small subscription line would be bought at its expense.
+**Do not walk into Polygraph.** Custom workflows, cross-repository coordination,
+and agentic auto-fix are already part of Nx's Enterprise position. The hosted
+service begins with repository-scoped adoption execution and delivery. It must
+not be marketed as a generic organization-wide monorepo-management platform.
 
-**The defensible version:** workflows run in the user's own CI, free, using compute they already pay for. If a hosted option ever appears, it is packaged convenience — never capability withheld from the free path.
+**Do not corrupt the funnel.** Free-and-MIT is what makes Megamono's opinionated
+defaults readable as opinions. The setup flow, generated repository, and public
+documentation must remain useful without an account, installation, subscription,
+or promotional selection. Paid placement never influences a generated default.
 
-**Revisit trigger:** if a non-trivial number of adopters are running the workflows and asking specifically for hosting (not features), the convenience framing can be tested. Not before.
+**The defensible boundary:** local commands and user-owned CI expose the complete
+deterministic capability. The hosted service charges only for convenience:
+private-repository compute, authentication, orchestration, durable run history,
+reruns, and pull-request delivery. A hosted run pins a released public version
+and emits a locally replayable manifest and command. Service-only repository
+semantics are prohibited.
+
+Pricing, plans, metering, entitlements, billing, and service data-retention
+policy belong to the private hosted-service specification, not this public
+package contract. The public contract owns the portable manifest and execution
+semantics on which that service depends.
 
 ## Assets
 
@@ -178,7 +201,7 @@ Full boundary treatment in `spec-megamono-0007`.
 
 ## V1 scope
 
-V1 is the package set and compatibility baseline in `spec-megamono-0000`. It is successful when a user can bootstrap or initialize an Nx repository, discover Apple and Cargo projects with correct graph edges, enforce the docs and dependency conventions locally, and run the workflow without a hosted Megamono service.
+V1 is the package set and compatibility baseline in `spec-megamono-0000`. It is successful when a user can bootstrap or initialize an Nx repository, discover Apple and Cargo projects with correct graph edges, enforce the docs and dependency conventions locally, and run the workflow without a hosted Megamono service. Hosted delivery is versioned and released independently from this public-package baseline.
 
 ## Acceptance criteria
 
@@ -186,4 +209,6 @@ V1 is the package set and compatibility baseline in `spec-megamono-0000`. It is 
 - No `@megamono/*` package is required by generated production code.
 - Public documentation uses `megamono.com` as the only canonical host.
 - Positioning copy uses the repository/product distinction and does not claim generic large-monorepo management.
-- Hosted execution, cross-repository graph management, and runtime product packages are absent from v1.
+- Hosted execution is absent from the public packages and never required for v1;
+  an optional external service may orchestrate their released interfaces.
+- Cross-repository graph management and runtime product packages are absent from v1.

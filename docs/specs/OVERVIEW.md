@@ -31,9 +31,12 @@ Structural rules are split by capability: ESLint handles source imports, `megamo
 
 Megamono can emit a Playstack runtime import, but no `@megamono/*` package has a runtime dependency on Playstack. `org-playstack/playstack-pro` initially owns the qualified `playstack:` contract namespace. A generator remains reserved and unpublished until the referenced package supplies install, compatibility, configuration, tier, schema-fragment, and fixture artifacts; Megamono never requires a sibling checkout of the Playstack repository.
 
-## Deliberate v1 exclusions
+## Deliberate public-package v1 exclusions
 
-- Hosted GitHub App, organization-wide analysis, or automatic PR creation.
+- Hosted-service implementation, organization-wide analysis, or automatic merge.
+  A separately operated GitHub App may invoke the same released local contracts
+  and deliver explicitly approved draft pull requests; it owns no additional
+  repository-shaping capability.
 - Automatic model invocation from hooks, CI, or schedules.
 - Monorepo-into-monorepo imports.
 - Gradle reimplementation where the official Nx plugin suffices.

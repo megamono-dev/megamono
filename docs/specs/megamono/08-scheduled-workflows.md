@@ -145,7 +145,17 @@ The generated scheduled workflow declares only `contents: read` and `issues: wri
 
 Weekly by default. Daily is available and not recommended — the checks measure accumulation, and accumulation is not a daily phenomenon. A daily cadence produces near-identical reports, which trains the maintainer to skim.
 
-Emitted as a scheduled CI workflow. It runs in **the user's own CI, on compute they already pay for.** There is no hosted execution path; see `spec-megamono-0001`, "Paid tier / hosted GitHub App — declined."
+Emitted as a scheduled CI workflow. By default it runs in **the user's own CI,
+on compute they already pay for.** This remains the complete, free path and
+requires no Megamono account or service.
+
+An optional hosted service may schedule and retain the output of the same
+released command for an explicitly authorized repository. It gains no additional
+health checks, remediation semantics, or automatic merge authority. Its GitHub
+App permissions, execution isolation, retention, and pull-request delivery are
+service concerns; they do not change the permissions of the generated workflow
+or the deterministic command contract in this spec. See `spec-megamono-0001`,
+"Optional hosted GitHub App — accepted as packaged convenience."
 
 The default schedule is Mondays at `09:17 UTC`. The non-round minute avoids a common Actions scheduling peak. `megamono.json` may replace the cron or disable the workflow.
 

@@ -142,7 +142,11 @@ Execution creates a history-graft commit first. It then applies integration chan
 - A source may contain a single JS app plus SwiftPM or Cargo surfaces when the matching Wave 1 plugin is installed. Toolchain-version conflicts block execution and appear in analysis; they are never silently reconciled.
 - The source repository remains read-only. Import never writes a redirect, archives the source, changes its default branch, or modifies its settings.
 - Monorepo-into-monorepo and organization-wide analysis are out of v1 scope.
-- A hosted GitHub App is deferred. V1 is local only, creates no PR, and requests no GitHub token.
+- The import executor remains local and requests no GitHub token. An optional
+  hosted service may invoke the same released analysis and execution contract in
+  a disposable workspace and deliver its result as a draft pull request after
+  explicit authorization. It may not add an organization-wide import primitive
+  or service-only history strategy.
 
 ## Acceptance criteria
 
