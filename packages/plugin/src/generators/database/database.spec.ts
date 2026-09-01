@@ -48,7 +48,7 @@ describe('database generator', () => {
     expect(readJson(tree, 'playstack.json').databases).toEqual({
       events: {
         adapter: 'prisma',
-        target: 'packages/database-events/prisma/models',
+        target: 'packages/database-events/prisma',
       },
     });
     expect(
@@ -267,15 +267,35 @@ describe('database generator', () => {
     await databaseGenerator(tree, {
       name: 'primary',
       adapter: 'prisma',
-      target: 'prisma/models',
+      target: 'prisma',
       interactive: false,
       yes: true,
     });
 
     expect(readJson(tree, 'playstack.json').databases.primary).toEqual({
       adapter: 'prisma',
-      target: 'prisma/models',
+      target: 'prisma',
     });
+  });
+
+  it('rejects a Prisma artifact target that excludes the schema entry', async () => {
+    const tree = workspace();
+    tree.write(
+      'prisma/schema.prisma',
+      'generator client {\n  provider = "prisma-client-js"\n}\n',
+    );
+
+    await expect(
+      databaseGenerator(tree, {
+        name: 'primary',
+        adapter: 'prisma',
+        target: 'prisma/models',
+        interactive: false,
+        yes: true,
+      }),
+    ).rejects.toThrow(
+      /target prisma\/models excludes the datasource-bearing schema prisma\/schema\.prisma/,
+    );
   });
 
   it('reuses existing adapter and TypeScript versions for a new database project', async () => {
@@ -306,7 +326,7 @@ describe('database generator', () => {
       databases: {
         events: {
           adapter: 'prisma',
-          target: 'packages/database-events/prisma/models',
+          target: 'packages/database-events/prisma',
           packages: { '@playstack/auth': {} },
         },
       },

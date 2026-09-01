@@ -282,12 +282,12 @@ async function normalizeOptions(
     (adapter === 'prisma'
       ? existingLayout
         ? undefined
-        : `${directory}/prisma/models`
+        : `${directory}/prisma`
       : `${directory}/src/schema`);
   if (
     target !== undefined &&
     (!isSafeWorkspaceRelativePath(target) ||
-      !target.startsWith(`${directory}/`))
+      (target !== directory && !target.startsWith(`${directory}/`)))
   ) {
     throw new DatabaseGeneratorError(
       `Database target must be a safe path inside ${directory}; received ${target}.`,
@@ -307,6 +307,18 @@ async function normalizeOptions(
       `Database schema must be a safe path inside ${directory}; received ${normalizedSchema}.`,
       2,
       'options',
+    );
+  }
+  if (
+    adapter === 'prisma' &&
+    target !== undefined &&
+    normalizedSchema !== target &&
+    !normalizedSchema.startsWith(`${target}/`)
+  ) {
+    throw new DatabaseGeneratorError(
+      `Prisma target ${target} excludes the datasource-bearing schema ${normalizedSchema}. Select the complete schema folder so compatibility checks include application-owned models.`,
+      3,
+      'target-coverage',
     );
   }
   return {
