@@ -9,6 +9,7 @@ import {
   parsePbxLocalPackagePaths,
   parseWorkspaceProjectPaths,
   projectsFromAppleManifests,
+  swiftPackageDumpArguments,
   type AppleManifestRecord,
   type SwiftPackageDumpRunner,
 } from './apple';
@@ -62,6 +63,25 @@ describe('Apple createNodes compatibility', () => {
 });
 
 describe('Apple manifest parsers', () => {
+  it('isolates SwiftPM caches and scratch output outside the repository', () => {
+    expect(
+      swiftPackageDumpArguments('/workspace/Packages/Core', '/tmp/megamono-cache'),
+    ).toEqual([
+      'package',
+      '--cache-path',
+      '/tmp/megamono-cache/cache',
+      '--config-path',
+      '/tmp/megamono-cache/config',
+      '--security-path',
+      '/tmp/megamono-cache/security',
+      '--scratch-path',
+      '/tmp/megamono-cache/scratch',
+      'dump-package',
+      '--package-path',
+      '/workspace/Packages/Core',
+    ]);
+  });
+
   it('parses quoted and unquoted local Swift package references', () => {
     const source = `
 /* Begin XCLocalSwiftPackageReference section */
@@ -194,6 +214,20 @@ describe('collectAppleManifests', () => {
       selected: true,
     });
     expect(collected.diagnostics[0].message).toContain('spawn swift ENOENT');
+  });
+
+  it('bounds Swift diagnostics emitted during graph inference', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'nx-apple-bounded-swift-'));
+    await writeFile(resolve(root, 'Package.swift'), '// package');
+    const collected = await collectAppleManifests(
+      ['Package.swift'],
+      root,
+      async () => {
+        throw new Error('x'.repeat(2_000));
+      },
+    );
+    expect(collected.diagnostics[0].message.length).toBeLessThan(1_000);
+    expect(collected.diagnostics[0].message).toMatch(/\.\.\.$/);
   });
 });
 

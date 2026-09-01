@@ -8,9 +8,11 @@ import {
   type RawProjectGraphDependency,
 } from '@nx/devkit';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile, readdir } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
+import { mkdir, readFile, readdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -175,12 +177,45 @@ export function parseWorkspaceProjectPaths(source: string): string[] {
   ].sort();
 }
 
-async function dumpSwiftPackage(
+export function swiftPackageDumpArguments(
   packageRoot: string,
-): Promise<SwiftPackageDump> {
+  cacheRoot: string,
+): readonly string[] {
+  return [
+    'package',
+    '--cache-path',
+    join(cacheRoot, 'cache'),
+    '--config-path',
+    join(cacheRoot, 'config'),
+    '--security-path',
+    join(cacheRoot, 'security'),
+    '--scratch-path',
+    join(cacheRoot, 'scratch'),
+    'dump-package',
+    '--package-path',
+    packageRoot,
+  ];
+}
+
+function boundedDiagnostic(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.length <= 800 ? message : `${message.slice(0, 797)}...`;
+}
+
+async function dumpSwiftPackage(packageRoot: string): Promise<SwiftPackageDump> {
+  const cacheRoot = join(
+    tmpdir(),
+    'megamono-swiftpm',
+    createHash('sha256').update(packageRoot).digest('hex').slice(0, 16),
+  );
+  await Promise.all(
+    ['cache', 'config', 'security', 'scratch'].map((name) =>
+      mkdir(join(cacheRoot, name), { recursive: true }),
+    ),
+  );
   const { stdout } = await execFileAsync(
     'swift',
-    ['package', 'dump-package', '--package-path', packageRoot],
+    swiftPackageDumpArguments(packageRoot, cacheRoot),
     { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 },
   );
   return JSON.parse(stdout) as SwiftPackageDump;
@@ -265,7 +300,7 @@ export async function collectAppleManifests(
     } catch (error) {
       const diagnostic = {
         manifest,
-        message: `${kind === 'package' ? 'swift package dump-package' : 'Apple manifest parsing'} failed for ${manifest}: ${error instanceof Error ? error.message : String(error)}`,
+        message: `${kind === 'package' ? 'swift package dump-package' : 'Apple manifest parsing'} failed for ${manifest}: ${boundedDiagnostic(error)}`,
       };
       collectedDiagnostics.push(diagnostic);
       recordDiagnostics.push(diagnostic);

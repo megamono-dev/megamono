@@ -82,6 +82,7 @@ Swift, SwiftUI, Xcode projects, Swift packages.
 - `createNodes` discovers `Package.swift`, `.xcodeproj/project.pbxproj`, and `.xcworkspace/contents.xcworkspacedata`.
 - Discovery precedence is workspace → project → package within one directory, producing one Nx project rather than three overlapping nodes.
 - `swift package dump-package` supplies package metadata. A small parser for the `XCLocalSwiftPackageReference` section of `project.pbxproj` supplies app→local-package edges; workspace file references supply workspace→project edges.
+- Swift package inspection uses deterministic temporary cache, configuration, security, and scratch paths outside the repository and bounds subprocess diagnostics. Read-only graph, health, and unrelated generator planning must not write to global SwiftPM caches or flood their primary result with cache-permission output.
 - `createDependencies` resolves every local path to the Nx project rooted at that path and validates the edge. This is the prize — touching SynthKit must mark both Synth and Synth Lens affected.
 - Targets: `xcodebuild` build/test, SwiftLint, archive + Fastlane deploy.
 - Validation surface: eight Apple targets in the portfolio (Synth, Synth Lens, Quickzones Mac + iOS companion, Casters, Portals, Springbar iOS companion, Termvisor iOS).
