@@ -21,7 +21,7 @@
     },
     "project": {
       "type": "string",
-      "description": "Nx project name; defaults to <scope>-database-<name>."
+      "description": "Nx project name; defaults to <scope>-<adapter>-<name>."
     },
     "target": {
       "type": "string",
@@ -30,6 +30,15 @@
     "schema": {
       "type": "string",
       "description": "Existing workspace-relative Prisma schema file to adopt without moving it."
+    },
+    "relocate": {
+      "type": "boolean",
+      "default": false,
+      "description": "Move an existing Prisma schema directory into the selected context project after a conflict-free dry run."
+    },
+    "clientOutput": {
+      "type": "string",
+      "description": "Optional database-project-relative generated client output, such as src/generated; existing client ownership is preserved when omitted."
     },
     "scope": {
       "type": "string",

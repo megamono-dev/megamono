@@ -7,6 +7,8 @@ export interface DatabaseGeneratorSchema {
   readonly project?: string;
   readonly target?: string;
   readonly schema?: string;
+  readonly relocate?: boolean;
+  readonly clientOutput?: string;
   readonly scope?: string;
   readonly interactive?: boolean;
   readonly yes?: boolean;

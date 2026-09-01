@@ -217,6 +217,15 @@ The docs plan discovers Content Collections loaders anywhere in the workspace an
 
 `megamono add database <name> --adapter=prisma|drizzle` accepts `--schema=<path>` and otherwise detects established adapter layouts before proposing a new project. A root `prisma/schema.prisma` is adopted in place with its migration history, generated client ownership, package scripts, Docker commands, and CI commands untouched. Megamono adds only the bounded Nx validation project. For an established Prisma layout, Playstack artifact composition remains deferred unless an existing target is retained or the repository explicitly supplies a compatible `--target`; structural adoption alone never implies that a new fragments directory participates in the Prisma schema input. An explicit Prisma target must contain the configured schema entry, so `prisma` is valid for `prisma/schema.prisma` while `prisma/models` is rejected. Existing Prisma and TypeScript specifiers are reused; adopting Prisma 6 never proposes Prisma 7. ORM upgrades are separate explicit repository work.
 
+Repositories that deliberately want the context-package convention run a second, explicit operation:
+
+```text
+megamono add database primary --adapter=prisma --relocate --dry-run
+megamono add database primary --adapter=prisma --relocate --yes
+```
+
+The default destination is `libs/prisma/primary`, with the complete schema and migrations under `libs/prisma/primary/prisma`. `--directory` selects another project root. Relocation preserves migration bytes and installed dependency specifiers, converts an already adopted root project to the context project, updates exact command references and the Playstack target, and writes compatible root and project-local Prisma configuration. It does not execute validation, generation, migration creation, or migration application during the tree mutation. An optional `--client-output=src/generated` updates the existing `generator client` output explicitly; without that flag, generated-client ownership and application imports remain unchanged. The same relocation command is idempotent after completion.
+
 When no established layout is selected, the adapter default is `libs/<adapter>/<name>` with a separate package, schema or schema-module root, migrations, generated output, and Nx project for every logical context. The generator registers the exact nested root in npm, pnpm, Yarn, or Bun workspace configuration rather than assuming `packages/*`. Generated Nx targets invoke installed adapter binaries directly and never run a package-manager dependency-status preflight.
 
 ## Package sources and CI

@@ -65,6 +65,8 @@ The generator records `{ adapter, project }` under the user-supplied logical dat
 
 The generator exposes static `build` and `validate` targets and may expose an adapter-native `generate` target for generated clients or types. It never exposes an Nx target that implicitly runs a database migration. Migration generation and application remain explicit application-owned ORM commands.
 
+Prisma adoption and relocation are distinct operations. Adoption keeps the established schema, migration, generated-client, CI, and Docker ownership in place. `--relocate` moves the complete schema directory into the named context project only after the dry-run and clean-worktree preflights pass, updates literal command references, and preserves root CLI discovery through `prisma.config.ts`. Existing Prisma and TypeScript versions are retained. `--client-output` is optional because changing where Prisma generates a client can require application import migrations; omission preserves the existing client contract.
+
 ### `affected` caveat to pin in docs
 
 Nx computes affected from a **git diff base**. On long-lived branches and squash-merged history this produces surprises — either over-reporting or silently under-reporting.

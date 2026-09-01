@@ -209,6 +209,9 @@ Options:
   --directory=<path>   Select the Nx project root
   --project=<name>     Select the Nx project name
   --schema=<path>      Adopt an existing Prisma schema entry
+  --relocate           Move the existing Prisma schema into the context project
+  --client-output=<path>
+                       Explicitly relocate generated client output too
   --target=<path>      Select the complete Playstack artifact target
   --scope=<scope>      Select the package and tag scope
   --dry-run            Preview without mutation

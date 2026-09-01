@@ -12,11 +12,18 @@ projects:
   - nx-apple
   - nx-cargo
   - nx-cloudflare
+  - nx-extension
 topics: [architecture, generators, nx, release]
 summary: Canonical package map, compatibility baseline, command contract, and definition of done for Megamono v1.
 date: 2026-08-23
 supersedes: null
-references: [spec-megamono-0010, spec-megamono-0014, spec-megamono-0015]
+references:
+  [
+    spec-megamono-0010,
+    spec-megamono-0014,
+    spec-megamono-0015,
+    spec-megamono-0016,
+  ]
 external_references: [playstack:08-data-and-prisma, playstack:45-cli]
 ---
 
@@ -144,6 +151,8 @@ megamono --version
 `megamono add app <type> [...options]` delegates to the local `@megamono/plugin:app` generator. The supported v1 types are `web`, `site`, `api`, `worker`, `mobile`, `desktop`, and `apple`. The type is also the default project basename; `--name` and `--directory` allow additional instances without changing the maintained preset. A valueless `megamono add app` opens the type selector in an interactive terminal and exits `4` without mutation in non-interactive mode. The generator owns application structure, project registration, conventional tags, stable port allocation, lint and test setup, Nest feature-library composition, Chakra starter composition, and the repository onboarding billboard where applicable.
 
 `megamono add database <name> [...options]` delegates to `@megamono/plugin:database`. The adapter is selected with `--adapter=prisma|drizzle`, prompted when interactive, and required when automation cannot infer it from an existing named target. Megamono creates or adopts the Nx project, scaffolds the adapter's repository configuration at compatibility-pinned versions, and records the project in `megamono.json`. New native multi-file layouts receive a corresponding named artifact destination in `playstack.json`. A Prisma destination is always the complete schema-folder root containing the datasource-bearing schema entry; a nested fragments directory is invalid because it would let compatibility inspection omit application-owned models. An established Prisma layout is adopted structurally without enabling artifact composition unless the repository already owns that Playstack target or supplies an explicit compatible `--target`; this prevents package fragments from being written outside the schema input Prisma actually validates. An enabled new target omits `packages`, allowing installed-package discovery, while an existing explicit `packages` allowlist is preserved unchanged. Megamono never copies Playstack schema artifacts, connects to a database, generates a migration, or applies a migration.
+
+An existing Prisma layout moves only through the explicit `--relocate` workflow. Relocation is dry-run previewable, requires the normal clean-worktree preflight, moves the complete schema directory and migration history into `libs/prisma/<name>/prisma` by default, preserves installed Prisma and TypeScript specifiers, retargets an existing Playstack database while retaining its package allowlist, and leaves a root `prisma.config.ts` so repository-level Prisma commands continue discovering the context. Exact schema and migration path references in package scripts, Nx projects, Dockerfiles, repository scripts, and workflows are rewritten to the complete new schema folder. An existing non-literal Prisma configuration, occupied destination, or independent source package boundary fails before mutation. Generated-client output remains untouched unless `--client-output=<project-relative-path>` explicitly authorizes that separate compatibility change.
 
 `megamono add docs|agents|ci|release|lint|skills|health|inference` is an ergonomic route to the corresponding independently selectable `workspace-init` module. It does not introduce a second generator or ownership implementation. Add commands require an initialized `megamono.json`; they never adopt the baseline implicitly. Repeating an already satisfied add command is a successful no-op.
 

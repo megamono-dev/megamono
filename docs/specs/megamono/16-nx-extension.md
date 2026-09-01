@@ -1,12 +1,14 @@
 ---
 id: spec-megamono-0016
-title: Nx browser-extension integration
+type: spec
 status: accepted
-owners: [megamono]
-created: 2026-09-01
-updated: 2026-09-01
+visibility: internal
+projects: [megamono, nx-extension]
 topics: [generators, graph, nx, release, testing]
-depends_on: [spec-megamono-0000, spec-megamono-0003, spec-megamono-0006]
+summary: Defines WXT browser-extension inference, generation, browser-specific targets, store-command gating, and the Safari project boundary.
+date: 2026-09-01
+supersedes: null
+references: [spec-megamono-0000, spec-megamono-0003, spec-megamono-0006]
 external_references: [playstack:26-extension]
 ---
 

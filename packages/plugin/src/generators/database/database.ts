@@ -5,6 +5,7 @@ import {
   installPackagesTask,
   logger,
   readJson,
+  removeProjectConfiguration,
   updateJson,
   updateProjectConfiguration,
   writeJson,
@@ -14,7 +15,7 @@ import {
 } from '@nx/devkit';
 import { prompt } from 'enquirer';
 import { readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import {
   DATABASE_ADAPTERS,
   isSafeWorkspaceRelativePath,
@@ -57,6 +58,9 @@ interface NormalizedDatabaseOptions {
   readonly packageManager: PackageManager;
   readonly target?: string;
   readonly schema: string;
+  readonly sourceSchema?: string;
+  readonly relocate: boolean;
+  readonly clientOutput?: string;
   readonly existingLayout: boolean;
   readonly dryRun: boolean;
   readonly bootstrap: boolean;
@@ -241,17 +245,59 @@ async function normalizeOptions(
   const name = await resolveName(raw);
   const adapter = await resolveAdapter(raw);
   const scope = slug(raw.scope ?? workspaceScope(tree), 'Database scope');
+  const configuredDatabase =
+    !raw.bootstrap && tree.exists('megamono.json')
+      ? megamonoConfigSchema.parse(readJson(tree, 'megamono.json')).databases[
+          name
+        ]
+      : undefined;
+  const configuredProject = configuredDatabase
+    ? getProjects(tree).get(configuredDatabase.project)
+    : undefined;
+  const configuredSchema =
+    configuredDatabase && 'schema' in configuredDatabase
+      ? configuredDatabase.schema
+      : undefined;
+  const completedRelocation =
+    raw.relocate === true &&
+    configuredDatabase?.adapter === 'prisma' &&
+    typeof configuredSchema === 'string' &&
+    tree.exists(configuredSchema) &&
+    configuredProject?.root !== undefined &&
+    configuredSchema.startsWith(`${configuredProject.root}/`) &&
+    configuredProject.root !== dirname(configuredSchema);
   const inferredRootPrismaSchema =
     adapter === 'prisma' && tree.exists('prisma/schema.prisma')
       ? 'prisma/schema.prisma'
       : undefined;
-  const schema =
+  const requestedSchema =
     adapter === 'prisma'
-      ? (raw.schema?.replace(/^\.\//, '') ?? inferredRootPrismaSchema)
+      ? (raw.schema?.replace(/^\.\//, '') ??
+        inferredRootPrismaSchema ??
+        (completedRelocation ? configuredSchema : undefined))
       : undefined;
+  const relocate = raw.relocate === true;
+  if (relocate && adapter !== 'prisma') {
+    throw new DatabaseGeneratorError(
+      'Schema relocation is currently supported only for Prisma databases.',
+      2,
+      'options',
+    );
+  }
+  if (relocate && !requestedSchema) {
+    throw new DatabaseGeneratorError(
+      'Prisma relocation requires --schema=<path> or an existing prisma/schema.prisma.',
+      4,
+      'decision-required',
+    );
+  }
   const directory =
     raw.directory?.replace(/^\.\//, '').replace(/\/$/, '') ??
-    (schema ? dirname(schema) : `libs/${adapter}/${name}`);
+    (completedRelocation && configuredProject
+      ? configuredProject.root
+      : !relocate && requestedSchema
+        ? dirname(requestedSchema)
+        : `libs/${adapter}/${name}`);
   if (!isSafeWorkspaceRelativePath(directory)) {
     throw new DatabaseGeneratorError(
       `Database directory must stay inside the workspace; received ${directory}.`,
@@ -268,18 +314,32 @@ async function normalizeOptions(
         )?.[name] as { target?: unknown } | undefined
       )?.target
     : undefined;
-  const existingLayout = tree.exists(
+  const relocatedPlaystackTarget =
+    relocate &&
+    requestedSchema &&
+    typeof existingPlaystackTarget === 'string' &&
+    (existingPlaystackTarget === requestedSchema ||
+      existingPlaystackTarget === dirname(requestedSchema))
+      ? `${directory}/prisma`
+      : existingPlaystackTarget;
+  const normalizedSchema =
     adapter === 'prisma'
-      ? (schema ?? `${directory}/prisma/schema.prisma`)
-      : `${directory}/drizzle.config.ts`,
+      ? relocate && !completedRelocation
+        ? `${directory}/prisma/${basename(requestedSchema as string)}`
+        : (requestedSchema ?? `${directory}/prisma/schema.prisma`)
+      : `${directory}/drizzle.config.ts`;
+  const existingLayout = tree.exists(
+    relocate && !completedRelocation
+      ? (requestedSchema as string)
+      : normalizedSchema,
   );
   const target =
     raw.target?.replace(/^\.\//, '').replace(/\/$/, '') ??
-    (typeof existingPlaystackTarget === 'string'
-      ? existingPlaystackTarget
+    (typeof relocatedPlaystackTarget === 'string'
+      ? relocatedPlaystackTarget
       : undefined) ??
     (adapter === 'prisma'
-      ? existingLayout
+      ? existingLayout && !relocate
         ? undefined
         : `${directory}/prisma`
       : `${directory}/src/schema`);
@@ -294,10 +354,6 @@ async function normalizeOptions(
       'options',
     );
   }
-  const normalizedSchema =
-    adapter === 'prisma'
-      ? (schema ?? `${directory}/prisma/schema.prisma`)
-      : `${directory}/drizzle.config.ts`;
   if (
     !isSafeWorkspaceRelativePath(normalizedSchema) ||
     !normalizedSchema.startsWith(`${directory}/`)
@@ -320,6 +376,35 @@ async function normalizeOptions(
       'target-coverage',
     );
   }
+  const clientOutput = raw.clientOutput
+    ?.replace(/^\.\//, '')
+    .replace(/\/$/, '');
+  if (
+    clientOutput !== undefined &&
+    (!relocate ||
+      !isSafeWorkspaceRelativePath(clientOutput) ||
+      clientOutput.startsWith('../') ||
+      clientOutput === '.')
+  ) {
+    throw new DatabaseGeneratorError(
+      '--client-output is available only during Prisma relocation and must be a database-project-relative path such as src/generated.',
+      2,
+      'options',
+    );
+  }
+  if (
+    relocate &&
+    !completedRelocation &&
+    requestedSchema &&
+    (requestedSchema === directory ||
+      requestedSchema.startsWith(`${directory}/`))
+  ) {
+    throw new DatabaseGeneratorError(
+      `Relocation source ${requestedSchema} must be outside destination project ${directory}.`,
+      2,
+      'options',
+    );
+  }
   return {
     name,
     adapter,
@@ -330,6 +415,11 @@ async function normalizeOptions(
     packageManager: packageManager(tree),
     target,
     schema: normalizedSchema,
+    ...(requestedSchema && relocate && !completedRelocation
+      ? { sourceSchema: requestedSchema }
+      : {}),
+    relocate,
+    ...(clientOutput ? { clientOutput } : {}),
     existingLayout,
     dryRun: raw.dryRun === true || process.env.NX_DRY_RUN === 'true',
     bootstrap: raw.bootstrap === true,
@@ -354,7 +444,7 @@ function projectMatches(
 function preflight(
   tree: Tree,
   options: NormalizedDatabaseOptions,
-): 'create' | 'adopt' | 'adopt-layout' | 'noop' {
+): 'create' | 'adopt' | 'adopt-layout' | 'relocate' | 'noop' {
   const configured = options.bootstrap
     ? undefined
     : megamonoConfigSchema.parse(readJson(tree, 'megamono.json')).databases[
@@ -366,7 +456,8 @@ function preflight(
       configured.project !== options.project ||
       ('schema' in configured &&
         configured.schema !== undefined &&
-        configured.schema !== options.schema))
+        configured.schema !== options.schema &&
+        (!options.relocate || configured.schema !== options.sourceSchema)))
   ) {
     throw new DatabaseGeneratorError(
       `Database ${options.name} is already configured as ${configured.adapter} in project ${configured.project}.`,
@@ -381,6 +472,36 @@ function preflight(
   );
   assertPlaystackTarget(tree, options);
   if (configured && named && projectMatches(named, options)) return 'noop';
+  if (options.relocate) {
+    if (!options.sourceSchema || !tree.exists(options.sourceSchema)) {
+      throw new DatabaseGeneratorError(
+        `Cannot relocate Prisma schema: source ${options.sourceSchema ?? '(missing)'} does not exist.`,
+        3,
+        'relocation-source',
+      );
+    }
+    const sourceRoot = dirname(options.sourceSchema);
+    if (
+      rooted ||
+      tree.exists(options.directory) ||
+      (named !== undefined && named.root !== sourceRoot)
+    ) {
+      throw new DatabaseGeneratorError(
+        `Cannot relocate database ${options.name}: destination project or path ${options.directory} is occupied by a different contract.`,
+        3,
+        'conflict',
+      );
+    }
+    if (tree.exists(`${sourceRoot}/package.json`)) {
+      throw new DatabaseGeneratorError(
+        `Cannot relocate ${sourceRoot}: it already owns package.json. Adopt that project in place or move its package boundary explicitly first.`,
+        3,
+        'relocation-package-boundary',
+      );
+    }
+    assertRootPrismaConfigCanRelocate(tree, options);
+    return 'relocate';
+  }
   if (
     !configured &&
     named?.root === options.directory &&
@@ -414,8 +535,15 @@ function assertPlaystackTarget(
     (playstack.databases as Record<string, unknown> | undefined) ?? {};
   const existing = databases[options.name] as
     { adapter?: unknown; dialect?: unknown; target?: unknown } | undefined;
+  const relocatableTarget =
+    options.relocate &&
+    options.sourceSchema &&
+    existing?.adapter === 'prisma' &&
+    (existing.target === options.sourceSchema ||
+      existing.target === dirname(options.sourceSchema));
   if (
     existing &&
+    !relocatableTarget &&
     (options.target === undefined ||
       existing.adapter !== options.adapter ||
       existing.target !== options.target ||
@@ -429,6 +557,198 @@ function assertPlaystackTarget(
   }
 }
 
+function assertRootPrismaConfigCanRelocate(
+  tree: Tree,
+  options: NormalizedDatabaseOptions,
+): void {
+  if (!tree.exists('prisma.config.ts') || !options.sourceSchema) return;
+  const source = tree.read('prisma.config.ts', 'utf8') ?? '';
+  const sourceRoot = dirname(options.sourceSchema);
+  if (
+    /\bschema\s*:/.test(source) &&
+    !source.includes(options.sourceSchema) &&
+    !new RegExp(
+      `schema\\s*:\\s*['"]${sourceRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`,
+    ).test(source)
+  ) {
+    throw new DatabaseGeneratorError(
+      'The existing prisma.config.ts owns a schema expression Megamono cannot safely rewrite. Update it to an explicit workspace-relative schema path, then rerun relocation.',
+      3,
+      'relocation-prisma-config',
+    );
+  }
+}
+
+function filesUnder(tree: Tree, root: string): string[] {
+  const files: string[] = [];
+  const visit = (directory: string) => {
+    for (const child of tree.children(directory)) {
+      const path = directory ? `${directory}/${child}` : child;
+      if (tree.read(path) !== null) files.push(path);
+      else visit(path);
+    }
+  };
+  visit(root);
+  return files.sort();
+}
+
+function relocationReferencePaths(tree: Tree): string[] {
+  const paths = new Set<string>();
+  if (tree.exists('package.json')) paths.add('package.json');
+  for (const root of [
+    '.github',
+    'scripts',
+    'tools',
+    'apps',
+    'libs',
+    'packages',
+  ]) {
+    if (tree.children(root).length === 0) continue;
+    for (const path of filesUnder(tree, root)) {
+      const filename = basename(path);
+      if (
+        root === '.github' ||
+        root === 'scripts' ||
+        root === 'tools' ||
+        filename === 'package.json' ||
+        filename === 'project.json' ||
+        filename === 'Dockerfile' ||
+        filename.startsWith('Dockerfile.')
+      ) {
+        paths.add(path);
+      }
+    }
+  }
+  return [...paths].sort();
+}
+
+function rewriteRelocationReferences(
+  tree: Tree,
+  options: NormalizedDatabaseOptions,
+): void {
+  if (!options.sourceSchema || !options.target) return;
+  const sourceRoot = dirname(options.sourceSchema);
+  const escapedRoot = sourceRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const path of relocationReferencePaths(tree)) {
+    if (path.startsWith(`${options.directory}/`)) continue;
+    const current = tree.read(path, 'utf8');
+    if (current === null) continue;
+    const next = current
+      .replaceAll(options.sourceSchema, options.target)
+      .replaceAll(`${sourceRoot}/migrations`, `${options.target}/migrations`)
+      .replace(
+        new RegExp(`(--schema(?:=|\\s+))${escapedRoot}(?=[\\s'"]|$)`, 'g'),
+        `$1${options.target}`,
+      );
+    if (next !== current) tree.write(path, next);
+  }
+}
+
+function rewriteRootPrismaConfig(
+  tree: Tree,
+  options: NormalizedDatabaseOptions,
+): void {
+  if (!options.sourceSchema || !options.target) return;
+  const sourceRoot = dirname(options.sourceSchema);
+  if (!tree.exists('prisma.config.ts')) {
+    tree.write(
+      'prisma.config.ts',
+      `import { defineConfig } from 'prisma/config';\n\nexport default defineConfig({\n  schema: '${options.target}',\n  migrations: { path: '${options.target}/migrations' },\n});\n`,
+    );
+    return;
+  }
+  const current = tree.read('prisma.config.ts', 'utf8') ?? '';
+  let next = current
+    .replaceAll(options.sourceSchema, options.target)
+    .replaceAll(`${sourceRoot}/migrations`, `${options.target}/migrations`);
+  const quotedRoot = new RegExp(
+    `(schema\\s*:\\s*['"])${sourceRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(['"])`,
+  );
+  next = next.replace(quotedRoot, `$1${options.target}$2`);
+  if (!/\bschema\s*:/.test(next)) {
+    next = next.replace(
+      /defineConfig\(\{\s*/,
+      `defineConfig({\n  schema: '${options.target}',\n  `,
+    );
+  }
+  tree.write('prisma.config.ts', next);
+}
+
+function configureRelocatedClientOutput(
+  tree: Tree,
+  options: NormalizedDatabaseOptions,
+): void {
+  if (!options.clientOutput) return;
+  const current = tree.read(options.schema, 'utf8');
+  if (current === null) {
+    throw new DatabaseGeneratorError(
+      `Relocated schema ${options.schema} disappeared before client output configuration.`,
+      3,
+      'relocation-schema',
+    );
+  }
+  const output = relative(
+    dirname(options.schema),
+    `${options.directory}/${options.clientOutput}`,
+  ).replaceAll('\\', '/');
+  const client = /generator\s+client\s*\{[\s\S]*?\}/;
+  const block = current.match(client)?.[0];
+  if (!block) {
+    throw new DatabaseGeneratorError(
+      `Prisma schema ${options.schema} has no generator client block to configure.`,
+      3,
+      'relocation-client',
+    );
+  }
+  const nextBlock = /\n\s*output\s*=/.test(block)
+    ? block.replace(/(\n\s*output\s*=\s*)[^\n]+/, `$1"${output}"`)
+    : block.replace(/\n\}/, `\n  output   = "${output}"\n}`);
+  tree.write(options.schema, current.replace(client, nextBlock));
+}
+
+function relocatePrismaLayout(
+  tree: Tree,
+  options: NormalizedDatabaseOptions,
+): void {
+  if (!options.sourceSchema || !options.target) {
+    throw new DatabaseGeneratorError(
+      'Prisma relocation lost its source schema or destination target.',
+      3,
+      'relocation-state',
+    );
+  }
+  const sourceRoot = dirname(options.sourceSchema);
+  const sourceProject = [...getProjects(tree).entries()].find(
+    ([, project]) => project.root === sourceRoot,
+  );
+  if (sourceProject) removeProjectConfiguration(tree, sourceProject[0]);
+  const sourceFiles = filesUnder(tree, sourceRoot).filter(
+    (path) => !['project.json', 'package.json'].includes(basename(path)),
+  );
+  for (const source of sourceFiles) {
+    const destination = `${options.target}/${relative(sourceRoot, source)}`;
+    tree.rename(source, destination);
+  }
+  ensureWorkspacePackagePath(tree, options);
+  addProjectConfiguration(tree, options.project, projectConfiguration(options));
+  writePackage(tree, options);
+  if (!tree.exists(`${options.directory}/prisma.config.ts`)) {
+    tree.write(
+      `${options.directory}/prisma.config.ts`,
+      `import { defineConfig } from 'prisma/config';\n\nexport default defineConfig({\n  schema: 'prisma',\n  migrations: { path: 'prisma/migrations' },\n});\n`,
+    );
+  }
+  if (!tree.exists(`${options.directory}/src/index.ts`)) {
+    tree.write(
+      `${options.directory}/src/index.ts`,
+      '// Export the repository-owned Prisma client boundary from this package.\n',
+    );
+  }
+  configureRelocatedClientOutput(tree, options);
+  rewriteRelocationReferences(tree, options);
+  rewriteRootPrismaConfig(tree, options);
+}
+
 function renderPlan(options: NormalizedDatabaseOptions): string {
   return `# Megamono database plan
 
@@ -437,14 +757,16 @@ function renderPlan(options: NormalizedDatabaseOptions): string {
 - Project: ${options.project}
 - Root: ${options.directory}
 - Playstack target: ${options.target ?? 'deferred until an explicit compatible artifact target is selected'}
-- Existing schema: ${options.existingLayout ? options.schema : 'none'}
+- Existing schema: ${options.existingLayout ? (options.sourceSchema ?? options.schema) : 'none'}
+- Relocation: ${options.relocate ? (options.sourceSchema ? `${options.sourceSchema} -> ${dirname(options.schema)}` : 'already complete') : 'no'}
+- Generated client: ${options.clientOutput ? `move output to ${options.clientOutput}` : 'preserve existing ownership'}
 
 ## Ordered operations
 
-1. Create or adopt the adapter-native database project.
+1. ${options.relocate ? 'Move the complete Prisma schema directory into the named context project without running migrations.' : 'Create or adopt the adapter-native database project.'}
 2. Record the database in megamono.json${options.target ? ' and its explicit artifact target in playstack.json' : '; leave Playstack artifact composition deferred'}.
-3. Install compatibility-pinned adapter packages.
-4. Expose static validation without connecting to a database.
+3. ${options.relocate ? 'Retarget known repository commands and preserve root Prisma CLI discovery.' : 'Install compatibility-pinned adapter packages.'}
+4. Expose static validation and generation without connecting to a database.
 `;
 }
 
@@ -485,9 +807,9 @@ function ensureWorkspacePackagePath(
     );
   }
   const pattern = workspacePattern(options);
-  const entries = [...current.matchAll(/^\s*-\s*['"]?([^'"\s]+)['"]?\s*$/gm)].map(
-    (match) => match[1],
-  );
+  const entries = [
+    ...current.matchAll(/^\s*-\s*['"]?([^'"\s]+)['"]?\s*$/gm),
+  ].map((match) => match[1]);
   if (!entries.includes(pattern)) {
     tree.write(path, `${current.replace(/\s*$/, '')}\n  - '${pattern}'\n`);
   }
@@ -515,7 +837,13 @@ function projectConfiguration(
         generate: {
           executor: 'nx:run-commands',
           cache: true,
-          outputs: ['{projectRoot}/src/generated'],
+          ...(!options.relocate || options.clientOutput
+            ? {
+                outputs: [
+                  `{projectRoot}/${options.clientOutput ?? 'src/generated'}`,
+                ],
+              }
+            : {}),
           options: {
             cwd: options.directory,
             command: 'prisma generate --schema prisma',
@@ -554,6 +882,7 @@ function projectConfiguration(
 function adoptedProjectConfiguration(
   options: NormalizedDatabaseOptions,
 ): ProjectConfiguration {
+  const prismaInput = options.target ?? options.schema;
   return {
     root: options.directory,
     projectType: 'library',
@@ -566,10 +895,22 @@ function adoptedProjectConfiguration(
           cwd: '.',
           command:
             options.adapter === 'prisma'
-              ? `prisma validate --schema ${options.schema}`
+              ? `prisma validate --schema ${prismaInput}`
               : 'drizzle-kit check',
         },
       },
+      ...(options.adapter === 'prisma' && options.target
+        ? {
+            generate: {
+              executor: 'nx:run-commands',
+              cache: true,
+              options: {
+                cwd: '.',
+                command: `prisma generate --schema ${prismaInput}`,
+              },
+            },
+          }
+        : {}),
     },
   };
 }
@@ -689,13 +1030,18 @@ function writeConfigurations(
     ...playstack,
     databases: {
       ...databases,
-      [options.name]: existing ?? {
-        adapter: options.adapter,
-        ...(options.adapter === 'drizzle'
-          ? { dialect: compatibility.databaseAdapters.drizzle.provider }
-          : {}),
-        target: options.target,
-      },
+      [options.name]: existing
+        ? {
+            ...existing,
+            ...(options.relocate ? { target: options.target } : {}),
+          }
+        : {
+            adapter: options.adapter,
+            ...(options.adapter === 'drizzle'
+              ? { dialect: compatibility.databaseAdapters.drizzle.provider }
+              : {}),
+            target: options.target,
+          },
     },
   });
 }
@@ -733,6 +1079,13 @@ export async function databaseGenerator(
   logger.info(renderPlan(options));
   if (state === 'noop' || options.dryRun) return () => undefined;
   if (!(await confirm(rawOptions))) return () => undefined;
+
+  if (state === 'relocate') {
+    relocatePrismaLayout(tree, options);
+    writeConfigurations(tree, options);
+    await formatFiles(tree);
+    return () => installPackagesTask(tree);
+  }
 
   if (state === 'adopt') {
     const project = getProjects(tree).get(options.project);
