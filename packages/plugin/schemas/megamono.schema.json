@@ -68,7 +68,11 @@
               "properties": {
                 "router": { "const": "pages" },
                 "src": { "const": true },
-                "ui": { "const": "chakra" },
+                "ui": {
+                  "const": "chakra",
+                  "deprecated": true,
+                  "description": "Legacy compatibility only; use scaffolding.web.styling."
+                },
                 "e2e": { "const": "playwright" }
               }
             },
@@ -96,6 +100,33 @@
             "playstack-direction": { "$ref": "#/$defs/structuralRuleOverride" },
             "platform-boundary": { "$ref": "#/$defs/structuralRuleOverride" },
             "no-bare-jsx-strings": { "$ref": "#/$defs/ruleOverride" }
+          }
+        }
+      }
+    },
+    "scaffolding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "web": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "styling": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "chakra",
+                "emotion",
+                "tailwind",
+                "panda",
+                "stylex",
+                "css-modules",
+                "inline"
+              ],
+              "default": "auto",
+              "description": "Preferred renderer for newly scaffolded web billboards; it is not enforced on existing applications."
+            }
           }
         }
       }
@@ -229,7 +260,16 @@
       "type": "array",
       "uniqueItems": true,
       "items": {
-        "enum": ["web", "node", "worker", "mobile", "apple", "rust", "php", "extension"]
+        "enum": [
+          "web",
+          "node",
+          "worker",
+          "mobile",
+          "apple",
+          "rust",
+          "php",
+          "extension"
+        ]
       }
     },
     "ports": {

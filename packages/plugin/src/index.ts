@@ -129,6 +129,13 @@ export {
   type MegamonoConfig,
 } from './lib/config';
 export {
+  WEB_STYLING_OPTIONS,
+  detectWebStyling,
+  isWebStyling,
+  type ResolvedWebStyling,
+  type WebStyling,
+} from './lib/web-styling';
+export {
   PACKAGE_MANAGERS,
   isPackageManager,
   lockfileManagers,

@@ -22,6 +22,7 @@ import {
   isSafeWorkspaceRelativePath,
   megamonoConfigSchema,
 } from '../../lib/config';
+import { detectWebStyling } from '../../lib/web-styling';
 import { checkWorkspaceStructure } from '../../lib/structural-check';
 import {
   applyManagedSkillTemplates,
@@ -1794,6 +1795,9 @@ export async function workspaceInitGenerator(
           DEFAULT_MEGAMONO_CONFIG.conventions.rules),
         ...lintWarningRules,
       },
+    },
+    scaffolding: existingConfig?.scaffolding ?? {
+      web: { styling: detectWebStyling(tree) },
     },
     platforms: [...configuredPlatforms].sort(),
     ports:

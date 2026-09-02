@@ -25,7 +25,17 @@ describe('Megamono configuration', () => {
     });
     expect(config.databases).toEqual({});
     expect(config.conventions.packageManager).toBe('npm');
+    expect(config.scaffolding.web.styling).toBe('auto');
     expect(getTopicVocabulary(config)).toContain('architecture');
+  });
+
+  it('keeps styling as a non-enforced scaffold preference', () => {
+    const config = megamonoConfigSchema.parse({
+      ...DEFAULT_MEGAMONO_CONFIG,
+      scaffolding: { web: { styling: 'stylex' } },
+    });
+    expect(config.scaffolding.web.styling).toBe('stylex');
+    expect(config.conventions.apps.web.ui).toBeUndefined();
   });
 
   it('accepts npm as an explicit compatibility option', () => {

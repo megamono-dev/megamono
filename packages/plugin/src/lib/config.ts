@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import { z } from 'zod';
 import { PACKAGE_MANAGERS } from './package-manager';
+import { WEB_STYLING_OPTIONS } from './web-styling';
 
 export const BUILT_IN_TOPICS = [
   'agents',
@@ -121,14 +122,14 @@ const conventionsSchema = z
           .object({
             router: z.literal('pages').default('pages'),
             src: z.literal(true).default(true),
-            ui: z.literal('chakra').default('chakra'),
+            /** @deprecated Styling is a scaffold preference, not a convention. */
+            ui: z.literal('chakra').optional(),
             e2e: z.literal('playwright').default('playwright'),
           })
           .strict()
           .default({
             router: 'pages',
             src: true,
-            ui: 'chakra',
             e2e: 'playwright',
           }),
         api: z
@@ -142,7 +143,7 @@ const conventionsSchema = z
       })
       .strict()
       .default({
-        web: { router: 'pages', src: true, ui: 'chakra', e2e: 'playwright' },
+        web: { router: 'pages', src: true, e2e: 'playwright' },
         api: { framework: 'nest', featureLibraries: true, e2e: 'jest' },
       }),
     rules: z
@@ -252,6 +253,17 @@ export const megamonoConfigSchema = z
     $schema: z.string().optional(),
     version: z.literal(MEGAMONO_CONFIG_VERSION),
     conventions: conventionsSchema,
+    scaffolding: z
+      .object({
+        web: z
+          .object({
+            styling: z.enum(WEB_STYLING_OPTIONS).default('auto'),
+          })
+          .strict()
+          .default({ styling: 'auto' }),
+      })
+      .strict()
+      .default({ web: { styling: 'auto' } }),
     adoption: adoptionSchema,
     platforms: z
       .array(
@@ -336,9 +348,12 @@ export const megamonoConfigSchema = z
             z
               .array(z.string().min(1))
               .min(1)
-              .refine((projects) => new Set(projects).size === projects.length, {
-                message: 'Health project alias members must be unique.',
-              }),
+              .refine(
+                (projects) => new Set(projects).size === projects.length,
+                {
+                  message: 'Health project alias members must be unique.',
+                },
+              ),
           )
           .default({}),
         suppressions: z
@@ -450,11 +465,12 @@ export const DEFAULT_MEGAMONO_CONFIG: MegamonoConfig =
       docsLocation: 'centralized',
       packageManager: 'npm',
       apps: {
-        web: { router: 'pages', src: true, ui: 'chakra', e2e: 'playwright' },
+        web: { router: 'pages', src: true, e2e: 'playwright' },
         api: { framework: 'nest', featureLibraries: true, e2e: 'jest' },
       },
       rules: {},
     },
+    scaffolding: { web: { styling: 'auto' } },
     adoption: {
       modules: [],
       reductions: [],
