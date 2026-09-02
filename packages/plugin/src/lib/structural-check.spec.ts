@@ -86,6 +86,34 @@ describe('workspace structural checks', () => {
     }
   });
 
+  it('can retain core package checks without enforcing unadopted project conventions', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-check-'));
+    try {
+      await writeFile(join(root, 'package.json'), '{}');
+      const untagged: ProjectGraph = {
+        nodes: {
+          app: {
+            name: 'app',
+            type: 'app',
+            data: { root: 'apps/app', tags: [] },
+          },
+        },
+        dependencies: { app: [] },
+      };
+      expect(
+        await checkWorkspaceStructure(
+          root,
+          untagged,
+          DEFAULT_MEGAMONO_CONFIG,
+          new Set(),
+          new Set(['megamono-dev-only', 'playstack-direction']),
+        ),
+      ).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('covers every allowed and forbidden type dependency', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-check-'));
     const allowed: Readonly<Record<string, readonly string[]>> = {

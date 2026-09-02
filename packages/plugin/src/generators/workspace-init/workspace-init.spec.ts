@@ -930,6 +930,8 @@ export default [
       readProjectConfiguration(tree, 'megamono').targets?.check,
     ).toBeDefined();
     expect(tree.exists('AGENTS.md')).toBe(true);
+    expect(tree.read('AGENTS.md', 'utf8')).toContain('docs/DESIGN.md');
+    expect(tree.read('AGENTS.md', 'utf8')).not.toContain('docs/INDEX.md');
     expect(tree.exists('CLAUDE.md')).toBe(true);
     expect(tree.exists('docs/DESIGN.md')).toBe(true);
     expect(tree.exists('.agents/skills/structure-review/SKILL.md')).toBe(true);

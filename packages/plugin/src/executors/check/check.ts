@@ -24,7 +24,8 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
     );
     const diagnostics: Diagnostic[] = [];
     const acceptedDecisions = new Set<string>();
-    if (!options.skipDocs) {
+    const adoptedModules = new Set(config.adoption.modules);
+    if (!options.skipDocs && adoptedModules.has('docs')) {
       const docs = await validateRepositoryDocs(
         context.root,
         config,
@@ -46,6 +47,9 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
         context.projectGraph,
         config,
         acceptedDecisions,
+        adoptedModules.has('lint')
+          ? undefined
+          : new Set(['megamono-dev-only', 'playstack-direction']),
       )),
     );
     diagnostics.push(...(await checkProjectPreflights(context.projectGraph)));

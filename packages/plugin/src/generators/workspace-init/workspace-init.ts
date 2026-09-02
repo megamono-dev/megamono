@@ -2057,9 +2057,12 @@ export async function workspaceInitGenerator(
     !artifactIsEjected(tree, 'agents.instructions') &&
     !tree.exists('AGENTS.md')
   ) {
+    const documentationGuidance = tree.exists(`${docsRoot}/INDEX.md`)
+      ? `Read ${docsRoot}/INDEX.md, accepted specs, decisions, and in-progress plans`
+      : `Read ${docsRoot}/DESIGN.md and existing repository guidance`;
     tree.write(
       'AGENTS.md',
-      `# Repository instructions\n\nRead ${docsRoot}/INDEX.md, accepted specs, decisions, and in-progress plans before changing the repository. Use Megamono generators instead of hand-rolling repository structure.\n`,
+      `# Repository instructions\n\n${documentationGuidance} before changing the repository. Use Megamono generators instead of hand-rolling repository structure.\n`,
     );
   }
   const agentsPath = 'AGENTS.md';

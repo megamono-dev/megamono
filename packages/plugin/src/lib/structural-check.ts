@@ -356,6 +356,7 @@ export async function checkWorkspaceStructure(
   graph: ProjectGraph,
   config: MegamonoConfig,
   acceptedDecisionIds: ReadonlySet<string> = new Set(),
+  enabledRules?: ReadonlySet<string>,
 ): Promise<readonly Diagnostic[]> {
   const diagnostics: Diagnostic[] = [];
   validateTagCardinality(graph, diagnostics);
@@ -385,6 +386,12 @@ export async function checkWorkspaceStructure(
     >
   >;
   return diagnostics
+    .filter(
+      (diagnostic) =>
+        diagnostic.code === 'rule-override-decision' ||
+        enabledRules === undefined ||
+        enabledRules.has(diagnostic.code),
+    )
     .filter((diagnostic) => {
       const override = configuredRules[diagnostic.code];
       return !(
