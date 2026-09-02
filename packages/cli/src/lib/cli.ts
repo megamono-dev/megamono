@@ -84,6 +84,7 @@ interface InitOptions {
   >;
   readonly selectPlaystackPackages: boolean;
   readonly survey: boolean;
+  readonly dryRun: boolean;
 }
 
 export interface PlaystackProductChoice {
@@ -692,6 +693,9 @@ function parseInitOptions(args: readonly string[]): InitOptions {
     selectPlaystackPackages,
     survey: forwarded.some(
       (argument) => argument === '--survey' || argument === '--survey=true',
+    ),
+    dryRun: forwarded.some(
+      (argument) => argument === '--dry-run' || argument === '--dry-run=true',
     ),
   };
 }
@@ -1574,12 +1578,14 @@ async function addPlaystackCapabilities(
   workspace: Workspace,
   options: InitOptions,
   surfaces: Readonly<Partial<Record<PlaystackSurfaceKind, string>>>,
+  dryRun = false,
 ): Promise<void> {
   for (const capability of options.playstackCapabilities) {
     const args = [
       'add',
       capability,
       '--yes',
+      ...(dryRun ? ['--dry-run'] : []),
       ...(surfaces.web ? [`--web=${surfaces.web}`] : []),
       ...(surfaces.api ? [`--api=${surfaces.api}`] : []),
       ...(options.localPackages === 'yalc' ? ['--local-packages=yalc'] : []),
@@ -2108,6 +2114,18 @@ function renderPlaystackSurveyPlan(
   }.`;
 }
 
+function renderPlaystackDryRunPlan(
+  manager: PackageManager,
+  options: InitOptions,
+  surfaces: Readonly<Partial<Record<PlaystackSurfaceKind, string>>>,
+): string {
+  return `Playstack dry run: no packages will be installed and no Playstack files will be written. ${renderPlaystackSurveyPlan(
+    manager,
+    options,
+    surfaces,
+  ).replace('Playstack survey deferred: @playstack/cli is not installed. ', '')}`;
+}
+
 async function runInit(
   args: readonly string[],
   io: MegamonoCliIo,
@@ -2203,6 +2221,21 @@ async function runInit(
 
   const playstackAvailable = localPackageAvailable(root, '@playstack/cli');
   const surfaces = await resolvePlaystackSurfaces(io, workspace, options);
+  if (options.dryRun) {
+    io.stdout(
+      renderPlaystackDryRunPlan(workspace.packageManager, options, surfaces),
+    );
+    if (!playstackAvailable) return { exitCode: 0 };
+    await addPlaystackCapabilities(io, workspace, options, surfaces, true);
+    const [command, commandArgs] = playstackInvocation(
+      workspace.packageManager,
+      ['init', '--survey'],
+    );
+    const previewed = await io.runCommand(command, commandArgs, {
+      cwd: workspace.root,
+    });
+    return { exitCode: previewed.exitCode };
+  }
   if (options.survey) {
     if (!playstackAvailable) {
       io.stdout(

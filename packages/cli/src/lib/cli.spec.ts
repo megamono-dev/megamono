@@ -916,6 +916,61 @@ describe('@megamono/cli', () => {
     expect(harness.stdout.join('\n')).toContain('Playstack survey deferred');
   });
 
+  it('keeps combined Playstack dry runs package- and file-mutation free', async () => {
+    const root = await workspace('pnpm', [
+      'nx',
+      '@megamono/plugin',
+      '@playstack/cli',
+    ]);
+    const projects = {
+      site: {
+        root: 'apps/site',
+        projectType: 'application',
+        tags: ['platform:web', 'type:app'],
+      },
+    } as const;
+    const harness = io(
+      root,
+      (invocation) =>
+        surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
+    );
+
+    const result = await runMegamonoCli(
+      ['init', '--dry-run', '--playstack-packages=content', '--only=agents'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(harness.stdout.join('\n')).toContain(
+      'Playstack dry run: no packages will be installed',
+    );
+    expect(
+      harness.invocations.some(
+        ({ command, args }) =>
+          command === 'yalc' ||
+          (command === 'pnpm' && ['add', 'install'].includes(args[0] ?? '')),
+      ),
+    ).toBe(false);
+    expect(
+      harness.invocations.find(
+        ({ args }) => args.includes('playstack') && args.includes('add'),
+      )?.args,
+    ).toEqual(
+      expect.arrayContaining([
+        'content',
+        '--yes',
+        '--dry-run',
+        '--web=apps/site',
+      ]),
+    );
+    expect(harness.invocations.at(-1)?.args).toEqual([
+      'exec',
+      'playstack',
+      'init',
+      '--survey',
+    ]);
+  });
+
   it('applies Playstack compatibility without narrowing core init', async () => {
     const root = await workspace('pnpm');
     const manifestPath = join(root, 'package.json');
