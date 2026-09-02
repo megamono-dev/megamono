@@ -98,6 +98,41 @@ describe('workerGenerator', () => {
     });
   });
 
+  it('preserves a compatible Wrangler range during existing-workspace adoption', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const packageJson = JSON.parse(tree.read('package.json', 'utf8') ?? '{}');
+    packageJson.devDependencies = {
+      wrangler: '^4.105.0',
+    };
+    tree.write('package.json', JSON.stringify(packageJson));
+
+    await workerGenerator(tree, { name: 'events' });
+
+    expect(
+      JSON.parse(tree.read('package.json', 'utf8') ?? '{}').devDependencies,
+    ).toMatchObject({
+      '@megamono/nx-cloudflare': '0.0.1',
+      wrangler: '^4.105.0',
+    });
+  });
+
+  it('rejects a Wrangler range below the tested adoption floor', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const packageJson = JSON.parse(tree.read('package.json', 'utf8') ?? '{}');
+    packageJson.devDependencies = {
+      wrangler: '^4.104.0',
+    };
+    tree.write('package.json', JSON.stringify(packageJson));
+
+    await expect(
+      workerGenerator(tree, { name: 'events' }),
+    ).rejects.toMatchObject({
+      kind: 'conflict',
+      exitCode: 3,
+      diagnosticCode: 'cloudflare-generator-conflict',
+    });
+  });
+
   it('upgrades a shorthand plugin registration with the selected scope', async () => {
     const tree = createTreeWithEmptyWorkspace();
     const nxJson = JSON.parse(tree.read('nx.json', 'utf8') ?? '{}');

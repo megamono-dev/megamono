@@ -114,7 +114,7 @@ async function writeFixture(root) {
           '@megamono/nx-cloudflare': '0.0.1',
           nx: compatibility.scaffoldPackages['create-nx-workspace'],
           typescript: compatibility.scaffoldPackages.typescript,
-          wrangler: compatibility.scaffoldPackages.wrangler,
+          wrangler: compatibility.cloudflare.testedWranglerMinimum,
         },
       },
       null,
@@ -325,7 +325,7 @@ try {
         private: true,
         devDependencies: {
           '@megamono/nx-cloudflare': '0.0.1',
-          wrangler: '4.124.0',
+          wrangler: '4.104.0',
         },
       },
       null,
@@ -351,6 +351,13 @@ try {
     'npm',
     ['install', '--registry', registry, '--audit=false', '--fund=false'],
     { cwd: fixtureRoot, env: npmEnvironment },
+  );
+  const minimumWrangler = JSON.parse(
+    await readFile(resolve(fixtureRoot, 'node_modules/wrangler/package.json')),
+  );
+  assert(
+    minimumWrangler.version === compatibility.cloudflare.testedWranglerMinimum,
+    `Fixture did not install Wrangler ${compatibility.cloudflare.testedWranglerMinimum}.`,
   );
   const nxEnvironment = {
     NX_DAEMON: 'false',
@@ -381,6 +388,10 @@ try {
     metadata.externalWorkers.some(({ worker }) => worker === 'external-worker'),
     'Explicit external Worker metadata is missing.',
   );
+  await run('npm', ['exec', 'nx', '--', 'run', 'probe-backend:typegen'], {
+    cwd: fixtureRoot,
+    env: nxEnvironment,
+  });
 
   await run('npm', ['exec', 'nx', '--', 'graph', '--file=graph.json'], {
     cwd: fixtureRoot,
@@ -528,7 +539,7 @@ try {
 
   succeeded = true;
   process.stdout.write(
-    'nx-cloudflare local-registry e2e passed: peer gate, mixed config inference, targets, metadata, graph, affected propagation, typegen, and generators verified.\n',
+    `nx-cloudflare local-registry e2e passed: Wrangler ${compatibility.cloudflare.testedWranglerMinimum} adoption, peer gate, mixed config inference, targets, metadata, graph, affected propagation, typegen, and generators verified.\n`,
   );
 } finally {
   verdaccio.kill('SIGTERM');

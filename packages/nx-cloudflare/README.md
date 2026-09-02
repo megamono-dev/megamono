@@ -14,6 +14,8 @@ Register the inference plugin in `nx.json`:
 
 The plugin discovers `wrangler.jsonc`, `wrangler.json`, and `wrangler.toml`, then infers `dev`, `deploy`, `typegen`, and `tail`. Local Worker bindings become static Nx dependency edges.
 
+Existing workspaces may retain Wrangler `>=4.105 <5`; the packed compatibility fixture runs inference and type generation at 4.105. New Worker scaffolds continue to use the newer exact compatibility pin. Upgrading Wrangler is therefore separate from adopting Megamono.
+
 The package also provides three plan-first generators:
 
 ```sh

@@ -114,7 +114,8 @@
     "@megamono/nx-extension": "0.0.1"
   },
   "cloudflare": {
-    "wrangler": ">=4.125 <5",
+    "wrangler": ">=4.105 <5",
+    "testedWranglerMinimum": "4.105.0",
     "compatibilityDate": "2026-08-23",
     "nodeCompatibilityDefaultDate": "2026-08-04"
   },

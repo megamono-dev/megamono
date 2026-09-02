@@ -56,6 +56,8 @@ The package follows the adoption Node and package-manager ranges in `spec-megamo
 
 JSONC, JSON, and TOML are first-class. [Cloudflare recommends JSONC for new projects](https://developers.cloudflare.com/workers/wrangler/configuration/), but existing TOML projects retain equal inference support. Generated deployment redirects under `.wrangler/deploy/config.json` are outputs, not source project identities, and are ignored.
 
+The scaffold version and adoption range are intentionally separate. New Workers receive the current exact Wrangler compatibility pin, while established repositories may retain Wrangler `>=4.105 <5`. The packed consumer fixture installs 4.105, verifies project inference and runs the inferred type-generation target before exercising generators at the current scaffold pin. A Wrangler upgrade is never an implicit prerequisite for Megamono adoption.
+
 One directory produces at most one Nx project. If more than one standard config exists in that directory, graph construction succeeds but executable targets and dependency edges are omitted until the plugin option `configPath` selects one. The diagnostic is emitted through `metadata['megamono:preflight']` and therefore appears in `megamono:check`.
 
 Unknown configuration keys are preserved in raw parsing and ignored by inference. A malformed config, an unsupported Pages config, or a future shape the parser cannot interpret never fails the whole Nx graph; it produces no inferred Cloudflare edges for that project and emits an actionable preflight diagnostic.

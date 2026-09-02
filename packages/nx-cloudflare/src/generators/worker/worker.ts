@@ -7,9 +7,11 @@ import {
   type Tree,
 } from '@nx/devkit';
 import { relative } from 'node:path';
+import { subset, validRange } from 'semver';
 import {
   CLOUDFLARE_COMPATIBILITY_DATE,
   WRANGLER_VERSION,
+  WRANGLER_VERSION_RANGE,
 } from '../../lib/compatibility';
 import type { WorkerGeneratorSchema } from './schema';
 import {
@@ -225,10 +227,22 @@ function missingDependencies(tree: Tree): Record<string, string> {
       name === PLUGIN_NAME &&
       installed !== undefined &&
       isExactYalcPackage(tree, name, version, installed);
-    if (installed && installed !== version && !exactYalcPackage)
+    const compatibleWrangler =
+      name === 'wrangler' &&
+      installed !== undefined &&
+      validRange(installed) !== null &&
+      subset(installed, WRANGLER_VERSION_RANGE);
+    if (
+      installed &&
+      installed !== version &&
+      !exactYalcPackage &&
+      !compatibleWrangler
+    )
       throw new CloudflareGeneratorError(
         'conflict',
-        `${name} is already declared as ${installed}; expected ${version}.`,
+        name === 'wrangler'
+          ? `${name} is already declared as ${installed}; expected a version within ${WRANGLER_VERSION_RANGE}.`
+          : `${name} is already declared as ${installed}; expected ${version}.`,
       );
     if (!installed) missing[name] = version;
   }
