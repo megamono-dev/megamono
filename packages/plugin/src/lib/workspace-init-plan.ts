@@ -1,4 +1,5 @@
 import { getProjects, type Tree } from '@nx/devkit';
+import ignore = require('ignore');
 import { readArtifactRegistry } from './managed-artifacts';
 import { MANAGED_SKILL_NAMES } from './managed-skills';
 import { nxWorkspaceCapabilities } from './workspace-compatibility';
@@ -320,21 +321,52 @@ function dependencyVersion(
 
 function listFiles(tree: Tree): readonly string[] {
   const files: string[] = [];
-  const ignored = new Set([
+  const ignoredDirectoryNames = new Set([
+    '.build',
     '.git',
     '.nx',
+    '.yalc',
     '.content-collections',
+    'DerivedData',
     'coverage',
     'dist',
     'node_modules',
     'tmp',
   ]);
-  const visit = (directory: string) => {
+  const visit = (
+    directory: string,
+    inheritedRules: readonly {
+      readonly directory: string;
+      readonly matcher: ReturnType<typeof ignore>;
+    }[] = [],
+  ) => {
+    const ignorePath = directory ? `${directory}/.gitignore` : '.gitignore';
+    const rules = tree.isFile(ignorePath)
+      ? [
+          ...inheritedRules,
+          {
+            directory,
+            matcher: ignore().add(tree.read(ignorePath, 'utf8') ?? ''),
+          },
+        ]
+      : inheritedRules;
     for (const child of tree.children(directory).sort(compare)) {
-      if (ignored.has(child)) continue;
       const path = directory ? `${directory}/${child}` : child;
+      if (!tree.isFile(path) && ignoredDirectoryNames.has(child)) continue;
+      let ignored = false;
+      for (const rule of rules) {
+        const relativePath = rule.directory
+          ? path.slice(rule.directory.length + 1)
+          : path;
+        const result = rule.matcher.test(
+          tree.isFile(path) ? relativePath : `${relativePath}/`,
+        );
+        if (result.ignored) ignored = true;
+        else if (result.unignored) ignored = false;
+      }
+      if (ignored) continue;
       if (tree.isFile(path)) files.push(path);
-      else visit(path);
+      else visit(path, rules);
     }
   };
   visit('');

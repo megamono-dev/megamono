@@ -104,6 +104,24 @@ describe('workspace init survey and plan', () => {
     expect(tree.listChanges()).toEqual(changes);
   });
 
+  it('excludes generated directories and repository-ignored files from surveys', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      '.gitignore',
+      'vendor/generated/\npackages/tool/generated-docs/\n',
+    );
+    tree.write('docs/kept.md', '# Kept\n');
+    tree.write('vendor/generated/ignored.md', '# Ignored\n');
+    tree.write('basemarks-swift/.build/checkouts/dependency/README.md', '# Dependency\n');
+    tree.write('packages/tool/.gitignore', 'local-output/\n');
+    tree.write('packages/tool/local-output/nested.md', '# Nested ignore\n');
+    tree.write('packages/tool/generated-docs/also-ignored.md', '# Root ignore\n');
+
+    expect(surveyWorkspaceInit(tree).documentation.markdown).toEqual([
+      'docs/kept.md',
+    ]);
+  });
+
   it('orders module selection canonically and reports reductions', () => {
     const tree = createTreeWithEmptyWorkspace();
     const plan = createWorkspaceInitPlan(tree, {
