@@ -474,6 +474,7 @@ describe('createPlan', () => {
       'initialize-megamono',
       'commit-workspace',
     ]);
+    expect(renderPlan(plan)).toContain('--platforms=mobile,rust,worker');
   });
 
   it('keeps the dry-run and execution plan identical', () => {

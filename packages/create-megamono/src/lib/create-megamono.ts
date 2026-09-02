@@ -368,6 +368,7 @@ function requestedPlatforms(options: NormalizedCreateOptions): string[] {
       options.apps.map((app) => {
         if (app === 'api') return 'node';
         if (app === 'worker') return 'worker';
+        if (app === 'mobile') return 'mobile';
         if (app === 'desktop') return 'rust';
         if (app === 'apple') return 'apple';
         if (app === 'extension') return 'extension';

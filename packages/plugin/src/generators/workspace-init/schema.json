@@ -111,7 +111,7 @@
     "defaultPlatform": {
       "type": "string",
       "description": "Platform assigned to untagged existing applications.",
-      "enum": ["web", "node", "worker", "apple", "rust", "php", "extension"],
+      "enum": ["web", "node", "worker", "mobile", "apple", "rust", "php", "extension"],
       "x-prompt": "Which platform should untagged existing applications use?"
     },
     "adoptionMap": {

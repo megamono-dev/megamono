@@ -88,7 +88,14 @@ interface NormalizedAppOptions {
   readonly scope: string;
   readonly projectName: string;
   readonly packageName: string;
-  readonly platform: 'web' | 'node' | 'worker' | 'apple' | 'rust' | 'extension';
+  readonly platform:
+    | 'web'
+    | 'node'
+    | 'worker'
+    | 'mobile'
+    | 'apple'
+    | 'rust'
+    | 'extension';
   readonly tags: readonly string[];
   readonly port?: number;
   readonly packageManager: PackageManager;
@@ -221,6 +228,7 @@ function workspaceIdentity(tree: Tree): {
 function platform(type: AppType): NormalizedAppOptions['platform'] {
   if (type === 'api') return 'node';
   if (type === 'worker') return 'worker';
+  if (type === 'mobile') return 'mobile';
   if (type === 'apple') return 'apple';
   if (type === 'desktop') return 'rust';
   if (type === 'extension') return 'extension';

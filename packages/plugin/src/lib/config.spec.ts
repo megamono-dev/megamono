@@ -40,6 +40,15 @@ describe('Megamono configuration', () => {
     ).toBe('npm');
   });
 
+  it('accepts mobile as a first-class workspace platform', () => {
+    expect(
+      megamonoConfigSchema.parse({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        platforms: ['mobile'],
+      }).platforms,
+    ).toEqual(['mobile']);
+  });
+
   it('records modular adoption, reductions, inference, and lint ratchets', () => {
     const config = megamonoConfigSchema.parse({
       ...DEFAULT_MEGAMONO_CONFIG,

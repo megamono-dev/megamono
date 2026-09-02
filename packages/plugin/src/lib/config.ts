@@ -255,7 +255,16 @@ export const megamonoConfigSchema = z
     adoption: adoptionSchema,
     platforms: z
       .array(
-        z.enum(['web', 'node', 'worker', 'apple', 'rust', 'php', 'extension']),
+        z.enum([
+          'web',
+          'node',
+          'worker',
+          'mobile',
+          'apple',
+          'rust',
+          'php',
+          'extension',
+        ]),
       )
       .default([]),
     ports: z

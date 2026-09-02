@@ -143,6 +143,7 @@ const SUPPORTED_PLATFORMS = new Set([
   'web',
   'node',
   'worker',
+  'mobile',
   'apple',
   'rust',
   'php',
@@ -793,7 +794,15 @@ function renderCiWorkflow(
   toolchain: WorkflowToolchain,
   reusable = false,
 ): string {
-  const linuxPlatforms = ['web', 'node', 'worker', 'rust', 'php', 'extension'];
+  const linuxPlatforms = [
+    'web',
+    'node',
+    'worker',
+    'mobile',
+    'rust',
+    'php',
+    'extension',
+  ];
   const hasLinux = linuxPlatforms.some((platform) => platforms.has(platform));
   const hasApple = platforms.has('apple');
   const gh = (expression: string) => '${{ ' + expression + ' }}';

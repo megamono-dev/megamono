@@ -13,6 +13,7 @@ export const PROJECT_ADOPTION_PLATFORMS = [
   'web',
   'node',
   'worker',
+  'mobile',
   'apple',
   'rust',
   'php',
@@ -162,6 +163,13 @@ function inferPlatform(
     /\b(?:node|nest|webpack-cli)\b/.test(commands)
   )
     add('node', 'Node/Nest executable target');
+  if (
+    tree.exists(`${root}/app.json`) ||
+    typeof dependencies.expo === 'string' ||
+    typeof dependencies['react-native'] === 'string' ||
+    /\bexpo\s+(?:start|export|run:android|run:ios)\b/.test(commands)
+  )
+    add('mobile', 'Expo/React Native project');
   if (
     ['wrangler.json', 'wrangler.jsonc', 'wrangler.toml'].some((name) =>
       tree.exists(`${root}/${name}`),

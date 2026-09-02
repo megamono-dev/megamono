@@ -229,7 +229,7 @@
       "type": "array",
       "uniqueItems": true,
       "items": {
-        "enum": ["web", "node", "worker", "apple", "rust", "php", "extension"]
+        "enum": ["web", "node", "worker", "mobile", "apple", "rust", "php", "extension"]
       }
     },
     "ports": {

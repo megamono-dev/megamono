@@ -185,6 +185,14 @@ describe('app generator', () => {
       } as const;
       await appGenerator(tree, options);
       expect(tree.exists(expectedPath)).toBe(true);
+      if (type === 'mobile') {
+        expect(tree.read('apps/mobile/package.json', 'utf8')).toContain(
+          'platform:mobile',
+        );
+        expect(tree.read('apps/mobile/package.json', 'utf8')).not.toContain(
+          'platform:web',
+        );
+      }
       const first = snapshot(tree);
       await appGenerator(tree, options);
       expect(snapshot(tree)).toBe(first);

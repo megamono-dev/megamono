@@ -365,6 +365,36 @@ describe('workspace init survey and plan', () => {
     );
   });
 
+  it('classifies Expo applications as mobile without an adoption override', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    addProjectConfiguration(tree, 'mobile-app', {
+      root: 'apps/mobile-app',
+      projectType: 'application',
+      targets: {
+        build: {
+          executor: 'nx:run-commands',
+          options: { command: 'expo export -p ios' },
+        },
+      },
+    });
+    tree.write(
+      'apps/mobile-app/package.json',
+      JSON.stringify({ dependencies: { expo: '57.0.10', 'react-native': '0.86.2' } }),
+    );
+    tree.write('apps/mobile-app/app.json', JSON.stringify({ expo: {} }));
+
+    expect(surveyWorkspaceInit(tree).projects).toContainEqual(
+      expect.objectContaining({
+        name: 'mobile-app',
+        type: 'application',
+        platform: 'mobile',
+      }),
+    );
+    expect(createWorkspaceInitPlan(tree, { only: 'lint' }).decisions).toEqual(
+      [],
+    );
+  });
+
   it('requires and consumes an adoption map for conflicting project evidence', () => {
     const tree = createTreeWithEmptyWorkspace();
     addProjectConfiguration(tree, 'mixed', {
