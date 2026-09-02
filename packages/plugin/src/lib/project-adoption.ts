@@ -143,6 +143,7 @@ function inferPlatform(
   const root = project.root;
   const commands = commandText(project);
   const manifest = readJsonObject(tree, `${root}/package.json`);
+  const appConfig = readJsonObject(tree, `${root}/app.json`);
   const dependencies = {
     ...((manifest.dependencies as Record<string, unknown> | undefined) ?? {}),
     ...((manifest.devDependencies as Record<string, unknown> | undefined) ??
@@ -164,7 +165,7 @@ function inferPlatform(
   )
     add('node', 'Node/Nest executable target');
   if (
-    tree.exists(`${root}/app.json`) ||
+    (appConfig.expo !== null && typeof appConfig.expo === 'object') ||
     typeof dependencies.expo === 'string' ||
     typeof dependencies['react-native'] === 'string' ||
     /\bexpo\s+(?:start|export|run:android|run:ios)\b/.test(commands)

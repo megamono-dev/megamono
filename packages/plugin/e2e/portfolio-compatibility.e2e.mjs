@@ -24,7 +24,7 @@ const pnpmWrapper = join(toolRoot, 'pnpm');
 writeFileSync(pnpmWrapper, '#!/bin/sh\nexec corepack pnpm "$@"\n');
 chmodSync(pnpmWrapper, 0o755);
 
-function run(command, args, cwd = fixtureRoot) {
+function run(command, args, cwd = fixtureRoot, environment = {}) {
   return execFileSync(command, args, {
     cwd,
     encoding: 'utf8',
@@ -37,6 +37,7 @@ function run(command, args, cwd = fixtureRoot) {
         process.env.MEGAMONO_NPM_CACHE ?? join(temporaryRoot, 'npm-cache'),
       PNPM_HOME: process.env.PNPM_HOME ?? join(temporaryRoot, 'pnpm-home'),
       PATH: `${toolRoot}:${process.env.PATH ?? ''}`,
+      ...environment,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -110,7 +111,7 @@ try {
   });
   write(
     join(fixtureRoot, '.gitignore'),
-    'node_modules/\n.nx/\n*.tgz\n.content-collections/\n',
+    'node_modules/\n.nx/\n*.tgz\n.content-collections/\nbasemarks-swift/.build/\n',
   );
   write(
     join(fixtureRoot, 'pnpm-workspace.yaml'),
@@ -190,6 +191,27 @@ try {
     },
   });
   write(join(fixtureRoot, 'apps/api/tsconfig.app.json'), '{}\n');
+  writeJson(join(fixtureRoot, 'apps/mobile-app/project.json'), {
+    name: '@portfolio/mobile-app',
+    root: 'apps/mobile-app',
+    projectType: 'application',
+    targets: {
+      build: {
+        executor: 'nx:run-commands',
+        options: { command: 'pnpm exec expo export -p ios' },
+      },
+    },
+  });
+  writeJson(join(fixtureRoot, 'apps/mobile-app/package.json'), {
+    name: '@portfolio/mobile-app',
+    private: true,
+  });
+  writeJson(join(fixtureRoot, 'apps/mobile-app/app.json'), { expo: {} });
+  writeJson(join(fixtureRoot, '.megamono-adoption.json'), {
+    projects: {
+      '@portfolio/extension': { type: 'app', platform: 'extension' },
+    },
+  });
   writeJson(join(fixtureRoot, 'libs/nest-data/project.json'), {
     name: '@portfolio/nest-data',
     root: 'libs/nest-data',
@@ -223,7 +245,13 @@ try {
 
   write(
     join(fixtureRoot, 'apps/apple/QuickzonesKit/Package.swift'),
-    '// swift-tools-version: 6.0\n',
+    [
+      '// swift-tools-version: 6.0',
+      'import PackageDescription',
+      '',
+      'let package = Package(name: "QuickzonesKit")',
+      '',
+    ].join('\n'),
   );
   write(
     join(fixtureRoot, 'apps/apple/Quickzones.xcodeproj/project.pbxproj'),
@@ -251,6 +279,10 @@ try {
   write(join(fixtureRoot, '.github/workflows/release-apple.yml'), release);
   for (const name of ['00-overview', '01-mac-app', '02-zones-model'])
     write(join(fixtureRoot, `docs/specs/${name}.md`), `# ${name}\n`);
+  write(
+    join(fixtureRoot, 'basemarks-swift/.build/checkouts/dependency/README.md'),
+    '# Generated dependency documentation\n',
+  );
 
   console.error('Installing the packed Nx 22 / pnpm 11 consumer...');
   run('pnpm', ['install', '--ignore-scripts', '--no-frozen-lockfile']);
@@ -264,6 +296,7 @@ try {
     '--docsLoader=.megamono/content-collections.ts',
     '--docsModule=megamono-docs',
     '--docsOutput=.megamono/content-collections',
+    '--adoptionMap=.megamono-adoption.json',
     '--packageManager=pnpm',
     '--interactive=false',
     '--yes',
@@ -288,9 +321,46 @@ try {
     'Survey did not classify the inferred library.',
   );
   assert(
+    survey.includes('"@portfolio/mobile-app"') &&
+      survey.includes('"platform": "mobile"'),
+    'Survey did not classify the Expo application as mobile.',
+  );
+  assert(
+    !survey.includes('basemarks-swift/.build'),
+    'Survey included ignored Swift build output.',
+  );
+  assert(
     survey.includes('"adoptionTemplates"') &&
       survey.includes('spec-portfolio-0001'),
     'Survey did not emit copy-ready adoption templates.',
+  );
+
+  console.error('Verifying partial agents and skills adoption...');
+  run('pnpm', [
+    'exec',
+    'nx',
+    'generate',
+    '@megamono/plugin:workspace-init',
+    '--only=agents,skills',
+    '--packageManager=pnpm',
+    '--interactive=false',
+    '--yes',
+    '--bootstrap',
+  ]);
+  const agentInstructions = readFileSync(
+    join(fixtureRoot, 'AGENTS.md'),
+    'utf8',
+  );
+  assert(
+    agentInstructions.includes('docs/DESIGN.md') &&
+      !agentInstructions.includes('docs/INDEX.md'),
+    'Agents-only adoption referenced documentation that was not adopted.',
+  );
+  run(
+    'pnpm',
+    ['exec', 'nx', 'run', 'megamono:check', '--output-style=static'],
+    fixtureRoot,
+    { CI: 'false' },
   );
 
   run('pnpm', init);

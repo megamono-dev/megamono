@@ -86,9 +86,13 @@ When a terminal is interactive, a bare `--playstack-packages` opens a multiselec
 
 For a survey, no packages are installed. An already-installed Playstack CLI contributes its own read-only survey; otherwise the Megamono report lists the deferred package and command plan.
 
+The composite command treats `--dry-run` as an end-to-end transaction boundary. Megamono may inspect the Nx graph and local package metadata, but it never installs either CLI or capability packages. When a local Playstack CLI is already present, each capability receives `--dry-run` and final initialization uses the read-only survey; otherwise Megamono prints the exact deferred package and capability plan.
+
 Existing-workspace mutation uses the adoption baseline from `spec-megamono-0000`: Node `>=18.18 <25`; npm `>=9 <12`, pnpm `>=8 <12`, Yarn `>=1.22 <5`, or Bun `>=1.1 <2`; Nx `>=17 <24`; and TypeScript `>=5.2 <7`. Core adoption is operating-system-neutral. Platform-specific generators and targets apply their own host gates instead of disqualifying the repository. Optional Playstack setup applies its narrower Node `>=20` gate only when requested, plus ESLint `^9` only when the explicit `@playstack/lint` package is selected; these constraints never narrow core Megamono adoption. Inference plugins require Nx 18 or newer; an Nx 17 workspace can adopt the core modules and receives an explicit capability reduction for detected Apple, Cargo, or Cloudflare manifests.
 
 Eligibility, mutation safety, and host readiness are separate decisions. Any established Nx repository with the local plugin can be surveyed, including one with no recognized manager, an unavailable global manager, a dirty tree, or an untested future Nx version. Mutation additionally requires supported Nx and TypeScript versions, unambiguous root ownership, a supported active Node and selected package-manager binary, a valid project graph, a clean worktree, and a non-default named branch. Nested project lockfiles are ignored for root ownership; conflicting root managers refuse. If the lockfile identifies the manager but `package.json#packageManager` is absent, init records the inferred manager only in `megamono.json`. It never adds, replaces, or upgrades the repository's manager declaration. Package-manager migration is a separate explicit operation. `--toolchainPin=nvmrc|node-version|both --toolchainNode=<exact-version>` may add explicit repository-owned runtime pins after the same conflict preview.
+
+Survey inventory honors repository `.gitignore` rules, including nested ignore files, and always excludes generated dependency/build surfaces such as `.git`, `.nx`, `.yalc`, `.build`, `DerivedData`, `node_modules`, `dist`, and coverage output. Dependency checkouts and ignored generated Markdown never affect document counts, classification, or adoption maps.
 
 ## Additive and modular
 
@@ -102,7 +106,7 @@ Every execution installs a small baseline: `megamono.json`, the `megamono` proje
 | `agents`    | A managed section in `AGENTS.md`, a safe `CLAUDE.md` pointer when possible, and `docs/DESIGN.md`                                                                  |
 | `ci`        | Retains equivalent repository CI by default, or adds a standalone/reusable affected-CI workflow owned by Megamono                                                 |
 | `release`   | Nx Release groups and tag strategy for publishable packages, a private prerelease workflow, and yalc-from-dist local package vetting                              |
-| `lint`      | Project-tag completion, structural checks, docs validation, and ESLint wiring (`spec-megamono-0006`)                                                              |
+| `lint`      | Project-tag completion, project-graph structural checks, and ESLint wiring (`spec-megamono-0006`)                                                                 |
 | `skills`    | Managed portable skills under `.agents/skills` and the `.claude/skills` projection (`spec-megamono-0005`)                                                         |
 | `health`    | The deterministic scheduled health workflow and local health target (`spec-megamono-0008`)                                                                        |
 | `inference` | Supported Apple, Cargo, or Cloudflare plugins when corresponding manifests are detected (`spec-megamono-0003`, `spec-megamono-0015`)                              |
@@ -112,6 +116,8 @@ npm exec nx g @megamono/plugin:workspace-init --only=docs,agents
 ```
 
 `--only` accepts a comma-separated set of module names. Omitting it starts the guided flow. Selecting a module never silently selects another: when a capability is reduced because another module is absent, the preview names the reduction. For example, `health` without `docs` disables the spec-drift and stale-plan checks but can still run dependency-alignment and orphan checks.
+
+The baseline `megamono:check` target is capability-aware. Documentation lifecycle/front-matter checks run only after `docs` is adopted, while tag cardinality, naming, and type/scope/platform graph rules run only after `lint` is adopted. Core managed-artifact integrity, package-source safety, installed-skill validation, inference preflights, and Megamono/Playstack package-direction checks remain available independently. Thus an `agents,skills` adoption is valid without retroactively imposing documentation metadata or project tags.
 
 The `ci` module never replaces or inserts unbounded text into an existing general-purpose workflow. In the default `--ciMode=auto`, a repository workflow that runs lint, test, and build through either Nx affected commands or a mature full-workspace `run-many` is retained and no duplicate workflow is added. `--ciMode=standalone` writes `.github/workflows/megamono-ci.yml`; `--ciMode=reusable` writes the bounded `.github/workflows/megamono-ci-reusable.yml` with only `workflow_call`, leaving caller integration repository-owned. Generated workflows inherit the committed Node version from `.node-version`, `.nvmrc`, or `engines.node`, and the manager version from `packageManager`. When Node is undeclared, init chooses the tested fallback for the installed Nx major. An occupied selected target is an owned-path conflict, not permission to overwrite it.
 
@@ -235,6 +241,7 @@ Yalc is a development transport only. `--packageRegistries='{"@megamono":"https:
 ## Existing agent files
 
 - If `AGENTS.md` is absent, the `agents` module creates a seeded repository-owned file containing a managed Megamono section. If present, init appends only that delimited managed section after preview approval and preserves all existing content outside it.
+- Generated instructions reference `docs/INDEX.md` only when that index exists. An agents-only adoption instead points to its seeded `docs/DESIGN.md` and existing repository guidance.
 - If `CLAUDE.md` is absent, init creates the supported pointer to `AGENTS.md` as a managed artifact. An existing pointer remains repository-owned and unchanged. A substantive `CLAUDE.md` or `.cursorrules` is never replaced or merged automatically; the survey reports duplicated instructions and a follow-up proposal.
 - Existing skills with a conflicting name block installation of that managed skill. Init never relies on undefined duplicate-name precedence.
 
@@ -281,6 +288,8 @@ The completion summary lists modules adopted or skipped, paths added or modified
 - Guided preview and non-interactive execution produce the same ordered plan for equivalent answers.
 - Dirty/default-branch execution, unsupported baselines, unresolved decisions, conflicting owned paths, and substantive alternate agent files fail or defer exactly as specified before mutation.
 - Each module is independently idempotent; every supported module subset either works or reports its documented capability reduction.
+- Survey fixtures exclude ignored Swift `.build` dependency documentation and other repository-ignored output.
+- Expo and React Native applications infer `platform:mobile`; native Swift/Xcode applications retain `platform:apple`.
 - Existing project names, roots, valid tags, targets, docs, and agent content survive unchanged unless their exact edit was approved in preview.
 - Every emitted artifact is classified as managed, managed-section, seeded, or derived; registry hashes, delimiters, IDs, and ordering are deterministic.
 - Updating pristine managed artifacts succeeds, while modified, seeded, and ejected artifacts remain byte-for-byte unchanged; derived artifacts regenerate from canonical input.
@@ -289,4 +298,5 @@ The completion summary lists modules adopted or skipped, paths added or modified
 - Temporary structural warnings remain visible to health until ratcheted or covered by an accepted decision.
 - A failed external command writes recovery guidance without committing, pushing, or rolling back repository-owned changes.
 - Playstack capability handoff passes explicit Nx project roots, resolves a sole candidate deterministically, and exits `4` before Playstack mutation when automated selection is ambiguous.
+- A composite Playstack `--dry-run` performs no package installation and delegates only read-only Playstack planning commands.
 - A direct-package yalc handoff validates the complete local closure before init and hydrates it through the selected package-manager adapter without requesting an unpublished Playstack dependency from the registry; packed npm and pnpm fixtures remain the exhaustive registry-escape contract.

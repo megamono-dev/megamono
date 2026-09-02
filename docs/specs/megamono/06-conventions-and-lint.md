@@ -49,7 +49,7 @@ Generated and enforced:
 ```
 type:app | type:feature | type:ui | type:data | type:util
 scope:<product>
-platform:web | platform:node | platform:worker | platform:apple
+platform:web | platform:node | platform:worker | platform:mobile | platform:apple
 platform:rust | platform:php | platform:extension
 visibility:public | visibility:internal # apps only
 capability:theme-tokens            # optional platform-neutral util library
@@ -65,6 +65,8 @@ Dependency direction is fixed:
 - `type:ui` and `type:data` may import `util`; neither imports the other.
 - `type:util` imports only `type:util`.
 - A platform-tagged project imports the same platform or a platform-neutral project. `worker` never imports `node`; `extension` never imports `node` unless code lives in a separate build-time project.
+
+`platform:mobile` represents applications that execute across the iOS and Android runtime families, including Expo and React Native applications. Framework names are inference evidence rather than tag vocabulary: an Expo project is `platform:mobile`, not `platform:expo` or `platform:react-native`. Native Xcode/Swift projects remain `platform:apple`.
 
 When `structure-review` recommends extracting or moving a project, it must propose the complete tag change needed to preserve this matrix. A recommendation that would immediately fail deterministic checks without naming the required tag or dependency correction is incomplete.
 

@@ -93,6 +93,10 @@ Playstack owns recipes, prerequisites, surface bindings, and transitive yalc
 resolution. Full package names such as `@playstack/cache` remain accepted as a
 compatibility escape hatch for direct package installation.
 
+Adding `--dry-run` keeps this entire combined flow read-only. Missing packages
+are reported but never installed; an already installed Playstack CLI receives
+capability dry runs and a final `playstack init --survey`.
+
 For capability handoff, Megamono inspects the local Nx project graph and passes
 explicit `--web=<project-root>` and `--api=<project-root>` paths to Playstack.
 The conventional `apps/web` and `apps/api` roots win automatically; otherwise a

@@ -26,6 +26,7 @@ function quickzonesShapedPortfolio() {
     },
   });
   tree.write('pnpm-lock.yaml', 'lockfileVersion: 9\n');
+  tree.write('.gitignore', 'basemarks-swift/.build/\n');
   tree.write('pnpm-workspace.yaml', "packages:\n  - 'apps/*'\n  - 'libs/*'\n");
   writeJson(tree, 'nx.json', { plugins: ['@nx/js/typescript'] });
   writeJson(tree, 'tsconfig.base.json', {
@@ -58,6 +59,21 @@ function quickzonesShapedPortfolio() {
     },
   });
   tree.write('apps/api/tsconfig.app.json', '{}');
+  addProjectConfiguration(tree, '@portfolio/mobile-app', {
+    root: 'apps/mobile-app',
+    projectType: 'application',
+    targets: {
+      build: {
+        executor: 'nx:run-commands',
+        options: { command: 'expo export -p ios' },
+      },
+    },
+  });
+  writeJson(tree, 'apps/mobile-app/package.json', {
+    name: '@portfolio/mobile-app',
+    dependencies: { expo: '57.0.10', 'react-native': '0.86.2' },
+  });
+  writeJson(tree, 'apps/mobile-app/app.json', { expo: {} });
   tree.write(
     'apps/api/Dockerfile',
     'RUN pnpm exec prisma generate\nCMD ["node", "main.js"]\n',
@@ -80,6 +96,10 @@ function quickzonesShapedPortfolio() {
   tree.write(
     'apps/apple/Quickzones.xcodeproj/project.pbxproj',
     '// !$*UTF8*$!\nrootObject = PROJECT;\n',
+  );
+  tree.write(
+    'basemarks-swift/.build/checkouts/dependency/README.md',
+    '# Generated dependency documentation\n',
   );
   for (const scheme of [
     'Quickzones Mac Direct',
@@ -131,7 +151,16 @@ describe('mixed-platform portfolio adoption fixture', () => {
           name: '@portfolio/nest-data',
           type: 'library',
         }),
+        expect.objectContaining({
+          name: '@portfolio/mobile-app',
+          type: 'application',
+          platform: 'mobile',
+        }),
       ]),
+    );
+    expect(survey.documentation.markdown).toHaveLength(3);
+    expect(survey.documentation.markdown).not.toContain(
+      'basemarks-swift/.build/checkouts/dependency/README.md',
     );
     expect(survey.manifests.apple).toEqual([
       'apps/apple/QuickzonesKit/Package.swift',

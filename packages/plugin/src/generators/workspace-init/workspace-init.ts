@@ -792,6 +792,7 @@ function renderCiWorkflow(
   platforms: ReadonlySet<string>,
   packageManager: PackageManager,
   toolchain: WorkflowToolchain,
+  includeDocs: boolean,
   reusable = false,
 ): string {
   const linuxPlatforms = [
@@ -852,7 +853,7 @@ function renderCiWorkflow(
           fetch-depth: 0
 ${packageManagerSetup}
 ${platforms.has('rust') ? '      - uses: dtolnay/rust-toolchain@stable\n' : ''}${platforms.has('php') ? '      - uses: shivammathur/setup-php@v2\n        with:\n          php-version: 8.4\n' : ''}      - run: ${install}
-      - run: ${nx} run megamono-docs:validate --output-style=static
+${includeDocs ? `      - run: ${nx} run megamono-docs:validate --output-style=static\n` : ''}
       - run: ${nx} affected -t lint test build --exclude=tag:platform:apple --output-style=static`,
         ]
       : []),
@@ -871,7 +872,7 @@ ${platforms.has('rust') ? '      - uses: dtolnay/rust-toolchain@stable\n' : ''}$
           fetch-depth: 0
 ${packageManagerSetup}
       - run: ${install}
-      - run: ${nx} run megamono-docs:validate --output-style=static
+${includeDocs ? `      - run: ${nx} run megamono-docs:validate --output-style=static\n` : ''}
       - run: xcodebuild -downloadComponent MetalToolchain
       - run: ${nx} affected -t lint test build${hasLinux ? " --exclude='*,!tag:platform:apple'" : ''} --output-style=static`,
         ]
@@ -2021,6 +2022,7 @@ export async function workspaceInitGenerator(
     configuredWorkspacePlatforms(tree, defaultPlatform),
     packageManager,
     workflowToolchain(tree, packageManager),
+    config.adoption.modules.includes('docs'),
     ciMode === 'reusable',
   );
   const ciCanUpdate = ciShouldGenerate

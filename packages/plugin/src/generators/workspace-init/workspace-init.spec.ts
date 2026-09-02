@@ -946,6 +946,18 @@ export default [
     ]);
   });
 
+  it('does not invoke documentation targets from CI when docs are not adopted', async () => {
+    await workspaceInitGenerator(tree, {
+      only: 'ci',
+      ciMode: 'standalone',
+      yes: true,
+    });
+
+    const ci = tree.read('.github/workflows/megamono-ci.yml', 'utf8') ?? '';
+    expect(ci).toContain('affected -t lint test build');
+    expect(ci).not.toContain('megamono-docs:validate');
+  });
+
   it('keeps health useful without docs and records its reductions', async () => {
     await workspaceInitGenerator(tree, {
       only: 'health',
