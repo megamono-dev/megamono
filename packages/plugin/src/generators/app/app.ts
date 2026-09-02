@@ -25,8 +25,20 @@ import {
   isPackageManager,
   lockfileManagers,
   packageManagerAdapter,
+  packageManagerExec,
   type PackageManager,
 } from '../../lib/package-manager';
+import {
+  WEB_STYLING_OPTIONS,
+  detectWebStyling,
+  isWebStyling,
+  type ResolvedWebStyling,
+  type WebStyling,
+} from '../../lib/web-styling';
+import {
+  billboardCss,
+  billboardSource as styledBillboardSource,
+} from './web-billboard';
 
 export const APP_TYPES = [
   'web',
@@ -89,15 +101,10 @@ interface NormalizedAppOptions {
   readonly projectName: string;
   readonly packageName: string;
   readonly platform:
-    | 'web'
-    | 'node'
-    | 'worker'
-    | 'mobile'
-    | 'apple'
-    | 'rust'
-    | 'extension';
+    'web' | 'node' | 'worker' | 'mobile' | 'apple' | 'rust' | 'extension';
   readonly tags: readonly string[];
   readonly port?: number;
+  readonly styling?: ResolvedWebStyling;
   readonly packageManager: PackageManager;
   readonly workspaceName: string;
   readonly requestedApps: readonly AppType[];
@@ -328,6 +335,10 @@ async function normalizeOptions(
       'port-conflict',
     );
   }
+  const styling =
+    type === 'web' || type === 'site'
+      ? await resolveWebStyling(tree, raw)
+      : undefined;
   return {
     type,
     name,
@@ -343,6 +354,7 @@ async function normalizeOptions(
       'visibility:internal',
     ],
     port: selectedPort,
+    ...(styling ? { styling } : {}),
     packageManager: packageManager(tree),
     workspaceName: raw.workspaceName?.trim() || identity.name,
     requestedApps: csv<AppType>(raw.requestedApps, APP_TYPE_SET),
@@ -351,6 +363,54 @@ async function normalizeOptions(
     dryRun: raw.dryRun === true || process.env.NX_DRY_RUN === 'true',
     bootstrap: raw.bootstrap === true,
   };
+}
+
+const STYLING_LABELS: Record<ResolvedWebStyling, string> = {
+  chakra: 'Chakra UI (suggested)',
+  emotion: 'Emotion',
+  tailwind: 'Tailwind CSS',
+  panda: 'Panda CSS',
+  stylex: 'StyleX',
+  'css-modules': 'CSS Modules',
+  inline: 'Inline styles (dependency-free fallback)',
+};
+
+async function resolveWebStyling(
+  tree: Tree,
+  options: AppGeneratorSchema,
+): Promise<ResolvedWebStyling> {
+  if (options.styling && !isWebStyling(options.styling)) {
+    throw new AppGeneratorError(
+      `Unknown styling option ${options.styling}. Expected one of: ${WEB_STYLING_OPTIONS.join(', ')}.`,
+      2,
+      'options',
+    );
+  }
+  let selected: WebStyling = options.styling ?? 'auto';
+  if (selected === 'auto' && tree.exists('megamono.json')) {
+    const config = readJson<{
+      scaffolding?: { web?: { styling?: string } };
+      conventions?: { apps?: { web?: { ui?: string } } };
+    }>(tree, 'megamono.json');
+    const configured = config.scaffolding?.web?.styling;
+    if (configured && isWebStyling(configured)) selected = configured;
+    else if (config.conventions?.apps?.web?.ui === 'chakra')
+      selected = 'chakra';
+  }
+  if (selected === 'auto') selected = detectWebStyling(tree);
+  if (selected !== 'auto') return selected;
+  if (!canPrompt(options)) return 'css-modules';
+  const answer = await prompt<{ styling: ResolvedWebStyling }>({
+    type: 'select',
+    name: 'styling',
+    message: 'How should the generated billboard be styled?',
+    initial: 0,
+    choices: Object.entries(STYLING_LABELS).map(([name, message]) => ({
+      name,
+      message,
+    })),
+  });
+  return answer.styling;
 }
 
 function projectMatches(
@@ -400,6 +460,7 @@ function renderPlan(options: NormalizedAppOptions): string {
     `- Package: ${options.packageName}`,
     `- Tags: ${options.tags.join(', ')}`,
     ...(options.port ? [`- Port: ${options.port}`] : []),
+    ...(options.styling ? [`- Styling: ${options.styling}`] : []),
     '',
     '## Ordered operations',
     '',
@@ -498,7 +559,7 @@ export const megamonoSystem = createSystem(defaultConfig, config);
 `;
 }
 
-function billboardSource(options: NormalizedAppOptions): string {
+function chakraBillboardSource(options: NormalizedAppOptions): string {
   const nx = packageManagerAdapter(options.packageManager).nx;
   const surfaces = (
     options.requestedApps.length ? options.requestedApps : [options.type]
@@ -756,16 +817,16 @@ async function createWebApp(
   tree: Tree,
   options: NormalizedAppOptions,
 ): Promise<readonly (GeneratorCallback | void)[]> {
-  const callbacks: (GeneratorCallback | void)[] = [
-    await ensureTheme(tree, options),
-  ];
+  const styling = options.styling ?? 'css-modules';
+  const callbacks: (GeneratorCallback | void)[] = [];
+  if (styling === 'chakra') callbacks.push(await ensureTheme(tree, options));
   callbacks.push(
     await generator('@nx/next', 'applicationGenerator')(tree, {
       name: options.projectName,
       directory: options.directory,
       appDir: false,
       src: true,
-      style: 'none',
+      style: 'css',
       linter: 'eslint',
       unitTestRunner: 'none',
       e2eTestRunner: 'playwright',
@@ -773,22 +834,133 @@ async function createWebApp(
       skipFormat: true,
     }),
   );
-  updatePackage(tree, `${options.directory}/package.json`, options, {
-    '@chakra-ui/react': packageVersion('@chakra-ui/react'),
-    [`@${options.scope}/theme`]: workspaceDependency(options),
-  });
+  const dependencies: Record<string, string> =
+    styling === 'chakra'
+      ? {
+          '@chakra-ui/react': packageVersion('@chakra-ui/react'),
+          [`@${options.scope}/theme`]: workspaceDependency(options),
+        }
+      : styling === 'emotion'
+        ? { '@emotion/react': packageVersion('@emotion/react') }
+        : styling === 'stylex'
+          ? {
+              '@stylexjs/stylex': packageVersion('@stylexjs/stylex'),
+              '@stylexjs/babel-plugin': packageVersion(
+                '@stylexjs/babel-plugin',
+              ),
+              '@stylexjs/postcss-plugin': packageVersion(
+                '@stylexjs/postcss-plugin',
+              ),
+            }
+          : styling === 'tailwind'
+            ? {
+                tailwindcss: packageVersion('tailwindcss'),
+                '@tailwindcss/postcss': packageVersion('@tailwindcss/postcss'),
+              }
+            : styling === 'panda'
+              ? { '@pandacss/dev': packageVersion('@pandacss/dev') }
+              : {};
+  updatePackage(
+    tree,
+    `${options.directory}/package.json`,
+    options,
+    dependencies,
+  );
   const e2eRoot = `${options.directory}-e2e`;
   if (tree.exists(`${e2eRoot}/package.json`))
     updatePackage(tree, `${e2eRoot}/package.json`, options);
-  tree.delete(`${options.directory}/src/pages/index.module.none`);
-  tree.delete(`${options.directory}/src/pages/styles.css`);
-  tree.write(
-    `${options.directory}/src/pages/_app.tsx`,
-    `import { ChakraProvider } from '@chakra-ui/react';\nimport { megamonoSystem } from '@${options.scope}/theme';\nimport type { AppProps } from 'next/app';\n\nexport default function App({ Component, pageProps }: AppProps) {\n  return <ChakraProvider value={megamonoSystem}><Component {...pageProps} /></ChakraProvider>;\n}\n`,
-  );
+  tree.delete(`${options.directory}/src/pages/index.module.css`);
+  if (styling === 'chakra') {
+    tree.delete(`${options.directory}/src/pages/styles.css`);
+    tree.write(
+      `${options.directory}/src/pages/_app.tsx`,
+      `import { ChakraProvider } from '@chakra-ui/react';\nimport { megamonoSystem } from '@${options.scope}/theme';\nimport type { AppProps } from 'next/app';\n\nexport default function App({ Component, pageProps }: AppProps) {\n  return <ChakraProvider value={megamonoSystem}><Component {...pageProps} /></ChakraProvider>;\n}\n`,
+    );
+  } else {
+    tree.write(
+      `${options.directory}/src/pages/_app.tsx`,
+      `import './styles.css';\nimport type { AppProps } from 'next/app';\n\nexport default function App({ Component, pageProps }: AppProps) {\n  return <Component {...pageProps} />;\n}\n`,
+    );
+    tree.write(
+      `${options.directory}/src/pages/styles.css`,
+      styling === 'tailwind'
+        ? '@import "tailwindcss";\n'
+        : styling === 'panda'
+          ? '@layer reset, base, tokens, recipes, utilities;\n'
+          : 'html, body { margin: 0; }\n* { box-sizing: border-box; }\n',
+    );
+  }
+  if (styling === 'css-modules') {
+    tree.write(
+      `${options.directory}/src/pages/index.module.css`,
+      billboardCss(),
+    );
+  }
+  if (styling === 'tailwind') {
+    tree.write(
+      `${options.directory}/postcss.config.cjs`,
+      `module.exports = { plugins: { '@tailwindcss/postcss': {} } };\n`,
+    );
+  }
+  if (styling === 'panda') {
+    tree.write(
+      `${options.directory}/panda.config.ts`,
+      `import { defineConfig } from '@pandacss/dev';\n\nexport default defineConfig({\n  preflight: true,\n  include: ['./src/**/*.{ts,tsx}'],\n  exclude: [],\n  outdir: 'styled-system',\n});\n`,
+    );
+    tree.write(
+      `${options.directory}/postcss.config.cjs`,
+      `module.exports = { plugins: { '@pandacss/dev/postcss': {} } };\n`,
+    );
+    const invocation = packageManagerExec(options.packageManager, 'panda', [
+      'codegen',
+      '--config',
+      'panda.config.ts',
+    ]);
+    callbacks.push(async () => {
+      const { execFile } = await import('node:child_process');
+      await new Promise<void>((resolve, reject) => {
+        execFile(
+          invocation.command,
+          [...invocation.args],
+          { cwd: join(workspaceRoot, options.directory) },
+          (error) => (error ? reject(error) : resolve()),
+        );
+      });
+    });
+  }
+  if (styling === 'stylex') {
+    tree.write(
+      `${options.directory}/babel.config.js`,
+      `module.exports = {\n  presets: ['next/babel'],\n  plugins: [['@stylexjs/babel-plugin', {\n    runtimeInjection: false,\n    dev: process.env.NODE_ENV !== 'production',\n    unstable_moduleResolution: { type: 'commonJS', rootDir: __dirname },\n  }]],\n};\n`,
+    );
+    tree.write(
+      `${options.directory}/postcss.config.cjs`,
+      `module.exports = { plugins: { '@stylexjs/postcss-plugin': { include: ['${options.directory}/src/**/*.{js,jsx,ts,tsx}'] } } };\n`,
+    );
+    tree.write(`${options.directory}/src/pages/styles.css`, '@stylex;\n');
+  }
   tree.write(
     `${options.directory}/src/pages/index.tsx`,
-    billboardSource(options),
+    styling === 'chakra'
+      ? chakraBillboardSource(options)
+      : styledBillboardSource(
+          {
+            workspaceName: options.workspaceName,
+            surfaces: (options.requestedApps.length
+              ? options.requestedApps
+              : [options.type]
+            ).map((type) => APP_LABELS[type]),
+            services: options.requestedServices.map((service) =>
+              service === 'postgres' ? 'PostgreSQL' : service,
+            ),
+            commands: [
+              `${packageManagerAdapter(options.packageManager).nx} show projects`,
+              `${packageManagerAdapter(options.packageManager).nx} graph`,
+              `${packageManagerAdapter(options.packageManager).nx} run megamono:check`,
+            ],
+          },
+          styling,
+        ),
   );
   tree.write(`${e2eRoot}/src/example.spec.ts`, billboardE2eSource(options));
   configureE2ePackage(tree, options);
@@ -1147,6 +1319,15 @@ export async function appGenerator(
         ...((value.ports as Record<string, number> | undefined) ?? {}),
         ...(options.port ? { [options.name]: options.port } : {}),
       },
+      ...(options.styling
+        ? {
+            scaffolding: {
+              ...((value.scaffolding as Record<string, unknown> | undefined) ??
+                {}),
+              web: { styling: options.styling },
+            },
+          }
+        : {}),
     }));
   }
 

@@ -14,6 +14,7 @@ export interface AppGeneratorSchema {
   readonly directory?: string;
   readonly scope?: string;
   readonly port?: number;
+  readonly styling?: import('../../lib/web-styling').WebStyling;
   readonly interactive?: boolean;
   readonly yes?: boolean;
   readonly dryRun?: boolean;

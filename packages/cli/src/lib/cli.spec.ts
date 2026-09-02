@@ -108,6 +108,7 @@ function io(
     defaultBranch: 'main',
   },
   selectedPlaystackSurfaces?: Readonly<Partial<Record<'web' | 'api', string>>>,
+  selectedWebStyling?: string,
 ): {
   readonly value: MegamonoCliIo;
   readonly invocations: Invocation[];
@@ -147,6 +148,9 @@ function io(
         : {}),
       ...(selectedAppType
         ? { selectAppType: async () => selectedAppType }
+        : {}),
+      ...(selectedWebStyling
+        ? { selectWebStyling: async () => selectedWebStyling }
         : {}),
       ...(databaseSelection
         ? {
@@ -277,7 +281,9 @@ describe('@megamono/cli', () => {
       runMegamonoCli(['account', 'use', 'commune'], value),
     ).resolves.toEqual({ exitCode: 0 });
 
-    expect(harness.stdout.join('\n')).toContain('* Personal (personal) — owner');
+    expect(harness.stdout.join('\n')).toContain(
+      '* Personal (personal) — owner',
+    );
     expect(auth.switchAccount).toHaveBeenCalledWith(
       'https://app.megamono.com',
       'commune-1',
@@ -568,6 +574,32 @@ describe('@megamono/cli', () => {
       '--type=api',
       '--yes',
     ]);
+  });
+
+  it('selects web styling before confirming the application plan', async () => {
+    const root = await workspace('pnpm', [
+      'nx',
+      '@megamono/plugin',
+      '@nx/next',
+      '@nx/playwright',
+      '@nx/js',
+      '@nx/eslint',
+    ]);
+    const harness = io(
+      root,
+      undefined,
+      undefined,
+      'web',
+      true,
+      undefined,
+      undefined,
+      undefined,
+      'stylex',
+    );
+    expect((await runMegamonoCli(['add', 'app'], harness.value)).exitCode).toBe(
+      0,
+    );
+    expect(harness.invocations[0].args).toContain('--styling=stylex');
   });
 
   it('refuses app and database mutations from an unsafe Git state', async () => {

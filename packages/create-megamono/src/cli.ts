@@ -11,6 +11,7 @@ import {
   DATABASE_ADAPTERS,
   SERVICE_IDS,
   SERVICE_RUNNERS,
+  WEB_STYLING_OPTIONS,
   createMegamono,
   renderPlan,
   type CreateMegamonoInput,
@@ -61,6 +62,13 @@ export async function resolveInteractive(
           `Database adapter (${DATABASE_ADAPTERS.join(', ')}) [prisma]: `,
         ))) ||
       'prisma';
+    const styling = apps?.some((app) => app === 'web' || app === 'site')
+      ? (input.styling ??
+          (await prompt.question(
+            `Web styling (${WEB_STYLING_OPTIONS.join(', ')}) [chakra]: `,
+          ))) ||
+        'chakra'
+      : input.styling;
     const databaseName =
       databaseAdapter === 'none'
         ? undefined
@@ -88,6 +96,7 @@ export async function resolveInteractive(
       services,
       databaseAdapter,
       databaseName,
+      styling,
       serviceRunner,
     };
   } finally {
@@ -109,6 +118,7 @@ export async function main(
         services: { type: 'string' },
         'database-adapter': { type: 'string' },
         'database-name': { type: 'string' },
+        styling: { type: 'string' },
         'service-runner': { type: 'string' },
         integrations: { type: 'string' },
         interactive: { type: 'string' },
@@ -135,6 +145,7 @@ export async function main(
       services: commaList(parsed.values.services),
       databaseAdapter: parsed.values['database-adapter'],
       databaseName: parsed.values['database-name'],
+      styling: parsed.values.styling,
       serviceRunner: parsed.values['service-runner'],
       integrations: commaList(parsed.values.integrations),
       interactive,

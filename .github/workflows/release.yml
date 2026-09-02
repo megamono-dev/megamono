@@ -75,7 +75,7 @@ jobs:
       - run: npm exec nx -- run create-megamono:e2e-selection-matrix-local-registry --skip-nx-cache
       - name: Build representative generated workspaces
         env:
-          MEGAMONO_MATRIX_CASES: web-npm,api
+          MEGAMONO_MATRIX_CASES: web-npm,api,web-tailwind,web-panda,web-stylex
           MEGAMONO_MATRIX_VERIFY: build
         run: npm exec nx -- run create-megamono:e2e-selection-matrix-local-registry --skip-nx-cache
       - name: Require a clean release checkout

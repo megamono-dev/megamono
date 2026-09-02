@@ -44,7 +44,7 @@ same workspace-local generators used by `create-megamono`:
 ```sh
 megamono add docs
 megamono add ci --dry-run
-megamono add app web
+megamono add app web --styling=stylex
 megamono add app api --name=admin-api --interactive=false --yes
 megamono add database events --adapter=drizzle
 megamono add database primary --adapter=prisma --interactive=false --yes
@@ -62,7 +62,10 @@ per-project `--adoptionMap`, reviewed `--docsAdoptionMap`, `--ciMode`, optional
 toolchain pins, and non-secret `--packageRegistries` scope routing.
 
 A valueless `megamono add app` opens the application selector in an interactive
-terminal. Add commands preview before confirmation, install only missing
+terminal. Web and site additions then select Chakra (suggested), Emotion,
+Tailwind, Panda, StyleX, CSS Modules, or inline styles. shadcn/ui uses the
+Tailwind renderer and Park UI uses the Panda renderer; styling remains an
+app-owned scaffold choice rather than a Megamono rule. Add commands preview before confirmation, install only missing
 compatible framework adapters, and preserve the workspace's Nx major. Mutating
 app and database additions require a clean, named, non-default Git branch before
 dependency installation or generation begins. Use

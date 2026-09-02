@@ -46,11 +46,8 @@ describe('app generator', () => {
     expect(tree.read('apps/web/src/pages/index.tsx', 'utf8')).toContain(
       'Fixture is ready to build.',
     );
-    expect(tree.read('packages/theme/src/lib/system.ts', 'utf8')).toContain(
-      'createSystem',
-    );
-    expect(tree.read('apps/web/package.json', 'utf8')).toContain(
-      '"@fixture/theme": "workspace:*"',
+    expect(tree.read('apps/web/src/pages/index.module.css', 'utf8')).toContain(
+      '.main',
     );
     expect(tree.children('apps')).toEqual(['web', 'web-e2e']);
     expect(tree.read('apps/web-e2e/package.json', 'utf8')).toContain(
@@ -97,6 +94,57 @@ describe('app generator', () => {
       'process.env.PORT || 45449',
     );
   });
+
+  it.each([
+    [
+      'chakra',
+      '@chakra-ui/react',
+      '@chakra-ui/react',
+      'packages/theme/src/lib/system.ts',
+    ],
+    ['emotion', '@emotion/react', '@jsxImportSource @emotion/react', undefined],
+    [
+      'tailwind',
+      'tailwindcss',
+      'tracking-[-.055em]',
+      'apps/web/postcss.config.cjs',
+    ],
+    [
+      'panda',
+      '@pandacss/dev',
+      "from '../../styled-system/css'",
+      'apps/web/panda.config.ts',
+    ],
+    ['stylex', '@stylexjs/stylex', 'stylex.create', 'apps/web/babel.config.js'],
+    [
+      'css-modules',
+      undefined,
+      "from './index.module.css'",
+      'apps/web/src/pages/index.module.css',
+    ],
+    ['inline', undefined, 'satisfies Record<string, CSSProperties>', undefined],
+  ] as const)(
+    'renders the billboard with %s without enforcing it as a convention',
+    async (styling, dependency, sourceMarker, configPath) => {
+      const tree = workspace();
+      await appGenerator(tree, {
+        type: 'web',
+        scope: 'fixture',
+        styling,
+        interactive: false,
+        yes: true,
+      });
+      const manifest = tree.read('apps/web/package.json', 'utf8') ?? '';
+      const source = tree.read('apps/web/src/pages/index.tsx', 'utf8') ?? '';
+      if (dependency) expect(manifest).toContain(`"${dependency}"`);
+      expect(source).toContain(sourceMarker);
+      if (configPath) expect(tree.exists(configPath)).toBe(true);
+      expect(
+        JSON.parse(tree.read('megamono.json', 'utf8') ?? '{}').scaffolding.web
+          .styling,
+      ).toBe(styling);
+    },
+  );
 
   it('keeps dry-run mutation-free and rejects occupied roots', async () => {
     const tree = workspace();

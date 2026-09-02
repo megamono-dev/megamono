@@ -52,6 +52,7 @@ describe('normalizeCreateOptions', () => {
       apps: ['api', 'web'],
       services: [],
       databaseAdapter: 'none',
+      styling: 'chakra',
       serviceRunner: 'none',
       install: true,
       verify: 'config',
@@ -328,6 +329,7 @@ describe('createPlan', () => {
     expect(rendered).toContain('@megamono/plugin:app');
     expect(rendered).toContain('--type=site');
     expect(rendered).toContain('--type=web');
+    expect(rendered).toContain('--styling=chakra');
     expect(rendered).toContain('--requestedApps=site,web');
     expect(rendered).toContain('--port=43017');
     expect(rendered).toContain('--port=43018');

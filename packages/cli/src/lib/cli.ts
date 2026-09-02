@@ -37,6 +37,7 @@ export interface MegamonoCliIo {
     choices: readonly PlaystackSurfaceChoice[],
   ): Promise<string>;
   selectAppType?(choices: readonly AppTypeChoice[]): Promise<string>;
+  selectWebStyling?(choices: readonly WebStylingChoice[]): Promise<string>;
   inputDatabaseName?(initial: string): Promise<string>;
   selectDatabaseAdapter?(
     choices: readonly DatabaseAdapterChoice[],
@@ -105,13 +106,18 @@ export interface AppTypeChoice {
   readonly message: string;
 }
 
+export interface WebStylingChoice {
+  readonly name: string;
+  readonly message: string;
+}
+
 export interface DatabaseAdapterChoice {
   readonly name: string;
   readonly message: string;
 }
 
 export const APP_TYPE_CHOICES: readonly AppTypeChoice[] = [
-  { name: 'web', message: 'Web — Next Pages Router, Chakra, Playwright' },
+  { name: 'web', message: 'Web — Next Pages Router with selectable styling' },
   { name: 'site', message: 'Site — Next marketing surface' },
   { name: 'api', message: 'API — Nest composition root and feature library' },
   { name: 'worker', message: 'Worker — Cloudflare Worker' },
@@ -119,6 +125,16 @@ export const APP_TYPE_CHOICES: readonly AppTypeChoice[] = [
   { name: 'desktop', message: 'Desktop — Tauri application' },
   { name: 'apple', message: 'Apple — native SwiftUI application' },
   { name: 'extension', message: 'Extension — WXT browser extension' },
+];
+
+export const WEB_STYLING_CHOICES: readonly WebStylingChoice[] = [
+  { name: 'chakra', message: 'Chakra UI (suggested)' },
+  { name: 'emotion', message: 'Emotion' },
+  { name: 'tailwind', message: 'Tailwind CSS (also suits shadcn/ui)' },
+  { name: 'panda', message: 'Panda CSS (also suits Park UI)' },
+  { name: 'stylex', message: 'StyleX' },
+  { name: 'css-modules', message: 'CSS Modules' },
+  { name: 'inline', message: 'Inline styles (dependency-free fallback)' },
 ];
 
 export const DATABASE_ADAPTER_CHOICES: readonly DatabaseAdapterChoice[] = [
@@ -138,6 +154,7 @@ const ADD_MODULES = [
 ] as const;
 const ADD_MODULE_SET = new Set<string>(ADD_MODULES);
 const APP_TYPE_SET = new Set(APP_TYPE_CHOICES.map(({ name }) => name));
+const WEB_STYLING_SET = new Set(WEB_STYLING_CHOICES.map(({ name }) => name));
 const DATABASE_ADAPTER_SET = new Set(
   DATABASE_ADAPTER_CHOICES.map(({ name }) => name),
 );
@@ -225,6 +242,7 @@ Examples:
   megamono add ci --dry-run
 
 Application types: ${APP_TYPE_CHOICES.map(({ name }) => name).join(', ')}
+Web styling: ${WEB_STYLING_CHOICES.map(({ name }) => name).join(', ')}
 Database adapters: ${DATABASE_ADAPTER_CHOICES.map(({ name }) => name).join(', ')}
 Modules: ${ADD_MODULES.join(', ')}
 
@@ -1866,6 +1884,30 @@ async function resolveAppType(
   return selected;
 }
 
+async function resolveWebStyling(
+  io: MegamonoCliIo,
+  type: string,
+  options: AddOptions,
+): Promise<string | undefined> {
+  if (type !== 'web' && type !== 'site') return undefined;
+  const explicit = explicitOption(options.args, '--styling');
+  if (explicit) {
+    if (explicit !== 'auto' && !WEB_STYLING_SET.has(explicit)) {
+      throw new CliError(
+        `Unknown web styling ${explicit}. Expected one of: auto, ${[...WEB_STYLING_SET].join(', ')}.`,
+        2,
+      );
+    }
+    return explicit;
+  }
+  if (!options.interactive || !io.selectWebStyling) return undefined;
+  const selected = await io.selectWebStyling(WEB_STYLING_CHOICES);
+  if (!WEB_STYLING_SET.has(selected)) {
+    throw new CliError('Web styling selection was cancelled.', 2);
+  }
+  return selected;
+}
+
 function explicitOption(
   args: readonly string[],
   name: string,
@@ -2024,6 +2066,7 @@ async function runAdd(
     hasPositionalType ? args[1] : undefined,
     parsed,
   );
+  const styling = await resolveWebStyling(io, type, parsed);
   if (!parsed.dryRun) {
     await assertWorkspaceMutationPreflight(
       io,
@@ -2049,7 +2092,7 @@ async function runAdd(
       );
     }
     const confirmed = await io.confirmAddPlan(
-      `Add the ${type} application${missing.length ? ` and install ${missing.join(', ')}` : ''}?`,
+      `Add the ${type} application${styling ? ` using ${styling}` : ''}${missing.length ? ` and install ${missing.join(', ')}` : ''}?`,
     );
     if (!confirmed) return { exitCode: 0 };
   }
@@ -2059,6 +2102,9 @@ async function runAdd(
     : await installAppPlugins(io, workspace, required, parsed.localPackages);
   const generatorArgs = [
     `--type=${type}`,
+    ...(styling && !explicitOption(parsed.args, '--styling')
+      ? [`--styling=${styling}`]
+      : []),
     ...parsed.args,
     ...(!parsed.dryRun && !parsed.yes ? ['--yes'] : []),
   ];
@@ -2123,7 +2169,10 @@ function renderPlaystackDryRunPlan(
     manager,
     options,
     surfaces,
-  ).replace('Playstack survey deferred: @playstack/cli is not installed. ', '')}`;
+  ).replace(
+    'Playstack survey deferred: @playstack/cli is not installed. ',
+    '',
+  )}`;
 }
 
 async function runInit(
@@ -2424,7 +2473,9 @@ async function runAccount(
     if (options.positional.length > 0) throw new CliError(ACCOUNT_HELP, 2);
     for (const account of profile.accounts) {
       const marker = account.id === profile.account?.id ? '*' : ' ';
-      io.stdout(`${marker} ${account.name} (${account.slug}) — ${account.role}`);
+      io.stdout(
+        `${marker} ${account.name} (${account.slug}) — ${account.role}`,
+      );
     }
     return { exitCode: 0 };
   }
@@ -2445,7 +2496,10 @@ async function runAccount(
     printHostedProfile(io, options.serviceUrl, switched);
     return { exitCode: 0 };
   }
-  throw new CliError(`Unknown account command ${action}.\n\n${ACCOUNT_HELP}`, 2);
+  throw new CliError(
+    `Unknown account command ${action}.\n\n${ACCOUNT_HELP}`,
+    2,
+  );
 }
 
 export async function runMegamonoCli(

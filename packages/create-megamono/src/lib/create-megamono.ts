@@ -45,6 +45,15 @@ export const VERIFY_MODES = ['none', 'config', 'build'] as const;
 export const SERVICE_RUNNERS = ['none', 'springbar'] as const;
 export const LOCAL_PACKAGE_SOURCES = ['registry', 'yalc'] as const;
 export const DATABASE_ADAPTERS = ['none', 'prisma', 'drizzle'] as const;
+export const WEB_STYLING_OPTIONS = [
+  'chakra',
+  'emotion',
+  'tailwind',
+  'panda',
+  'stylex',
+  'css-modules',
+  'inline',
+] as const;
 
 export type AppId = (typeof APP_IDS)[number];
 export type ServiceId = (typeof SERVICE_IDS)[number];
@@ -52,6 +61,7 @@ export type VerifyMode = (typeof VERIFY_MODES)[number];
 export type ServiceRunner = (typeof SERVICE_RUNNERS)[number];
 export type LocalPackageSource = (typeof LOCAL_PACKAGE_SOURCES)[number];
 export type DatabaseAdapter = (typeof DATABASE_ADAPTERS)[number];
+export type WebStyling = (typeof WEB_STYLING_OPTIONS)[number];
 
 export interface CreateMegamonoInput {
   name?: string;
@@ -60,6 +70,7 @@ export interface CreateMegamonoInput {
   services?: readonly string[];
   databaseAdapter?: string;
   databaseName?: string;
+  styling?: string;
   serviceRunner?: string;
   integrations?: readonly string[];
   interactive?: boolean;
@@ -82,6 +93,7 @@ export interface NormalizedCreateOptions {
   services: ServiceId[];
   databaseAdapter: DatabaseAdapter;
   databaseName?: string;
+  styling: WebStyling;
   serviceRunner: ServiceRunner;
   integrations: string[];
   install: boolean;
@@ -291,6 +303,11 @@ export function normalizeCreateOptions(
     services: services as ServiceId[],
     databaseAdapter,
     ...(databaseName ? { databaseName } : {}),
+    styling: requireEnum<WebStyling>(
+      'web styling',
+      input.styling ?? 'chakra',
+      new Set<string>(WEB_STYLING_OPTIONS),
+    ),
     serviceRunner: requireEnum<ServiceRunner>(
       'service runner',
       input.serviceRunner ?? 'none',
@@ -531,6 +548,9 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
           `--name=${app}`,
           `--scope=${options.scope}`,
           `--workspaceName=${options.name}`,
+          ...(app === 'web' || app === 'site'
+            ? [`--styling=${options.styling}`]
+            : []),
           `--requestedApps=${options.apps.join(',')}`,
           `--requestedServices=${options.services.join(',')}`,
           `--serviceRunner=${options.serviceRunner}`,

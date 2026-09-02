@@ -10,6 +10,7 @@ describe('CLI entrypoint', () => {
     const answers = [
       'web, api',
       'drizzle',
+      'stylex',
       'events',
       'postgres, redis',
       'springbar',
@@ -31,8 +32,10 @@ describe('CLI entrypoint', () => {
       services: ['postgres', 'redis'],
       databaseAdapter: 'drizzle',
       databaseName: 'events',
+      styling: 'stylex',
       serviceRunner: 'springbar',
     });
+    expect(questions).toContainEqual(expect.stringContaining('Web styling'));
     expect(questions.at(-2)).toContain('Services (postgres, redis');
     expect(questions.at(-1)).toContain('Service runner (none, springbar)');
   });

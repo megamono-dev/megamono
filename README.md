@@ -49,9 +49,12 @@ npm exec -- create-megamono <name> \
   --local-packages=yalc
 ```
 
-The guided flow selects applications, a named database adapter, optional local
-services, and finally whether Springbar should configure the requested apps and
-services. Automation can provide the same decisions with `--apps`,
+The guided flow selects applications, a named database adapter, web styling for
+the app-owned onboarding billboard, optional local services, and finally whether
+Springbar should configure the requested apps and services. Chakra is suggested
+for a new workspace, while Emotion, Tailwind, Panda, StyleX, CSS Modules, and
+inline styles are supported without becoming governance requirements. Automation
+can provide the same decisions with `--apps`, `--styling`,
 `--database-adapter`, `--database-name`, `--services`, and `--service-runner`.
 
 Install both global development commands from their yalc artifacts:

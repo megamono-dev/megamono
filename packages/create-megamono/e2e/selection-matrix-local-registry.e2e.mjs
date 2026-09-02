@@ -54,6 +54,12 @@ const matrixCases = [
     packageManager: 'npm',
     install: false,
   },
+  ...['tailwind', 'panda', 'stylex'].map((styling) => ({
+    id: `web-${styling}`,
+    apps: ['web'],
+    packageManager: 'pnpm',
+    styling,
+  })),
 ];
 const requestedCases = new Set(
   (process.env.MEGAMONO_MATRIX_CASES ?? '')
@@ -182,7 +188,11 @@ async function verifyCase(root, testCase, environment, createCliPath) {
   const destination = resolve(root, scope);
   const staging = resolve(root, `megamono-${scope}-staging`);
   const npmCache = resolve(root, `npm-cache-${testCase.id}`);
-  const caseEnvironment = { ...environment, npm_config_cache: npmCache };
+  const caseEnvironment = {
+    ...environment,
+    npm_config_cache: npmCache,
+    ...(verifyMode === 'build' ? { NODE_ENV: 'production' } : {}),
+  };
   const packageManager = testCase.packageManager;
   process.stdout.write(
     `create-megamono selection matrix: ${testCase.id} (${testCase.apps.join(',')})\n`,
@@ -194,6 +204,7 @@ async function verifyCase(root, testCase, environment, createCliPath) {
       `Matrix ${testCase.id}`,
       `--directory=${scope}`,
       `--apps=${testCase.apps.join(',')}`,
+      ...(testCase.styling ? [`--styling=${testCase.styling}`] : []),
       `--package-manager=${packageManager}`,
       ...(testCase.database
         ? [

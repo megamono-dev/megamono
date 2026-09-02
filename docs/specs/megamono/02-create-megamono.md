@@ -37,8 +37,8 @@ Not a fixed preset. A guided setup that asks a handful of good questions and com
 
 The design tension is a combinatorial matrix that becomes unmaintainable. The line:
 
-- **Fixed (the opinionated spine):** docs and agent structure, conventions, lint rules, library boundaries, release mechanics, and maintained framework presets. The Next preset is Pages Router, Chakra UI, `src/`, ESLint, and Playwright; these are explicit generator inputs rather than inherited Nx defaults.
-- **Variable:** which platforms are in play, whether there's a Nest API, which services, which integrations, and whether the workspace uses npm, pnpm, Yarn, or Bun. npm is the default per `spec-megamono-0000`.
+- **Fixed (the opinionated spine):** docs and agent structure, conventions, lint rules, library boundaries, release mechanics, and maintained framework presets. The Next preset fixes Pages Router, `src/`, ESLint, and Playwright as explicit generator inputs rather than inherited Nx defaults.
+- **Variable:** which platforms are in play, whether there's a Nest API, which services, which integrations, which web styling renderer seeds the app-owned billboard, and whether the workspace uses npm, pnpm, Yarn, or Bun. npm is the default per `spec-megamono-0000`.
 
 ### Adaptive prompting
 
@@ -81,15 +81,15 @@ Then conventions, then integrations.
 
 The repository name becomes the package scope and default project-name prefix after normalization. Each selected surface emits one project:
 
-| Selection    | Default project  | Implementation                                                              |
-| ------------ | ---------------- | --------------------------------------------------------------------------- |
-| Web app      | `<repo>-web`     | Next.js Pages Router + Chakra UI app under `apps/web`, with Playwright e2e  |
-| API          | `<repo>-api`     | Thin Nest app under `apps/api`, with Jest/Supertest e2e                     |
-| Worker       | `<repo>-worker`  | TypeScript Cloudflare Worker under `apps/worker`                            |
-| Mobile       | `<repo>-mobile`  | Expo app under `apps/mobile`                                                |
-| Desktop      | `<repo>-desktop` | Tauri app under `apps/desktop`, registered through `@megamono/nx-cargo`     |
-| Apple native | `<repo>-apple`   | Xcode/Swift app under `apps/apple`, registered through `@megamono/nx-apple` |
-| Marketing    | `<repo>-site`    | Next.js Pages Router + Chakra UI app under `apps/site`, with Playwright e2e |
+| Selection    | Default project  | Implementation                                                                       |
+| ------------ | ---------------- | ------------------------------------------------------------------------------------ |
+| Web app      | `<repo>-web`     | Next.js Pages Router app under `apps/web`, with selected styling and Playwright e2e  |
+| API          | `<repo>-api`     | Thin Nest app under `apps/api`, with Jest/Supertest e2e                              |
+| Worker       | `<repo>-worker`  | TypeScript Cloudflare Worker under `apps/worker`                                     |
+| Mobile       | `<repo>-mobile`  | Expo app under `apps/mobile`                                                         |
+| Desktop      | `<repo>-desktop` | Tauri app under `apps/desktop`, registered through `@megamono/nx-cargo`              |
+| Apple native | `<repo>-apple`   | Xcode/Swift app under `apps/apple`, registered through `@megamono/nx-apple`          |
+| Marketing    | `<repo>-site`    | Next.js Pages Router app under `apps/site`, with selected styling and Playwright e2e |
 
 At least one app is required. Selecting Desktop or Apple installs the matching inference plugin. App names and directories have explicit override flags; collisions are detected before any files are written.
 
@@ -99,15 +99,17 @@ Megamono does not hand control to Nx's nested interactive prompts. It gathers Me
 
 - Pages Router (`appDir=false`)
 - a `src/` directory
-- Chakra UI v3 and Emotion instead of an Nx stylesheet starter
+- a selected billboard renderer: Chakra UI, Emotion, Tailwind CSS, Panda CSS, StyleX, CSS Modules, or dependency-free inline styles
 - ESLint with the generated project covered by Megamono's root structural rules
 - Playwright e2e in a sibling `<app>-e2e` project
 
-The generated Next surfaces share a small repository-owned Chakra system module. That module is starter composition, not a Megamono component library and not a substitute for the Playstack-owned theme surface in `spec-megamono-0007`; repositories may replace or compose it through ordinary Chakra APIs.
+Chakra is the suggested greenfield answer and emits a small repository-owned Chakra system module, but it is not a Megamono requirement. Tailwind is the underlying choice for shadcn/ui-style repositories and Panda is the underlying choice for Park UI-style repositories; Megamono need not identify the higher-level component catalog to render a compatible billboard. Existing-workspace adoption records a detected supported styling tool as `scaffolding.web.styling` and otherwise records `auto`. This value guides future scaffolds and is never a lint or health invariant. Explicit `--styling` always wins, interactive creation asks once, and non-interactive `auto` safely falls back to CSS Modules.
+
+Every billboard template becomes application-owned immediately. A repository may replace it, add a component system, or use a different styling tool without an exception record. StyleX support uses its maintained Babel/PostCSS integration rather than the deprecated Next-specific plugin. Panda, Tailwind, and StyleX are covered by packed generated-workspace build fixtures before their compatibility pins are promoted.
 
 The Nx placeholder page is replaced by a repository-owned onboarding billboard. It names the generated workspace and requested surfaces, explains the Megamono workflow (apps as composition roots, feature libraries, tags and boundaries, docs as intent, generators for structure, and `megamono:check` before commit), links to the emitted documentation entry points, and introduces Commune's Megamono, Playstack, and Springbar development tools. It performs no telemetry or runtime calls, does not require a private Playstack package, uses no secret or machine-specific value, and is deliberately easy to replace. The generated Playwright test verifies its heading, onboarding guidance, and outbound tool links rather than Nx placeholder copy.
 
-The billboard, Chakra starter, Nest feature library, project tags, ports, linting, and test setup are assets and operations of `@megamono/plugin:app`; `create-megamono` only selects the maintained inputs. Creating a workspace with an app and adding the same app type to an initialized empty workspace must produce equivalent project contracts after normalization of workspace name and path.
+The billboard and selected styling starter, Nest feature library, project tags, ports, linting, and test setup are assets and operations of `@megamono/plugin:app`; `create-megamono` only selects the maintained inputs. Creating a workspace with an app and adding the same app type to an initialized empty workspace must produce equivalent project contracts after normalization of workspace name and path.
 
 New Nest applications explicitly enable ESLint and emit their Jest/Supertest e2e project. Greenfield lint violations are errors. Existing-workspace adoption and conversion retain their separate warning-first migration contract.
 
@@ -123,6 +125,7 @@ npx create-megamono <name>
   --apps web,api,worker,mobile,desktop,apple,site
   --services postgres,redis,clickhouse,typesense
   --database-adapter prisma|drizzle|none
+  --styling chakra|emotion|tailwind|panda|stylex|css-modules|inline
   --database-name <name>
   --service-runner none|springbar
   --integrations sentry
@@ -241,7 +244,8 @@ That generator refuses a workspace already carrying `megamono.json` unless it is
 - Re-running against a non-empty destination exits `3` without modifying it.
 - `AGENTS.md` contains the rules and `CLAUDE.md` contains only the pointer/import.
 - No generated manifest uses an unbounded dependency range, and no secret value appears in generated files or process arguments.
-- Generated Next apps use Pages Router under `src/`, render through Chakra UI, and contain no Nx placeholder content.
+- Generated Next apps use Pages Router under `src/`, render their onboarding billboard through the selected styling tool, and contain no Nx placeholder content.
+- Packed build fixtures cover Tailwind, Panda, and StyleX in addition to the suggested Chakra path.
 - Each generated Next app has a passing Playwright e2e project whose assertions cover the onboarding billboard; each generated Nest app has a passing Jest/Supertest e2e project.
 - Generated application and e2e projects are covered by ESLint, Megamono structural rules, and the affected CI lint target.
 - The onboarding billboard explains the Megamono workflow and links to Megamono, Playstack, Springbar, and Commune without telemetry or private runtime dependencies.

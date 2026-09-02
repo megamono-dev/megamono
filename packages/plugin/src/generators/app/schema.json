@@ -39,6 +39,20 @@
       "maximum": 65535,
       "description": "Explicit unique development port."
     },
+    "styling": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "chakra",
+        "emotion",
+        "tailwind",
+        "panda",
+        "stylex",
+        "css-modules",
+        "inline"
+      ],
+      "description": "Styling tool used to render the generated web/site billboard. Auto detects the workspace and falls back to CSS Modules."
+    },
     "interactive": {
       "type": "boolean",
       "default": true,

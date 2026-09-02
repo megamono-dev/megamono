@@ -97,6 +97,23 @@ const result = await runMegamonoCli(process.argv.slice(2), {
           });
           return response.type;
         },
+        selectWebStyling: async (
+          choices: readonly {
+            readonly name: string;
+            readonly message: string;
+          }[],
+        ) => {
+          const response = await prompt<{ styling: string }>({
+            type: 'select',
+            name: 'styling',
+            message: 'How should the generated billboard be styled?',
+            choices: choices.map((choice) => ({
+              name: choice.name,
+              message: choice.message,
+            })),
+          });
+          return response.styling;
+        },
         inputDatabaseName: async (initial: string) => {
           const response = await prompt<{ name: string }>({
             type: 'input',
