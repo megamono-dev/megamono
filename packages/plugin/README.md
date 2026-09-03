@@ -103,6 +103,18 @@ npm exec nx -- run megamono:verify-dependencies
 This catches dependencies supplied only by a sibling package or an accidentally
 hoisted installation while leaving dependency correction to the repository.
 
+Container definitions can be checked independently for frozen installs,
+copied lock/workspace manifests, build stages, and a production dependency
+installation:
+
+```sh
+npm exec nx -- run megamono:verify-container --dockerfile=apps/api/Dockerfile
+```
+
+The default check only reads the Dockerfile. Pass `--smoke` explicitly to run
+`docker build` with the selected `--context`; Megamono never starts the built
+container or performs an image build as part of the ordinary health check.
+
 ## Generator availability
 
 `@megamono/plugin/availability.json` is the canonical registry for available,

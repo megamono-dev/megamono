@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoVerifyContainer",
+  "title": "Verify a production container",
+  "description": "Validate a Dockerfile and optionally prove that Docker can build it.",
+  "type": "object",
+  "properties": {
+    "dockerfile": {
+      "type": "string",
+      "default": "Dockerfile",
+      "description": "Workspace-relative Dockerfile path."
+    },
+    "context": {
+      "type": "string",
+      "default": ".",
+      "description": "Workspace-relative Docker build context."
+    },
+    "report": {
+      "type": "string",
+      "description": "Optional workspace-relative JSON report path."
+    },
+    "smoke": {
+      "type": "boolean",
+      "default": false,
+      "description": "Explicitly run docker build after static validation."
+    }
+  },
+  "additionalProperties": false
+}

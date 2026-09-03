@@ -199,6 +199,12 @@
       "schema": "./dist/executors/verify-workspace-dependencies/schema.json",
       "description": "Audit package-manager pins, workspace membership, and script dependency ownership"
     },
+    "verify-container": {
+      "status": "available",
+      "implementation": "./dist/executors/verify-container/verify-container",
+      "schema": "./dist/executors/verify-container/schema.json",
+      "description": "Validate container dependency inputs and optionally run docker build"
+    },
     "import": {
       "status": "available",
       "implementation": "./dist/executors/import/import",

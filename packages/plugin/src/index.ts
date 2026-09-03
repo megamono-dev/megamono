@@ -87,6 +87,13 @@ export {
   type RuntimeDependencyReport,
 } from './lib/runtime-verification';
 export {
+  serializeContainerVerificationReport,
+  verifyContainerDefinition,
+  type ContainerFinding,
+  type ContainerFindingCode,
+  type ContainerVerificationReport,
+} from './lib/container-verification';
+export {
   serializeWorkspaceDependencyReport,
   verifyWorkspaceDependencies,
   type WorkspaceDependencyFinding,

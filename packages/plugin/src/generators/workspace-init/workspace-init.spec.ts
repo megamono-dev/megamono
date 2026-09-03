@@ -201,6 +201,10 @@ describe('workspace-init generator', () => {
       executor: '@megamono/plugin:verify-workspace-dependencies',
       cache: false,
     });
+    expect(config.targets?.['verify-container']).toEqual({
+      executor: '@megamono/plugin:verify-container',
+      cache: false,
+    });
     expect(docs.targets?.validate?.executor).toBe(
       '@megamono/plugin:docs-validate',
     );

@@ -131,6 +131,11 @@ const verifyDependenciesTarget = {
   cache: false,
 };
 
+const verifyContainerTarget = {
+  executor: '@megamono/plugin:verify-container',
+  cache: false,
+};
+
 const AGENTS_SECTION_START = '<!-- megamono instructions start -->';
 const AGENTS_SECTION_END = '<!-- megamono instructions end -->';
 const LEGACY_AGENTS_MARKER = '<!-- megamono affected CI -->';
@@ -482,6 +487,32 @@ function ensureVerifyDependenciesTarget(tree: Tree): boolean {
     targets: {
       ...project.targets,
       'verify-dependencies': verifyDependenciesTarget,
+    },
+  });
+  return true;
+}
+
+function ensureVerifyContainerTarget(tree: Tree): boolean {
+  const project = getProjects(tree).get('megamono');
+  if (!project) {
+    throw new Error(
+      'Workspace initialization is incomplete; missing the megamono project.',
+    );
+  }
+  const current = project.targets?.['verify-container'];
+  if (current) {
+    if (JSON.stringify(current) !== JSON.stringify(verifyContainerTarget)) {
+      throw new Error(
+        'megamono:verify-container already exists with a different configuration.',
+      );
+    }
+    return false;
+  }
+  updateProjectConfiguration(tree, 'megamono', {
+    ...project,
+    targets: {
+      ...project.targets,
+      'verify-container': verifyContainerTarget,
     },
   });
   return true;
@@ -1726,6 +1757,7 @@ export async function workspaceInitGenerator(
         import: importTarget(tree),
         'verify-runtime': verifyRuntimeTarget,
         'verify-dependencies': verifyDependenciesTarget,
+        'verify-container': verifyContainerTarget,
         ...(modules.has('health') && !modules.has('docs')
           ? { health: healthTarget }
           : {}),
@@ -1735,6 +1767,7 @@ export async function workspaceInitGenerator(
     ensureImportTarget(tree);
     ensureVerifyRuntimeTarget(tree);
     ensureVerifyDependenciesTarget(tree);
+    ensureVerifyContainerTarget(tree);
     if (modules.has('health') && !modules.has('docs')) ensureHealthTarget(tree);
   } else {
     logger.warn(
