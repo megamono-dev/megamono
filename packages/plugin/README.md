@@ -221,6 +221,8 @@ and squash carries only the approved snapshot. Filter-repo requires a compatible
 ```sh
 npm exec nx run megamono:check
 npm exec nx run megamono:check --ci
+npm exec nx run megamono:check --profile=migration
+npm exec nx run megamono:check --profile=release
 npm exec nx run megamono-docs:validate
 npm exec nx run megamono-docs:index
 npm exec nx run megamono-docs:index --check
@@ -232,9 +234,12 @@ npm exec nx run megamono-docs:health
 Health checks cover npm, Expo SDK, SwiftPM, and Cargo dependency alignment,
 spec drift, stale plans, orphaned libraries, and integration-template drift.
 Findings are written deterministically to `.megamono/health.json`.
-The CI mode additionally rejects yalc/link/file dependency escape hatches,
-requires the selected manager's frozen lockfile, and validates non-secret scope
-routing configured through `--packageRegistries`.
+Package-source profiles keep local evaluation separate from publication policy.
+`development` permits local references, `migration` reports them as warnings,
+`ci` rejects them except for exact fixture locators approved in
+`megamono.json`, and `release` rejects every local reference. CI and release
+also require the selected manager's lockfile. `--ci` remains an alias for the
+`ci` profile, and `CI=true` selects it when no profile is passed.
 
 ## ESLint rules
 
@@ -267,13 +272,15 @@ gates. The optional Apple, Cargo, and Cloudflare inference plugins require Nx 18
 [`compatibility.json`](./compatibility.json) for the machine-readable contract
 and tested version anchors.
 
-In CI mode, package-source checks inspect dependency fields plus npm/Yarn
+In CI and release profiles, package-source checks inspect dependency fields plus npm/Yarn
 `overrides` and `resolutions`, package-level pnpm overrides/catalogs, and
 `pnpm-workspace.yaml` overrides/catalogs. Yalc, links, portals, local package
 directories, missing archives, and paths escaping the repository fail closed.
 A repository-contained `.tgz` whose filename carries an exact semantic version
-is the supported immutable local-distribution escape hatch; the selected
-package manager's frozen lockfile remains required.
+is accepted by the CI profile; the release profile still requires registry
+resolution. CI-only fixture exceptions use an exact
+`<manifest>#<dependency-location>` locator, such as
+`package.json#devDependencies.@megamono/plugin`, and do not weaken release.
 
 ## Develop the plugin
 

@@ -317,6 +317,12 @@ describe('workspace-init generator', () => {
         '@megamono': 'https://npm.example.test/megamono',
         '@playstack': 'https://npm.example.test/playstack',
       },
+      profiles: {
+        development: { localReferences: 'allow', approved: [] },
+        migration: { localReferences: 'warn', approved: [] },
+        ci: { localReferences: 'reject', approved: [] },
+        release: { localReferences: 'reject', approved: [] },
+      },
       forbidLocalInCi: true,
     });
     const npmrc = tree.read('.npmrc', 'utf8');

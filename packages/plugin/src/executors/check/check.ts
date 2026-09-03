@@ -25,6 +25,13 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
     const diagnostics: Diagnostic[] = [];
     const acceptedDecisions = new Set<string>();
     const adoptedModules = new Set(config.adoption.modules);
+    const packageSourceProfile =
+      options.profile ??
+      (options.ci || process.env.CI === 'true' ? 'ci' : undefined);
+    if (options.ci && options.profile && options.profile !== 'ci') {
+      logger.error('--ci cannot be combined with a non-ci --profile.');
+      return { success: false };
+    }
     if (!options.skipDocs && adoptedModules.has('docs')) {
       const docs = await validateRepositoryDocs(
         context.root,
@@ -55,12 +62,12 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
     diagnostics.push(...(await checkProjectPreflights(context.projectGraph)));
     diagnostics.push(...validateInstalledSkills(context.root));
     diagnostics.push(...validateManagedArtifactRegistry(context.root));
-    if (
-      config.packageSources.forbidLocalInCi &&
-      (options.ci || process.env.CI === 'true')
-    ) {
-      diagnostics.push(...(await validatePackageSources(context.root, config)));
-    }
+    if (packageSourceProfile)
+      diagnostics.push(
+        ...(await validatePackageSources(context.root, config, {
+          profile: packageSourceProfile,
+        })),
+      );
     for (const diagnostic of diagnostics) {
       const message = formatDiagnostic(diagnostic);
       if (diagnostic.severity === 'error') logger.error(message);

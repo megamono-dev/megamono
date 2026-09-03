@@ -44,6 +44,21 @@ interface PackageAddress {
   readonly specifier: string;
 }
 
+export type PackageSourceProfileName =
+  'development' | 'migration' | 'ci' | 'release';
+
+function addressLocator(address: PackageAddress): string {
+  return `${address.manifestPath}#${address.location}`;
+}
+
+function isLocalPackageAddress(specifier: string): boolean {
+  const value = specifier.trim();
+  return (
+    /(?:^|[/:])\.yalc(?:\/|$)/.test(value) ||
+    /^(?:file|link|portal):/.test(value)
+  );
+}
+
 export function parsePackageRegistries(
   source: string | undefined,
 ): Readonly<Record<string, string>> {
@@ -242,32 +257,31 @@ async function pnpmWorkspaceAddresses(
 export async function validatePackageSources(
   root: string,
   config: MegamonoConfig,
+  options: { readonly profile?: PackageSourceProfileName } = {},
 ): Promise<readonly Diagnostic[]> {
   const diagnostics: Diagnostic[] = [];
+  const profileName = options.profile ?? 'ci';
+  const configuredPolicy = config.packageSources.profiles[profileName];
+  const localReferences =
+    profileName === 'ci' && !config.packageSources.forbidLocalInCi
+      ? 'allow'
+      : configuredPolicy.localReferences;
+  const approved = new Set(
+    profileName === 'release' ? [] : configuredPolicy.approved,
+  );
   const manager = config.conventions.packageManager;
   const lockfiles = packageManagerAdapter(manager).lockfiles;
   const hasLockfile = (
     await Promise.all(lockfiles.map((lockfile) => exists(join(root, lockfile))))
   ).some(Boolean);
-  if (!hasLockfile) {
+  if ((profileName === 'ci' || profileName === 'release') && !hasLockfile) {
     const lockfile = lockfiles[0] ?? 'package.json';
     diagnostics.push({
       severity: 'error',
       code: 'package-sources-lockfile',
       path: lockfile,
-      message: `Frozen CI requires a committed ${manager} lockfile (${lockfiles.join(' or ')}).`,
+      message: `The ${profileName} profile requires a committed ${manager} lockfile (${lockfiles.join(' or ')}).`,
     });
-  }
-  for (const path of ['yalc.lock', '.yalc']) {
-    if (await exists(join(root, path))) {
-      diagnostics.push({
-        severity: 'error',
-        code: 'package-sources-local-state',
-        path,
-        message:
-          'Yalc state is development-only; CI must install reproducible registry dependencies.',
-      });
-    }
   }
   const addresses: PackageAddress[] = [];
   for (const absolutePath of await packageManifests(root)) {
@@ -288,15 +302,52 @@ export async function validatePackageSources(
   const pnpmAddresses = await pnpmWorkspaceAddresses(root);
   if (Array.isArray(pnpmAddresses)) addresses.push(...pnpmAddresses);
   else diagnostics.push(pnpmAddresses);
+  let hasApprovedYalcReference = false;
+  let hasUnapprovedYalcReference = false;
   for (const address of addresses) {
+    if (!isLocalPackageAddress(address.specifier)) continue;
+    const locator = addressLocator(address);
+    const isApproved = approved.has(locator);
+    const isYalc = /(?:^|[/:])\.yalc(?:\/|$)/.test(address.specifier.trim());
+    if (isYalc) {
+      if (isApproved) hasApprovedYalcReference = true;
+      else hasUnapprovedYalcReference = true;
+    }
+    if (localReferences === 'allow' || isApproved) continue;
     const problem = await localPackageAddressProblem(root, address);
-    if (problem)
-      diagnostics.push({
-        severity: 'error',
-        code: 'package-sources-local-dependency',
-        path: address.manifestPath,
-        message: `${address.location} uses unsupported address ${address.specifier}. ${problem} Use a registry package or a repository-contained, versioned .tgz artifact.`,
-      });
+    if (!problem && profileName !== 'release' && localReferences !== 'warn')
+      continue;
+    diagnostics.push({
+      severity: localReferences === 'warn' ? 'warning' : 'error',
+      code: 'package-sources-local-dependency',
+      path: address.manifestPath,
+      message:
+        `${address.location} uses local address ${address.specifier}. ` +
+        (problem ??
+          'Release verification requires a registry-resolved package.') +
+        (localReferences === 'warn'
+          ? ` Replace it before running the release profile. Locator: ${locator}.`
+          : ' Use a registry package or an explicitly approved CI fixture.'),
+    });
+  }
+  for (const path of ['yalc.lock', '.yalc']) {
+    if (!(await exists(join(root, path)))) continue;
+    if (localReferences === 'allow') continue;
+    if (
+      profileName === 'ci' &&
+      hasApprovedYalcReference &&
+      !hasUnapprovedYalcReference
+    )
+      continue;
+    diagnostics.push({
+      severity: localReferences === 'warn' ? 'warning' : 'error',
+      code: 'package-sources-local-state',
+      path,
+      message:
+        localReferences === 'warn'
+          ? 'Yalc state is permitted during migration but must be replaced before release.'
+          : `${profileName} package policy does not permit Yalc state.`,
+    });
   }
   const npmrc = (await exists(join(root, '.npmrc')))
     ? await readFile(join(root, '.npmrc'), 'utf8')

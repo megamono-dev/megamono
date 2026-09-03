@@ -21,6 +21,12 @@ describe('Megamono configuration', () => {
     expect(config.services.requirements).toEqual({});
     expect(config.packageSources).toEqual({
       registries: {},
+      profiles: {
+        development: { localReferences: 'allow', approved: [] },
+        migration: { localReferences: 'warn', approved: [] },
+        ci: { localReferences: 'reject', approved: [] },
+        release: { localReferences: 'reject', approved: [] },
+      },
       forbidLocalInCi: true,
     });
     expect(config.databases).toEqual({});

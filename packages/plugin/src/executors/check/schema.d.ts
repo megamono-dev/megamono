@@ -4,4 +4,5 @@ export interface CheckExecutorSchema {
   readonly skipDocs?: boolean;
   readonly verbose?: boolean;
   readonly ci?: boolean;
+  readonly profile?: 'development' | 'migration' | 'ci' | 'release';
 }

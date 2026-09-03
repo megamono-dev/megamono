@@ -24,6 +24,11 @@
       "type": "boolean",
       "default": false,
       "description": "Reject development-only package addresses and verify registry routing plus the frozen lockfile."
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["development", "migration", "ci", "release"],
+      "description": "Apply the named package-source policy profile. CI=true selects ci when omitted."
     }
   },
   "additionalProperties": false

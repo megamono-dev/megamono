@@ -56,6 +56,7 @@ describe('package source contracts', () => {
           registries: {
             '@megamono': 'https://npm.example.test/megamono',
           },
+          profiles: pnpmConfig.packageSources.profiles,
           forbidLocalInCi: true,
         },
       };
@@ -76,6 +77,90 @@ describe('package source contracts', () => {
           'package-sources-local-dependency',
         ]),
       );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('allows development sources, warns during migration, and rejects them for release', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-package-profiles-'));
+    try {
+      await mkdir(join(root, '.yalc'));
+      await writeFile(
+        join(root, 'package.json'),
+        JSON.stringify({
+          dependencies: {
+            '@playstack/core': 'file:.yalc/@playstack/core',
+          },
+        }),
+      );
+      await writeFile(join(root, 'yalc.lock'), '{}\n');
+
+      expect(
+        await validatePackageSources(root, pnpmConfig, {
+          profile: 'development',
+        }),
+      ).toEqual([]);
+      expect(
+        (
+          await validatePackageSources(root, pnpmConfig, {
+            profile: 'migration',
+          })
+        ).every(({ severity }) => severity === 'warning'),
+      ).toBe(true);
+      expect(
+        (
+          await validatePackageSources(root, pnpmConfig, {
+            profile: 'release',
+          })
+        ).map(({ code }) => code),
+      ).toEqual(
+        expect.arrayContaining([
+          'package-sources-lockfile',
+          'package-sources-local-dependency',
+          'package-sources-local-state',
+        ]),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('allows an exact local fixture locator only in the ci profile', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-package-approved-'));
+    try {
+      await mkdir(join(root, '.yalc'));
+      await writeFile(
+        join(root, 'package.json'),
+        JSON.stringify({
+          devDependencies: {
+            '@megamono/plugin': 'file:.yalc/@megamono/plugin',
+          },
+        }),
+      );
+      await writeFile(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n');
+      const config = {
+        ...pnpmConfig,
+        packageSources: {
+          ...pnpmConfig.packageSources,
+          profiles: {
+            ...pnpmConfig.packageSources.profiles,
+            ci: {
+              localReferences: 'reject' as const,
+              approved: ['package.json#devDependencies.@megamono/plugin'],
+            },
+          },
+        },
+      };
+
+      expect(
+        await validatePackageSources(root, config, { profile: 'ci' }),
+      ).toEqual([]);
+      expect(
+        (
+          await validatePackageSources(root, config, { profile: 'release' })
+        ).some(({ code }) => code === 'package-sources-local-dependency'),
+      ).toBe(true);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -243,6 +243,20 @@ const databaseSchema = z
   })
   .strict();
 
+const packageSourceProfileSchema = z
+  .object({
+    localReferences: z.enum(['allow', 'warn', 'reject']),
+    approved: z.array(z.string().min(1)).default([]),
+  })
+  .strict();
+
+const defaultPackageSourceProfiles = {
+  development: { localReferences: 'allow' as const, approved: [] },
+  migration: { localReferences: 'warn' as const, approved: [] },
+  ci: { localReferences: 'reject' as const, approved: [] },
+  release: { localReferences: 'reject' as const, approved: [] },
+};
+
 const legacyPrismaSchema = z
   .object({
     composition: z.literal('native-multi-file'),
@@ -421,10 +435,32 @@ export const megamonoConfigSchema = z
             z.url().refine((value) => value.startsWith('https://')),
           )
           .default({}),
+        profiles: z
+          .object({
+            development: packageSourceProfileSchema.default(
+              defaultPackageSourceProfiles.development,
+            ),
+            migration: packageSourceProfileSchema.default(
+              defaultPackageSourceProfiles.migration,
+            ),
+            ci: packageSourceProfileSchema.default(
+              defaultPackageSourceProfiles.ci,
+            ),
+            release: packageSourceProfileSchema.default(
+              defaultPackageSourceProfiles.release,
+            ),
+          })
+          .strict()
+          .default(defaultPackageSourceProfiles),
+        /** @deprecated Use packageSources.profiles.ci.localReferences. */
         forbidLocalInCi: z.boolean().default(true),
       })
       .strict()
-      .default({ registries: {}, forbidLocalInCi: true }),
+      .default({
+        registries: {},
+        profiles: defaultPackageSourceProfiles,
+        forbidLocalInCi: true,
+      }),
   })
   .strict()
   .superRefine((value, context) => {
@@ -510,7 +546,11 @@ export const DEFAULT_MEGAMONO_CONFIG: MegamonoConfig =
     },
     databases: {},
     services: { runner: 'none', requirements: {} },
-    packageSources: { registries: {}, forbidLocalInCi: true },
+    packageSources: {
+      registries: {},
+      profiles: defaultPackageSourceProfiles,
+      forbidLocalInCi: true,
+    },
   });
 
 export async function readMegamonoConfig(
