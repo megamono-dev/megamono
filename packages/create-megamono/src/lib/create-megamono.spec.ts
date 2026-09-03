@@ -50,6 +50,10 @@ describe('normalizeCreateOptions', () => {
     expect(normalized).toMatchObject({
       scope: 'acme-tools',
       apps: ['api', 'web'],
+      appInstances: [
+        { type: 'api', name: 'api', directory: 'apps/api' },
+        { type: 'web', name: 'web', directory: 'apps/web' },
+      ],
       services: [],
       databaseAdapter: 'none',
       styling: 'chakra',
@@ -63,6 +67,37 @@ describe('normalizeCreateOptions', () => {
     expect(normalized.stagingDirectory).toBe(
       '/workspace/megamono-acme-tools-staging',
     );
+  });
+
+  it('normalizes multiple named instances without collapsing their types', () => {
+    const normalized = options('/workspace', {
+      apps: [
+        'site:marketing',
+        'extension:extension-grids',
+        'extension:extension-guides',
+        'api',
+        'web:admin',
+        'web',
+      ],
+    });
+
+    expect(normalized.apps).toEqual(['api', 'extension', 'site', 'web']);
+    expect(normalized.appInstances).toEqual([
+      { type: 'api', name: 'api', directory: 'apps/api' },
+      {
+        type: 'extension',
+        name: 'extension-grids',
+        directory: 'apps/extension-grids',
+      },
+      {
+        type: 'extension',
+        name: 'extension-guides',
+        directory: 'apps/extension-guides',
+      },
+      { type: 'site', name: 'marketing', directory: 'apps/marketing' },
+      { type: 'web', name: 'web', directory: 'apps/web' },
+      { type: 'web', name: 'admin', directory: 'apps/admin' },
+    ]);
   });
 
   it('defaults new workspaces to npm', () => {
@@ -80,6 +115,9 @@ describe('normalizeCreateOptions', () => {
     [{ apps: [] }, 4, 'At least one app'],
     [{ name: undefined }, 4, 'workspace name'],
     [{ apps: ['unknown'] }, 2, 'Unknown app'],
+    [{ apps: ['extensions:guides'] }, 2, 'extension:guides'],
+    [{ apps: ['web', 'site:web'] }, 2, 'unique name'],
+    [{ apps: ['web:Admin Portal'] }, 2, 'normalized slug'],
     [{ integrations: ['sentry'] }, 3, 'fixture gate'],
     [{ apps: ['apple'], platform: 'linux' }, 3, 'requires macOS'],
     [{ localPackages: 'unknown' }, 2, 'local package source'],
@@ -102,6 +140,37 @@ describe('normalizeCreateOptions', () => {
 });
 
 describe('createPlan', () => {
+  it('generates and verifies every named app instance independently', () => {
+    const rendered = renderPlan(
+      createPlan(
+        options('/workspace', {
+          apps: [
+            'extension:extension-grids',
+            'extension:extension-guides',
+            'site:marketing',
+            'web',
+            'web:admin',
+          ],
+          verify: 'build',
+        }),
+      ),
+    );
+
+    expect(rendered).toContain('--type=extension" "--name=extension-grids');
+    expect(rendered).toContain('--type=extension" "--name=extension-guides');
+    expect(rendered).toContain('--type=site" "--name=marketing');
+    expect(rendered).toContain('--type=web" "--name=admin');
+    expect(rendered).toContain('--type=web" "--name=web');
+    expect(rendered).toContain(
+      '--ports={\\"marketing\\":43017,\\"web\\":43018,\\"admin\\":43021}',
+    );
+    expect(rendered).toContain(
+      '--projects=acme-tools-extension-grids,acme-tools-extension-guides,acme-tools-marketing,acme-tools-web,acme-tools-admin',
+    );
+    expect(rendered).toContain('acme-tools-marketing-e2e:e2e');
+    expect(rendered).toContain('acme-tools-admin-e2e:e2e');
+  });
+
   it('uses the canonical database generator with a user-defined name', () => {
     const plan = createPlan(
       options('/workspace', {

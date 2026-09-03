@@ -63,6 +63,12 @@ export type LocalPackageSource = (typeof LOCAL_PACKAGE_SOURCES)[number];
 export type DatabaseAdapter = (typeof DATABASE_ADAPTERS)[number];
 export type WebStyling = (typeof WEB_STYLING_OPTIONS)[number];
 
+export interface AppInstance {
+  type: AppId;
+  name: string;
+  directory: string;
+}
+
 export interface CreateMegamonoInput {
   name?: string;
   directory?: string;
@@ -90,6 +96,7 @@ export interface NormalizedCreateOptions {
   destination: string;
   stagingDirectory: string;
   apps: AppId[];
+  appInstances: AppInstance[];
   services: ServiceId[];
   databaseAdapter: DatabaseAdapter;
   databaseName?: string;
@@ -174,6 +181,7 @@ const VERIFY_SET = new Set<string>(VERIFY_MODES);
 const LOCAL_PACKAGE_SOURCE_SET = new Set<string>(LOCAL_PACKAGE_SOURCES);
 const PACKAGE_MANAGER_SET = new Set<string>(PACKAGE_MANAGERS);
 const DATABASE_ADAPTER_SET = new Set<string>(DATABASE_ADAPTERS);
+const APP_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const appPlugin: Partial<Record<AppId, string>> = {
   web: '@nx/next',
@@ -188,6 +196,53 @@ function normalizedList(values: readonly string[] | undefined): string[] {
   return [
     ...new Set((values ?? []).map((value) => value.trim()).filter(Boolean)),
   ].sort();
+}
+
+export function normalizeAppInstances(
+  values: readonly string[] | undefined,
+): AppInstance[] {
+  const descriptors = (values ?? [])
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+    .sort();
+  const instances = descriptors.map((descriptor) => {
+    const parts = descriptor.split(':');
+    if (parts.length > 2 || !parts[0] || (parts.length === 2 && !parts[1])) {
+      throw new CreateMegamonoError(
+        `Invalid app descriptor "${descriptor}". Use type or type:name.`,
+        2,
+      );
+    }
+    const type = parts[0];
+    if (!APP_SET.has(type)) {
+      const singular = type.endsWith('s') ? type.slice(0, -1) : undefined;
+      const suggestion =
+        singular && APP_SET.has(singular) ? singular : undefined;
+      throw new CreateMegamonoError(
+        `Unknown app type "${type}"${suggestion ? `. Did you mean "${suggestion}${parts[1] ? `:${parts[1]}` : ''}"?` : ` in "${descriptor}".`}`,
+        2,
+      );
+    }
+    const name = parts[1] ?? type;
+    if (!APP_NAME_PATTERN.test(name)) {
+      throw new CreateMegamonoError(
+        `Invalid app name "${name}" in "${descriptor}". Use a normalized slug such as admin or extension-guides.`,
+        2,
+      );
+    }
+    return { type: type as AppId, name, directory: `apps/${name}` };
+  });
+  const names = new Set<string>();
+  for (const instance of instances) {
+    if (names.has(instance.name)) {
+      throw new CreateMegamonoError(
+        `App name and root "${instance.name}" is requested more than once. Each app instance must have a unique name.`,
+        2,
+      );
+    }
+    names.add(instance.name);
+  }
+  return instances;
 }
 
 function requireEnum<T extends string>(
@@ -225,20 +280,16 @@ export function normalizeCreateOptions(
     );
   }
 
-  const apps = normalizedList(input.apps);
-  if (apps.length === 0) {
+  const appInstances = normalizeAppInstances(input.apps);
+  if (appInstances.length === 0) {
     throw new CreateMegamonoError(
       'At least one app is required when interactive mode cannot resolve --apps.',
       4,
     );
   }
-  const unknownApps = apps.filter((app) => !APP_SET.has(app));
-  if (unknownApps.length > 0) {
-    throw new CreateMegamonoError(
-      `Unknown app selection(s): ${unknownApps.join(', ')}.`,
-      2,
-    );
-  }
+  const apps = [
+    ...new Set(appInstances.map((app) => app.type)),
+  ].sort() as AppId[];
 
   const services = normalizedList(input.services);
   const unknownServices = services.filter(
@@ -299,7 +350,8 @@ export function normalizeCreateOptions(
     scope,
     destination,
     stagingDirectory,
-    apps: apps as AppId[],
+    apps,
+    appInstances,
     services: services as ServiceId[],
     databaseAdapter,
     ...(databaseName ? { databaseName } : {}),
@@ -396,32 +448,43 @@ function requestedPlatforms(options: NormalizedCreateOptions): string[] {
 }
 
 function generatedE2eProjects(options: NormalizedCreateOptions): string[] {
-  return options.apps
-    .filter((app) => app === 'api' || app === 'site' || app === 'web')
-    .map((app) => `${options.scope}-${app}-e2e`);
+  return options.appInstances
+    .filter(({ type }) => type === 'api' || type === 'site' || type === 'web')
+    .map(({ name }) => `${options.scope}-${name}-e2e`);
 }
 
 function scaffoldPort(
   options: NormalizedCreateOptions,
-  app: 'api' | 'site' | 'web',
+  app: AppInstance & { type: 'api' | 'site' | 'web' },
 ): number {
   const hash = [...options.scope].reduce(
     (value, character) => (value * 31 + (character.codePointAt(0) ?? 0)) >>> 0,
     0,
   );
-  return 40_000 + (hash % 8_000) + { api: 0, site: 1, web: 2 }[app];
+  const siblings = options.appInstances.filter(
+    (candidate) => candidate.type === app.type,
+  );
+  const instanceOffset = siblings.findIndex(
+    (candidate) => candidate.name === app.name,
+  );
+  return (
+    40_000 +
+    (hash % 8_000) +
+    { api: 0, site: 1, web: 2 }[app.type] +
+    instanceOffset * 3
+  );
 }
 
 function requestedPorts(
   options: NormalizedCreateOptions,
 ): Readonly<Record<string, number>> {
   return Object.fromEntries(
-    options.apps
+    options.appInstances
       .filter(
-        (app): app is 'api' | 'site' | 'web' =>
-          app === 'api' || app === 'site' || app === 'web',
+        (app): app is AppInstance & { type: 'api' | 'site' | 'web' } =>
+          app.type === 'api' || app.type === 'site' || app.type === 'web',
       )
-      .map((app) => [app, scaffoldPort(options, app)]),
+      .map((app) => [app.name, scaffoldPort(options, app)]),
   );
 }
 
@@ -532,23 +595,25 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     );
   }
 
-  for (const app of options.apps) {
+  for (const app of options.appInstances) {
     const port =
-      app === 'api' || app === 'site' || app === 'web'
-        ? [`--port=${scaffoldPort(options, app)}`]
+      app.type === 'api' || app.type === 'site' || app.type === 'web'
+        ? [
+            `--port=${scaffoldPort(options, app as AppInstance & { type: 'api' | 'site' | 'web' })}`,
+          ]
         : [];
     steps.push(
       commandStep(
-        `generate-${app}`,
+        `generate-${app.name}`,
         options.packageManager,
         nxArgs(options.packageManager, [
           'generate',
           '@megamono/plugin:app',
-          `--type=${app}`,
-          `--name=${app}`,
+          `--type=${app.type}`,
+          `--name=${app.name}`,
           `--scope=${options.scope}`,
           `--workspaceName=${options.name}`,
-          ...(app === 'web' || app === 'site'
+          ...(app.type === 'web' || app.type === 'site'
             ? [`--styling=${options.styling}`]
             : []),
           `--requestedApps=${options.apps.join(',')}`,
@@ -664,7 +729,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         nxArgs(options.packageManager, [
           'run-many',
           '--targets=build,test,lint',
-          `--projects=${options.apps.map((app) => `${options.scope}-${app}`).join(',')}`,
+          `--projects=${options.appInstances.map((app) => `${options.scope}-${app.name}`).join(',')}`,
         ]),
         'staging',
       ),

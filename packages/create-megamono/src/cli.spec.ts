@@ -99,6 +99,54 @@ describe('CLI entrypoint', () => {
     }
   });
 
+  it('accepts repeatable positional type and type:name app descriptors', async () => {
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    try {
+      await expect(
+        main([
+          'multi-app-fixture',
+          'site:marketing',
+          'extension:extension-grids',
+          'extension:extension-guides',
+          'api',
+          'web:admin',
+          'web',
+          '--interactive=false',
+          '--dry-run',
+        ]),
+      ).resolves.toBe(0);
+      const rendered = output.mock.calls
+        .map(([value]) => String(value))
+        .join('');
+      expect(rendered).toContain('--type=site" "--name=marketing');
+      expect(rendered).toContain('--type=extension" "--name=extension-grids');
+      expect(rendered).toContain('--type=extension" "--name=extension-guides');
+      expect(rendered).toContain('--type=web" "--name=admin');
+    } finally {
+      output.mockRestore();
+    }
+  });
+
+  it('rejects mixed positional and --apps app inputs', async () => {
+    const error = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    try {
+      await expect(
+        main([
+          'mixed-app-fixture',
+          'web:admin',
+          '--apps=api',
+          '--interactive=false',
+          '--dry-run',
+        ]),
+      ).resolves.toBe(2);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining('positionally or with --apps'),
+      );
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('accepts an explicit database adapter and arbitrary database name', async () => {
     const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
     try {

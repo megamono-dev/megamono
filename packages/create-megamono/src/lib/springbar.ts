@@ -10,6 +10,7 @@ import type {
 
 export interface SpringbarAppIntent {
   app: AppId;
+  name: string;
   projectName: string;
   directory: string;
 }
@@ -17,7 +18,7 @@ export interface SpringbarAppIntent {
 export interface SpringbarServiceIntent {
   service: ServiceId;
   version: string;
-  dependentApps: AppId[];
+  dependentApps: string[];
 }
 
 export interface SpringbarSetupIntent {
@@ -67,17 +68,6 @@ interface ToolResult {
   isError?: boolean;
 }
 
-const APP_DIRECTORIES: Record<AppId, string> = {
-  web: 'apps/web',
-  api: 'apps/api',
-  worker: 'apps/worker',
-  mobile: 'apps/mobile',
-  desktop: 'apps/desktop',
-  apple: 'apps/apple',
-  site: 'apps/site',
-  extension: 'apps/extension',
-};
-
 const SERVICE_REGISTRY_NAMES: Record<ServiceId, string> = {
   postgres: 'postgres',
   redis: 'redis',
@@ -89,15 +79,18 @@ export function createSpringbarIntent(
   options: NormalizedCreateOptions,
   serviceVersions: Readonly<Record<string, string>>,
 ): SpringbarSetupIntent {
-  const apps = options.apps.map((app) => ({
-    app,
-    projectName: `${options.scope}-${app}`,
-    directory: APP_DIRECTORIES[app],
+  const apps = options.appInstances.map((app) => ({
+    app: app.type,
+    name: app.name,
+    projectName: `${options.scope}-${app.name}`,
+    directory: app.directory,
   }));
-  const backendApps = options.apps.filter(
-    (app): app is AppId => app === 'api' || app === 'worker',
+  const backendApps = options.appInstances.filter(
+    (app) => app.type === 'api' || app.type === 'worker',
   );
-  const dependentApps = backendApps.length > 0 ? backendApps : options.apps;
+  const dependentApps = (
+    backendApps.length > 0 ? backendApps : options.appInstances
+  ).map((app) => app.name);
   const services = options.services.map((service) => {
     const registryName = service === 'postgres' ? 'postgresql' : service;
     const version = serviceVersions[registryName];
@@ -221,8 +214,8 @@ function toolPayload(result: unknown): unknown {
 function matchCandidates(
   intent: SpringbarSetupIntent,
   candidates: SpringbarCandidate[],
-): Map<AppId, string> {
-  const selected = new Map<AppId, string>();
+): Map<string, string> {
+  const selected = new Map<string, string>();
   for (const app of intent.apps) {
     const expectedDirectory = resolve(intent.workspaceRoot, app.directory);
     const matches = candidates.filter((candidate) => {
@@ -230,12 +223,12 @@ function matchCandidates(
       return (
         directory === expectedDirectory ||
         candidate.name === app.projectName ||
-        candidate.name === app.app
+        candidate.name === app.name
       );
     });
     const exact = matches.filter(
       (candidate) =>
-        candidate.name === app.projectName || candidate.name === app.app,
+        candidate.name === app.projectName || candidate.name === app.name,
     );
     const resolved =
       exact.length === 1
@@ -248,7 +241,7 @@ function matchCandidates(
         `Springbar candidate match for ${app.projectName} was ${matches.length === 0 ? 'missing' : 'ambiguous'}.`,
       );
     }
-    selected.set(app.app, resolved.name);
+    selected.set(app.name, resolved.name);
   }
   return selected;
 }
@@ -264,7 +257,7 @@ export function springbarSetupArguments(
   const selected = matchCandidates(intent, candidates);
   return {
     workspace_root: intent.workspaceRoot,
-    candidate_names: intent.apps.map((app) => selected.get(app.app) as string),
+    candidate_names: intent.apps.map((app) => selected.get(app.name) as string),
     services: intent.services.map((service) => ({
       service: SERVICE_REGISTRY_NAMES[service.service],
       version: service.version,

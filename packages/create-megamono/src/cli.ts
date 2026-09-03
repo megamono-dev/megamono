@@ -130,8 +130,15 @@ export async function main(
         'dry-run': { type: 'boolean', default: false },
       },
     });
-    if (parsed.positionals.length > 1) {
-      throw new CreateMegamonoError('Expected at most one workspace name.', 2);
+    if (parsed.positionals.length === 0 && !stdin.isTTY) {
+      throw new CreateMegamonoError('Expected a workspace name.', 2);
+    }
+    const positionalApps = parsed.positionals.slice(1);
+    if (positionalApps.length > 0 && parsed.values.apps !== undefined) {
+      throw new CreateMegamonoError(
+        'Pass app descriptors positionally or with --apps, not both.',
+        2,
+      );
     }
     const interactive = booleanValue(
       '--interactive',
@@ -141,7 +148,10 @@ export async function main(
     const input = await resolveInteractive({
       name: parsed.positionals[0],
       directory: parsed.values.directory,
-      apps: commaList(parsed.values.apps),
+      apps:
+        positionalApps.length > 0
+          ? positionalApps
+          : commaList(parsed.values.apps),
       services: commaList(parsed.values.services),
       databaseAdapter: parsed.values['database-adapter'],
       databaseName: parsed.values['database-name'],

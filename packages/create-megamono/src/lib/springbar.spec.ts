@@ -45,9 +45,24 @@ describe('createSpringbarIntent', () => {
     ).toEqual({
       workspaceRoot: '/workspace/acme',
       apps: [
-        { app: 'api', projectName: 'acme-api', directory: 'apps/api' },
-        { app: 'web', projectName: 'acme-web', directory: 'apps/web' },
-        { app: 'worker', projectName: 'acme-worker', directory: 'apps/worker' },
+        {
+          app: 'api',
+          name: 'api',
+          projectName: 'acme-api',
+          directory: 'apps/api',
+        },
+        {
+          app: 'web',
+          name: 'web',
+          projectName: 'acme-web',
+          directory: 'apps/web',
+        },
+        {
+          app: 'worker',
+          name: 'worker',
+          projectName: 'acme-worker',
+          directory: 'apps/worker',
+        },
       ],
       services: [
         {
@@ -64,6 +79,28 @@ describe('createSpringbarIntent', () => {
       postgresql: '17',
     });
     expect(intent.services[0]?.dependentApps).toEqual(['site', 'web']);
+  });
+
+  it('keeps named siblings distinct when matching Springbar candidates', () => {
+    const intent = createSpringbarIntent(
+      options(['extension:extension-grids', 'extension:extension-guides']),
+      { postgresql: '17' },
+    );
+    expect(
+      intent.apps.map(({ name, directory }) => ({ name, directory })),
+    ).toEqual([
+      { name: 'extension-grids', directory: 'apps/extension-grids' },
+      { name: 'extension-guides', directory: 'apps/extension-guides' },
+    ]);
+    expect(
+      springbarSetupArguments(intent, [
+        { name: 'extension-grids', working_dir: 'apps/extension-grids' },
+        { name: 'extension-guides', working_dir: 'apps/extension-guides' },
+      ]),
+    ).toMatchObject({
+      candidate_names: ['extension-grids', 'extension-guides'],
+      services: [{ dependents: ['extension-grids', 'extension-guides'] }],
+    });
   });
 });
 
