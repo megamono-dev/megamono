@@ -5,14 +5,15 @@ Global command dispatcher for adopting Megamono in an existing Nx workspace.
 ```sh
 npm install --global @megamono/cli
 megamono init --survey
-megamono init --profile=minimal --dry-run
+megamono init --profile=pilot --dry-run
 megamono init
 ```
 
-`minimal`, `platform`, and `full` adoption profiles are forwarded to the local
-plugin. They expand to the same independently runnable modules as `--only`, and
-the resulting plan includes suggested commit boundaries without staging or
-committing files.
+`minimal`, `pilot`, `platform`, and `full` adoption profiles are forwarded to
+the local plugin. `pilot` is the mature-workspace path for lint, health, and
+inference without claiming existing CI or release workflows. Every profile
+expands to the same independently runnable modules as `--only`, and the plan
+includes suggested commit boundaries without staging or committing files.
 
 The target workspace must install `@megamono/plugin` as a development
 dependency. The CLI always delegates to the workspace-local Nx and plugin.

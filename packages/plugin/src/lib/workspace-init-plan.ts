@@ -37,6 +37,7 @@ export const WORKSPACE_INIT_MODULES = [
 export type WorkspaceInitModule = (typeof WORKSPACE_INIT_MODULES)[number];
 export const WORKSPACE_INIT_PROFILES = {
   minimal: ['lint', 'health'],
+  pilot: ['lint', 'health', 'inference'],
   platform: ['ci', 'release', 'lint', 'health', 'inference'],
   full: WORKSPACE_INIT_MODULES,
 } as const satisfies Readonly<Record<string, readonly WorkspaceInitModule[]>>;

@@ -104,7 +104,7 @@ This contract is the repository-side input for Playstack integration planning. M
 
 Every execution installs a small baseline: `megamono.json`, the `megamono` project with `check` and `import` targets, plugin compatibility metadata, and the selected module records. Modules are otherwise independently selectable.
 
-`--profile=minimal|platform|full` provides named shortcuts without changing module behavior. `minimal` selects `lint,health`; `platform` selects `ci,release,lint,health,inference`; and `full` selects every module. A profile and `--only` are mutually exclusive. The ordered plan includes one suggested commit batch per selected module, attaching baseline changes to the first batch. Suggested batches contain exact targets and a commit subject, but the generator never stages or commits repository files.
+`--profile=minimal|pilot|platform|full` provides named shortcuts without changing module behavior. `minimal` selects `lint,health`; `pilot` selects `lint,health,inference` for a mature repository without claiming CI or release ownership; `platform` selects `ci,release,lint,health,inference`; and `full` selects every module. A profile and `--only` are mutually exclusive. The ordered plan includes one suggested commit batch per selected module, attaching baseline changes to the first batch. Suggested batches contain exact targets and a commit subject, but the generator never stages or commits repository files.
 
 The independently selectable modules are:
 

@@ -265,6 +265,9 @@ describe('workspace init survey and plan', () => {
     expect(
       createWorkspaceInitPlan(tree, { profile: 'minimal' }).modules,
     ).toEqual(['lint', 'health']);
+    expect(createWorkspaceInitPlan(tree, { profile: 'pilot' }).modules).toEqual(
+      ['lint', 'health', 'inference'],
+    );
     expect(
       createWorkspaceInitPlan(tree, { profile: 'platform' }).modules,
     ).toEqual(['ci', 'release', 'lint', 'health', 'inference']);

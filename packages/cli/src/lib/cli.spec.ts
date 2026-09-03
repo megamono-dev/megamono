@@ -795,7 +795,7 @@ describe('@megamono/cli', () => {
     const harness = io(root);
 
     const result = await runMegamonoCli(
-      ['init', '--profile=minimal', '--dry-run'],
+      ['init', '--profile=pilot', '--dry-run'],
       harness.value,
     );
 
@@ -807,7 +807,7 @@ describe('@megamono/cli', () => {
         'nx',
         'generate',
         '@megamono/plugin:workspace-init',
-        '--profile=minimal',
+        '--profile=pilot',
         '--dry-run',
       ],
     });

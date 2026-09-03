@@ -14,7 +14,7 @@ For a mature mixed workspace, survey first and resolve only genuine ambiguity:
 
 ```sh
 npm exec nx g @megamono/plugin:workspace-init --survey --format=json
-npm exec nx g @megamono/plugin:workspace-init --profile=minimal --dry-run
+npm exec nx g @megamono/plugin:workspace-init --profile=pilot --dry-run
 npm exec nx g @megamono/plugin:workspace-init \
   --only=docs,agents,ci,lint \
   --adoptionMap=.megamono/adoption.json \
@@ -24,11 +24,12 @@ npm exec nx g @megamono/plugin:workspace-init \
 ```
 
 Named adoption profiles are shortcuts over the same independent modules:
-`minimal` selects project boundaries and health, `platform` adds CI, release,
-and inference, and `full` selects every governance module. `--profile` and
-`--only` are mutually exclusive. Every plan groups the selected modules into
-suggested commit batches without running Git or committing on the caller's
-behalf.
+`minimal` selects project boundaries and health; `pilot` adds platform
+inference without claiming repository CI or release workflows; `platform` adds
+CI and release management; and `full` selects every governance module.
+`--profile` and `--only` are mutually exclusive. Every plan groups the selected
+modules into suggested commit batches without running Git or committing on the
+caller's behalf.
 
 The survey includes a versioned `inventory`, plus
 `adoptionTemplates.projects` and `adoptionTemplates.documentation`. Inventory

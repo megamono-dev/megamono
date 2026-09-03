@@ -27,7 +27,7 @@
     },
     "profile": {
       "type": "string",
-      "enum": ["minimal", "platform", "full"],
+      "enum": ["minimal", "pilot", "platform", "full"],
       "description": "Named adoption profile; mutually exclusive with --only."
     },
     "interactive": {
