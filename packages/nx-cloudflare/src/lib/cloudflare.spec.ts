@@ -192,6 +192,32 @@ describe('projectsFromWranglerConfigs', () => {
     expect(project?.targets?.['tail']).not.toHaveProperty('continuous');
   });
 
+  it('suppresses repository-owned runtime targets without losing safe inference', async () => {
+    const workspaceRoot = await mkdtemp(
+      resolve(tmpdir(), 'nx-cloudflare-suppressed-target-'),
+    );
+    const results = projectsFromWranglerConfigs(
+      [record('apps/worker', { name: 'worker', main: 'src/index.ts' })],
+      workspaceRoot,
+      {
+        devTargetName: false,
+        deployTargetName: false,
+      },
+    );
+    const project = results
+      .flatMap(([, result]) => Object.values(result.projects))
+      .find((candidate) => candidate.root === 'apps/worker');
+
+    expect(project?.targets).toEqual({
+      typegen: expect.objectContaining({ cache: true }),
+      tail: expect.objectContaining({ cache: false, continuous: true }),
+    });
+    expect(project?.metadata?.['megamono:cloudflare']).toMatchObject({
+      workerName: 'worker',
+      configPath: 'apps/worker/wrangler.jsonc',
+    });
+  });
+
   it('resolves local and explicitly external references into versioned metadata', async () => {
     const workspaceRoot = await mkdtemp(
       resolve(tmpdir(), 'nx-cloudflare-ref-'),

@@ -14,6 +14,20 @@ Register the inference plugin in `nx.json`:
 
 The plugin discovers `wrangler.jsonc`, `wrangler.json`, and `wrangler.toml`, then infers `dev`, `deploy`, `typegen`, and `tail`. Local Worker bindings become static Nx dependency edges.
 
+Each inferred target name can be customized or set to `false`. Mature repositories with guarded runtime wrappers can suppress the raw commands while retaining type generation, metadata, and graph edges:
+
+```json
+{
+  "plugin": "@megamono/nx-cloudflare",
+  "options": {
+    "devTargetName": false,
+    "deployTargetName": false
+  }
+}
+```
+
+Nx plugin `include` and `exclude` patterns may scope separate registrations when target policy differs between Worker projects. Repository-owned explicit targets remain authoritative.
+
 Existing workspaces may retain Wrangler `>=4.105 <5`; the packed compatibility fixture runs inference and type generation at 4.105. New Worker scaffolds continue to use the newer exact compatibility pin. Upgrading Wrangler is therefore separate from adopting Megamono.
 
 The package also provides three plan-first generators:

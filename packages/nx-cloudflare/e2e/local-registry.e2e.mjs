@@ -96,6 +96,26 @@ function workerProject(name, root) {
   )}\n`;
 }
 
+function safelyWrappedWorkerProject(name, root) {
+  return `${JSON.stringify(
+    {
+      ...JSON.parse(workerProject(name, root)),
+      targets: {
+        dev: {
+          executor: 'nx:run-commands',
+          options: { command: 'node tools/safe-worker.mjs dev' },
+        },
+        deploy: {
+          executor: 'nx:run-commands',
+          options: { command: 'node tools/safe-worker.mjs deploy' },
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 async function writeFiles(root, files) {
   for (const [path, content] of Object.entries(files)) {
     const absolutePath = resolve(root, path);
@@ -129,6 +149,8 @@ async function writeFixture(root) {
             options: {
               scope: 'probe',
               externalWorkers: ['external-worker'],
+              devTargetName: false,
+              deployTargetName: false,
             },
           },
         ],
@@ -149,7 +171,10 @@ async function writeFixture(root) {
       null,
       2,
     )}\n`,
-    'apps/api/project.json': workerProject('probe-api', 'apps/api'),
+    'apps/api/project.json': safelyWrappedWorkerProject(
+      'probe-api',
+      'apps/api',
+    ),
     'apps/api/src/index.ts':
       "export default { fetch: () => new Response('api') };\n",
     'apps/api/wrangler.jsonc': `{
@@ -369,16 +394,23 @@ try {
     { cwd: fixtureRoot, env: nxEnvironment },
   );
   const project = JSON.parse(show.stdout);
-  assert(project.targets.dev?.continuous, 'Worker dev must be continuous.');
+  assert(
+    project.targets.dev?.options?.command === 'node tools/safe-worker.mjs dev',
+    'Repository-owned safe development wrapper was not retained.',
+  );
   assert(project.targets.tail?.continuous, 'Worker tail must be continuous.');
-  assert(project.targets.deploy?.cache === false, 'Deploy must not cache.');
+  assert(
+    project.targets.deploy?.options?.command ===
+      'node tools/safe-worker.mjs deploy',
+    'Repository-owned safe deployment wrapper was not retained.',
+  );
   assert(project.targets.typegen?.cache === true, 'Typegen must cache.');
   assert(!project.targets.build, 'Worker inference must not invent build.');
   assert(
-    project.targets.deploy.configurations.staging.command.includes(
+    project.targets.typegen.configurations.staging.command.includes(
       "'--env=staging'",
     ),
-    'Named environment target configuration is missing.',
+    'Named environment configuration is missing from a retained inferred target.',
   );
   const metadata = project.metadata['megamono:cloudflare'];
   assert(metadata.schemaVersion === 1, 'Vendor metadata is not schema v1.');
@@ -387,6 +419,20 @@ try {
   assert(
     metadata.externalWorkers.some(({ worker }) => worker === 'external-worker'),
     'Explicit external Worker metadata is missing.',
+  );
+  const suppressedShow = await run(
+    'npm',
+    ['exec', 'nx', '--', 'show', 'project', 'probe-backend', '--json'],
+    { cwd: fixtureRoot, env: nxEnvironment },
+  );
+  const suppressedProject = JSON.parse(suppressedShow.stdout);
+  assert(
+    !suppressedProject.targets.dev && !suppressedProject.targets.deploy,
+    'Disabled raw runtime targets were still inferred.',
+  );
+  assert(
+    suppressedProject.targets.typegen && suppressedProject.targets.tail,
+    'Safe inferred targets were lost when runtime targets were disabled.',
   );
   await run('npm', ['exec', 'nx', '--', 'run', 'probe-backend:typegen'], {
     cwd: fixtureRoot,
@@ -539,7 +585,7 @@ try {
 
   succeeded = true;
   process.stdout.write(
-    `nx-cloudflare local-registry e2e passed: Wrangler ${compatibility.cloudflare.testedWranglerMinimum} adoption, peer gate, mixed config inference, targets, metadata, graph, affected propagation, typegen, and generators verified.\n`,
+    `nx-cloudflare local-registry e2e passed: Wrangler ${compatibility.cloudflare.testedWranglerMinimum} adoption, peer gate, safe target suppression, mixed config inference, metadata, graph, affected propagation, typegen, and generators verified.\n`,
   );
 } finally {
   verdaccio.kill('SIGTERM');

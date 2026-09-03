@@ -121,6 +121,8 @@ The plugin infers four overridable targets:
 
 Every command receives the discovered `--config` path. `build` is not inferred: [modern Wrangler bundles during development/deployment and has no standalone build command](https://developers.cloudflare.com/workers/wrangler/deprecations/). A repository-owned `project.json` target with the same name wins over inference.
 
+Each `*TargetName` plugin option accepts a non-empty target name or `false`. `false` suppresses that raw Wrangler target without suppressing the Worker project, normalized metadata, graph edges, or other targets. This is the required adoption path when a repository-owned wrapper validates secrets or replaces sentinel resource names before invoking Wrangler: unsafe raw `dev` and `deploy` commands must not remain as alternate entry points. Nx plugin `include` and `exclude` patterns allow separate registrations when Worker projects need different policies. Renaming remains available when both raw and guarded targets are intentionally exposed.
+
 All targets declare the Wrangler config and normal project inputs. `typegen` additionally declares its exact output and every local bound Worker config passed to Wrangler for service/RPC type generation. Because the entire config file is an input, changes to `compatibility_date`, compatibility flags, `main`, bindings, or environments invalidate the cached output without redundant pseudo-inputs.
 
 Wrangler named environments become Nx target configurations, invoked as `<project>:deploy:<environment>` and equivalent configurations on other supported targets. They are not separate targets or graph variants. Each configuration passes `--env=<name>` and retains the same cache/side-effect contract as its base target.
@@ -166,6 +168,7 @@ The package is build-ready when:
 - paired Workers prove every direct edge type, queue fan-in, no local self-edge, and no edge for external/resource bindings;
 - an affected fixture proves changing a dependency marks its Worker consumers affected;
 - target snapshots prove cache, continuous, input, output, override, and environment-configuration behavior;
+- a guarded-worker fixture suppresses raw `dev` and `deploy`, retains repository-owned wrappers, and preserves type generation, metadata, and graph edges;
 - current and out-of-range Wrangler fixtures prove the compatibility gate and type generation;
 - packed consumer fixtures cover every supported Nx major from 18 through 23, including the single-file, transitional `createNodesV2`, and finalized batched discovery contracts; the pinned scaffold baseline additionally repeats graph, target, generator, and affected checks through pnpm and npm;
 - Springbar is absent from the package manifest and generated files, while normalized vendor metadata remains available to any graph consumer.

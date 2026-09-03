@@ -48,10 +48,10 @@ const BINDING_FAMILIES = [
 export interface CloudflarePluginOptions extends WranglerConfigSelection {
   externalWorkers?: string[];
   scope?: string;
-  devTargetName?: string;
-  deployTargetName?: string;
-  typegenTargetName?: string;
-  tailTargetName?: string;
+  devTargetName?: string | false;
+  deployTargetName?: string | false;
+  typegenTargetName?: string | false;
+  tailTargetName?: string | false;
   typegenOutput?: string;
 }
 
@@ -469,12 +469,20 @@ function targetConfigurations(
   );
 }
 
+function targetName(
+  configured: string | false | undefined,
+  fallback: string,
+): string | false {
+  if (configured === false) return false;
+  return configured?.trim() || fallback;
+}
+
 function createTargets(
   prepared: PreparedRecord,
   metadata: CloudflareProjectMetadata,
   options: CloudflarePluginOptions,
   continuousTargets: boolean,
-): ProjectConfiguration['targets'] {
+): NonNullable<ProjectConfiguration['targets']> {
   if (!prepared.record.executable) return {};
   const configParts = ['--config', prepared.record.configPath];
   const inputs = ['default', workspaceOutput(prepared.record.configPath)];
@@ -492,21 +500,21 @@ function createTargets(
   const targets: NonNullable<ProjectConfiguration['targets']> = {};
   for (const target of [
     {
-      name: options.devTargetName ?? 'dev',
+      name: targetName(options.devTargetName, 'dev'),
       wrangler: 'dev',
       cache: false,
       continuous: true,
       inputs,
     },
     {
-      name: options.deployTargetName ?? 'deploy',
+      name: targetName(options.deployTargetName, 'deploy'),
       wrangler: 'deploy',
       cache: false,
       continuous: false,
       inputs,
     },
     {
-      name: options.typegenTargetName ?? 'typegen',
+      name: targetName(options.typegenTargetName, 'typegen'),
       wrangler: 'types',
       cache: true,
       continuous: false,
@@ -514,13 +522,14 @@ function createTargets(
       outputs: [workspaceOutput(typegenOutput)],
     },
     {
-      name: options.tailTargetName ?? 'tail',
+      name: targetName(options.tailTargetName, 'tail'),
       wrangler: 'tail',
       cache: false,
       continuous: true,
       inputs,
     },
   ] as const) {
+    if (target.name === false) continue;
     const parts = [
       'wrangler',
       target.wrangler,
@@ -576,6 +585,12 @@ export function projectsFromWranglerConfigs(
       workers,
       externalWorkers,
     );
+    const targets = createTargets(
+      item,
+      metadata,
+      options,
+      capabilities.continuousTargets,
+    );
     return [
       item.record.configPath,
       {
@@ -591,25 +606,21 @@ export function projectsFromWranglerConfigs(
               'type:app',
               'visibility:internal',
             ],
-            targets: createTargets(
-              item,
-              metadata,
-              options,
-              capabilities.continuousTargets,
-            ),
+            targets,
             metadata: {
               technologies: ['cloudflare-workers', 'wrangler'],
               [CLOUDFLARE_METADATA_KEY]: metadata,
               [PROJECT_PREFLIGHT_METADATA_KEY]: {
                 diagnostics: preflightDiagnostics,
-                requiredTools: item.record.executable
-                  ? [
-                      {
-                        executable: 'wrangler',
-                        reason: 'Cloudflare Worker inferred targets',
-                      },
-                    ]
-                  : [],
+                requiredTools:
+                  item.record.executable && Object.keys(targets).length > 0
+                    ? [
+                        {
+                          executable: 'wrangler',
+                          reason: 'Cloudflare Worker inferred targets',
+                        },
+                      ]
+                    : [],
               },
             },
           },
