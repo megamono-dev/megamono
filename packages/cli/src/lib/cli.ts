@@ -271,6 +271,7 @@ const INIT_HELP = `Usage: megamono init [generator options]
 
 Examples:
   megamono init --survey
+  megamono init --profile=minimal --dry-run
   megamono init --only=docs,agents --interactive=false --yes
   megamono init --playstack --playstack-packages=auth
   megamono init --playstack-packages=auth --playstack-web=apps/storefront --playstack-api=apps/gateway

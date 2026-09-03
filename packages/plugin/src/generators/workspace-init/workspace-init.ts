@@ -1304,6 +1304,15 @@ export async function workspaceInitGenerator(
   const workspaceSurvey = initialSurvey;
   logger.info(renderWorkspaceInitSurvey(workspaceSurvey, outputFormat));
   let only = options.only;
+  if (only && options.profile) {
+    throw new WorkspaceInitError(
+      'options',
+      'Select either --only or --profile, not both.',
+    );
+  }
+  if (!only && options.profile) {
+    only = parseWorkspaceInitModules(undefined, options.profile).join(',');
+  }
   if (!only) {
     if (options.yes || !canPrompt(options)) {
       throw new WorkspaceInitError(
@@ -1327,6 +1336,7 @@ export async function workspaceInitGenerator(
     ...options,
     yes: false,
     only: requestedModules,
+    profile: undefined,
     defaultPlatform,
     packageManager,
     host: initialSurvey.host,
@@ -1349,6 +1359,7 @@ export async function workspaceInitGenerator(
       ...options,
       yes: false,
       only: requestedModules,
+      profile: undefined,
       defaultPlatform,
       packageManager,
       host: initialSurvey.host,

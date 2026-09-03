@@ -35,6 +35,12 @@ export const WORKSPACE_INIT_MODULES = [
 ] as const;
 
 export type WorkspaceInitModule = (typeof WORKSPACE_INIT_MODULES)[number];
+export const WORKSPACE_INIT_PROFILES = {
+  minimal: ['lint', 'health'],
+  platform: ['ci', 'release', 'lint', 'health', 'inference'],
+  full: WORKSPACE_INIT_MODULES,
+} as const satisfies Readonly<Record<string, readonly WorkspaceInitModule[]>>;
+export type WorkspaceInitProfile = keyof typeof WORKSPACE_INIT_PROFILES;
 export type WorkspaceInitOutputFormat = 'markdown' | 'json';
 export type WorkspaceInitErrorKind =
   | 'options'
@@ -202,11 +208,20 @@ export interface WorkspaceInitPlan {
   readonly reductions: readonly WorkspaceInitReduction[];
   readonly conflicts: readonly string[];
   readonly decisions: readonly string[];
+  readonly suggestedCommitBatches: readonly WorkspaceInitCommitBatch[];
+}
+
+export interface WorkspaceInitCommitBatch {
+  readonly id: string;
+  readonly modules: readonly ('baseline' | WorkspaceInitModule)[];
+  readonly targets: readonly string[];
+  readonly suggestedCommit: string;
 }
 
 export interface WorkspaceInitPlanOptions {
   readonly bootstrap?: boolean;
   readonly only?: string | readonly WorkspaceInitModule[];
+  readonly profile?: WorkspaceInitProfile;
   readonly docsRoot?: string;
   readonly docsLoader?: string;
   readonly docsModule?: string;
@@ -662,7 +677,14 @@ function publishableWorkspaceProjects(tree: Tree): readonly string[] {
 
 export function parseWorkspaceInitModules(
   only?: string | readonly WorkspaceInitModule[],
+  profile?: WorkspaceInitProfile,
 ): readonly WorkspaceInitModule[] {
+  if (only !== undefined && profile !== undefined)
+    throw new WorkspaceInitError(
+      'options',
+      'Select either --only or --profile, not both.',
+    );
+  if (profile !== undefined) return WORKSPACE_INIT_PROFILES[profile];
   if (only === undefined) return WORKSPACE_INIT_MODULES;
   const requested: string[] =
     typeof only === 'string'
@@ -907,7 +929,7 @@ export function createWorkspaceInitPlan(
   tree: Tree,
   options: WorkspaceInitPlanOptions = {},
 ): WorkspaceInitPlan {
-  const modules = parseWorkspaceInitModules(options.only);
+  const modules = parseWorkspaceInitModules(options.only, options.profile);
   const survey = surveyWorkspaceInit(tree, {
     adoptionMap: options.adoptionMap,
     defaultPlatform: options.defaultPlatform,
@@ -1579,7 +1601,37 @@ export function createWorkspaceInitPlan(
     reductions,
     conflicts,
     decisions,
+    suggestedCommitBatches: commitBatches(operations, modules),
   };
+}
+
+const MODULE_COMMIT_SUBJECTS: Readonly<Record<WorkspaceInitModule, string>> = {
+  docs: 'adopt Megamono documentation governance',
+  agents: 'add Megamono agent guidance',
+  ci: 'integrate Megamono CI checks',
+  release: 'configure Megamono release governance',
+  lint: 'adopt Megamono project boundaries',
+  skills: 'install Megamono workspace skills',
+  health: 'add Megamono workspace health checks',
+  inference: 'enable Megamono platform inference',
+};
+
+function commitBatches(
+  operations: readonly WorkspaceInitPlanOperation[],
+  modules: readonly WorkspaceInitModule[],
+): readonly WorkspaceInitCommitBatch[] {
+  return modules.map((module, index) => {
+    const included = operations.filter(
+      (entry) =>
+        entry.module === module || (index === 0 && entry.module === 'baseline'),
+    );
+    return {
+      id: index === 0 ? `baseline-${module}` : module,
+      modules: index === 0 ? ['baseline', module] : [module],
+      targets: [...new Set(included.map(({ target }) => target))],
+      suggestedCommit: `chore: ${MODULE_COMMIT_SUBJECTS[module]}`,
+    };
+  });
 }
 
 export function renderWorkspaceInitSurvey(
@@ -1788,6 +1840,15 @@ ${conflicts.join('\n')}
 ## Decisions required
 
 ${decisions.join('\n')}
+
+## Suggested commit batches
+
+${plan.suggestedCommitBatches
+  .map(
+    ({ id, modules, targets, suggestedCommit }) =>
+      `- **${id}** (${modules.join(', ')}): ${targets.join(', ') || 'no file changes'} — \`${suggestedCommit}\``,
+  )
+  .join('\n')}
 `;
 }
 

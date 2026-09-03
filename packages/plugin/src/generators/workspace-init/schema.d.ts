@@ -3,6 +3,7 @@ export interface WorkspaceInitGeneratorSchema {
   readonly dryRun?: boolean;
   readonly format?: 'markdown' | 'json';
   readonly only?: string;
+  readonly profile?: 'minimal' | 'platform' | 'full';
   readonly interactive?: boolean;
   readonly yes?: boolean;
   readonly report?: string;

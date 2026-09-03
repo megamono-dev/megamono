@@ -25,6 +25,11 @@
       "type": "string",
       "description": "Comma-separated modules to adopt: docs, agents, ci, release, lint, skills, health, inference."
     },
+    "profile": {
+      "type": "string",
+      "enum": ["minimal", "platform", "full"],
+      "description": "Named adoption profile; mutually exclusive with --only."
+    },
     "interactive": {
       "type": "boolean",
       "default": true,
@@ -111,7 +116,16 @@
     "defaultPlatform": {
       "type": "string",
       "description": "Platform assigned to untagged existing applications.",
-      "enum": ["web", "node", "worker", "mobile", "apple", "rust", "php", "extension"],
+      "enum": [
+        "web",
+        "node",
+        "worker",
+        "mobile",
+        "apple",
+        "rust",
+        "php",
+        "extension"
+      ],
       "x-prompt": "Which platform should untagged existing applications use?"
     },
     "adoptionMap": {

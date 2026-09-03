@@ -790,6 +790,29 @@ describe('@megamono/cli', () => {
     ]);
   });
 
+  it('forwards a named adoption profile to the workspace-local plugin', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+
+    const result = await runMegamonoCli(
+      ['init', '--profile=minimal', '--dry-run'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(harness.invocations[0]).toMatchObject({
+      command: 'pnpm',
+      args: [
+        'exec',
+        'nx',
+        'generate',
+        '@megamono/plugin:workspace-init',
+        '--profile=minimal',
+        '--dry-run',
+      ],
+    });
+  });
+
   it('uses the npm command family and propagates delegated failures', async () => {
     const root = await workspace('npm');
     const harness = io(root, () => ({ exitCode: 4 }));

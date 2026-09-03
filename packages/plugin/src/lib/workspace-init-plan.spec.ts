@@ -258,6 +258,51 @@ describe('workspace init survey and plan', () => {
     expect(renderWorkspaceInitPlan(plan)).toContain('health.spec-drift');
   });
 
+  it('expands named adoption profiles and rejects a conflicting explicit selection', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    expect(
+      createWorkspaceInitPlan(tree, { profile: 'minimal' }).modules,
+    ).toEqual(['lint', 'health']);
+    expect(
+      createWorkspaceInitPlan(tree, { profile: 'platform' }).modules,
+    ).toEqual(['ci', 'release', 'lint', 'health', 'inference']);
+    expect(createWorkspaceInitPlan(tree, { profile: 'full' }).modules).toEqual([
+      'docs',
+      'agents',
+      'ci',
+      'release',
+      'lint',
+      'skills',
+      'health',
+      'inference',
+    ]);
+    expect(() =>
+      createWorkspaceInitPlan(tree, { only: 'health', profile: 'minimal' }),
+    ).toThrow(/either --only or --profile/);
+  });
+
+  it('groups selected modules into deterministic suggested commit boundaries', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const plan = createWorkspaceInitPlan(tree, { only: 'lint,health' });
+
+    expect(plan.suggestedCommitBatches).toEqual([
+      expect.objectContaining({
+        id: 'baseline-lint',
+        modules: ['baseline', 'lint'],
+        suggestedCommit: 'chore: adopt Megamono project boundaries',
+      }),
+      expect.objectContaining({
+        id: 'health',
+        modules: ['health'],
+        suggestedCommit: 'chore: add Megamono workspace health checks',
+      }),
+    ]);
+    expect(plan.suggestedCommitBatches[0]?.targets).toContain('megamono.json');
+    expect(renderWorkspaceInitPlan(plan)).toContain(
+      '## Suggested commit batches',
+    );
+  });
+
   it('classifies numbered specification corpora with stable path-preserving IDs', () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write(

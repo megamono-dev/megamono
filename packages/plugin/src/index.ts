@@ -53,6 +53,7 @@ export {
 } from './lib/skills-projection';
 export {
   WORKSPACE_INIT_MODULES,
+  WORKSPACE_INIT_PROFILES,
   WorkspaceInitError,
   createWorkspaceInitPlan,
   parseWorkspaceInitModules,
@@ -62,11 +63,13 @@ export {
   resolveWorkspaceDocsContract,
   surveyWorkspaceInit,
   type WorkspaceInitErrorKind,
+  type WorkspaceInitCommitBatch,
   type WorkspaceInitModule,
   type WorkspaceInitOutputFormat,
   type WorkspaceInitPlan,
   type WorkspaceInitPlanOperation,
   type WorkspaceInitPlanOptions,
+  type WorkspaceInitProfile,
   type WorkspaceInitReduction,
   type WorkspaceInitHostReadiness,
   type WorkspaceInitSurvey,
