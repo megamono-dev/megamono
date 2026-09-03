@@ -236,7 +236,9 @@ When no established layout is selected, the adapter default is `libs/<adapter>/<
 
 ## Package sources and CI
 
-Yalc is a development transport only. `--packageRegistries='{"@megamono":"https://…","@playstack":"https://…"}'` records scope routing in `megamono.json` and a managed, non-secret `.npmrc` section. Authentication tokens and environment bindings remain repository/CI-owned. `megamono:check --ci` (also selected by `CI=true`) requires the recorded manager's frozen lockfile, rejects `.yalc`, `yalc.lock`, `file:.yalc`, `link:`, `portal:`, and parent/absolute `file:` dependency addresses, and verifies that every configured scope route is present. It never contacts a registry or prints credentials.
+Yalc is a development transport only. `--packageRegistries='{"@megamono":"https://…","@playstack":"https://…"}'` records scope routing in `megamono.json` and a managed, non-secret `.npmrc` section. Authentication tokens and environment bindings remain repository/CI-owned. `megamono:check --ci` (also selected by `CI=true`) requires the recorded manager's frozen lockfile and verifies that every configured scope route is present. It inspects every package manifest's dependency fields, npm/Yarn `overrides` and `resolutions`, package-level pnpm overrides/catalogs, and root `pnpm-workspace.yaml` overrides/catalogs so a package-manager redirect cannot hide a development source. `.yalc`, `yalc.lock`, `file:.yalc`, `link:`, `portal:`, repository-local package directories, missing archives, and paths escaping the repository are rejected.
+
+An existing repository-contained `.tgz` with an exact semantic version in its filename is the only local-package exception. This supports a deliberately committed immutable package artifact from root or nested package manifests while the selected manager's frozen lockfile owns its resolution. Workspace protocol references remain valid for packages built from the same repository. The check never contacts a registry, opens an archive, or prints credentials; application and CI policy remain responsible for provenance and artifact signing.
 
 ## Existing agent files
 

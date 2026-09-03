@@ -1,5 +1,14 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { readdir, readFile, realpath, stat } from 'node:fs/promises';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import type { MegamonoConfig } from './config';
 import type { Diagnostic } from './diagnostics';
@@ -25,6 +34,15 @@ const ignoredDirectories = new Set([
   'dist',
   'node_modules',
 ]);
+const versionedTarballPattern =
+  /(?:^|[-_])v?\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?\.tgz$/;
+
+interface PackageAddress {
+  readonly manifestPath: string;
+  readonly location: string;
+  readonly baseDirectory: string;
+  readonly specifier: string;
+}
 
 export function parsePackageRegistries(
   source: string | undefined,
@@ -86,6 +104,141 @@ async function packageManifests(root: string): Promise<string[]> {
   return output.sort();
 }
 
+function valueAt(
+  value: Record<string, unknown>,
+  path: readonly string[],
+): unknown {
+  let current: unknown = value;
+  for (const segment of path) {
+    if (!current || typeof current !== 'object' || Array.isArray(current))
+      return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+function collectStringAddresses(
+  value: unknown,
+  candidate: Omit<PackageAddress, 'location' | 'specifier'>,
+  location: string,
+  output: PackageAddress[],
+): void {
+  if (typeof value === 'string') {
+    output.push({ ...candidate, location, specifier: value });
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  for (const [name, child] of Object.entries(value)) {
+    collectStringAddresses(child, candidate, `${location}.${name}`, output);
+  }
+}
+
+function manifestPackageAddresses(
+  manifest: Record<string, unknown>,
+  manifestPath: string,
+  baseDirectory: string,
+): PackageAddress[] {
+  const output: PackageAddress[] = [];
+  const candidate = { manifestPath, baseDirectory };
+  for (const field of dependencyFields) {
+    const dependencies = manifest[field];
+    if (!dependencies || typeof dependencies !== 'object') continue;
+    for (const [name, specifier] of Object.entries(dependencies)) {
+      if (typeof specifier === 'string')
+        output.push({
+          ...candidate,
+          location: `${field}.${name}`,
+          specifier,
+        });
+    }
+  }
+  for (const path of [
+    ['overrides'],
+    ['resolutions'],
+    ['pnpm', 'overrides'],
+    ['pnpm', 'catalog'],
+    ['pnpm', 'catalogs'],
+  ] as const) {
+    collectStringAddresses(
+      valueAt(manifest, path),
+      candidate,
+      path.join('.'),
+      output,
+    );
+  }
+  return output;
+}
+
+function outsideRoot(root: string, target: string): boolean {
+  const path = relative(root, target);
+  return path === '..' || path.startsWith(`..${sep}`) || isAbsolute(path);
+}
+
+async function localPackageAddressProblem(
+  root: string,
+  address: PackageAddress,
+): Promise<string | undefined> {
+  const specifier = address.specifier.trim();
+  if (/(?:^|[/:])\.yalc(?:\/|$)/.test(specifier))
+    return 'Yalc addresses are development-only.';
+  if (/^(?:link|portal):/.test(specifier))
+    return 'Link and portal addresses are development-only.';
+  if (!specifier.startsWith('file:')) return undefined;
+
+  const localPath = specifier.slice('file:'.length);
+  if (!localPath.toLowerCase().endsWith('.tgz'))
+    return 'Local package directories are not immutable CI inputs.';
+  if (!versionedTarballPattern.test(basename(localPath)))
+    return 'Repository tarballs must include an exact semantic version in the filename.';
+
+  const absolutePath = resolve(address.baseDirectory, localPath);
+  if (outsideRoot(root, absolutePath))
+    return 'Repository tarballs must resolve inside the workspace.';
+  try {
+    const information = await stat(absolutePath);
+    if (!information.isFile()) return 'The configured tarball is not a file.';
+    const resolvedRoot = await realpath(root);
+    const resolvedTarball = await realpath(absolutePath);
+    if (outsideRoot(resolvedRoot, resolvedTarball))
+      return 'Repository tarballs must not resolve through a symlink outside the workspace.';
+  } catch {
+    return 'The configured repository tarball does not exist.';
+  }
+  return undefined;
+}
+
+async function pnpmWorkspaceAddresses(
+  root: string,
+): Promise<PackageAddress[] | Diagnostic> {
+  const manifestPath = 'pnpm-workspace.yaml';
+  const absolutePath = join(root, manifestPath);
+  if (!(await exists(absolutePath))) return [];
+  let workspace: unknown;
+  try {
+    workspace = parseYaml(await readFile(absolutePath, 'utf8'));
+  } catch {
+    return {
+      severity: 'error',
+      code: 'package-sources-config',
+      path: manifestPath,
+      message:
+        'pnpm-workspace.yaml is malformed and package sources cannot be validated.',
+    };
+  }
+  if (!workspace || typeof workspace !== 'object' || Array.isArray(workspace))
+    return [];
+  const output: PackageAddress[] = [];
+  const record = workspace as Record<string, unknown>;
+  const candidate = {
+    manifestPath,
+    baseDirectory: root,
+  };
+  for (const field of ['overrides', 'catalog', 'catalogs'] as const) {
+    collectStringAddresses(record[field], candidate, field, output);
+  }
+  return output;
+}
+
 export async function validatePackageSources(
   root: string,
   config: MegamonoConfig,
@@ -116,6 +269,7 @@ export async function validatePackageSources(
       });
     }
   }
+  const addresses: PackageAddress[] = [];
   for (const absolutePath of await packageManifests(root)) {
     const path = relative(root, absolutePath).split('\\').join('/');
     let manifest: Record<string, unknown>;
@@ -127,25 +281,22 @@ export async function validatePackageSources(
     } catch {
       continue;
     }
-    for (const field of dependencyFields) {
-      const dependencies = manifest[field];
-      if (!dependencies || typeof dependencies !== 'object') continue;
-      for (const [name, specifier] of Object.entries(dependencies)) {
-        if (
-          typeof specifier === 'string' &&
-          /^(?:file:)?\.yalc\/|^(?:link|portal):|^file:(?:\.\.\/|\/)/.test(
-            specifier,
-          )
-        ) {
-          diagnostics.push({
-            severity: 'error',
-            code: 'package-sources-local-dependency',
-            path,
-            message: `${field}.${name} uses development-only address ${specifier}. Publish it to a configured registry before CI.`,
-          });
-        }
-      }
-    }
+    addresses.push(
+      ...manifestPackageAddresses(manifest, path, dirname(absolutePath)),
+    );
+  }
+  const pnpmAddresses = await pnpmWorkspaceAddresses(root);
+  if (Array.isArray(pnpmAddresses)) addresses.push(...pnpmAddresses);
+  else diagnostics.push(pnpmAddresses);
+  for (const address of addresses) {
+    const problem = await localPackageAddressProblem(root, address);
+    if (problem)
+      diagnostics.push({
+        severity: 'error',
+        code: 'package-sources-local-dependency',
+        path: address.manifestPath,
+        message: `${address.location} uses unsupported address ${address.specifier}. ${problem} Use a registry package or a repository-contained, versioned .tgz artifact.`,
+      });
   }
   const npmrc = (await exists(join(root, '.npmrc')))
     ? await readFile(join(root, '.npmrc'), 'utf8')

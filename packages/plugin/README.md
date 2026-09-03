@@ -202,6 +202,14 @@ gates. The optional Apple, Cargo, and Cloudflare inference plugins require Nx 18
 [`compatibility.json`](./compatibility.json) for the machine-readable contract
 and tested version anchors.
 
+In CI mode, package-source checks inspect dependency fields plus npm/Yarn
+`overrides` and `resolutions`, package-level pnpm overrides/catalogs, and
+`pnpm-workspace.yaml` overrides/catalogs. Yalc, links, portals, local package
+directories, missing archives, and paths escaping the repository fail closed.
+A repository-contained `.tgz` whose filename carries an exact semantic version
+is the supported immutable local-distribution escape hatch; the selected
+package manager's frozen lockfile remains required.
+
 ## Develop the plugin
 
 ```sh
