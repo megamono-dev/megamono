@@ -42,6 +42,13 @@ export interface WorkspaceInventoryDeployment {
   readonly paths: readonly string[];
   readonly services: readonly string[];
   readonly renderServices?: readonly WorkspaceInventoryRenderService[];
+  readonly containers?: readonly WorkspaceInventoryContainer[];
+}
+
+export interface WorkspaceInventoryContainer {
+  readonly dockerfile: string;
+  readonly project: string | null;
+  readonly projectCandidates: readonly string[];
 }
 
 export interface WorkspaceInventoryRenderService {
@@ -448,6 +455,20 @@ export function createWorkspaceInventory(
   const dockerfiles = files.filter((path) =>
     /(?:^|\/)Dockerfile(?:\.[^/]+)?$/.test(path),
   );
+  const containers = dockerfiles.map((dockerfile) => {
+    const owned = ownerProject(dockerfile, projects);
+    const source = tree.read(dockerfile, 'utf8') ?? '';
+    const projectCandidates = owned
+      ? [owned]
+      : [...projects.keys()].filter((project) =>
+          commandReferencesProject(source, project),
+        );
+    return {
+      dockerfile,
+      project: projectCandidates.length === 1 ? projectCandidates[0] : null,
+      projectCandidates: projectCandidates.sort(compare),
+    };
+  });
   const deployments: WorkspaceInventoryDeployment[] = [];
   const render = renderBlueprintServices(tree, renderManifests, projects);
   if (renderManifests.length > 0 || procfiles.length > 0)
@@ -470,7 +491,10 @@ export function createWorkspaceInventory(
       provider: 'docker',
       authority: 'manifest',
       paths: dockerfiles,
-      services: [],
+      services: containers
+        .flatMap(({ project }) => (project ? [project] : []))
+        .filter((name, index, names) => names.indexOf(name) === index),
+      containers,
     });
 
   const ambiguities = [
@@ -488,6 +512,13 @@ export function createWorkspaceInventory(
             .join(', ')}.`,
         ]
       : []),
+    ...containers
+      .filter(({ project }) => project === null)
+      .map(({ dockerfile, projectCandidates }) =>
+        projectCandidates.length > 1
+          ? `Container ${dockerfile} references multiple Nx projects: ${projectCandidates.join(', ')}.`
+          : `Container ${dockerfile} is not owned by or explicitly tied to an Nx project.`,
+      ),
   ];
 
   return {

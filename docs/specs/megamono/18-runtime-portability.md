@@ -50,6 +50,8 @@ Static output inspection is the first layer. A separate workspace-dependency ver
 
 Container validation is a further explicit layer. `@megamono/plugin:verify-container` statically checks build-stage discovery, copied package-manager lockfiles, pnpm workspace manifests, frozen installs, and production dependency installation or transfer. It emits deterministic JSON and fails on missing or mutable install inputs. The managed `megamono:verify-container` target accepts a workspace-relative Dockerfile and build context.
 
+The adoption survey maps every Dockerfile to the deepest owning Nx project. A root-level Dockerfile may instead resolve from exact `nx run`, `nx build`, `nx serve`, or related command references. Multiple or absent project candidates remain explicit inventory ambiguities. Dockerfiles are repository-owned; the survey records this topology and the verifier checks it without generating deployment commands or rewriting build stages.
+
 The default container check is read-only. Passing `--smoke` explicitly invokes `docker build` against the selected context after static validation succeeds. It does not start the image. Network access, image builds, and container execution are never part of the default health report, and production behavior beyond image construction remains application-owned.
 
 The acceptance fixtures include built output requiring `tslib` and a `tsconfig-paths/register` preload so npm/Yarn hoisting assumptions cannot silently pass the pnpm portability contract.

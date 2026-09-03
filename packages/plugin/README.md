@@ -114,6 +114,9 @@ npm exec nx -- run megamono:verify-container --dockerfile=apps/api/Dockerfile
 The default check only reads the Dockerfile. Pass `--smoke` explicitly to run
 `docker build` with the selected `--context`; Megamono never starts the built
 container or performs an image build as part of the ordinary health check.
+The adoption survey also maps nested Dockerfiles to their owning Nx project and
+uses exact Nx command references for root Dockerfiles. Ambiguous container
+ownership stays visible as a decision rather than becoming a guessed target.
 
 ## Generator availability
 

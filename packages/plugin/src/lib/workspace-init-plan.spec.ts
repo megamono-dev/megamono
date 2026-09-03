@@ -207,6 +207,7 @@ describe('workspace init survey and plan', () => {
       'SELECT 1;\n',
     );
     tree.write('Procfile', 'web: nx run api:serve:production\n');
+    tree.write('apps/worker/Dockerfile', 'RUN pnpm exec nx build worker\n');
 
     const survey = surveyWorkspaceInit(tree);
 
@@ -238,14 +239,26 @@ describe('workspace init survey and plan', () => {
         expect.objectContaining({ provider: 'redis', projects: ['site'] }),
         expect.objectContaining({ provider: 'bullmq', projects: ['worker'] }),
       ]),
-      deployments: [
-        {
+      deployments: expect.arrayContaining([
+        expect.objectContaining({
           provider: 'render',
           authority: 'partial-marker',
           paths: ['Procfile'],
           services: ['web'],
-        },
-      ],
+        }),
+        expect.objectContaining({
+          provider: 'docker',
+          paths: ['apps/worker/Dockerfile'],
+          services: ['worker'],
+          containers: [
+            {
+              dockerfile: 'apps/worker/Dockerfile',
+              project: 'worker',
+              projectCandidates: ['worker'],
+            },
+          ],
+        }),
+      ]),
     });
     expect(survey.inventory.ambiguities).toContain(
       'Render has only a Procfile marker (Procfile); dashboard-owned services cannot be inventoried without an explicit adoption map or render.yaml.',

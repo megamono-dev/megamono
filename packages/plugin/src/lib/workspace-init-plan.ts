@@ -2031,7 +2031,7 @@ ${values(
 ${values(
   survey.inventory.deployments.map(
     (deployment) =>
-      `${deployment.provider} (${deployment.authority}) — ${deployment.paths.join(', ')}; services: ${deployment.services.join(', ') || 'not declared'}`,
+      `${deployment.provider} (${deployment.authority}) — ${deployment.paths.join(', ')}; services: ${deployment.services.join(', ') || 'not declared'}${deployment.containers ? `; containers: ${deployment.containers.map(({ dockerfile, project, projectCandidates }) => `${dockerfile} → ${project ?? `unresolved (${projectCandidates.join(', ') || 'no candidates'})`}`).join(', ')}` : ''}`,
   ),
 )}
 

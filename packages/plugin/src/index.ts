@@ -103,6 +103,7 @@ export {
 export { createWorkspaceInventory } from './lib/workspace-inventory';
 export type {
   WorkspaceInventory,
+  WorkspaceInventoryContainer,
   WorkspaceInventoryDatabase,
   WorkspaceInventoryDeployment,
   WorkspaceInventoryEvidence,
