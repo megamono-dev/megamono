@@ -51,6 +51,19 @@ describe('workspace init survey and plan', () => {
         cloudflare: ['apps/worker/wrangler.jsonc'],
       },
       projects: [{ name: 'web', targets: ['build'] }],
+      inventory: {
+        schemaVersion: 1,
+        projects: [
+          {
+            name: 'web',
+            root: 'apps/web',
+            frameworks: [],
+            externalPackages: [],
+            environmentNames: [],
+            serviceKinds: [],
+          },
+        ],
+      },
       documentation: {
         corpusDirectories: ['architecture/decisions', 'rfcs'],
         classifications: [
@@ -112,14 +125,116 @@ describe('workspace init survey and plan', () => {
     );
     tree.write('docs/kept.md', '# Kept\n');
     tree.write('vendor/generated/ignored.md', '# Ignored\n');
-    tree.write('basemarks-swift/.build/checkouts/dependency/README.md', '# Dependency\n');
+    tree.write('apps/site/.next/server/generated.md', '# Next output\n');
+    tree.write(
+      'basemarks-swift/.build/checkouts/dependency/README.md',
+      '# Dependency\n',
+    );
     tree.write('packages/tool/.gitignore', 'local-output/\n');
     tree.write('packages/tool/local-output/nested.md', '# Nested ignore\n');
-    tree.write('packages/tool/generated-docs/also-ignored.md', '# Root ignore\n');
+    tree.write(
+      'packages/tool/generated-docs/also-ignored.md',
+      '# Root ignore\n',
+    );
 
     expect(surveyWorkspaceInit(tree).documentation.markdown).toEqual([
       'docs/kept.md',
     ]);
+  });
+
+  it('inventories nested frameworks, databases, services, and partial Render deployment evidence', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      'package.json',
+      JSON.stringify({
+        dependencies: {
+          '@nestjs/bullmq': '^11.0.0',
+          '@nestjs/core': '^11.0.0',
+          bullmq: '^5.0.0',
+          next: '^15.0.0',
+          redis: '^5.0.0',
+        },
+      }),
+    );
+    addProjectConfiguration(tree, 'site', {
+      root: 'apps/site',
+      projectType: 'application',
+      targets: { dev: { executor: '@nx/next:server' } },
+    });
+    tree.write('apps/site/next.config.mjs', 'export default {};\n');
+    tree.write(
+      'apps/site/src/pages/index.tsx',
+      "import { createClient } from 'redis';\nprocess.env.REDIS_URL;\n",
+    );
+    addProjectConfiguration(tree, 'worker', {
+      root: 'apps/worker',
+      projectType: 'application',
+      targets: { serve: { executor: '@nx/js:node' } },
+    });
+    tree.write(
+      'apps/worker/src/main.ts',
+      "import { Processor } from '@nestjs/bullmq';\nimport { Queue } from 'bullmq';\n",
+    );
+    addProjectConfiguration(tree, 'database-auth', {
+      root: 'libs/prisma/schema-auth',
+      projectType: 'library',
+      targets: {},
+    });
+    tree.write(
+      'libs/prisma/schema-auth/prisma/schema.prisma',
+      'datasource db {\n  provider = "postgresql"\n  url = env("DATABASE_URL")\n}\n',
+    );
+    tree.write(
+      'libs/prisma/schema-auth/prisma/migrations/init/migration.sql',
+      'SELECT 1;\n',
+    );
+    tree.write('Procfile', 'web: nx run api:serve:production\n');
+
+    const survey = surveyWorkspaceInit(tree);
+
+    expect(survey.inventory).toMatchObject({
+      schemaVersion: 1,
+      projects: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'site',
+          nextRouter: 'pages',
+          externalPackages: ['redis'],
+          environmentNames: ['REDIS_URL'],
+          serviceKinds: ['cache'],
+        }),
+        expect.objectContaining({
+          name: 'worker',
+          externalPackages: ['@nestjs/bullmq', 'bullmq'],
+          serviceKinds: ['queue'],
+        }),
+      ]),
+      databases: [
+        expect.objectContaining({
+          name: null,
+          provider: 'postgresql',
+          project: 'database-auth',
+          migrations: 'libs/prisma/schema-auth/prisma/migrations',
+        }),
+      ],
+      services: expect.arrayContaining([
+        expect.objectContaining({ provider: 'redis', projects: ['site'] }),
+        expect.objectContaining({ provider: 'bullmq', projects: ['worker'] }),
+      ]),
+      deployments: [
+        {
+          provider: 'render',
+          authority: 'partial-marker',
+          paths: ['Procfile'],
+          services: ['web'],
+        },
+      ],
+    });
+    expect(survey.inventory.ambiguities).toContain(
+      'Render has only a Procfile marker (Procfile); dashboard-owned services cannot be inventoried without an explicit adoption map or render.yaml.',
+    );
+    expect(renderWorkspaceInitSurvey(survey)).toContain(
+      'Integration inventory (schema v1)',
+    );
   });
 
   it('orders module selection canonically and reports reductions', () => {
@@ -379,7 +494,9 @@ describe('workspace init survey and plan', () => {
     });
     tree.write(
       'apps/mobile-app/package.json',
-      JSON.stringify({ dependencies: { expo: '57.0.10', 'react-native': '0.86.2' } }),
+      JSON.stringify({
+        dependencies: { expo: '57.0.10', 'react-native': '0.86.2' },
+      }),
     );
     tree.write('apps/mobile-app/app.json', JSON.stringify({ expo: {} }));
 

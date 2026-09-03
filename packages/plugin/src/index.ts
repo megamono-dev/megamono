@@ -73,6 +73,15 @@ export {
   type WorkspaceInitSurveyProject,
   type WorkspaceDocsContract,
 } from './lib/workspace-init-plan';
+export { createWorkspaceInventory } from './lib/workspace-inventory';
+export type {
+  WorkspaceInventory,
+  WorkspaceInventoryDatabase,
+  WorkspaceInventoryDeployment,
+  WorkspaceInventoryEvidence,
+  WorkspaceInventoryProject,
+  WorkspaceInventoryService,
+} from './lib/workspace-inventory';
 export {
   PROJECT_ADOPTION_PLATFORMS,
   PROJECT_ADOPTION_TYPES,

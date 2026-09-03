@@ -22,9 +22,14 @@ npm exec nx g @megamono/plugin:workspace-init \
   --yes
 ```
 
-The survey includes `adoptionTemplates.projects` and
-`adoptionTemplates.documentation`. Copy either JSON object into a workspace
-file, replace any `<review-…>` placeholders, and pass that file with
+The survey includes a versioned `inventory`, plus
+`adoptionTemplates.projects` and `adoptionTemplates.documentation`. Inventory
+v1 is Nx-project-aware: it records nested framework/router evidence, imported
+external packages, environment-variable names (never values), Prisma schema
+contexts, Redis/BullMQ usage, and Docker/Render deployment markers. Ambiguous
+or dashboard-owned topology remains an explicit finding instead of becoming a
+guessed configuration. Copy either adoption-template JSON object into a
+workspace file, replace any `<review-…>` placeholders, and pass that file with
 `--adoptionMap` or `--docsAdoptionMap`.
 
 On a real workspace, the same survey also separates committed toolchain

@@ -18,6 +18,10 @@ import {
   type PackageManager,
 } from './package-manager';
 import { workspaceInitDependencyAssessments } from './dependency-compatibility';
+import {
+  createWorkspaceInventory,
+  type WorkspaceInventory,
+} from './workspace-inventory';
 
 export const WORKSPACE_INIT_MODULES = [
   'docs',
@@ -108,6 +112,7 @@ export interface WorkspaceInitSurvey {
   };
   readonly host: WorkspaceInitHostReadiness | null;
   readonly projects: readonly WorkspaceInitSurveyProject[];
+  readonly inventory: WorkspaceInventory;
   readonly manifests: {
     readonly apple: readonly string[];
     readonly cargo: readonly string[];
@@ -327,6 +332,7 @@ function listFiles(tree: Tree): readonly string[] {
     '.nx',
     '.yalc',
     '.content-collections',
+    '.next',
     'DerivedData',
     'coverage',
     'dist',
@@ -780,7 +786,8 @@ export function surveyWorkspaceInit(
   if (!managedDocsLoader && tree.exists('.megamono/artifacts.json')) {
     try {
       const loaderArtifact = readArtifactRegistry(tree).artifacts.find(
-        (artifact) => artifact.id === 'docs.loader' && artifact.state !== 'ejected',
+        (artifact) =>
+          artifact.id === 'docs.loader' && artifact.state !== 'ejected',
       );
       managedDocsLoader = loaderArtifact?.target ?? null;
     } catch {
@@ -809,6 +816,7 @@ export function surveyWorkspaceInit(
     },
     host: options.host ?? null,
     projects,
+    inventory: createWorkspaceInventory(tree, workspaceProjects, files),
     manifests: {
       apple: files.filter((path) => path.endsWith('Package.swift')),
       cargo: files.filter((path) => path.endsWith('Cargo.toml')),
@@ -1619,6 +1627,48 @@ ${values(
       `${project.name} — ${project.type}${project.platform ? ` (${project.platform})` : ''} at ${project.root}; targets: ${project.targets.join(', ') || 'none'}; tags: ${project.tags.join(', ') || 'none'}; evidence: ${project.evidence.join(', ')}`,
   ),
 )}
+
+## Integration inventory (schema v${survey.inventory.schemaVersion})
+
+### Project technologies
+
+${values(
+  survey.inventory.projects.map(
+    (project) =>
+      `${project.name} — frameworks: ${project.frameworks.map(({ value }) => value).join(', ') || 'none'}${project.nextRouter ? `; Next router: ${project.nextRouter}` : ''}; services: ${project.serviceKinds.join(', ') || 'none'}; environment names: ${project.environmentNames.join(', ') || 'none'}`,
+  ),
+)}
+
+### Databases
+
+${values(
+  survey.inventory.databases.map(
+    (database) =>
+      `${database.name ?? '<name-required>'} — ${database.adapter}/${database.provider ?? 'unknown'} at ${database.schema}; Nx project: ${database.project ?? 'unresolved'}; migrations: ${database.migrations ?? 'none detected'}`,
+  ),
+)}
+
+### Runtime services
+
+${values(
+  survey.inventory.services.map(
+    (service) =>
+      `${service.kind}/${service.provider} — projects: ${service.projects.join(', ')}`,
+  ),
+)}
+
+### Deployments
+
+${values(
+  survey.inventory.deployments.map(
+    (deployment) =>
+      `${deployment.provider} (${deployment.authority}) — ${deployment.paths.join(', ')}; services: ${deployment.services.join(', ') || 'not declared'}`,
+  ),
+)}
+
+### Integration ambiguities
+
+${values(survey.inventory.ambiguities)}
 
 ## Inference manifests
 
