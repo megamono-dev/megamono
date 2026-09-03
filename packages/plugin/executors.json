@@ -35,6 +35,11 @@
       "schema": "./dist/executors/verify-runtime/schema.json",
       "description": "Verify production dependencies used by built JavaScript output"
     },
+    "verify-workspace-dependencies": {
+      "implementation": "./dist/executors/verify-workspace-dependencies/verify-workspace-dependencies",
+      "schema": "./dist/executors/verify-workspace-dependencies/schema.json",
+      "description": "Audit package-manager pins, workspace membership, and script dependency ownership"
+    },
     "import": {
       "implementation": "./dist/executors/import/import",
       "schema": "./dist/executors/import/schema.json",

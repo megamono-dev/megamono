@@ -126,6 +126,11 @@ const verifyRuntimeTarget = {
   cache: false,
 };
 
+const verifyDependenciesTarget = {
+  executor: '@megamono/plugin:verify-workspace-dependencies',
+  cache: false,
+};
+
 const AGENTS_SECTION_START = '<!-- megamono instructions start -->';
 const AGENTS_SECTION_END = '<!-- megamono instructions end -->';
 const LEGACY_AGENTS_MARKER = '<!-- megamono affected CI -->';
@@ -451,6 +456,32 @@ function ensureVerifyRuntimeTarget(tree: Tree): boolean {
     targets: {
       ...project.targets,
       'verify-runtime': verifyRuntimeTarget,
+    },
+  });
+  return true;
+}
+
+function ensureVerifyDependenciesTarget(tree: Tree): boolean {
+  const project = getProjects(tree).get('megamono');
+  if (!project) {
+    throw new Error(
+      'Workspace initialization is incomplete; missing the megamono project.',
+    );
+  }
+  const current = project.targets?.['verify-dependencies'];
+  if (current) {
+    if (JSON.stringify(current) !== JSON.stringify(verifyDependenciesTarget)) {
+      throw new Error(
+        'megamono:verify-dependencies already exists with a different configuration.',
+      );
+    }
+    return false;
+  }
+  updateProjectConfiguration(tree, 'megamono', {
+    ...project,
+    targets: {
+      ...project.targets,
+      'verify-dependencies': verifyDependenciesTarget,
     },
   });
   return true;
@@ -1694,6 +1725,7 @@ export async function workspaceInitGenerator(
         },
         import: importTarget(tree),
         'verify-runtime': verifyRuntimeTarget,
+        'verify-dependencies': verifyDependenciesTarget,
         ...(modules.has('health') && !modules.has('docs')
           ? { health: healthTarget }
           : {}),
@@ -1702,6 +1734,7 @@ export async function workspaceInitGenerator(
   } else if (coreProjectCanUpdate) {
     ensureImportTarget(tree);
     ensureVerifyRuntimeTarget(tree);
+    ensureVerifyDependenciesTarget(tree);
     if (modules.has('health') && !modules.has('docs')) ensureHealthTarget(tree);
   } else {
     logger.warn(

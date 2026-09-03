@@ -197,6 +197,10 @@ describe('workspace-init generator', () => {
       executor: '@megamono/plugin:verify-runtime',
       cache: false,
     });
+    expect(config.targets?.['verify-dependencies']).toEqual({
+      executor: '@megamono/plugin:verify-workspace-dependencies',
+      cache: false,
+    });
     expect(docs.targets?.validate?.executor).toBe(
       '@megamono/plugin:docs-validate',
     );

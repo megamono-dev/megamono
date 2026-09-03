@@ -35,6 +35,8 @@ Missing output is fail-closed and directs the caller to build first. Verificatio
 
 Static output inspection is the first layer. A separate workspace-dependency verifier must inspect scripts, preload modules, executable ownership, workspace package closure, lockfile/Corepack/runtime alignment, and production-install contexts. It must use the repository's selected package manager and must not infer compatibility from a globally hoisted executable.
 
+`@megamono/plugin:verify-workspace-dependencies` implements the static portion. It requires an exact `packageManager` pnpm pin and matching lockfile, compares the active Node and pnpm versions with committed requirements unless explicitly disabled, and verifies every nested manifest is included by `pnpm-workspace.yaml`. Known tool executables and Node preload modules referenced by package scripts must be declared by that manifest or the root workspace manifest. A dependency available only from a sibling manifest is reported separately from a wholly undeclared dependency. The check reads installed tool versions but never installs or rewrites packages.
+
 Container validation is a further explicit layer. Static Dockerfile analysis checks build stages, copied manifests/lockfiles, production-install commands, and selected Nx project outputs. Optional materialization may create a temporary production dependency tree, and optional container smoke testing may invoke Docker only when the caller requests it. Network access, image builds, and container execution are never part of the default health report.
 
 The acceptance fixtures include built output requiring `tslib` and a `tsconfig-paths/register` preload so npm/Yarn hoisting assumptions cannot silently pass the pnpm portability contract.

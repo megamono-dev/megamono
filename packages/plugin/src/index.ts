@@ -86,6 +86,13 @@ export {
   type RuntimeDependencyFindingCode,
   type RuntimeDependencyReport,
 } from './lib/runtime-verification';
+export {
+  serializeWorkspaceDependencyReport,
+  verifyWorkspaceDependencies,
+  type WorkspaceDependencyFinding,
+  type WorkspaceDependencyFindingCode,
+  type WorkspaceDependencyReport,
+} from './lib/workspace-dependency-verification';
 export { createWorkspaceInventory } from './lib/workspace-inventory';
 export type {
   WorkspaceInventory,

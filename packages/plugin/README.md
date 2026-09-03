@@ -92,6 +92,17 @@ npm exec nx -- run megamono:verify-runtime --project=api \
 The verifier never builds or changes dependencies implicitly. Build the project
 first, and provide `--outputPath` when its build target does not declare one.
 
+The companion workspace audit checks pnpm/Corepack pins, active Node and pnpm,
+workspace package membership, and known executables or preload modules used by
+scripts:
+
+```sh
+npm exec nx -- run megamono:verify-dependencies
+```
+
+This catches dependencies supplied only by a sibling package or an accidentally
+hoisted installation while leaving dependency correction to the repository.
+
 ## Generator availability
 
 `@megamono/plugin/availability.json` is the canonical registry for available,

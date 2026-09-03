@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoVerifyWorkspaceDependencies",
+  "title": "Verify workspace dependency portability",
+  "description": "Audit package-manager pins, workspace membership, and script dependency ownership.",
+  "type": "object",
+  "properties": {
+    "report": {
+      "type": "string",
+      "description": "Optional workspace-relative JSON report path."
+    },
+    "checkActiveToolchain": {
+      "type": "boolean",
+      "default": true,
+      "description": "Compare active Node and pnpm versions with committed requirements."
+    }
+  },
+  "additionalProperties": false
+}
