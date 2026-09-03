@@ -43,6 +43,7 @@ import {
   WORKSPACE_INIT_MODULES,
   WorkspaceInitError,
   createWorkspaceInitPlan,
+  parseRenderServiceProjects,
   parseWorkspaceInitModules,
   renderWorkspaceInitCompletion,
   renderWorkspaceInitPlan,
@@ -1752,13 +1753,39 @@ export async function workspaceInitGenerator(
           : {}),
       }
     : {};
+  const renderServiceProjects = options.renderServiceProjects
+    ? parseRenderServiceProjects(
+        tree,
+        options.renderServiceProjects,
+        workspaceSurvey.inventory,
+      )
+    : {};
   if (modules.has('inference') && Object.keys(inference).length > 0) {
     updateJson(tree, 'nx.json', (value) => {
       const plugins: unknown[] = Array.isArray(value.plugins)
         ? value.plugins
         : [];
+      const renderPlugin =
+        Object.keys(renderServiceProjects).length > 0
+          ? {
+              plugin: '@megamono/nx-render',
+              options: { serviceProjects: renderServiceProjects },
+            }
+          : '@megamono/nx-render';
+      const configuredPlugins = plugins.map((plugin) => {
+        const name =
+          typeof plugin === 'string'
+            ? plugin
+            : plugin && typeof plugin === 'object' && 'plugin' in plugin
+              ? String(plugin.plugin)
+              : null;
+        return name === '@megamono/nx-render' &&
+          Object.keys(renderServiceProjects).length > 0
+          ? renderPlugin
+          : plugin;
+      });
       const pluginNames = new Set(
-        plugins.flatMap((plugin) =>
+        configuredPlugins.flatMap((plugin) =>
           typeof plugin === 'string'
             ? [plugin]
             : plugin && typeof plugin === 'object' && 'plugin' in plugin
@@ -1767,9 +1794,11 @@ export async function workspaceInitGenerator(
         ),
       );
       const additions = Object.values(inference)
-        .map(({ plugin }) => plugin)
-        .filter((plugin) => !pluginNames.has(plugin));
-      return { ...value, plugins: [...plugins, ...additions] };
+        .filter(({ plugin }) => !pluginNames.has(plugin))
+        .map(({ plugin }) =>
+          plugin === '@megamono/nx-render' ? renderPlugin : plugin,
+        );
+      return { ...value, plugins: [...configuredPlugins, ...additions] };
     });
     if ('apple' in inference) configuredPlatforms.add('apple');
     if ('cargo' in inference) configuredPlatforms.add('rust');

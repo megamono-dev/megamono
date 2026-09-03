@@ -163,6 +163,17 @@ export interface WorkspaceInitSurvey {
         Record<string, Readonly<Record<string, unknown>>>
       >;
     };
+    readonly render: {
+      readonly serviceProjects: Readonly<
+        Record<
+          string,
+          {
+            readonly project: string;
+            readonly root: string;
+          }
+        >
+      >;
+    };
   };
 }
 
@@ -239,8 +250,13 @@ export interface WorkspaceInitPlanOptions {
   readonly packageManager?: PackageManager;
   readonly ciMode?: 'auto' | 'standalone' | 'reusable';
   readonly packageRegistries?: string;
+  readonly renderServiceProjects?: string;
   readonly host?: WorkspaceInitHostReadiness | null;
 }
+
+export type RenderServiceProjects = Readonly<
+  Record<string, { readonly project: string; readonly root: string }>
+>;
 
 export interface WorkspaceDocsContract {
   readonly root: string;
@@ -304,6 +320,97 @@ export function resolveWorkspaceDocsContract(
       'docsModule is not a valid import alias.',
     );
   return contract;
+}
+
+export function parseRenderServiceProjects(
+  tree: Tree,
+  value: string,
+  inventory: WorkspaceInventory,
+): RenderServiceProjects {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch (error) {
+    throw new WorkspaceInitError(
+      'options',
+      `renderServiceProjects must be valid JSON: ${error instanceof Error ? error.message : String(error)}.`,
+    );
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    throw new WorkspaceInitError(
+      'options',
+      'renderServiceProjects must be a JSON object keyed by Render service name.',
+    );
+  const knownServices = new Set(
+    inventory.deployments.flatMap(
+      (deployment) => deployment.renderServices?.map(({ name }) => name) ?? [],
+    ),
+  );
+  const projects = getProjects(tree);
+  const result: Record<string, { project: string; root: string }> = {};
+  for (const [service, mapping] of Object.entries(parsed)) {
+    if (!service.trim() || !knownServices.has(service))
+      throw new WorkspaceInitError(
+        'options',
+        `renderServiceProjects references unknown Render service ${service || '<empty>'}.`,
+      );
+    if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping))
+      throw new WorkspaceInitError(
+        'options',
+        `renderServiceProjects.${service} must contain project and root strings.`,
+      );
+    const entry = mapping as Record<string, unknown>;
+    if (
+      typeof entry.project !== 'string' ||
+      !entry.project.trim() ||
+      typeof entry.root !== 'string' ||
+      !entry.root.trim() ||
+      entry.root.startsWith('/') ||
+      entry.root.includes('\\') ||
+      entry.root.split('/').includes('..')
+    )
+      throw new WorkspaceInitError(
+        'options',
+        `renderServiceProjects.${service} must contain a known project and safe workspace-relative root.`,
+      );
+    const project = projects.get(entry.project);
+    if (!project)
+      throw new WorkspaceInitError(
+        'options',
+        `renderServiceProjects.${service} references unknown Nx project ${entry.project}.`,
+      );
+    const root = entry.root.replace(/^\.\//, '').replace(/\/$/, '');
+    if (project.root !== root)
+      throw new WorkspaceInitError(
+        'options',
+        `renderServiceProjects.${service} maps ${entry.project} to ${root}, but its Nx root is ${project.root}.`,
+      );
+    result[service] = { project: entry.project, root };
+  }
+  return Object.fromEntries(
+    Object.entries(result).sort(([left], [right]) => compare(left, right)),
+  );
+}
+
+function configuredRenderServiceProjects(tree: Tree): string | undefined {
+  const plugins = readJsonObject(tree, 'nx.json').plugins;
+  if (!Array.isArray(plugins)) return undefined;
+  const render = plugins.find(
+    (plugin) =>
+      plugin &&
+      typeof plugin === 'object' &&
+      !Array.isArray(plugin) &&
+      (plugin as Record<string, unknown>).plugin === '@megamono/nx-render',
+  ) as Record<string, unknown> | undefined;
+  if (!render || !render.options || typeof render.options !== 'object')
+    return undefined;
+  const serviceProjects = (render.options as Record<string, unknown>)
+    .serviceProjects;
+  return serviceProjects &&
+    typeof serviceProjects === 'object' &&
+    !Array.isArray(serviceProjects)
+    ? JSON.stringify(serviceProjects)
+    : undefined;
 }
 
 function compare(left: string, right: string): number {
@@ -590,6 +697,7 @@ function adoptionTemplates(
   tree: Tree,
   projects: readonly WorkspaceInitSurveyProject[],
   documentation: ReturnType<typeof classifyDocumentation>,
+  inventory: WorkspaceInventory,
 ): WorkspaceInitSurvey['adoptionTemplates'] {
   const projectEntries = projects.flatMap((project) => {
     const missingType = !project.tags.some((tag) => tag.startsWith('type:'));
@@ -639,9 +747,31 @@ function adoptionTemplates(
       ] as const;
     },
   );
+  const nxProjects = getProjects(tree);
+  const renderEntries = inventory.deployments.flatMap((deployment) =>
+    (deployment.renderServices ?? []).flatMap((service) => {
+      if (service.rootDir !== null) return [];
+      const candidate =
+        service.projectCandidates.length === 1
+          ? service.projectCandidates[0]
+          : null;
+      return [
+        [
+          service.name,
+          candidate
+            ? {
+                project: candidate,
+                root: nxProjects.get(candidate)?.root ?? '<review-root>',
+              }
+            : { project: '<review-project>', root: '<review-root>' },
+        ] as const,
+      ];
+    }),
+  );
   return {
     projects: { projects: Object.fromEntries(projectEntries) },
     documentation: { documents: Object.fromEntries(documentEntries) },
+    render: { serviceProjects: Object.fromEntries(renderEntries) },
   };
 }
 
@@ -822,6 +952,10 @@ export function surveyWorkspaceInit(
   const coexistingContentCollections = contentCollections.filter(
     (path) => path !== managedDocsLoader,
   );
+  const inventory = createWorkspaceInventory(tree, workspaceProjects, files);
+  const unmappedRenderServices = inventory.deployments.flatMap((deployment) =>
+    (deployment.renderServices ?? []).filter(({ rootDir }) => rootDir === null),
+  );
   return {
     schemaVersion: 1,
     baseline: {
@@ -840,7 +974,7 @@ export function surveyWorkspaceInit(
     },
     host: options.host ?? null,
     projects,
-    inventory: createWorkspaceInventory(tree, workspaceProjects, files),
+    inventory,
     manifests: {
       apple: files.filter((path) => path.endsWith('Package.swift')),
       cargo: files.filter((path) => path.endsWith('Cargo.toml')),
@@ -907,8 +1041,26 @@ export function surveyWorkspaceInit(
             },
           ]
         : []),
+      ...(unmappedRenderServices.length > 0
+        ? [
+            {
+              module: 'inference' as const,
+              action: 'configure' as const,
+              paths: inventory.deployments
+                .filter(({ provider }) => provider === 'render')
+                .flatMap(({ paths }) => paths),
+              reason:
+                'Review the generated Render service project map and pass it with --renderServiceProjects; root-level Render commands must not be attached to guessed Nx projects.',
+            },
+          ]
+        : []),
     ],
-    adoptionTemplates: adoptionTemplates(tree, projects, documentation),
+    adoptionTemplates: adoptionTemplates(
+      tree,
+      projects,
+      documentation,
+      inventory,
+    ),
   };
 }
 
@@ -970,6 +1122,36 @@ export function createWorkspaceInitPlan(
     } catch (error) {
       conflicts.push(error instanceof Error ? error.message : String(error));
     }
+  }
+  let renderServiceProjects: RenderServiceProjects = {};
+  let renderServiceProjectsValid = true;
+  const renderServiceProjectsInput =
+    options.renderServiceProjects ?? configuredRenderServiceProjects(tree);
+  if (renderServiceProjectsInput !== undefined) {
+    try {
+      renderServiceProjects = parseRenderServiceProjects(
+        tree,
+        renderServiceProjectsInput,
+        survey.inventory,
+      );
+    } catch (error) {
+      renderServiceProjectsValid = false;
+      conflicts.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  if (modules.includes('inference') && renderServiceProjectsValid) {
+    const unmapped = survey.inventory.deployments.flatMap((deployment) =>
+      (deployment.renderServices ?? [])
+        .filter(
+          ({ name, rootDir }) =>
+            rootDir === null && !renderServiceProjects[name],
+        )
+        .map(({ name }) => name),
+    );
+    if (unmapped.length > 0)
+      decisions.push(
+        `Render services ${unmapped.join(', ')} have no rootDir; review survey.adoptionTemplates.render.serviceProjects and pass --renderServiceProjects='<json>'.`,
+      );
   }
   let docsAdoptionEntries: ReturnType<typeof readDocsAdoptionMap> = [];
   if (modules.includes('docs') && options.docsAdoptionMap) {
@@ -1804,6 +1986,14 @@ ${JSON.stringify(survey.adoptionTemplates.projects, null, 2)}
 
 \`\`\`json
 ${JSON.stringify(survey.adoptionTemplates.documentation, null, 2)}
+\`\`\`
+
+### Render service project map
+
+Pass the reviewed \`serviceProjects\` value to \`--renderServiceProjects\`.
+
+\`\`\`json
+${JSON.stringify(survey.adoptionTemplates.render, null, 2)}
 \`\`\`
 `;
 }

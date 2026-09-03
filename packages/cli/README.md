@@ -66,7 +66,8 @@ megamono add database primary --adapter=prisma --schema=prisma/schema.prisma
 
 All plugin options remain forwardable through `megamono init`, including
 per-project `--adoptionMap`, reviewed `--docsAdoptionMap`, `--ciMode`, optional
-toolchain pins, and non-secret `--packageRegistries` scope routing.
+toolchain pins, reviewed `--renderServiceProjects` mappings, and non-secret
+`--packageRegistries` scope routing.
 
 A valueless `megamono add app` opens the application selector in an interactive
 terminal. Web and site additions then select Chakra (suggested), Emotion,

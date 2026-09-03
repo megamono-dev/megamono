@@ -1330,6 +1330,40 @@ export default [
     expect(JSON.stringify(readJson(tree, 'nx.json'))).not.toContain('go.mod');
   });
 
+  it('registers a reviewed root-level Render service mapping', async () => {
+    addProjectConfiguration(tree, 'api', {
+      root: 'apps/api',
+      projectType: 'application',
+      targets: { build: { executor: 'nx:noop' } },
+    });
+    tree.write(
+      'render.yaml',
+      [
+        'services:',
+        '  - type: web',
+        '    name: fontstack-api',
+        '    buildCommand: pnpm exec nx build api',
+        '',
+      ].join('\n'),
+    );
+
+    await workspaceInitGenerator(tree, {
+      only: 'inference',
+      yes: true,
+      renderServiceProjects:
+        '{"fontstack-api":{"project":"api","root":"apps/api"}}',
+    });
+
+    expect(readJson(tree, 'nx.json').plugins).toContainEqual({
+      plugin: '@megamono/nx-render',
+      options: {
+        serviceProjects: {
+          'fontstack-api': { project: 'api', root: 'apps/api' },
+        },
+      },
+    });
+  });
+
   it('retains core adoption and records inference reductions on Nx 17', async () => {
     tree.write(
       'package.json',

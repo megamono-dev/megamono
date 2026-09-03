@@ -1,4 +1,5 @@
 import type { ProjectConfiguration, Tree } from '@nx/devkit';
+import { parse } from 'yaml';
 
 export type WorkspaceFramework =
   'nest' | 'next' | 'expo' | 'react-native' | 'vite';
@@ -40,6 +41,13 @@ export interface WorkspaceInventoryDeployment {
   readonly authority: 'manifest' | 'partial-marker';
   readonly paths: readonly string[];
   readonly services: readonly string[];
+  readonly renderServices?: readonly WorkspaceInventoryRenderService[];
+}
+
+export interface WorkspaceInventoryRenderService {
+  readonly name: string;
+  readonly rootDir: string | null;
+  readonly projectCandidates: readonly string[];
 }
 
 export interface WorkspaceInventory {
@@ -235,6 +243,89 @@ function procfileServices(source: string): string[] {
     .sort(compare);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function renderServiceRecords(value: unknown): Record<string, unknown>[] {
+  if (!isRecord(value)) return [];
+  return [
+    ...records(value.services),
+    ...records(value.projects).flatMap((project) =>
+      records(project.environments).flatMap((environment) =>
+        records(environment.services),
+      ),
+    ),
+  ];
+}
+
+function commandReferencesProject(command: string, project: string): boolean {
+  const escaped = project.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return (
+    new RegExp(`\\bnx\\s+run\\s+${escaped}(?::|\\s|$)`).test(command) ||
+    new RegExp(
+      `\\bnx\\s+(?:build|serve|start|deploy|test|lint)\\s+${escaped}(?::|\\s|$)`,
+    ).test(command)
+  );
+}
+
+function renderBlueprintServices(
+  tree: Tree,
+  paths: readonly string[],
+  projects: ReadonlyMap<string, ProjectConfiguration>,
+): { services: WorkspaceInventoryRenderService[]; ambiguities: string[] } {
+  const services: WorkspaceInventoryRenderService[] = [];
+  const ambiguities: string[] = [];
+  for (const path of paths) {
+    let blueprint: unknown;
+    try {
+      blueprint = parse(tree.read(path, 'utf8') ?? '');
+    } catch (error) {
+      ambiguities.push(
+        `Render manifest ${path} could not be parsed: ${error instanceof Error ? error.message : String(error)}.`,
+      );
+      continue;
+    }
+    for (const service of renderServiceRecords(blueprint)) {
+      const name =
+        typeof service.name === 'string' && service.name.trim()
+          ? service.name.trim()
+          : null;
+      const type = typeof service.type === 'string' ? service.type : null;
+      if (!name || type === 'redis' || type === 'keyvalue') continue;
+      const declaredRoot =
+        typeof service.rootDir === 'string' && service.rootDir.trim()
+          ? service.rootDir.trim().replace(/^\.\//, '').replace(/\/$/, '')
+          : null;
+      const explicitRoot = declaredRoot === '.' ? null : declaredRoot;
+      const commands = [
+        service.buildCommand,
+        service.startCommand,
+        service.preDeployCommand,
+      ].filter((value): value is string => typeof value === 'string');
+      const projectCandidates = [...projects.entries()]
+        .filter(
+          ([project, configuration]) =>
+            (explicitRoot !== null && configuration.root === explicitRoot) ||
+            commands.some((command) =>
+              commandReferencesProject(command, project),
+            ),
+        )
+        .map(([project]) => project)
+        .sort(compare);
+      services.push({ name, rootDir: explicitRoot, projectCandidates });
+    }
+  }
+  return {
+    services: services.sort((left, right) => compare(left.name, right.name)),
+    ambiguities,
+  };
+}
+
 export function createWorkspaceInventory(
   tree: Tree,
   projects: ReadonlyMap<string, ProjectConfiguration>,
@@ -358,14 +449,21 @@ export function createWorkspaceInventory(
     /(?:^|\/)Dockerfile(?:\.[^/]+)?$/.test(path),
   );
   const deployments: WorkspaceInventoryDeployment[] = [];
+  const render = renderBlueprintServices(tree, renderManifests, projects);
   if (renderManifests.length > 0 || procfiles.length > 0)
     deployments.push({
       provider: 'render',
       authority: renderManifests.length > 0 ? 'manifest' : 'partial-marker',
       paths: [...renderManifests, ...procfiles].sort(compare),
-      services: procfiles.flatMap((path) =>
-        procfileServices(tree.read(path, 'utf8') ?? ''),
-      ),
+      services: [
+        ...render.services.map(({ name }) => name),
+        ...procfiles.flatMap((path) =>
+          procfileServices(tree.read(path, 'utf8') ?? ''),
+        ),
+      ].filter((name, index, names) => names.indexOf(name) === index),
+      ...(render.services.length > 0
+        ? { renderServices: render.services }
+        : {}),
     });
   if (dockerfiles.length > 0)
     deployments.push({
@@ -376,6 +474,7 @@ export function createWorkspaceInventory(
     });
 
   const ambiguities = [
+    ...render.ambiguities,
     ...(procfiles.length > 0 && renderManifests.length === 0
       ? [
           `Render has only a Procfile marker (${procfiles.join(', ')}); dashboard-owned services cannot be inventoried without an explicit adoption map or render.yaml.`,

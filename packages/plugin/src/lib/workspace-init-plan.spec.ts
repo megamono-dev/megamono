@@ -104,6 +104,7 @@ describe('workspace init survey and plan', () => {
             },
           },
         },
+        render: { serviceProjects: {} },
       },
     });
     expect(JSON.parse(first).documentation.markdown).not.toContain(
@@ -258,6 +259,63 @@ describe('workspace init survey and plan', () => {
       plan.operations.map((_, index) => index + 1),
     );
     expect(renderWorkspaceInitPlan(plan)).toContain('health.spec-drift');
+  });
+
+  it('requires a reviewed mapping for root-level Render services', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    addProjectConfiguration(tree, 'api', {
+      root: 'apps/api',
+      projectType: 'application',
+      targets: { build: { executor: 'nx:noop' } },
+    });
+    tree.write(
+      'render.yaml',
+      [
+        'services:',
+        '  - type: web',
+        '    name: fontstack-api',
+        '    buildCommand: pnpm exec nx build api',
+        '    startCommand: pnpm exec nx run api:serve:production',
+        '',
+      ].join('\n'),
+    );
+
+    const survey = surveyWorkspaceInit(tree);
+    expect(survey.inventory.deployments).toContainEqual(
+      expect.objectContaining({
+        provider: 'render',
+        services: ['fontstack-api'],
+        renderServices: [
+          {
+            name: 'fontstack-api',
+            rootDir: null,
+            projectCandidates: ['api'],
+          },
+        ],
+      }),
+    );
+    expect(survey.adoptionTemplates.render).toEqual({
+      serviceProjects: {
+        'fontstack-api': { project: 'api', root: 'apps/api' },
+      },
+    });
+    expect(
+      createWorkspaceInitPlan(tree, { only: 'inference' }).decisions,
+    ).toEqual([expect.stringContaining('fontstack-api')]);
+    expect(
+      createWorkspaceInitPlan(tree, {
+        only: 'inference',
+        renderServiceProjects:
+          '{"fontstack-api":{"project":"api","root":"apps/api"}}',
+      }).decisions,
+    ).toEqual([]);
+    expect(
+      createWorkspaceInitPlan(tree, {
+        only: 'inference',
+        renderServiceProjects:
+          '{"fontstack-api":{"project":"api","root":"apps/wrong"}}',
+      }).conflicts,
+    ).toEqual([expect.stringContaining('its Nx root is apps/api')]);
   });
 
   it('expands named adoption profiles and rejects a conflicting explicit selection', () => {

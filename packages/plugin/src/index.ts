@@ -56,6 +56,7 @@ export {
   WORKSPACE_INIT_PROFILES,
   WorkspaceInitError,
   createWorkspaceInitPlan,
+  parseRenderServiceProjects,
   parseWorkspaceInitModules,
   renderWorkspaceInitPlan,
   renderWorkspaceInitCompletion,
@@ -75,6 +76,7 @@ export {
   type WorkspaceInitSurvey,
   type WorkspaceInitSurveyProject,
   type WorkspaceDocsContract,
+  type RenderServiceProjects,
 } from './lib/workspace-init-plan';
 export { createWorkspaceInventory } from './lib/workspace-inventory';
 export type {
@@ -83,6 +85,7 @@ export type {
   WorkspaceInventoryDeployment,
   WorkspaceInventoryEvidence,
   WorkspaceInventoryProject,
+  WorkspaceInventoryRenderService,
   WorkspaceInventoryService,
 } from './lib/workspace-inventory';
 export {

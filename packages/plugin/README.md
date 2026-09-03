@@ -32,20 +32,26 @@ modules into suggested commit batches without running Git or committing on the
 caller's behalf.
 
 The survey includes a versioned `inventory`, plus
-`adoptionTemplates.projects` and `adoptionTemplates.documentation`. Inventory
+`adoptionTemplates.projects`, `adoptionTemplates.documentation`, and
+`adoptionTemplates.render`. Inventory
 v1 is Nx-project-aware: it records nested framework/router evidence, imported
 external packages, environment-variable names (never values), Prisma schema
 contexts, Redis/BullMQ usage, and Docker/Render deployment markers. Ambiguous
 or dashboard-owned topology remains an explicit finding instead of becoming a
-guessed configuration. Copy either adoption-template JSON object into a
-workspace file, replace any `<review-…>` placeholders, and pass that file with
-`--adoptionMap` or `--docsAdoptionMap`.
+guessed configuration. Copy the relevant project or documentation template
+into a workspace file, replace any `<review-…>` placeholders, and pass that
+file with `--adoptionMap` or `--docsAdoptionMap`; pass the reviewed Render map
+inline as described below.
 
 When a repository-owned `render.yaml` is present, the inference module installs
 `@megamono/nx-render`. That plugin attaches only explicitly rooted or mapped
 services, preserves the Blueprint as deployment authority, and exposes bounded
 build/start/pre-deploy targets plus health, resource, filter, and multi-instance
-Next cache diagnostics.
+Next cache diagnostics. For a root-level service, the survey identifies exact
+Nx project references in declared commands and proposes a copy-ready map; init
+still requires the reviewed `serviceProjects` value through
+`--renderServiceProjects='<json>'` and validates its project/root pairs before
+updating `nx.json`.
 
 On a real workspace, the same survey also separates committed toolchain
 requirements from active Node and package-manager binaries. It reports whether

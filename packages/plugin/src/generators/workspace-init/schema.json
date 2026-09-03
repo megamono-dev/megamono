@@ -70,6 +70,10 @@
       "type": "string",
       "description": "JSON object mapping package scopes such as @megamono and @playstack to HTTPS registry URLs; authentication remains repository/CI-owned."
     },
+    "renderServiceProjects": {
+      "type": "string",
+      "description": "Reviewed JSON object mapping root-level Render service names to existing Nx project names and roots."
+    },
     "packageManager": {
       "type": "string",
       "enum": ["npm", "pnpm", "yarn", "bun"],
