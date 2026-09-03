@@ -26,6 +26,9 @@ export interface WxtConfigRecord {
   readonly packageName?: string;
   readonly tags: readonly string[];
   readonly storeCommands: Readonly<Record<string, string>>;
+  readonly framework?: 'wxt' | 'manifest';
+  readonly manifestVersion?: 2 | 3;
+  readonly scripts?: Readonly<Record<string, string>>;
 }
 
 let diagnostics: ExtensionDiagnostic[] = [];
@@ -101,6 +104,95 @@ function recordForConfig(
       ]),
     ].sort(),
     storeCommands,
+    framework: 'wxt',
+    scripts: {},
+  };
+}
+
+function nearestPackageRoot(path: string, workspaceRoot: string): string {
+  let current = dirname(resolve(workspaceRoot, path));
+  const boundary = resolve(workspaceRoot);
+  while (current.startsWith(boundary)) {
+    if (existsSync(resolve(current, 'package.json')))
+      return normalizePath(current.slice(boundary.length).replace(/^\//, ''));
+    if (current === boundary) break;
+    current = dirname(current);
+  }
+  const directory = normalizePath(dirname(path));
+  return basename(directory) === 'public' ? dirname(directory) : directory;
+}
+
+function recordForManifest(
+  manifestPath: string,
+  workspaceRoot: string,
+  options: ExtensionPluginOptions,
+): WxtConfigRecord | null {
+  const normalizedConfig = normalizePath(manifestPath);
+  const root = nearestPackageRoot(normalizedConfig, workspaceRoot);
+  if (
+    ['ts', 'js', 'mjs', 'mts'].some((extension) =>
+      existsSync(resolve(workspaceRoot, root, `wxt.config.${extension}`)),
+    )
+  )
+    return null;
+  let extensionManifest: {
+    readonly manifest_version?: unknown;
+    readonly name?: unknown;
+    readonly version?: unknown;
+  };
+  try {
+    extensionManifest = JSON.parse(
+      readFileSync(resolve(workspaceRoot, normalizedConfig), 'utf8'),
+    ) as typeof extensionManifest;
+  } catch (error) {
+    diagnostics.push({
+      configPath: normalizedConfig,
+      message: `Invalid browser extension manifest: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return null;
+  }
+  if (
+    (extensionManifest.manifest_version !== 2 &&
+      extensionManifest.manifest_version !== 3) ||
+    typeof extensionManifest.name !== 'string' ||
+    typeof extensionManifest.version !== 'string'
+  )
+    return null;
+  const packagePath = resolve(workspaceRoot, root, 'package.json');
+  const packageManifest = existsSync(packagePath)
+    ? (JSON.parse(readFileSync(packagePath, 'utf8')) as {
+        readonly name?: unknown;
+        readonly scripts?: unknown;
+        readonly nx?: { readonly name?: unknown; readonly tags?: unknown };
+      })
+    : {};
+  const packageName =
+    typeof packageManifest.name === 'string' ? packageManifest.name : undefined;
+  const configuredTags = Array.isArray(packageManifest.nx?.tags)
+    ? packageManifest.nx.tags.filter(
+        (value): value is string => typeof value === 'string',
+      )
+    : [];
+  return {
+    configPath: normalizedConfig,
+    root,
+    projectName:
+      (typeof packageManifest.nx?.name === 'string'
+        ? packageManifest.nx.name
+        : packageName) ?? basename(root),
+    ...(packageName ? { packageName } : {}),
+    tags: [
+      ...new Set([
+        ...configuredTags,
+        'platform:extension',
+        `scope:${options.scope ?? 'shared'}`,
+        'type:app',
+      ]),
+    ].sort(),
+    storeCommands: {},
+    framework: 'manifest',
+    manifestVersion: extensionManifest.manifest_version,
+    scripts: stringRecord(packageManifest.scripts),
   };
 }
 
@@ -187,6 +279,29 @@ function extensionTargets(
   return targets;
 }
 
+function genericExtensionTargets(
+  record: WxtConfigRecord,
+  options: ExtensionPluginOptions,
+): NonNullable<ProjectConfiguration['targets']> {
+  const targets: NonNullable<ProjectConfiguration['targets']> = {};
+  const scripts = record.scripts ?? {};
+  const mappings = [
+    [options.buildTargetName ?? 'build', 'build', true],
+    ['dev', 'dev', false],
+    ['test', 'test', true],
+    ['lint', 'lint', true],
+  ] as const;
+  for (const [target, script, cache] of mappings)
+    if (scripts[script])
+      targets[target] = {
+        executor: 'nx:run-script',
+        cache,
+        options: { script },
+        ...(script === 'dev' ? { continuous: true } : {}),
+      };
+  return targets;
+}
+
 export function projectsFromWxtConfigs(
   records: readonly WxtConfigRecord[],
   options: ExtensionPluginOptions = {},
@@ -197,17 +312,36 @@ export function projectsFromWxtConfigs(
       {
         name: record.projectName,
         root: record.root,
-        sourceRoot: `${record.root}/entrypoints`,
+        sourceRoot:
+          record.framework === 'manifest'
+            ? `${record.root}/src`
+            : `${record.root}/entrypoints`,
         projectType: 'application',
         tags: [...record.tags],
-        targets: extensionTargets(record, options),
+        targets:
+          record.framework === 'manifest'
+            ? genericExtensionTargets(record, options)
+            : extensionTargets(record, options),
         metadata: {
-          technologies: ['wxt', 'vite', 'webextension'],
-          description: 'WXT browser extension application',
+          technologies:
+            record.framework === 'manifest'
+              ? ['webextension']
+              : ['wxt', 'vite', 'webextension'],
+          description:
+            record.framework === 'manifest'
+              ? 'Repository-authored browser extension application'
+              : 'WXT browser extension application',
           'megamono:extension': {
             schemaVersion: 1,
             configPath: record.configPath,
-            browsers: ['chrome', 'firefox'],
+            framework: record.framework ?? 'wxt',
+            ...(record.manifestVersion
+              ? { manifestVersion: record.manifestVersion }
+              : {}),
+            browsers:
+              record.framework === 'manifest'
+                ? ['declared-by-repository']
+                : ['chrome', 'firefox'],
             safari: 'separate-apple-project',
           },
         },
@@ -217,7 +351,7 @@ export function projectsFromWxtConfigs(
 }
 
 export const createNodes: CreateNodes<ExtensionPluginOptions> = [
-  '**/wxt.config.{ts,js,mjs,mts}',
+  '**/{wxt.config.{ts,js,mjs,mts},manifest.json}',
   async (
     configFiles: readonly string[] | string,
     options: ExtensionPluginOptions = {},
@@ -227,7 +361,12 @@ export const createNodes: CreateNodes<ExtensionPluginOptions> = [
     const single = typeof configFiles === 'string';
     const files = single ? [configFiles] : configFiles;
     const records = files
-      .map((path) => recordForConfig(path, context.workspaceRoot, options))
+      .map((path) =>
+        basename(path) === 'manifest.json'
+          ? recordForManifest(path, context.workspaceRoot, options)
+          : recordForConfig(path, context.workspaceRoot, options),
+      )
+      .filter((record): record is WxtConfigRecord => record !== null)
       .sort((left, right) => left.configPath.localeCompare(right.configPath));
     for (const diagnostic of diagnostics) {
       process.stderr.write(`@megamono/nx-extension: ${diagnostic.message}\n`);

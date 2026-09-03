@@ -5,7 +5,7 @@ status: accepted
 visibility: internal
 projects: [megamono, nx-extension]
 topics: [generators, graph, nx, release, testing]
-summary: Defines WXT browser-extension inference, generation, browser-specific targets, store-command gating, and the Safari project boundary.
+summary: Defines WXT and generic browser-extension inference, WXT generation, store-command gating, and the Safari project boundary.
 date: 2026-09-01
 supersedes: null
 references: [spec-megamono-0000, spec-megamono-0003, spec-megamono-0006]
@@ -14,7 +14,7 @@ external_references: [playstack:26-extension]
 
 # Nx browser-extension integration
 
-`@megamono/nx-extension` makes WXT browser extensions first-class Nx applications without taking ownership of product capabilities or store credentials.
+`@megamono/nx-extension` makes WXT and repository-authored browser extensions first-class Nx applications without taking ownership of product capabilities or store credentials.
 
 ## Compatibility
 
@@ -23,6 +23,8 @@ The package supports Nx 18–23 inference and declares the same Node 18.18–24 
 ## Inference
 
 The plugin discovers `wxt.config.ts`, `.js`, `.mjs`, and `.mts` files. Package identity and existing Nx tags are retained when present. Every inferred project is an application tagged `platform:extension`, `type:app`, and with the configured scope.
+
+The plugin also discovers standard Manifest V2 and V3 `manifest.json` files. A valid extension manifest must declare its manifest version, name, and version. The nearest package manifest determines the project root and identity. Generic projects expose only repository-declared `build`, `dev`, `test`, and `lint` scripts through package-manager-neutral Nx script targets; Megamono never guesses their framework, output directory, browser matrix, archive format, or deployment. A WXT config in the same project takes precedence over its generated manifest.
 
 The target contract is explicit:
 

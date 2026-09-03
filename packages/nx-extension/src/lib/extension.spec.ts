@@ -94,4 +94,56 @@ describe('WXT project inference', () => {
       projectType: 'application',
     });
   });
+
+  it('infers a non-WXT browser extension from its standard manifest', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'nx-extension-manifest-'));
+    await mkdir(join(root, 'apps/extension/public'), { recursive: true });
+    await writeFile(
+      join(root, 'apps/extension/public/manifest.json'),
+      JSON.stringify({
+        manifest_version: 3,
+        name: 'Fixture',
+        version: '1.0.0',
+      }),
+    );
+    await writeFile(
+      join(root, 'apps/extension/package.json'),
+      JSON.stringify({
+        name: '@fixture/hand-authored-extension',
+        scripts: { build: 'vite build', dev: 'vite' },
+      }),
+    );
+    const callback = createNodes[1] as unknown as (
+      configFile: string,
+      options: Record<string, never>,
+      context: { workspaceRoot: string },
+    ) => Promise<{ projects: Record<string, ProjectConfiguration> }>;
+
+    const result = await callback(
+      'apps/extension/public/manifest.json',
+      {},
+      { workspaceRoot: root },
+    );
+
+    expect(result.projects['apps/extension']).toMatchObject({
+      name: '@fixture/hand-authored-extension',
+      projectType: 'application',
+      tags: expect.arrayContaining(['platform:extension']),
+      targets: {
+        build: { executor: 'nx:run-script', options: { script: 'build' } },
+        dev: {
+          executor: 'nx:run-script',
+          continuous: true,
+          options: { script: 'dev' },
+        },
+      },
+      metadata: {
+        technologies: ['webextension'],
+        'megamono:extension': {
+          framework: 'manifest',
+          manifestVersion: 3,
+        },
+      },
+    });
+  });
 });
