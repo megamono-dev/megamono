@@ -4,10 +4,18 @@ Global command dispatcher for adopting Megamono in an existing Nx workspace.
 
 ```sh
 npm install --global @megamono/cli
-megamono init --survey
-megamono init --profile=pilot --dry-run
-megamono init
+megamono adopt
+megamono adopt --profile=pilot --dry-run
+megamono adopt --only=health,inference,lint --write --yes
 ```
+
+`megamono adopt` is the mature-workspace spelling of the same initializer. It
+defaults to the write-free survey; `--dry-run` prints the exact operation and
+commit plan, while `--write` enables an explicitly accepted mutation. The
+survey includes a capability assessment covering detected repository behavior,
+the Megamono equivalent, compatible-as-is systems, importable configuration,
+planned files, and conflicts that still require a decision. `megamono init`
+remains available for direct orchestration and automation compatibility.
 
 `minimal`, `pilot`, `platform`, and `full` adoption profiles are forwarded to
 the local plugin. `pilot` is the mature-workspace path for lint, health, and
@@ -64,7 +72,8 @@ changing the installed major:
 megamono add database primary --adapter=prisma --schema=prisma/schema.prisma
 ```
 
-All plugin options remain forwardable through `megamono init`, including
+All plugin options remain forwardable through `megamono init` and
+`megamono adopt`, including
 per-project `--adoptionMap`, reviewed `--docsAdoptionMap`, `--ciMode`, optional
 toolchain pins, reviewed `--renderServiceProjects` mappings, and non-secret
 `--packageRegistries` scope routing.

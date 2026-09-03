@@ -53,6 +53,18 @@ describe('workspace init survey and plan', () => {
         render: ['render.yaml'],
       },
       projects: [{ name: 'web', targets: ['build'] }],
+      capabilities: expect.arrayContaining([
+        expect.objectContaining({
+          module: 'docs',
+          detected: true,
+          status: 'importable',
+        }),
+        expect.objectContaining({
+          module: 'inference',
+          detected: true,
+          status: 'importable',
+        }),
+      ]),
       inventory: {
         schemaVersion: 1,
         projects: [
@@ -116,6 +128,9 @@ describe('workspace init survey and plan', () => {
     );
     expect(renderWorkspaceInitSurvey(surveyWorkspaceInit(tree))).toContain(
       '## Copy-ready adoption maps',
+    );
+    expect(renderWorkspaceInitSurvey(surveyWorkspaceInit(tree))).toContain(
+      '## Capability adoption assessment',
     );
     expect(tree.listChanges()).toEqual(changes);
   });

@@ -139,6 +139,8 @@ megamono init --survey
 megamono init --playstack --playstack-packages=auth,accounts
 megamono init --playstack-packages=auth --playstack-web=apps/storefront --playstack-api=apps/gateway
 megamono init --playstack --local-packages=yalc
+megamono adopt
+megamono adopt --only=health,inference,lint --write --yes
 megamono add app web
 megamono add app api --name=admin-api
 megamono add database primary --adapter=prisma
@@ -153,6 +155,8 @@ megamono --version
 ```
 
 `megamono init [...options]` finds the workspace from the current directory, resolves root package-manager ownership from the committed lockfile or `packageManager` declaration, verifies that the corresponding local package manager, Nx, and `@megamono/plugin` are installed, and delegates to the local `@megamono/plugin:workspace-init` generator through the recorded manager's adapter. A core-only `--survey` is the exception: it invokes the repository-local Nx binary directly through Node, so an unsupported or unavailable global package manager does not prevent read-only inspection. Every option not owned by the Playstack orchestration families below is forwarded as its own argument without reinterpretation, including `--survey`, `--only`, `--interactive`, `--yes`, and generator options added by a compatible local plugin.
+
+`megamono adopt` is the safe mature-workspace alias. It defaults to `init --survey`, preserves an explicit `--dry-run`, and requires `--write` before delegating a mutation. Its survey adds module-level adoption assessments without introducing a separate source of planning or mutation behavior.
 
 `megamono generate <name> [...options]` reads the workspace-local plugin availability registry before delegation. Available names run through the local Nx and package manager; gated and reserved names exit `3` with the registry's exact unsatisfied gate and never reach Nx. This preserves an available-only published collection while giving the dedicated CLI a stable diagnostic for canonical names that are not yet buildable.
 

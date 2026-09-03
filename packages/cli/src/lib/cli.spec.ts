@@ -790,6 +790,35 @@ describe('@megamono/cli', () => {
     ]);
   });
 
+  it('defaults adopt to a read-only survey and requires write for mutation', async () => {
+    const root = await workspace('pnpm');
+    const surveyed = io(root);
+
+    expect((await runMegamonoCli(['adopt'], surveyed.value)).exitCode).toBe(0);
+    expect(surveyed.invocations[0]?.args).toEqual(
+      expect.arrayContaining(['@megamono/plugin:workspace-init', '--survey']),
+    );
+
+    const written = io(root);
+    expect(
+      (
+        await runMegamonoCli(
+          ['adopt', '--only=health', '--write', '--yes'],
+          written.value,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(written.invocations[0]?.args).toEqual(
+      expect.arrayContaining([
+        '@megamono/plugin:workspace-init',
+        '--only=health',
+        '--yes',
+      ]),
+    );
+    expect(written.invocations[0]?.args).not.toContain('--survey');
+    expect(written.invocations[0]?.args).not.toContain('--write');
+  });
+
   it('forwards a named adoption profile to the workspace-local plugin', async () => {
     const root = await workspace('pnpm');
     const harness = io(root);

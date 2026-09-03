@@ -146,6 +146,7 @@ export interface WorkspaceInitSurvey {
     readonly megamono: readonly string[];
   };
   readonly recommendations: readonly WorkspaceInitSurveyRecommendation[];
+  readonly capabilities: readonly WorkspaceInitCapabilityAssessment[];
   readonly adoptionTemplates: {
     readonly projects: {
       readonly projects: Readonly<
@@ -177,6 +178,18 @@ export interface WorkspaceInitSurvey {
   };
 }
 
+export interface WorkspaceInitCapabilityAssessment {
+  readonly module: WorkspaceInitModule;
+  readonly detected: boolean;
+  readonly evidence: readonly string[];
+  readonly megamonoEquivalent: string;
+  readonly status:
+    'available' | 'compatible-as-is' | 'importable' | 'decision-required';
+  readonly importableConfiguration: readonly string[];
+  readonly plannedFiles: readonly string[];
+  readonly conflicts: readonly string[];
+}
+
 export interface WorkspaceInitHostReadiness {
   readonly platform: NodeJS.Platform;
   readonly active: {
@@ -197,6 +210,110 @@ export interface WorkspaceInitSurveyRecommendation {
   readonly action: 'skip' | 'configure';
   readonly paths: readonly string[];
   readonly reason: string;
+}
+
+const CAPABILITY_EQUIVALENTS: Readonly<
+  Record<
+    WorkspaceInitModule,
+    { readonly equivalent: string; readonly files: readonly string[] }
+  >
+> = {
+  docs: {
+    equivalent:
+      'Repository lifecycle records, indexes, and Content Collections loader',
+    files: ['docs/project.json', 'docs/INDEX.md', 'content-collections.ts'],
+  },
+  agents: {
+    equivalent: 'Bounded repository instructions and portable agent guidance',
+    files: ['AGENTS.md', 'CLAUDE.md', 'docs/DESIGN.md'],
+  },
+  ci: {
+    equivalent: 'Composable Nx affected checks',
+    files: ['.github/workflows/megamono-ci.yml'],
+  },
+  release: {
+    equivalent: 'Nx release groups and protected publish channels',
+    files: ['nx.json', '.github/workflows/release.yml'],
+  },
+  lint: {
+    equivalent: 'Megamono project tags and ESLint dependency boundaries',
+    files: ['eslint.config.mjs', 'project.json'],
+  },
+  skills: {
+    equivalent: 'Portable managed workspace skills',
+    files: ['.agents/skills', '.claude/skills'],
+  },
+  health: {
+    equivalent: 'Repository health targets and scheduled reporting',
+    files: ['.github/workflows/megamono-health.yml', '.megamono/health.json'],
+  },
+  inference: {
+    equivalent: 'Nx project inference for detected platform manifests',
+    files: ['nx.json', 'package.json'],
+  },
+};
+
+function capabilityAssessments(
+  existing: WorkspaceInitSurvey['existing'],
+  manifests: WorkspaceInitSurvey['manifests'],
+  documentation: WorkspaceInitSurvey['documentation'],
+  agents: WorkspaceInitSurvey['agents'],
+  recommendations: readonly WorkspaceInitSurveyRecommendation[],
+): readonly WorkspaceInitCapabilityAssessment[] {
+  const evidence: Readonly<Record<WorkspaceInitModule, readonly string[]>> = {
+    docs: [...documentation.roots, ...existing.contentCollections],
+    agents: [...agents.files, ...agents.skillRoots],
+    ci: existing.ci,
+    release: existing.ci.filter((path) => /release|publish/i.test(path)),
+    lint: existing.eslint,
+    skills: agents.skillRoots,
+    health: existing.health,
+    inference: [
+      ...manifests.apple,
+      ...manifests.cargo,
+      ...manifests.cloudflare,
+      ...manifests.render,
+      ...manifests.unsupported,
+    ],
+  };
+  return WORKSPACE_INIT_MODULES.map((module) => {
+    const moduleRecommendations = recommendations.filter(
+      (recommendation) => recommendation.module === module,
+    );
+    const conflicts = moduleRecommendations
+      .filter(({ action }) => action === 'configure')
+      .map(({ reason }) => reason);
+    const compatible = moduleRecommendations.some(
+      ({ action }) => action === 'skip',
+    );
+    const paths = [...new Set(evidence[module])].sort(compare);
+    return {
+      module,
+      detected: paths.length > 0,
+      evidence: paths,
+      megamonoEquivalent: CAPABILITY_EQUIVALENTS[module].equivalent,
+      status:
+        conflicts.length > 0
+          ? 'decision-required'
+          : compatible
+            ? 'compatible-as-is'
+            : paths.length > 0
+              ? 'importable'
+              : 'available',
+      importableConfiguration:
+        module === 'docs'
+          ? ['docsAdoptionMap', 'docsLoader', 'docsModule', 'docsOutput']
+          : module === 'ci'
+            ? ['ciMode']
+            : module === 'inference'
+              ? ['adoptionMap', 'renderServiceProjects']
+              : module === 'lint'
+                ? ['adoptionMap', 'defaultScope', 'defaultPlatform']
+                : [],
+      plannedFiles: CAPABILITY_EQUIVALENTS[module].files,
+      conflicts,
+    };
+  });
 }
 
 export interface WorkspaceInitReduction {
@@ -956,6 +1073,86 @@ export function surveyWorkspaceInit(
   const unmappedRenderServices = inventory.deployments.flatMap((deployment) =>
     (deployment.renderServices ?? []).filter(({ rootDir }) => rootDir === null),
   );
+  const manifests = {
+    apple: files.filter((path) => path.endsWith('Package.swift')),
+    cargo: files.filter((path) => path.endsWith('Cargo.toml')),
+    cloudflare: files.filter((path) =>
+      /(?:^|\/)wrangler\.(?:jsonc?|toml)$/.test(path),
+    ),
+    render: files.filter((path) => /(?:^|\/)render\.yaml$/.test(path)),
+    unsupported: files.filter((path) =>
+      /(?:^|\/)(?:build\.gradle(?:\.kts)?|go\.mod|pom\.xml)$/.test(path),
+    ),
+  };
+  const agents = {
+    files: ['AGENTS.md', 'CLAUDE.md', '.cursorrules'].filter((path) =>
+      files.includes(path),
+    ),
+    skillRoots: ['.agents/skills', '.claude/skills'].filter((path) =>
+      files.some((file) => file.startsWith(`${path}/`)),
+    ),
+  };
+  const existing = {
+    ci: workflows.filter((path) => !/health/i.test(path)),
+    health: workflows.filter((path) => /health/i.test(path)),
+    eslint: [
+      'eslint.config.js',
+      'eslint.config.mjs',
+      'eslint.config.cjs',
+      '.eslintrc',
+      '.eslintrc.json',
+      '.eslintrc.js',
+      '.eslintrc.cjs',
+      '.eslintrc.yml',
+      '.eslintrc.yaml',
+    ].filter((path) => files.includes(path)),
+    contentCollections,
+    megamono: ['megamono.json', '.megamono/artifacts.json'].filter((path) =>
+      files.includes(path),
+    ),
+  };
+  const recommendations: readonly WorkspaceInitSurveyRecommendation[] = [
+    ...(equivalentAffectedCi.length > 0
+      ? [
+          {
+            module: 'ci' as const,
+            action: 'skip' as const,
+            paths: equivalentAffectedCi,
+            reason:
+              'Existing repository-owned CI runs lint, test, and build through Nx affected or full-workspace run-many.',
+          },
+        ]
+      : []),
+    ...(coexistingContentCollections.length > 0
+      ? [
+          {
+            module: 'docs' as const,
+            action: 'configure' as const,
+            paths: coexistingContentCollections,
+            reason:
+              'Keep the existing Content Collections setup separate by passing --docsLoader=.megamono/content-collections.ts --docsModule=megamono-docs --docsOutput=.megamono/content-collections, or explicitly adopt a compatible loader with --docsLoaderMode=adopt.',
+          },
+        ]
+      : []),
+    ...(unmappedRenderServices.length > 0
+      ? [
+          {
+            module: 'inference' as const,
+            action: 'configure' as const,
+            paths: inventory.deployments
+              .filter(({ provider }) => provider === 'render')
+              .flatMap(({ paths }) => paths),
+            reason:
+              'Review the generated Render service project map and pass it with --renderServiceProjects; root-level Render commands must not be attached to guessed Nx projects.',
+          },
+        ]
+      : []),
+  ];
+  const documentationInventory = {
+    roots: [...roots].sort(compare),
+    markdown,
+    ...documentation,
+  };
   return {
     schemaVersion: 1,
     baseline: {
@@ -975,86 +1172,18 @@ export function surveyWorkspaceInit(
     host: options.host ?? null,
     projects,
     inventory,
-    manifests: {
-      apple: files.filter((path) => path.endsWith('Package.swift')),
-      cargo: files.filter((path) => path.endsWith('Cargo.toml')),
-      cloudflare: files.filter((path) =>
-        /(?:^|\/)wrangler\.(?:jsonc?|toml)$/.test(path),
-      ),
-      render: files.filter((path) => /(?:^|\/)render\.yaml$/.test(path)),
-      unsupported: files.filter((path) =>
-        /(?:^|\/)(?:build\.gradle(?:\.kts)?|go\.mod|pom\.xml)$/.test(path),
-      ),
-    },
-    documentation: {
-      roots: [...roots].sort(compare),
-      markdown,
-      ...documentation,
-    },
-    agents: {
-      files: ['AGENTS.md', 'CLAUDE.md', '.cursorrules'].filter((path) =>
-        files.includes(path),
-      ),
-      skillRoots: ['.agents/skills', '.claude/skills'].filter((path) =>
-        files.some((file) => file.startsWith(`${path}/`)),
-      ),
-    },
-    existing: {
-      ci: workflows.filter((path) => !/health/i.test(path)),
-      health: workflows.filter((path) => /health/i.test(path)),
-      eslint: [
-        'eslint.config.js',
-        'eslint.config.mjs',
-        'eslint.config.cjs',
-        '.eslintrc',
-        '.eslintrc.json',
-        '.eslintrc.js',
-        '.eslintrc.cjs',
-        '.eslintrc.yml',
-        '.eslintrc.yaml',
-      ].filter((path) => files.includes(path)),
-      contentCollections,
-      megamono: ['megamono.json', '.megamono/artifacts.json'].filter((path) =>
-        files.includes(path),
-      ),
-    },
-    recommendations: [
-      ...(equivalentAffectedCi.length > 0
-        ? [
-            {
-              module: 'ci' as const,
-              action: 'skip' as const,
-              paths: equivalentAffectedCi,
-              reason:
-                'Existing repository-owned CI runs lint, test, and build through Nx affected or full-workspace run-many.',
-            },
-          ]
-        : []),
-      ...(coexistingContentCollections.length > 0
-        ? [
-            {
-              module: 'docs' as const,
-              action: 'configure' as const,
-              paths: coexistingContentCollections,
-              reason:
-                'Keep the existing Content Collections setup separate by passing --docsLoader=.megamono/content-collections.ts --docsModule=megamono-docs --docsOutput=.megamono/content-collections, or explicitly adopt a compatible loader with --docsLoaderMode=adopt.',
-            },
-          ]
-        : []),
-      ...(unmappedRenderServices.length > 0
-        ? [
-            {
-              module: 'inference' as const,
-              action: 'configure' as const,
-              paths: inventory.deployments
-                .filter(({ provider }) => provider === 'render')
-                .flatMap(({ paths }) => paths),
-              reason:
-                'Review the generated Render service project map and pass it with --renderServiceProjects; root-level Render commands must not be attached to guessed Nx projects.',
-            },
-          ]
-        : []),
-    ],
+    manifests,
+    documentation: documentationInventory,
+    agents,
+    existing,
+    recommendations,
+    capabilities: capabilityAssessments(
+      existing,
+      manifests,
+      documentationInventory,
+      agents,
+      recommendations,
+    ),
     adoptionTemplates: adoptionTemplates(
       tree,
       projects,
@@ -1962,6 +2091,15 @@ ${values([...survey.agents.files, ...survey.agents.skillRoots])}
 - ESLint: ${survey.existing.eslint.join(', ') || 'none'}
 - Content Collections: ${survey.existing.contentCollections.join(', ') || 'none'}
 - Megamono: ${survey.existing.megamono.join(', ') || 'none'}
+
+## Capability adoption assessment
+
+${values(
+  survey.capabilities.map(
+    (capability) =>
+      `${capability.module} — ${capability.status}; detected: ${capability.detected ? 'yes' : 'no'}; equivalent: ${capability.megamonoEquivalent}; evidence: ${capability.evidence.join(', ') || 'none'}; importable configuration: ${capability.importableConfiguration.join(', ') || 'none'}; planned files: ${capability.plannedFiles.join(', ') || 'none'}; conflicts: ${capability.conflicts.join(' | ') || 'none'}`,
+  ),
+)}
 
 ## Adoption recommendations
 

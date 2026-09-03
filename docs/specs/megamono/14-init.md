@@ -44,6 +44,20 @@ npm install --global @megamono/cli
 megamono init
 ```
 
+For an established workspace, the preferred CLI surface is safe-by-default:
+
+```text
+megamono adopt
+megamono adopt --only=health,inference,lint --dry-run
+megamono adopt --only=health,inference,lint --write --yes
+```
+
+`adopt` delegates to this same generator. With no execution-mode flag it adds
+`--survey`; `--dry-run` returns the ordered operation plan; and `--write`
+removes the safety alias before delegation so the normal clean-branch,
+decision, and confirmation requirements remain authoritative. There is no
+second adoption implementation.
+
 The direct generator invocation remains supported for repository-local automation:
 
 ```text
@@ -95,6 +109,8 @@ Eligibility, mutation safety, and host readiness are separate decisions. Any est
 Survey inventory honors repository `.gitignore` rules, including nested ignore files, and always excludes generated dependency/build surfaces such as `.git`, `.nx`, `.yalc`, `.build`, `.next`, `DerivedData`, `node_modules`, `dist`, and coverage output. Dependency checkouts and ignored generated Markdown never affect document counts, classification, or adoption maps.
 
 The survey embeds `inventory.schemaVersion: 1` as the stable integration handoff. Inventory is derived per Nx project rather than from repository-root markers. It records project roots and targets alongside nested Next router, Nest, Expo/React Native, and Vite evidence; imported external package names; environment-variable names but never their values; named or unresolved Prisma schema contexts and migration roots; Redis and BullMQ consumers; and explicit Docker or Render deployment markers. Render inventory includes declared service names, explicit roots, and exact Nx project candidates referenced by Blueprint commands. A Procfile without `render.yaml` is only a `partial-marker`, because dashboard-owned Render services cannot be reconstructed from repository files. Multiple unnamed database contexts and other incomplete topology are returned as `inventory.ambiguities`; survey never invents product-purpose names or deployment services to make the report appear complete.
+
+The same survey includes one capability assessment per adoption module. Each assessment names detected evidence, the Megamono equivalent, whether existing behavior is compatible as-is, configuration that can be imported, files a selected module may modify, and conflicts requiring a decision. This section is deterministic in both Markdown and JSON and remains a report rather than authorization to mutate.
 
 This contract is the repository-side input for Playstack integration planning. Megamono may pass the versioned inventory and explicit Nx destinations to Playstack, but package-specific routes, provider tokens, environment requirements, source templates, and artifact lifecycle remain Playstack-owned. Megamono does not interpret database-model collisions or copy capability recipes into its plugin.
 

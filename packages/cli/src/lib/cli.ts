@@ -186,6 +186,7 @@ const HELP = `Usage: megamono <command> [options]
 
 Commands:
   init                 Adopt Megamono in an existing Nx workspace
+  adopt                Survey first, then selectively adopt with --write
   add app [type]       Add a convention-aligned application
   add database [name]  Add a named Prisma or Drizzle database project
   add <module>         Add one repository-governance module
@@ -278,6 +279,18 @@ Examples:
   megamono init --playstack --local-packages=yalc
 
 The workspace must contain local nx and @megamono/plugin installations.`;
+
+const ADOPT_HELP = `Usage: megamono adopt [generator options]
+
+Examples:
+  megamono adopt
+  megamono adopt --survey --format=json
+  megamono adopt --only=health,inference,lint --dry-run
+  megamono adopt --only=health,inference,lint --write --yes
+
+Adopt is the mature-workspace entry point. It defaults to a read-only survey.
+Pass --dry-run for an operation plan or --write to apply an accepted plan. All
+workspace-init options are supported.`;
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -2313,6 +2326,26 @@ async function runInit(
   return { exitCode: configured.exitCode };
 }
 
+async function runAdopt(
+  args: readonly string[],
+  io: MegamonoCliIo,
+): Promise<MegamonoCliResult> {
+  const write = args.includes('--write');
+  const generatorArgs = args.filter((argument) => argument !== '--write');
+  if (
+    !write &&
+    !generatorArgs.some(
+      (argument) =>
+        argument === '--survey' ||
+        argument.startsWith('--survey=') ||
+        argument === '--dry-run' ||
+        argument.startsWith('--dry-run='),
+    )
+  )
+    return runInit(['--survey', ...generatorArgs], io);
+  return runInit(generatorArgs, io);
+}
+
 interface HostedCommandOptions {
   readonly serviceUrl: string;
   readonly account?: string;
@@ -2527,6 +2560,13 @@ export async function runMegamonoCli(
         return { exitCode: 0 };
       }
       return await runInit(args.slice(1), io);
+    }
+    if (args[0] === 'adopt') {
+      if (args[1] === '--help' || args[1] === '-h') {
+        io.stdout(ADOPT_HELP);
+        return { exitCode: 0 };
+      }
+      return await runAdopt(args.slice(1), io);
     }
     if (args[0] === 'add') {
       if (args[1] === '--help' || args[1] === '-h') {
