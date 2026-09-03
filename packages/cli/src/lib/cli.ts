@@ -193,6 +193,8 @@ Commands:
   auth login|status|logout
                        Manage optional hosted-service authentication
   account list|use     List or switch personal and organization accounts
+  health               Run workspace checks with a package-source profile
+  verify <kind>        Verify runtime, dependency, or container portability
   generate <name>      Run an available local Megamono generator
   help                 Show this help
 
@@ -291,6 +293,23 @@ Examples:
 Adopt is the mature-workspace entry point. It defaults to a read-only survey.
 Pass --dry-run for an operation plan or --write to apply an accepted plan. All
 workspace-init options are supported.`;
+
+const HEALTH_HELP = `Usage: megamono health [--profile=development|migration|ci|release]
+
+Runs the initialized workspace's structural check target. CI=true selects the
+ci package-source profile when an explicit profile is absent.`;
+
+const VERIFY_HELP = `Usage: megamono verify runtime <project> [options]
+       megamono verify dependencies [options]
+       megamono verify container [options]
+
+Examples:
+  megamono verify runtime api --outputPath=dist/apps/api
+  megamono verify dependencies --checkActive=false
+  megamono verify container --dockerfile=apps/api/Dockerfile
+  megamono verify container --dockerfile=apps/api/Dockerfile --smoke
+
+Verification is read-only unless container --smoke is explicitly requested.`;
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -2346,6 +2365,67 @@ async function runAdopt(
   return runInit(generatorArgs, io);
 }
 
+async function runWorkspaceTarget(
+  io: MegamonoCliIo,
+  target: string,
+  args: readonly string[],
+): Promise<MegamonoCliResult> {
+  const root = await findWorkspaceRoot(io.cwd);
+  const packageManager = await detectPackageManager(root);
+  await assertActiveToolchainPreflight(io, { root, packageManager });
+  if (!localPackageAvailable(root, 'nx'))
+    throw new CliError('The workspace-local nx package is not installed.', 3);
+  if (!localPackageAvailable(root, '@megamono/plugin'))
+    throw new CliError(
+      `@megamono/plugin is not installed locally. Run: ${pluginInstallInstruction(packageManager, 'registry')}.`,
+      3,
+    );
+  const [command, commandArgs] = nxCommandInvocation(packageManager, [
+    'run',
+    target,
+    ...args,
+  ]);
+  const result = await io.runCommand(command, commandArgs, { cwd: root });
+  return { exitCode: result.exitCode };
+}
+
+async function runHealth(
+  args: readonly string[],
+  io: MegamonoCliIo,
+): Promise<MegamonoCliResult> {
+  if (args.some((argument) => !argument.startsWith('-')))
+    throw new CliError(HEALTH_HELP, 2);
+  return runWorkspaceTarget(io, 'megamono:check', args);
+}
+
+async function runVerify(
+  args: readonly string[],
+  io: MegamonoCliIo,
+): Promise<MegamonoCliResult> {
+  const kind = args[0];
+  if (kind === 'runtime') {
+    const project = args[1];
+    if (!project || project.startsWith('-')) throw new CliError(VERIFY_HELP, 2);
+    return runWorkspaceTarget(io, 'megamono:verify-runtime', [
+      `--project=${project}`,
+      ...args.slice(2),
+    ]);
+  }
+  if (kind === 'dependencies') {
+    if (args[1] && !args[1].startsWith('-')) throw new CliError(VERIFY_HELP, 2);
+    return runWorkspaceTarget(
+      io,
+      'megamono:verify-dependencies',
+      args.slice(1),
+    );
+  }
+  if (kind === 'container') {
+    if (args[1] && !args[1].startsWith('-')) throw new CliError(VERIFY_HELP, 2);
+    return runWorkspaceTarget(io, 'megamono:verify-container', args.slice(1));
+  }
+  throw new CliError(VERIFY_HELP, 2);
+}
+
 interface HostedCommandOptions {
   readonly serviceUrl: string;
   readonly account?: string;
@@ -2587,6 +2667,20 @@ export async function runMegamonoCli(
     }
     if (args[0] === 'account') {
       return await runAccount(args.slice(1), io);
+    }
+    if (args[0] === 'health') {
+      if (args[1] === '--help' || args[1] === '-h') {
+        io.stdout(HEALTH_HELP);
+        return { exitCode: 0 };
+      }
+      return await runHealth(args.slice(1), io);
+    }
+    if (args[0] === 'verify') {
+      if (args[1] === '--help' || args[1] === '-h') {
+        io.stdout(VERIFY_HELP);
+        return { exitCode: 0 };
+      }
+      return await runVerify(args.slice(1), io);
     }
     if (args[0] === 'generate') {
       return await runGenerate(args.slice(1), io);

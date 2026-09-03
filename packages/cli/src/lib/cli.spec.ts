@@ -819,6 +819,56 @@ describe('@megamono/cli', () => {
     expect(written.invocations[0]?.args).not.toContain('--write');
   });
 
+  it('runs composable health and portability targets through local Nx', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+
+    expect(
+      (await runMegamonoCli(['health', '--profile=migration'], harness.value))
+        .exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runMegamonoCli(
+          ['verify', 'runtime', 'api', '--outputPath=dist/apps/api'],
+          harness.value,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      (await runMegamonoCli(['verify', 'dependencies'], harness.value))
+        .exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runMegamonoCli(
+          ['verify', 'container', '--dockerfile=apps/api/Dockerfile'],
+          harness.value,
+        )
+      ).exitCode,
+    ).toBe(0);
+
+    expect(harness.invocations.map(({ args }) => args)).toEqual([
+      ['exec', 'nx', 'run', 'megamono:check', '--profile=migration'],
+      [
+        'exec',
+        'nx',
+        'run',
+        'megamono:verify-runtime',
+        '--project=api',
+        '--outputPath=dist/apps/api',
+      ],
+      ['exec', 'nx', 'run', 'megamono:verify-dependencies'],
+      [
+        'exec',
+        'nx',
+        'run',
+        'megamono:verify-container',
+        '--dockerfile=apps/api/Dockerfile',
+      ],
+    ]);
+  });
+
   it('forwards a named adoption profile to the workspace-local plugin', async () => {
     const root = await workspace('pnpm');
     const harness = io(root);

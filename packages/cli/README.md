@@ -26,6 +26,21 @@ includes suggested commit boundaries without staging or committing files.
 The target workspace must install `@megamono/plugin` as a development
 dependency. The CLI always delegates to the workspace-local Nx and plugin.
 
+Initialized workspaces expose composable verification without requiring users
+to remember executor target names:
+
+```sh
+megamono health --profile=development
+megamono health --profile=ci
+megamono verify runtime api --outputPath=dist/apps/api
+megamono verify dependencies
+megamono verify container --dockerfile=apps/api/Dockerfile
+```
+
+These commands delegate to `megamono:check`, `verify-runtime`,
+`verify-dependencies`, and `verify-container` respectively. Container
+verification remains static unless `--smoke` is explicitly passed.
+
 Hosted authentication is optional and independent of repository discovery:
 
 ```sh

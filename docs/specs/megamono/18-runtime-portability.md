@@ -29,6 +29,17 @@ nx run megamono:verify-runtime --project=api
 nx run megamono:verify-runtime --project=api --outputPath=dist/apps/api --report=.megamono/runtime-api.json
 ```
 
+The global dispatcher provides equivalent workspace-local commands for humans and composable CI steps:
+
+```text
+megamono health --profile=ci
+megamono verify runtime api --outputPath=dist/apps/api
+megamono verify dependencies
+megamono verify container --dockerfile=apps/api/Dockerfile
+```
+
+The dispatcher resolves the repository's selected package manager and invokes only the installed Nx and plugin. It does not duplicate verification logic.
+
 Missing output is fail-closed and directs the caller to build first. Verification does not modify dependency declarations.
 
 ## Package-manager and container layers
