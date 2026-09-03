@@ -78,6 +78,14 @@ export {
   type WorkspaceDocsContract,
   type RenderServiceProjects,
 } from './lib/workspace-init-plan';
+export {
+  externalSpecifiers,
+  serializeRuntimeDependencyReport,
+  verifyRuntimeDependencies,
+  type RuntimeDependencyFinding,
+  type RuntimeDependencyFindingCode,
+  type RuntimeDependencyReport,
+} from './lib/runtime-verification';
 export { createWorkspaceInventory } from './lib/workspace-inventory';
 export type {
   WorkspaceInventory,

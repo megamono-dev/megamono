@@ -1,0 +1,40 @@
+---
+id: spec-megamono-0018
+type: spec
+status: accepted
+visibility: internal
+projects: [megamono]
+topics: [dependencies, health, migration, nx, testing]
+summary: Defines production runtime dependency and package-manager portability verification for mature workspaces.
+date: 2026-09-03
+supersedes: null
+references: [spec-megamono-0000, spec-megamono-0006, spec-megamono-0014]
+external_references: []
+---
+
+# Runtime portability verification
+
+Mature-workspace adoption must detect runtime assumptions hidden by a developer machine, a hoisted dependency tree, or a broader build-stage installation. These checks complement repository structure and lifecycle health; they do not replace an application's tests or deployment authority.
+
+## Built-output contract
+
+`@megamono/plugin:verify-runtime` accepts an existing Nx project and a workspace-relative built output path. When the path is omitted, it reads the selected build target's `options.outputPath` or first declared output. It never builds implicitly.
+
+The verifier recursively inspects JavaScript output for literal CommonJS requires, static imports, and dynamic imports. Relative paths, URL-like specifiers, import-map aliases, and Node built-ins are excluded. Package subpaths normalize to their owning package. Every remaining external must appear in `dependencies` or `optionalDependencies` in the project or root manifest. A package found only in `devDependencies` is a distinct error from a wholly undeclared package. Reports are deterministic JSON and include exact output-file evidence without copying source contents.
+
+The managed `megamono` Nx project exposes this executor as `verify-runtime`, allowing a repository to run:
+
+```text
+nx run megamono:verify-runtime --project=api
+nx run megamono:verify-runtime --project=api --outputPath=dist/apps/api --report=.megamono/runtime-api.json
+```
+
+Missing output is fail-closed and directs the caller to build first. Verification does not modify dependency declarations.
+
+## Package-manager and container layers
+
+Static output inspection is the first layer. A separate workspace-dependency verifier must inspect scripts, preload modules, executable ownership, workspace package closure, lockfile/Corepack/runtime alignment, and production-install contexts. It must use the repository's selected package manager and must not infer compatibility from a globally hoisted executable.
+
+Container validation is a further explicit layer. Static Dockerfile analysis checks build stages, copied manifests/lockfiles, production-install commands, and selected Nx project outputs. Optional materialization may create a temporary production dependency tree, and optional container smoke testing may invoke Docker only when the caller requests it. Network access, image builds, and container execution are never part of the default health report.
+
+The acceptance fixtures include built output requiring `tslib` and a `tsconfig-paths/register` preload so npm/Yarn hoisting assumptions cannot silently pass the pnpm portability contract.

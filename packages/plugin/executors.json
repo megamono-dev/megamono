@@ -30,6 +30,11 @@
       "schema": "./dist/executors/check/schema.json",
       "description": "Validate Megamono repository structure"
     },
+    "verify-runtime": {
+      "implementation": "./dist/executors/verify-runtime/verify-runtime",
+      "schema": "./dist/executors/verify-runtime/schema.json",
+      "description": "Verify production dependencies used by built JavaScript output"
+    },
     "import": {
       "implementation": "./dist/executors/import/import",
       "schema": "./dist/executors/import/schema.json",

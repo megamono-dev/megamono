@@ -76,6 +76,22 @@ retains compatible existing ranges, lists missing dependencies individually,
 and refuses incompatible, duplicate, or non-semver declarations instead of
 silently upgrading an adopted workspace.
 
+## Verify a production runtime
+
+Workspace initialization adds a generic `megamono:verify-runtime` target. It
+inspects an existing JavaScript build and fails when an external package is
+undeclared or available only through `devDependencies`:
+
+```sh
+npm exec nx -- run megamono:verify-runtime --project=api
+npm exec nx -- run megamono:verify-runtime --project=api \
+  --outputPath=dist/apps/api \
+  --report=.megamono/runtime-api.json
+```
+
+The verifier never builds or changes dependencies implicitly. Build the project
+first, and provide `--outputPath` when its build target does not declare one.
+
 ## Generator availability
 
 `@megamono/plugin/availability.json` is the canonical registry for available,
