@@ -35,6 +35,10 @@ It is also the piece Nx structurally cannot take. `create-nx-workspace --preset`
 
 Not a fixed preset. A guided setup that asks a handful of good questions and composes the answer.
 
+The application question begins with a one-line overview of every supported type so a contributor does not need prior Nx or Megamono vocabulary. The maintained descriptions distinguish product web apps, public sites, APIs, edge workers, Expo mobile apps, Tauri desktop apps, native Apple apps, and browser extensions. Selection remains one quick comma-separated answer.
+
+Each answer uses `type` or `type:name`. A bare type accepts its conventional name and root (`web` → `apps/web`); the optional name creates a distinct instance (`web:admin` → `apps/admin`). Every type is repeatable, including `extension:extension-grids extension:extension-guides`. Names are normalized slugs and must be unique across the workspace because the name determines the root, Nx project identity, generated e2e identity, port assignment, and Springbar candidate. Unknown plural types receive a singular correction rather than being interpreted as a separate collection syntax.
+
 The design tension is a combinatorial matrix that becomes unmaintainable. The line:
 
 - **Fixed (the opinionated spine):** docs and agent structure, conventions, lint rules, library boundaries, release mechanics, and maintained framework presets. The Next preset fixes Pages Router, `src/`, ESLint, and Playwright as explicit generator inputs rather than inherited Nx defaults.
@@ -113,16 +117,16 @@ The billboard and selected styling starter, Nest feature library, project tags, 
 
 New Nest applications explicitly enable ESLint and emit their Jest/Supertest e2e project. Greenfield lint violations are errors. Existing-workspace adoption and conversion retain their separate warning-first migration contract.
 
-Generated servers use stable, non-overlapping high ports derived from the normalized workspace scope, with consecutive assignments for API, site, and web. This reduces collisions when several generated workspaces run on one machine and prevents an e2e suite from silently connecting to the wrong application. Every e2e command owns its server lifecycle, refuses to reuse an unknown process on that port, and runs as a separate verification step so Nx tears it down before starting the next suite. `PORT` controls both the server and test client, while `BASE_URL` remains available for testing an externally hosted Next application.
+Generated servers use stable, non-overlapping high ports derived from the normalized workspace scope. API, site, and web keep their conventional offsets; additional named instances of a type receive deterministic subsequent offsets. Ports are recorded by instance name. This reduces collisions when several generated workspaces run on one machine and prevents an e2e suite from silently connecting to the wrong application. Every e2e command owns its server lifecycle, refuses to reuse an unknown process on that port, and runs as a separate verification step so Nx tears it down before starting the next suite. `PORT` controls both the server and test client, while `BASE_URL` remains available for testing an externally hosted Next application.
 
 The desktop preset emits a minimal Tauri 2 application directly through `@megamono/plugin:app`, avoiding a second host-filesystem scaffold that cannot participate in Nx dry-run or conflict preflight. The JavaScript package, Cargo package, Tauri product, and inferred Nx project are all named `<repo>-desktop`; the application identifier is `com.<repo>.desktop`; `apps/*` is registered in the selected workspace format; and `@megamono/nx-cargo` is added to `nx.json` with `scope:<repo>` and `tauriTargetName:tauri-build`. The distinct target name preserves the `tauri` script without colliding with the cacheable inferred Tauri build. Every JavaScript and Rust dependency is emitted at its exact tested compatibility pin before installation or graph construction.
 
 ### CLI contract
 
 ```text
-npx create-megamono <name>
+npx create-megamono <name> [type|type:name ...]
   --directory <path>
-  --apps web,api,worker,mobile,desktop,apple,site
+  --apps web,api,worker,mobile,desktop,apple,site,extension
   --services postgres,redis,clickhouse,typesense
   --database-adapter prisma|drizzle|none
   --styling chakra|emotion|tailwind|panda|stylex|css-modules|inline
@@ -138,7 +142,7 @@ npx create-megamono <name>
   --dry-run
 ```
 
-Defaults are `--database-adapter=none`, `--service-runner=none`, no integrations, `--install=true`, `--package-manager=npm`, `--local-packages=registry`, and `--verify=config`. Interactive creation offers Prisma, Drizzle, and no database toolkit as genuine choices, with Prisma marked recommended while it remains the fully verified baseline. A requested PostgreSQL service does not silently select an ORM. Non-interactive mode requires `name` and `apps`; all other omitted values use those defaults. `--verify=config` runs formatting, docs validation, `megamono:check`, and graph creation. `--verify=build` additionally runs affected build/test/lint targets for generated projects.
+Positional descriptors and `--apps` are equivalent application-selection surfaces and cannot be mixed in one invocation. `--apps` remains comma-separated and accepts the same `type:name` grammar for automation compatibility. Defaults are `--database-adapter=none`, `--service-runner=none`, no integrations, `--install=true`, `--package-manager=npm`, `--local-packages=registry`, and `--verify=config`. Interactive creation offers Prisma, Drizzle, and no database toolkit as genuine choices, with Prisma marked recommended while it remains the fully verified baseline. A requested PostgreSQL service does not silently select an ORM. Non-interactive mode requires `name` and at least one app descriptor; all other omitted values use those defaults. `--verify=config` runs formatting, docs validation, `megamono:check`, and graph creation. `--verify=build` additionally runs build/test/lint targets for every generated instance and the e2e target for every named web, site, and API instance.
 
 When a database adapter is selected, `create-megamono` invokes the same `@megamono/plugin:database` generator exposed by `megamono add database`. Database names are repository-defined normalized slugs, not a Megamono vocabulary: `primary` is only the interactive suggestion and non-interactive default when `--database-name` is omitted. Names such as `events`, `analytics`, and `identity` require no product change. Database scaffolding completes before the optional Playstack handoff so `playstack init` can bind package-owned `database-schema` artifacts to an existing named target. Service selection remains independent: the adapter owns repository tooling, while Springbar owns any requested database service.
 
@@ -233,7 +237,7 @@ That generator refuses a workspace already carrying `megamono.json` unless it is
 
 ## Acceptance criteria
 
-- Every app selection alone and the all-app combination passes `--verify=config` in a fresh fixture.
+- Every app selection alone, the all-app combination, and multiple named instances of one type pass `--verify=config` in a fresh fixture.
 - A Prisma selection in an npm fixture and a Drizzle selection in a pnpm fixture pass adapter-native validation and database-target health alignment.
 - Non-interactive creation with complete flags never reads stdin; missing required flags exits `4` before creating the destination.
 - Dry-run and execution produce the same ordered plan.

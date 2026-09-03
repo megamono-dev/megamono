@@ -17,6 +17,17 @@ import {
   type CreateMegamonoInput,
 } from './lib/create-megamono.js';
 
+export const APP_TYPE_OVERVIEWS = {
+  web: 'Next.js product, dashboard, or admin web app',
+  api: 'NestJS HTTP API or backend service',
+  worker: 'Cloudflare Worker for edge or background work',
+  mobile: 'Expo React Native app for iOS and Android',
+  desktop: 'Tauri desktop app',
+  apple: 'Native Swift/Xcode app (macOS required)',
+  site: 'Next.js marketing, documentation, or public site',
+  extension: 'Browser extension',
+} as const satisfies Record<(typeof APP_IDS)[number], string>;
+
 export interface InteractivePrompt {
   question(message: string): Promise<string>;
   close(): void;
@@ -40,6 +51,13 @@ function booleanValue(
   throw new CreateMegamonoError(`${label} must be true or false.`, 2);
 }
 
+function appSelectionQuestion(): string {
+  const overview = APP_IDS.map(
+    (type) => `  ${type.padEnd(9)} ${APP_TYPE_OVERVIEWS[type]}`,
+  ).join('\n');
+  return `Application types:\n${overview}\n\nChoose apps using type or type:name (comma-separated): `;
+}
+
 export async function resolveInteractive(
   input: CreateMegamonoInput,
   interactivePrompt?: InteractivePrompt,
@@ -51,18 +69,17 @@ export async function resolveInteractive(
     const name = input.name ?? (await prompt.question('Workspace name: '));
     const apps = input.apps?.length
       ? input.apps
-      : commaList(
-          await prompt.question(
-            `Apps (${APP_IDS.join(', ')}; comma-separated): `,
-          ),
-        );
+      : commaList(await prompt.question(appSelectionQuestion()));
     const databaseAdapter =
       (input.databaseAdapter ??
         (await prompt.question(
           `Database adapter (${DATABASE_ADAPTERS.join(', ')}) [prisma]: `,
         ))) ||
       'prisma';
-    const styling = apps?.some((app) => app === 'web' || app === 'site')
+    const styling = apps?.some((app) => {
+      const type = app.split(':', 1)[0];
+      return type === 'web' || type === 'site';
+    })
       ? (input.styling ??
           (await prompt.question(
             `Web styling (${WEB_STYLING_OPTIONS.join(', ')}) [chakra]: `,

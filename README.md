@@ -56,8 +56,23 @@ the app-owned onboarding billboard, optional local services, and finally whether
 Springbar should configure the requested apps and services. Chakra is suggested
 for a new workspace, while Emotion, Tailwind, Panda, StyleX, CSS Modules, and
 inline styles are supported without becoming governance requirements. Automation
-can provide the same decisions with `--apps`, `--styling`,
+can provide the same decisions with positional `type`/`type:name` app descriptors
+or the backward-compatible `--apps` list, plus `--styling`,
 `--database-adapter`, `--database-name`, `--services`, and `--service-runner`.
+
+```bash
+create-megamono commune \
+  site:marketing \
+  extension:extension-grids \
+  extension:extension-guides \
+  api \
+  web:admin \
+  web
+```
+
+A bare type keeps the quick default name (`web` creates `apps/web`). A named
+descriptor creates another instance (`web:admin` creates `apps/admin`), so any
+application type can be repeated without adding one-off plural flags.
 
 Install both global development commands from their yalc artifacts:
 

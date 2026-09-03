@@ -35,9 +35,32 @@ describe('CLI entrypoint', () => {
       styling: 'stylex',
       serviceRunner: 'springbar',
     });
+    expect(questions[0]).toContain('Application types:');
+    expect(questions[0]).toContain('web       Next.js product');
+    expect(questions[0]).toContain('extension Browser extension');
+    expect(questions[0]).toContain('type or type:name');
     expect(questions).toContainEqual(expect.stringContaining('Web styling'));
     expect(questions.at(-2)).toContain('Services (postgres, redis');
     expect(questions.at(-1)).toContain('Service runner (none, springbar)');
+  });
+
+  it('asks for web styling when a guided app uses a custom name', async () => {
+    const questions: string[] = [];
+    const answers = ['site:marketing', 'none', 'css-modules', '', 'none'];
+    const resolved = await resolveInteractive(
+      { name: 'named-site', interactive: true },
+      {
+        question: async (message) => {
+          questions.push(message);
+          return answers.shift() ?? '';
+        },
+        close: () => undefined,
+      },
+    );
+
+    expect(resolved.apps).toEqual(['site:marketing']);
+    expect(resolved.styling).toBe('css-modules');
+    expect(questions).toContainEqual(expect.stringContaining('Web styling'));
   });
 
   it('retains explicit service choices without prompting for them', async () => {
