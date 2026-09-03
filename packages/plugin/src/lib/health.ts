@@ -138,6 +138,14 @@ interface CloudflareCompatibilityRegistry {
   readonly nodeCompatibilityDefaultDate: string;
 }
 
+interface RenderPreflightDiagnostic {
+  readonly severity: 'error' | 'warning';
+  readonly code: string;
+  readonly message: string;
+  readonly path: string;
+  readonly service?: string;
+}
+
 const cloudflareCompatibility = (
   JSON.parse(
     readFileSync(join(__dirname, '../../compatibility.json'), 'utf8'),
@@ -561,6 +569,53 @@ async function cloudflareHealthFindings(
     }
   }
   return { dependencyAlignment, specDrift };
+}
+
+function renderPreflightFindings(graph: ProjectGraph): HealthFinding[] {
+  return Object.entries(graph.nodes)
+    .flatMap(([project, node]) => {
+      if (!node.data.metadata?.['megamono:render']) return [];
+      const preflight = node.data.metadata?.['megamono:preflight'];
+      if (!preflight || typeof preflight !== 'object') return [];
+      const candidates = (preflight as { diagnostics?: unknown }).diagnostics;
+      if (!Array.isArray(candidates)) return [];
+      return candidates.flatMap((candidate) => {
+        if (
+          !candidate ||
+          typeof candidate !== 'object' ||
+          !('severity' in candidate) ||
+          !('code' in candidate) ||
+          !('message' in candidate) ||
+          !('path' in candidate)
+        )
+          return [];
+        const value = candidate as Partial<RenderPreflightDiagnostic>;
+        if (
+          (value.severity !== 'error' && value.severity !== 'warning') ||
+          typeof value.code !== 'string' ||
+          typeof value.message !== 'string' ||
+          typeof value.path !== 'string'
+        )
+          return [];
+        return [
+          {
+            check: 'spec-drift' as const,
+            fingerprint: `render:${value.code}:${project}:${value.service ?? value.path}`,
+            state: value.severity === 'error' ? 'constrained' : 'alignable',
+            confidence: 'complete' as const,
+            summary: value.message,
+            evidence: [
+              value.path,
+              `Nx project: ${project}`,
+              ...(value.service ? [`Render service: ${value.service}`] : []),
+            ],
+            recommendation:
+              'Review the repository-owned Render Blueprint and rerun the Nx graph preflight.',
+          },
+        ];
+      });
+    })
+    .sort(findingSort);
 }
 
 function findingSort(left: HealthFinding, right: HealthFinding): number {
@@ -1153,6 +1208,8 @@ async function graphConfidence(
     !plugins.has('@megamono/nx-cloudflare')
   )
     return 'reduced';
+  if (config.adoption.inference.render && !plugins.has('@megamono/nx-render'))
+    return 'reduced';
   return 'complete';
 }
 
@@ -1360,6 +1417,7 @@ export async function runRepositoryHealth(options: {
               options.config,
             ),
             ...cloudflare.specDrift,
+            ...renderPreflightFindings(options.graph),
             ...databaseDrift,
           ]
         : [],

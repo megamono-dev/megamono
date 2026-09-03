@@ -40,6 +40,12 @@ guessed configuration. Copy either adoption-template JSON object into a
 workspace file, replace any `<review-…>` placeholders, and pass that file with
 `--adoptionMap` or `--docsAdoptionMap`.
 
+When a repository-owned `render.yaml` is present, the inference module installs
+`@megamono/nx-render`. That plugin attaches only explicitly rooted or mapped
+services, preserves the Blueprint as deployment authority, and exposes bounded
+build/start/pre-deploy targets plus health, resource, filter, and multi-instance
+Next cache diagnostics.
+
 On a real workspace, the same survey also separates committed toolchain
 requirements from active Node and package-manager binaries. It reports whether
 the host is mutation-ready and gives Corepack or repository-pin activation

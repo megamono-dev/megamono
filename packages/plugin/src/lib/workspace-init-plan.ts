@@ -123,6 +123,7 @@ export interface WorkspaceInitSurvey {
     readonly apple: readonly string[];
     readonly cargo: readonly string[];
     readonly cloudflare: readonly string[];
+    readonly render: readonly string[];
     readonly unsupported: readonly string[];
   };
   readonly documentation: {
@@ -845,6 +846,7 @@ export function surveyWorkspaceInit(
       cloudflare: files.filter((path) =>
         /(?:^|\/)wrangler\.(?:jsonc?|toml)$/.test(path),
       ),
+      render: files.filter((path) => /(?:^|\/)render\.yaml$/.test(path)),
       unsupported: files.filter((path) =>
         /(?:^|\/)(?:build\.gradle(?:\.kts)?|go\.mod|pom\.xml)$/.test(path),
       ),
@@ -1534,6 +1536,7 @@ export function createWorkspaceInitPlan(
       ['apple', survey.manifests.apple],
       ['cargo', survey.manifests.cargo],
       ['cloudflare', survey.manifests.cloudflare],
+      ['render', survey.manifests.render],
     ] as const) {
       operation(
         operations,
@@ -1559,7 +1562,9 @@ export function createWorkspaceInitPlan(
             ? '@megamono/nx-apple'
             : platform === 'cargo'
               ? '@megamono/nx-cargo'
-              : '@megamono/nx-cloudflare';
+              : platform === 'cloudflare'
+                ? '@megamono/nx-cloudflare'
+                : '@megamono/nx-render';
         operation(
           operations,
           'inference',
@@ -1735,6 +1740,10 @@ ${values(survey.manifests.cargo)}
 ### Cloudflare
 
 ${values(survey.manifests.cloudflare)}
+
+### Render
+
+${values(survey.manifests.render)}
 
 ### Unsupported
 

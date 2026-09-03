@@ -15,6 +15,7 @@ const manifests = [
   'packages/nx-cargo/package.json',
   'packages/nx-cloudflare/package.json',
   'packages/nx-extension/package.json',
+  'packages/nx-render/package.json',
   'packages/create-megamono/package.json',
 ];
 

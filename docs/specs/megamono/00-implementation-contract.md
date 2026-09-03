@@ -13,6 +13,7 @@ projects:
   - nx-cargo
   - nx-cloudflare
   - nx-extension
+  - nx-render
 topics: [architecture, generators, nx, release]
 summary: Canonical package map, compatibility baseline, command contract, and definition of done for Megamono v1.
 date: 2026-08-23
@@ -23,6 +24,7 @@ references:
     spec-megamono-0014,
     spec-megamono-0015,
     spec-megamono-0016,
+    spec-megamono-0017,
   ]
 external_references: [playstack:08-data-and-prisma, playstack:45-cli]
 ---
@@ -44,14 +46,14 @@ Megamono distinguishes a pinned scaffold baseline from a broader adoption range.
 | Bun                                | `>=1.1 <2`; exactly pinned compatibility option  | `>=1.1 <2`; detected and preserved      |
 | Nx core adoption                   | `>=23.1 <24`                                     | `>=17 <24`                              |
 | TypeScript                         | `>=6.0 <6.1`                                     | `>=5.2 <7`                              |
-| Apple/Cargo/Cloudflare inference   | `>=23.1 <24`                                     | `>=18 <24`                              |
+| Platform/deployment inference      | `>=23.1 <24`                                     | `>=18 <24`                              |
 | Optional Playstack handoff         | Node `>=20`; ESLint `^9` when lint is selected   | Same per-capability gate                |
 | Operating systems for core tooling | macOS and Linux                                  | Any Node-supported host                 |
 | Windows                            | Unsupported for new-workspace bootstrap in v1    | Supported for platform-neutral adoption |
 
 `create-megamono` accepts `--package-manager=npm|pnpm|yarn|bun`, defaults to npm, and records the selection in both the root `packageManager` field and `megamono.json`. Every generated install, execution, CI, verification, recovery, and local-package command uses that recorded manager. Existing-workspace adoption selects the manager from an unambiguous root lockfile or a matching `packageManager` declaration and preserves it. Nested lockfiles do not participate in root ownership. When a root lockfile supplies the only answer, Megamono records the inferred choice in `megamono.json` without adding a `packageManager` declaration. Changing managers is a separate explicit migration, never a side effect of adoption.
 
-`@megamono/plugin` declares the adoption range in `engines` and `peerDependencies`. Each inference plugin declares its narrower Nx floor independently. Nx 17's plugin discovery callback is synchronous, so it can host core adoption but not the async Apple, Cargo, or Cloudflare discovery implementations. Adding another package-manager or Nx range remains an explicit compatibility project; operating-system gates belong only to capabilities that actually require them.
+`@megamono/plugin` declares the adoption range in `engines` and `peerDependencies`. Each inference plugin declares its narrower Nx floor independently. Nx 17's plugin discovery callback is synchronous, so it can host core adoption but not the async Apple, Cargo, Cloudflare, extension, or Render discovery implementations. Adding another package-manager or Nx range remains an explicit compatibility project; operating-system gates belong only to capabilities that actually require them.
 
 `@megamono/plugin/compatibility.json` is a public, versioned data export containing the exact scaffold defaults, adoption ranges, per-package Nx ranges, stable test anchors, application frameworks, service images, vendor SDKs, and optional external CLIs. Generators read that file rather than resolving `latest`. Changing an entry requires the affected fixture and snapshot suite in the same release.
 
@@ -66,9 +68,10 @@ Megamono distinguishes a pinned scaffold baseline from a broader adoption range.
 | `@megamono/nx-cargo`      | Cargo/Tauri inference, targets, and graph edges                                                                  | Dev dependency only                                             | Implemented; public release group |
 | `@megamono/nx-cloudflare` | Wrangler inference, binding graph edges, targets, and generators                                                 | Dev dependency only                                             | Implemented; public release group |
 | `@megamono/nx-extension`  | WXT extension inference and generators                                                                           | Dev dependency only                                             | Implemented; public release group |
+| `@megamono/nx-render`     | Render Blueprint inference, bounded command targets, and deployment preflight                                    | Dev dependency only                                             | Implemented; public release group |
 | `@megamono/nx-laravel`    | Composer/Laravel inference and generators                                                                        | Dev dependency only                                             | Reserved; no package directory    |
 
-The `megamono` Nx release group publishes `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, `@megamono/nx-cargo`, `@megamono/nx-cloudflare`, and `@megamono/nx-extension` as fixed-version public packages on npm from `megamono-dev/megamono`. The unscoped `create-megamono` entry package remains independently versioned and tagged, but the guarded workflow validates and publishes both groups together so new-workspace and existing-workspace entry points are exercised in the same release.
+The `megamono` Nx release group publishes `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, `@megamono/nx-cargo`, `@megamono/nx-cloudflare`, `@megamono/nx-extension`, and `@megamono/nx-render` as fixed-version public packages on npm from `megamono-dev/megamono`. The unscoped `create-megamono` entry package remains independently versioned and tagged, but the guarded workflow validates and publishes both groups together so new-workspace and existing-workspace entry points are exercised in the same release.
 
 These labels deliberately distinguish specification state from software and distribution state. `accepted` means the behavioral contract is build-ready; `implemented` means a package directory and tested implementation exist; membership in a public release group means CI is authorized to publish it after its gates pass, not that a registry version already exists. A reserved row is neither implemented nor published. Later packages enter a public validation group only after their accepted spec, implementation, and packed-package fixture are complete.
 

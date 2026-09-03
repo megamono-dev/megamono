@@ -60,7 +60,8 @@
           "nx-apple",
           "nx-cargo",
           "nx-cloudflare",
-          "nx-extension"
+          "nx-extension",
+          "nx-render"
         ],
         "projectsRelationship": "fixed",
         "releaseTag": {

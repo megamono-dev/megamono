@@ -80,6 +80,10 @@ describe('Megamono configuration', () => {
             plugin: '@megamono/nx-cloudflare',
             manifests: ['apps/worker/wrangler.jsonc'],
           },
+          render: {
+            plugin: '@megamono/nx-render',
+            manifests: ['render.yaml'],
+          },
         },
         ratchets: [
           {
@@ -97,6 +101,9 @@ describe('Megamono configuration', () => {
     ]);
     expect(config.adoption.inference.cloudflare?.manifests).toEqual([
       'apps/worker/wrangler.jsonc',
+    ]);
+    expect(config.adoption.inference.render?.manifests).toEqual([
+      'render.yaml',
     ]);
   });
 

@@ -23,6 +23,9 @@
     },
     {
       "path": "./packages/nx-extension"
+    },
+    {
+      "path": "./packages/nx-render"
     }
   ],
   "compilerOptions": {}

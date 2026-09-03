@@ -40,6 +40,7 @@ const packageRoots = {
           workspaceRoot,
           'packages/nx-extension',
         ),
+        '@megamono/nx-render': resolve(workspaceRoot, 'packages/nx-render'),
       }
     : {}),
 };
@@ -118,6 +119,7 @@ try {
             '@megamono/nx-cargo',
             '@megamono/nx-cloudflare',
             '@megamono/nx-extension',
+            '@megamono/nx-render',
           ],
         }
       : {},
@@ -327,6 +329,25 @@ process.stdout.write(JSON.stringify({
       join(fixtureRoot, 'apps/extension/wxt.config.ts'),
       'export default {};\n',
     );
+    mkdirSync(join(fixtureRoot, 'apps/render-site'), { recursive: true });
+    writeJson(join(fixtureRoot, 'apps/render-site/package.json'), {
+      name: 'render-site',
+      private: true,
+    });
+    writeFileSync(
+      join(fixtureRoot, 'render.yaml'),
+      [
+        'services:',
+        '  - type: web',
+        '    name: render-site',
+        '    runtime: node',
+        '    rootDir: apps/render-site',
+        '    buildCommand: npm exec nx -- run render-site:build',
+        '    startCommand: npm exec nx -- run render-site:serve',
+        '    healthCheckPath: /health',
+        '',
+      ].join('\n'),
+    );
     run('npm', ['exec', 'nx', '--', 'reset']);
     const inferredProjects = run('npm', [
       'exec',
@@ -350,6 +371,10 @@ process.stdout.write(JSON.stringify({
     assert(
       inferredProjects.includes('fixture-extension'),
       `The packed extension plugin did not infer the WXT project. Projects:\n${inferredProjects}`,
+    );
+    assert(
+      inferredProjects.includes('render-site'),
+      `The packed Render plugin did not infer the Blueprint service. Projects:\n${inferredProjects}`,
     );
     const apple = JSON.parse(
       run('npm', ['exec', 'nx', '--', 'show', 'project', 'Fixture', '--json']),
@@ -377,6 +402,23 @@ process.stdout.write(JSON.stringify({
     );
     const worker = JSON.parse(
       run('npm', ['exec', 'nx', '--', 'show', 'project', 'worker', '--json']),
+    );
+    const render = JSON.parse(
+      run('npm', [
+        'exec',
+        'nx',
+        '--',
+        'show',
+        'project',
+        'render-site',
+        '--json',
+      ]),
+    );
+    assert(
+      render.targets['render-build'].options.command.includes(
+        'render-site:build',
+      ) && render.metadata.technologies.includes('render'),
+      `Nx ${nxVersion} did not retain Render target metadata.`,
     );
     if (nxMajor < 21) {
       assert(
@@ -438,6 +480,7 @@ process.stdout.write(JSON.stringify({
             "import type { CargoPluginOptions } from '@megamono/nx-cargo';",
             "import type { CloudflarePluginOptions } from '@megamono/nx-cloudflare';",
             "import type { ExtensionPluginOptions } from '@megamono/nx-extension';",
+            "import type { RenderPluginOptions } from '@megamono/nx-render';",
           ]
         : []),
       'const survey: WorkspaceInitSurvey | undefined = undefined;',
@@ -447,7 +490,8 @@ process.stdout.write(JSON.stringify({
             'const cargo: CargoPluginOptions = {};',
             'const cloudflare: CloudflarePluginOptions = {};',
             'const extension: ExtensionPluginOptions = {};',
-            'void apple; void cargo; void cloudflare; void extension;',
+            'const render: RenderPluginOptions = {};',
+            'void apple; void cargo; void cloudflare; void extension; void render;',
           ]
         : []),
       'void survey;',

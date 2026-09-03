@@ -116,7 +116,8 @@
               "nx-apple",
               "nx-cargo",
               "nx-cloudflare",
-              "nx-extension"
+              "nx-extension",
+              "nx-render"
             ],
             "target": "build"
           }
@@ -136,7 +137,8 @@
               "nx-apple",
               "nx-cargo",
               "nx-cloudflare",
-              "nx-extension"
+              "nx-extension",
+              "nx-render"
             ],
             "target": "build"
           }

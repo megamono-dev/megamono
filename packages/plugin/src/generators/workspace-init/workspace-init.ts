@@ -1742,6 +1742,14 @@ export async function workspaceInitGenerator(
               },
             }
           : {}),
+        ...(workspaceSurvey.manifests.render.length > 0
+          ? {
+              render: {
+                plugin: '@megamono/nx-render' as const,
+                manifests: workspaceSurvey.manifests.render,
+              },
+            }
+          : {}),
       }
     : {};
   if (modules.has('inference') && Object.keys(inference).length > 0) {
@@ -2182,6 +2190,15 @@ export async function workspaceInitGenerator(
           '@megamono/nx-cloudflare': inferenceDependencyVersion(
             tree,
             '@megamono/nx-cloudflare',
+            pluginVersion,
+          ),
+        }
+      : {}),
+    ...(modules.has('inference') && 'render' in inference
+      ? {
+          '@megamono/nx-render': inferenceDependencyVersion(
+            tree,
+            '@megamono/nx-render',
             pluginVersion,
           ),
         }

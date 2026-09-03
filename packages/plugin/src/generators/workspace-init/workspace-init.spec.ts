@@ -1287,6 +1287,7 @@ export default [
     tree.write('apps/apple/Package.swift', '// swift-tools-version: 6.2\n');
     tree.write('crates/tool/Cargo.toml', '[package]\nname = "tool"\n');
     tree.write('apps/worker/wrangler.jsonc', '{"name":"worker"}\n');
+    tree.write('render.yaml', 'services: []\n');
     tree.write('services/go/go.mod', 'module example.com/service\n');
 
     await workspaceInitGenerator(tree, { only: 'inference', yes: true });
@@ -1295,11 +1296,13 @@ export default [
       '@megamono/nx-apple',
       '@megamono/nx-cargo',
       '@megamono/nx-cloudflare',
+      '@megamono/nx-render',
     ]);
     expect(readJson(tree, 'package.json').devDependencies).toMatchObject({
       '@megamono/nx-apple': '0.0.1',
       '@megamono/nx-cargo': '0.0.1',
       '@megamono/nx-cloudflare': '0.0.1',
+      '@megamono/nx-render': '0.0.1',
     });
     expect(readJson(tree, 'megamono.json').adoption.inference).toEqual({
       apple: {
@@ -1313,6 +1316,10 @@ export default [
       cloudflare: {
         plugin: '@megamono/nx-cloudflare',
         manifests: ['apps/worker/wrangler.jsonc'],
+      },
+      render: {
+        plugin: '@megamono/nx-render',
+        manifests: ['render.yaml'],
       },
     });
     expect(readJson(tree, 'megamono.json').platforms).toEqual([

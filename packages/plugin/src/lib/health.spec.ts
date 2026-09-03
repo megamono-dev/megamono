@@ -922,6 +922,52 @@ describe('repository health', () => {
     }
   });
 
+  it('surfaces Render graph preflight diagnostics through spec drift', async () => {
+    const graph: ProjectGraph = {
+      nodes: {
+        site: {
+          name: 'site',
+          type: 'app',
+          data: {
+            root: 'apps/site',
+            metadata: {
+              'megamono:render': { schemaVersion: 1 },
+              'megamono:preflight': {
+                diagnostics: [
+                  {
+                    severity: 'warning',
+                    code: 'render-next-isr-shared-cache',
+                    message:
+                      'Multi-instance Next service site has no detectable shared cacheHandler configuration.',
+                    path: 'render.yaml',
+                    service: 'site',
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      dependencies: { site: [] },
+    };
+
+    const report = await runRepositoryHealth({
+      workspaceRoot: '/virtual',
+      graph,
+      config: DEFAULT_MEGAMONO_CONFIG,
+      documents: [],
+      checks: ['spec-drift'],
+    });
+
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({
+        fingerprint: 'render:render-next-isr-shared-cache:site:site',
+        state: 'alignable',
+        confidence: 'complete',
+      }),
+    );
+  });
+
   it('reports named database ownership and adapter drift', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-health-database-'));
     try {

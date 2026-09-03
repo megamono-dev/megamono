@@ -15,6 +15,7 @@ references:
     spec-megamono-0007,
     spec-megamono-0014,
     spec-megamono-0015,
+    spec-megamono-0017,
   ]
 external_references: [playstack:26-extension]
 ---
@@ -217,6 +218,10 @@ OpenGraphs (shipping, 200+ users), Timespans, and Basemarks. Horizens is not a c
 Cloudflare Workers remain JavaScript projects, but their service, Durable Object, Workflow, Tail Worker, and Queue relationships live in Wrangler configuration rather than imports. That makes them a graph-repair problem, not merely another JavaScript scaffolder.
 
 `spec-megamono-0015` promoted this package out of the demand-driven list and defines its `createNodes`/`createDependencies` contract, inferred targets, normalized binding metadata, health integration, and deliberately thin generators. The implementation and packed-package fixture now live in this repository, and the package is part of the public `megamono` release group. Actual npm availability remains a release event rather than unfinished generator work.
+
+## Implemented public-validation package — `@megamono/nx-render`
+
+Render deployment topology lives in a repository-owned Blueprint rather than in JavaScript imports. `spec-megamono-0017` defines an inference-only plugin that maps explicit service roots to Nx projects, exposes only the Blueprint's existing build/start/pre-deploy commands, and reports deployment preflight without claiming dashboard-owned configuration. It joins the public release group and the packed Nx compatibility fixture.
 
 ## Documented, demand-driven
 

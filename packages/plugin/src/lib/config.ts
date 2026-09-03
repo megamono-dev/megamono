@@ -210,6 +210,13 @@ const adoptionSchema = z
           })
           .strict()
           .optional(),
+        render: z
+          .object({
+            plugin: z.literal('@megamono/nx-render'),
+            manifests: z.array(z.string().refine(isSafeWorkspaceRelativePath)),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .default({}),

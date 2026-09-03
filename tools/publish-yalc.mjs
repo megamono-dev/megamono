@@ -14,6 +14,7 @@ const packages = [
   { project: 'nx-cargo', directory: 'packages/nx-cargo' },
   { project: 'nx-cloudflare', directory: 'packages/nx-cloudflare' },
   { project: 'nx-extension', directory: 'packages/nx-extension' },
+  { project: 'nx-render', directory: 'packages/nx-render' },
   { project: 'create-megamono', directory: 'packages/create-megamono' },
 ];
 

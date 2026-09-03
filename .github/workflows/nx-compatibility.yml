@@ -11,6 +11,7 @@ on:
       - 'packages/nx-cargo/**'
       - 'packages/nx-cloudflare/**'
       - 'packages/nx-extension/**'
+      - 'packages/nx-render/**'
   pull_request:
     paths:
       - '.github/workflows/nx-compatibility.yml'
@@ -20,6 +21,7 @@ on:
       - 'packages/nx-cargo/**'
       - 'packages/nx-cloudflare/**'
       - 'packages/nx-extension/**'
+      - 'packages/nx-render/**'
   merge_group:
   schedule:
     - cron: '43 8 * * 1'

@@ -1,0 +1,79 @@
+{
+  "name": "@megamono/nx-render",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@megamono/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo"
+  ],
+  "nx": {
+    "name": "nx-render",
+    "targets": {
+      "build": {
+        "executor": "@nx/js:tsc",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "outputPath": "packages/nx-render/dist",
+          "main": "packages/nx-render/src/index.ts",
+          "tsConfig": "packages/nx-render/tsconfig.lib.json",
+          "rootDir": "packages/nx-render/src",
+          "generatePackageJson": false,
+          "assets": [
+            {
+              "input": "./packages/nx-render/src",
+              "glob": "**/!(*.ts)",
+              "output": "."
+            },
+            {
+              "input": "./packages/nx-render/src",
+              "glob": "**/*.d.ts",
+              "output": "."
+            }
+          ]
+        }
+      }
+    },
+    "tags": [
+      "platform:node",
+      "scope:shared",
+      "type:util"
+    ]
+  },
+  "dependencies": {
+    "tslib": "^2.3.0",
+    "yaml": "2.9.0"
+  },
+  "peerDependencies": {
+    "@nx/devkit": ">=18 <24",
+    "nx": ">=18 <24"
+  },
+  "engines": {
+    "node": ">=18.18 <25",
+    "pnpm": ">=8 <12",
+    "npm": ">=9 <12"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/megamono-dev/megamono.git",
+    "directory": "packages/nx-render"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  }
+}

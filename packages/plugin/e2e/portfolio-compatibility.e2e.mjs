@@ -72,6 +72,7 @@ try {
       ['@megamono/nx-cargo', 'packages/nx-cargo'],
       ['@megamono/nx-cloudflare', 'packages/nx-cloudflare'],
       ['@megamono/nx-extension', 'packages/nx-extension'],
+      ['@megamono/nx-render', 'packages/nx-render'],
     ].map(([name, directory]) => {
       const packed = JSON.parse(
         run(
@@ -143,6 +144,7 @@ try {
       '@megamono/nx-cargo',
       '@megamono/nx-cloudflare',
       '@megamono/nx-extension',
+      '@megamono/nx-render',
     ],
   });
   writeJson(join(fixtureRoot, 'tsconfig.base.json'), {
