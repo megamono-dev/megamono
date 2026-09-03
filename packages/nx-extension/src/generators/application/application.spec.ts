@@ -30,6 +30,14 @@ describe('extension application generator', () => {
       readJson(tree, 'apps/browser-extension/project.json').targets.build
         .dependsOn,
     ).toEqual(['build-chrome', 'build-firefox']);
+    expect(
+      readJson(tree, 'apps/browser-extension/project.json').targets.lint
+        .options,
+    ).toEqual({
+      command:
+        "eslint . --ignore-pattern '.wxt/**' --ignore-pattern '.output/**'",
+      cwd: '{projectRoot}',
+    });
     expect(readJson(tree, 'package.json').workspaces).toEqual([
       'apps/browser-extension',
       'packages/*',

@@ -17,6 +17,7 @@ const appRoots = {
   api: 'apps/api',
   apple: 'apps/apple',
   desktop: 'apps/desktop',
+  extension: 'apps/extension',
   mobile: 'apps/mobile',
   site: 'apps/site',
   web: 'apps/web',
@@ -26,7 +27,8 @@ const appPlatforms = {
   api: 'node',
   apple: 'apple',
   desktop: 'rust',
-  mobile: 'web',
+  extension: 'extension',
+  mobile: 'mobile',
   site: 'web',
   web: 'web',
   worker: 'worker',
@@ -42,6 +44,19 @@ const matrixCases = [
       : {}),
   })),
   { id: 'all', apps: allApps, packageManager: 'pnpm' },
+  {
+    id: 'named-apps',
+    apps: [
+      'site:marketing',
+      'extension:extension-grids',
+      'extension:extension-guides',
+      'api',
+      'web:admin',
+      'web',
+    ],
+    packageManager: 'pnpm',
+    positionalApps: true,
+  },
   {
     id: 'web-npm',
     apps: ['web'],
@@ -183,6 +198,11 @@ async function exists(path) {
   }
 }
 
+function appInstance(descriptor) {
+  const [type, requestedName] = descriptor.split(':');
+  return { type, name: requestedName ?? type };
+}
+
 async function verifyCase(root, testCase, environment, createCliPath) {
   const scope = `matrix-${testCase.id}`;
   const destination = resolve(root, scope);
@@ -203,7 +223,9 @@ async function verifyCase(root, testCase, environment, createCliPath) {
       createCliPath,
       `Matrix ${testCase.id}`,
       `--directory=${scope}`,
-      `--apps=${testCase.apps.join(',')}`,
+      ...(testCase.positionalApps
+        ? testCase.apps
+        : [`--apps=${testCase.apps.join(',')}`]),
       ...(testCase.styling ? [`--styling=${testCase.styling}`] : []),
       `--package-manager=${packageManager}`,
       ...(testCase.database
@@ -249,7 +271,7 @@ async function verifyCase(root, testCase, environment, createCliPath) {
     await readFile(resolve(destination, 'megamono.json'), 'utf8'),
   );
   const expectedPlatforms = [
-    ...new Set(testCase.apps.map((app) => appPlatforms[app])),
+    ...new Set(testCase.apps.map((app) => appPlatforms[appInstance(app).type])),
   ].sort();
   assert(
     JSON.stringify(megamono.platforms) === JSON.stringify(expectedPlatforms),
@@ -378,12 +400,12 @@ async function verifyCase(root, testCase, environment, createCliPath) {
   );
   assert(
     ciWorkflow.includes('runs-on: macos-latest') ===
-      testCase.apps.includes('apple'),
+      testCase.apps.some((app) => appInstance(app).type === 'apple'),
     `${testCase.id}: generated CI Apple job does not match the selected platforms.`,
   );
   assert(
     ciWorkflow.includes('dtolnay/rust-toolchain@stable') ===
-      testCase.apps.includes('desktop'),
+      testCase.apps.some((app) => appInstance(app).type === 'desktop'),
     `${testCase.id}: generated CI Rust toolchain does not match the selected platforms.`,
   );
   const gitignore = await readFile(resolve(destination, '.gitignore'), 'utf8');
@@ -401,8 +423,9 @@ async function verifyCase(root, testCase, environment, createCliPath) {
     `${testCase.id}: generated ESLint config is not wired to Megamono rules.`,
   );
 
-  for (const app of testCase.apps) {
-    const projectName = `${scope}-${app}`;
+  for (const descriptor of testCase.apps) {
+    const { type: app, name } = appInstance(descriptor);
+    const projectName = `${scope}-${name}`;
     const showProject = nxInvocation(packageManager, [
       'show',
       'project',
@@ -419,7 +442,7 @@ async function verifyCase(root, testCase, environment, createCliPath) {
       `${testCase.id}: ${projectName} project query`,
     );
     assert(
-      project.root === appRoots[app],
+      project.root === `apps/${name}`,
       `${testCase.id}: ${projectName} root is ${project.root}.`,
     );
     assert(
@@ -448,12 +471,12 @@ async function verifyCase(root, testCase, environment, createCliPath) {
     if (app === 'site' || app === 'web') {
       assert(
         await exists(
-          resolve(destination, appRoots[app], 'src/pages/index.tsx'),
+          resolve(destination, `apps/${name}`, 'src/pages/index.tsx'),
         ),
         `${testCase.id}: ${projectName} did not use the required Pages Router.`,
       );
       assert(
-        !(await exists(resolve(destination, appRoots[app], 'src/app'))),
+        !(await exists(resolve(destination, `apps/${name}`, 'src/app'))),
         `${testCase.id}: ${projectName} unexpectedly emitted App Router files.`,
       );
     }
@@ -635,7 +658,7 @@ try {
   process.stdout.write(
     requestedCases.size
       ? `create-megamono selection matrix passed requested cases: ${cases.map(({ id }) => id).join(',')}.\n`
-      : 'create-megamono selection matrix passed: every app independently, the all-app combination, and npm/pnpm generated outputs.\n',
+      : 'create-megamono selection matrix passed: every app independently, the all-app combination, named sibling instances, and npm/pnpm generated outputs.\n',
   );
 } finally {
   verdaccio.kill('SIGTERM');

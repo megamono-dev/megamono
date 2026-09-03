@@ -43,7 +43,7 @@ function targets(): NonNullable<ProjectConfiguration['targets']> {
   const run = (command: string, cache = true) => ({
     executor: 'nx:run-commands',
     cache,
-    options: { command },
+    options: { command, cwd: '{projectRoot}' },
   });
   return {
     prepare: run('wxt prepare'),
@@ -91,7 +91,9 @@ function targets(): NonNullable<ProjectConfiguration['targets']> {
       outputs: ['{projectRoot}/.output/*.zip'],
     },
     test: run('vitest run'),
-    lint: run('eslint .'),
+    lint: run(
+      "eslint . --ignore-pattern '.wxt/**' --ignore-pattern '.output/**'",
+    ),
   };
 }
 
