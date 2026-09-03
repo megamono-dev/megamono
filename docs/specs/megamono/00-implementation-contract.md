@@ -75,6 +75,8 @@ The `megamono` Nx release group publishes `@megamono/cli`, `@megamono/plugin`, `
 
 These labels deliberately distinguish specification state from software and distribution state. `accepted` means the behavioral contract is build-ready; `implemented` means a package directory and tested implementation exist; membership in a public release group means CI is authorized to publish it after its gates pass, not that a registry version already exists. A reserved row is neither implemented nor published. Later packages enter a public validation group only after their accepted spec, implementation, and packed-package fixture are complete.
 
+Every conditional or conventional package entry point must exist in the packed artifact. Packages that advertise the workspace-only `@megamono/source` condition include their complete `src` tree alongside compiled output. `packages:check-exports` inspects the actual `npm pack --dry-run` inventory for every public package and blocks yalc or npm publication when an `exports`, `main`, `module`, `types`, `bin`, generator, or executor target is absent.
+
 `docs`, `skills`, `conventions`, `content`, `integrations`, `playstack`, and `generators` are internal modules of `@megamono/plugin`, not separately published packages in v1. This avoids version skew between repo-shaping capabilities that must agree on one `megamono.json` schema.
 
 ## Canonical generator names

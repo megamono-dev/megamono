@@ -153,6 +153,7 @@ Hard-won conventions, generated rather than rediscovered:
 - Add `.yalc/**` to `namedInputs` so Nx cache invalidation notices linked changes
 - Gitignore `.yalc/` and `yalc.lock`
 - Do **one** real prerelease publish before flipping anything to `latest`
+- Validate the actual packed file inventory for every advertised entry point before either local or registry publication
 
 ### Prerelease dist-tags
 

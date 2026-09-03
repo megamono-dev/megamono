@@ -5,6 +5,7 @@
   "scripts": {
     "release:check": "node tools/check-release-policy.mjs",
     "release:test": "node --test tools/release-channel.test.mjs",
+    "packages:check-exports": "node tools/check-packed-exports.mjs",
     "yalc:publish": "node tools/publish-yalc.mjs",
     "yalc:install-cli": "node tools/install-yalc-cli.mjs",
     "yalc:install-clis": "node tools/install-yalc-cli.mjs"

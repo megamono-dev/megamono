@@ -78,6 +78,7 @@ jobs:
           MEGAMONO_MATRIX_CASES: web-npm,api,web-tailwind,web-panda,web-stylex
           MEGAMONO_MATRIX_VERIFY: build
         run: npm exec nx -- run create-megamono:e2e-selection-matrix-local-registry --skip-nx-cache
+      - run: npm run packages:check-exports
       - name: Require a clean release checkout
         run: |
           if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
