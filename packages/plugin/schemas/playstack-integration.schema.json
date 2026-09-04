@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megamono.com/schemas/playstack-integration.schema.json",
+  "title": "Playstack application integration manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "package", "integrations"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "package": { "type": "string", "pattern": "^@playstack/[a-z0-9._-]+$" },
+    "integrations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "surface", "framework", "requirements", "files"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+          "surface": { "enum": ["web", "api"] },
+          "framework": { "type": "string" },
+          "requirements": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "routes": { "type": "array", "items": { "type": "string" } },
+              "modules": { "type": "array", "items": { "type": "string" } },
+              "providers": { "type": "array", "items": { "type": "string" } },
+              "environment": { "type": "array", "items": { "type": "string" } },
+              "healthChecks": { "type": "array", "items": { "type": "string" } },
+              "frameworkConfiguration": { "type": "array", "items": { "type": "string" } },
+              "tests": { "type": "array", "items": { "type": "string" } },
+              "rawBody": { "type": "boolean" }
+            }
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source", "target"],
+              "properties": {
+                "source": { "type": "string" },
+                "target": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

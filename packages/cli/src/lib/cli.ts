@@ -197,6 +197,7 @@ Commands:
   adopt                Survey first, then selectively adopt with --write
   add app [type]       Add a convention-aligned application
   add database [name]  Add a named Prisma or Drizzle database project
+  add integration      Materialize package-authored Playstack wiring
   add <module>         Add one repository-governance module
   auth login|status|logout
                        Manage optional hosted-service authentication
@@ -249,6 +250,7 @@ Examples:
   megamono add app web --dry-run
   megamono add database events --adapter=drizzle
   megamono add database primary --adapter=prisma --interactive=false --yes
+  megamono add integration --packages=@playstack/rate-limit --api=apps/api --dry-run
   megamono add docs
   megamono add ci --dry-run
 
@@ -2156,6 +2158,24 @@ async function runAdd(
       cwd: workspace.root,
     });
     return { exitCode: result.exitCode };
+  }
+  if (subject === 'integration') {
+    const parsed = parseAddOptions(args.slice(1));
+    if (!parsed.dryRun)
+      await assertWorkspaceMutationPreflight(
+        io,
+        workspace,
+        'Playstack integration generation',
+      );
+    const [command, commandArgs] = nxInvocation(
+      workspace.packageManager,
+      parsed.args,
+      'playstack-integrate',
+    );
+    const generated = await io.runCommand(command, commandArgs, {
+      cwd: workspace.root,
+    });
+    return { exitCode: generated.exitCode };
   }
   if (subject === 'database') {
     const hasPositionalName = Boolean(args[1] && !args[1]?.startsWith('-'));

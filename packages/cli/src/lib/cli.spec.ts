@@ -417,6 +417,33 @@ describe('@megamono/cli', () => {
     ]);
   });
 
+  it('delegates package-authored integration wiring to the plugin', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+
+    const result = await runMegamonoCli(
+      [
+        'add',
+        'integration',
+        '--packages=@playstack/rate-limit',
+        '--api=apps/api',
+        '--dry-run',
+      ],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(harness.invocations[0]?.args).toEqual([
+      'exec',
+      'nx',
+      'generate',
+      '@megamono/plugin:playstack-integrate',
+      '--packages=@playstack/rate-limit',
+      '--api=apps/api',
+      '--dry-run',
+    ]);
+  });
+
   it.each([
     ['yarn', 'yarn', ['nx', 'generate']],
     ['bun', 'bunx', ['nx', 'generate']],

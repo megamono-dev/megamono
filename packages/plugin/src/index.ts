@@ -9,6 +9,8 @@ export {
   databaseGenerator,
 } from './generators/database/database';
 export type { DatabaseGeneratorSchema } from './generators/database/schema';
+export { playstackIntegrateGenerator } from './generators/playstack-integrate/playstack-integrate';
+export type { PlaystackIntegrateGeneratorSchema } from './generators/playstack-integrate/playstack-integrate';
 export {
   ARTIFACT_HASH_PATTERN,
   ARTIFACT_ID_PATTERN,

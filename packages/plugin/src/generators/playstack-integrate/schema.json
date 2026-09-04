@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoPlaystackIntegrate",
+  "title": "Materialize package-authored Playstack integration wiring",
+  "type": "object",
+  "properties": {
+    "packages": {
+      "type": "string",
+      "description": "Comma-separated installed @playstack package names."
+    },
+    "web": {
+      "type": "string",
+      "description": "Workspace-relative web application root."
+    },
+    "api": {
+      "type": "string",
+      "description": "Workspace-relative API application root."
+    },
+    "dryRun": {
+      "type": "boolean",
+      "default": false
+    },
+    "yes": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": ["packages"]
+}

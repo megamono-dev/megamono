@@ -39,6 +39,7 @@ megamono health --profile=ci
 megamono verify runtime api --outputPath=dist/apps/api
 megamono verify dependencies
 megamono verify container --dockerfile=apps/api/Dockerfile
+megamono add integration --packages=@playstack/rate-limit --api=apps/api --dry-run
 ```
 
 These commands delegate to `megamono:check`, `verify-runtime`,

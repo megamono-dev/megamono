@@ -13,6 +13,7 @@
     "./emissions.json": "./emissions.json",
     "./schemas/megamono.schema.json": "./schemas/megamono.schema.json",
     "./schemas/artifacts.schema.json": "./schemas/artifacts.schema.json",
+    "./schemas/playstack-integration.schema.json": "./schemas/playstack-integration.schema.json",
     "./eslint": {
       "types": "./dist/eslint/plugin.d.ts",
       "import": "./dist/eslint.cjs",

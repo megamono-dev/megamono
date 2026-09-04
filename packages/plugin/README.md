@@ -14,6 +14,7 @@ For a mature mixed workspace, survey first and resolve only genuine ambiguity:
 
 ```sh
 npm exec nx g @megamono/plugin:workspace-init --survey --format=json
+npm exec nx g @megamono/plugin:playstack-integrate --packages=@playstack/rate-limit --api=apps/api --dry-run
 npm exec nx g @megamono/plugin:workspace-init --profile=pilot --dry-run
 npm exec nx g @megamono/plugin:workspace-init \
   --only=docs,agents,ci,lint \

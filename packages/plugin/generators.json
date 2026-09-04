@@ -79,6 +79,11 @@
       "factory": "./dist/generators/playstack-skills/playstack-skills",
       "schema": "./dist/generators/playstack-skills/schema.json",
       "description": "Install and synchronize Playstack product skills"
+    },
+    "playstack-integrate": {
+      "factory": "./dist/generators/playstack-integrate/playstack-integrate",
+      "schema": "./dist/generators/playstack-integrate/schema.json",
+      "description": "Materialize package-authored application integration wiring"
     }
   }
 }
