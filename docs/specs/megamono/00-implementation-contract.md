@@ -158,6 +158,8 @@ megamono --version
 
 `megamono adopt` is the safe mature-workspace alias. It defaults to `init --survey`, preserves an explicit `--dry-run`, and requires `--write` before delegating a mutation. Its survey adds module-level adoption assessments without introducing a separate source of planning or mutation behavior.
 
+`megamono help <command>` resolves command-specific help for every public command. Host readiness always pairs a declared Node/package-manager mismatch with copy-ready activation guidance, even when the active runtime remains inside Megamono's broader support range.
+
 `megamono health --profile=<name>` and `megamono verify runtime|dependencies|container` are thin dispatchers for the initialized `megamono` Nx project's check and portability targets. They resolve the local toolchain, preserve executor exit codes, and never carry a second implementation of repository policy.
 
 `megamono generate <name> [...options]` reads the workspace-local plugin availability registry before delegation. Available names run through the local Nx and package manager; gated and reserved names exit `3` with the registry's exact unsatisfied gate and never reach Nx. This preserves an available-only published collection while giving the dedicated CLI a stable diagnostic for canonical names that are not yet buildable.

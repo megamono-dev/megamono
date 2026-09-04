@@ -94,6 +94,27 @@ describe('workspace init preflight', () => {
     ).toThrow('Database addition must not run on the default branch main.');
   });
 
+  it('guides activation when supported Node differs from the repository range', () => {
+    const tree = supportedTree();
+    const manifest = JSON.parse(tree.read('package.json', 'utf8') ?? '{}');
+    tree.write(
+      'package.json',
+      JSON.stringify({ ...manifest, engines: { node: '22' } }),
+    );
+
+    const readiness = assessWorkspaceInitHostReadiness(tree, {
+      ...featureBranch,
+      node: 'v24.18.0',
+    });
+
+    expect(readiness.issues).toContain(
+      'Active Node v24.18.0 does not satisfy the repository declaration 22.',
+    );
+    expect(readiness.activation).toContain(
+      'Activate a Node version satisfying `22` (for example, run `nvm install 22 && nvm use 22`).',
+    );
+  });
+
   it('accepts the supported baseline on a clean feature branch', () => {
     expect(() =>
       assertWorkspaceInitPreflight(supportedTree(), featureBranch),

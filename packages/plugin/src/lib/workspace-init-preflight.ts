@@ -201,6 +201,17 @@ function versionRangeIssue(
     : undefined;
 }
 
+function nodeActivationGuidance(tree: Tree, declaredNode: string): string {
+  if (tree.exists('.nvmrc')) return 'Run `nvm use` from the workspace root.';
+  if (tree.exists('.node-version'))
+    return 'Activate the Node version recorded in `.node-version`.';
+  const minimum = semver.minVersion(declaredNode);
+  const release = minimum
+    ? `${minimum.major}${minimum.minor === 0 && minimum.patch === 0 ? '' : `.${minimum.minor}.${minimum.patch}`}`
+    : declaredNode;
+  return `Activate a Node version satisfying \`${declaredNode}\` (for example, run \`nvm install ${release} && nvm use ${release}\`).`;
+}
+
 export function assessWorkspaceInitHostReadiness(
   tree: Tree,
   state: WorkspaceInitHostState,
@@ -276,6 +287,8 @@ export function assessWorkspaceInitHostReadiness(
     issues.push(
       `Active Node ${state.node} does not satisfy the repository declaration ${declaredNode}.`,
     );
+    const guidance = nodeActivationGuidance(tree, declaredNode);
+    if (!activation.includes(guidance)) activation.push(guidance);
   }
   if (!selectedPackageManager) {
     issues.push(

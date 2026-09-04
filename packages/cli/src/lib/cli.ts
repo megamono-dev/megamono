@@ -321,6 +321,24 @@ Examples:
 
 Verification is read-only unless container --smoke is explicitly requested.`;
 
+function helpForTopic(topic: string | undefined): string {
+  if (!topic) return HELP;
+  const help: Readonly<Record<string, string>> = {
+    init: INIT_HELP,
+    adopt: ADOPT_HELP,
+    add: ADD_HELP,
+    database: DATABASE_HELP,
+    health: HEALTH_HELP,
+    verify: VERIFY_HELP,
+    auth: AUTH_HELP,
+    account: ACCOUNT_HELP,
+  };
+  const selected = help[topic];
+  if (!selected)
+    throw new CliError(`Unknown help topic ${topic}.\n\n${HELP}`, 2);
+  return selected;
+}
+
 async function exists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -2706,13 +2724,12 @@ export async function runMegamonoCli(
   io: MegamonoCliIo,
 ): Promise<MegamonoCliResult> {
   try {
-    if (
-      args.length === 0 ||
-      args[0] === 'help' ||
-      args[0] === '--help' ||
-      args[0] === '-h'
-    ) {
+    if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       io.stdout(HELP);
+      return { exitCode: 0 };
+    }
+    if (args[0] === 'help') {
+      io.stdout(helpForTopic(args[1]));
       return { exitCode: 0 };
     }
     if (args[0] === '--version' || args[0] === '-v') {

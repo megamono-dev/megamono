@@ -45,6 +45,9 @@ These commands delegate to `megamono:check`, `verify-runtime`,
 `verify-dependencies`, and `verify-container` respectively. Container
 verification remains static unless `--smoke` is explicitly passed.
 
+`megamono help adopt`, `megamono help health`, and `megamono help verify`
+print the options for that command rather than repeating root help.
+
 Hosted authentication is optional and independent of repository discovery:
 
 ```sh

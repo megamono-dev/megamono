@@ -211,6 +211,21 @@ afterEach(async () => {
 });
 
 describe('@megamono/cli', () => {
+  it.each([
+    ['adopt', 'Usage: megamono adopt'],
+    ['health', 'Usage: megamono health'],
+    ['verify', 'Usage: megamono verify runtime'],
+  ])('renders command-specific help for %s', async (topic, usage) => {
+    const root = await workspace('npm');
+    const harness = io(root);
+
+    const result = await runMegamonoCli(['help', topic], harness.value);
+
+    expect(result.exitCode).toBe(0);
+    expect(harness.stdout).toEqual([expect.stringContaining(usage)]);
+    expect(harness.invocations).toEqual([]);
+  });
+
   it('logs in through hosted auth and selects a personal or organization account', async () => {
     const harness = io('/not-a-workspace');
     const initial: HostedProfile = {
