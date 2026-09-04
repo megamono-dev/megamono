@@ -1303,6 +1303,7 @@ function projectGraphFromTree(
           project,
           resolutions,
           defaultPlatform,
+          projects,
         );
         return [
           name,
@@ -1655,6 +1656,7 @@ export async function workspaceInitGenerator(
         project,
         adoptionResolutions,
         defaultPlatform,
+        projects,
       ),
     ]),
   );

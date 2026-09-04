@@ -1006,6 +1006,7 @@ export function surveyWorkspaceInit(
         project,
         resolutions,
         options.defaultPlatform as ProjectAdoptionPlatform | undefined,
+        workspaceProjects,
       );
       return {
         name,

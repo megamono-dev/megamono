@@ -73,6 +73,18 @@ function commandText(project: ProjectConfiguration): string {
     .join('\n');
 }
 
+function isWorkspaceToolingProject(
+  tree: Tree,
+  project: ProjectConfiguration,
+): boolean {
+  if (project.root !== '.' || project.projectType === 'application')
+    return false;
+  if (tree.exists('tsconfig.app.json')) return false;
+  return !Object.keys(project.targets ?? {}).some((name) =>
+    ['serve', 'start', 'dev', 'e2e'].includes(name),
+  );
+}
+
 function inferKind(
   tree: Tree,
   project: ProjectConfiguration,
@@ -84,6 +96,12 @@ function inferKind(
   const libraries: string[] = [];
   const add = (kind: 'application' | 'library', reason: string) =>
     (kind === 'application' ? applications : libraries).push(reason);
+
+  if (isWorkspaceToolingProject(tree, project))
+    return {
+      kind: 'library',
+      evidence: ['workspace-root tooling project'],
+    };
 
   if (project.projectType === 'application')
     add('application', 'Nx projectType=application');
@@ -133,6 +151,7 @@ function inferKind(
 function inferPlatform(
   tree: Tree,
   project: ProjectConfiguration,
+  projects?: ReadonlyMap<string, ProjectConfiguration>,
 ): {
   readonly platform?: ProjectAdoptionPlatform;
   readonly evidence: string[];
@@ -149,6 +168,9 @@ function inferPlatform(
     ...((manifest.devDependencies as Record<string, unknown> | undefined) ??
       {}),
   };
+
+  if (isWorkspaceToolingProject(tree, project))
+    return { evidence: ['workspace-root dependencies are not project evidence'] };
 
   if (
     ['next.config.js', 'next.config.mjs', 'next.config.ts'].some((name) =>
@@ -189,6 +211,33 @@ function inferPlatform(
   if (tree.exists(`${root}/Cargo.toml`)) add('rust', 'Cargo manifest');
   if (tree.exists(`${root}/composer.json`)) add('php', 'Composer manifest');
 
+  if (candidates.size === 0 && projects) {
+    for (const dependencyName of project.implicitDependencies ?? []) {
+      if (dependencyName.includes('*')) continue;
+      const dependency = projects.get(dependencyName);
+      if (!dependency) continue;
+      const tagged = projectTag(dependency, 'platform:');
+      if (
+        tagged &&
+        PROJECT_ADOPTION_PLATFORMS.includes(
+          tagged as ProjectAdoptionPlatform,
+        )
+      ) {
+        add(
+          tagged as ProjectAdoptionPlatform,
+          `implicit dependency ${dependencyName} has platform:${tagged}`,
+        );
+        continue;
+      }
+      const inferred = inferPlatform(tree, dependency);
+      if (inferred.platform)
+        add(
+          inferred.platform,
+          `implicit dependency ${dependencyName} resolves to ${inferred.platform}`,
+        );
+    }
+  }
+
   if (candidates.size !== 1)
     return {
       evidence: [...candidates.entries()].flatMap(([platform, reasons]) =>
@@ -205,15 +254,19 @@ export function classifyProjectForAdoption(
   project: ProjectConfiguration,
   resolutions: ProjectAdoptionResolutions = {},
   defaultPlatform?: ProjectAdoptionPlatform,
+  projects?: ReadonlyMap<string, ProjectConfiguration>,
 ): ProjectAdoptionClassification {
   const resolution = resolutions[name];
   const inferredKind = inferKind(tree, project);
-  const inferredPlatform = inferPlatform(tree, project);
+  const inferredPlatform = inferPlatform(tree, project, projects);
   const existingType = projectTag(project, 'type:') as
     ProjectAdoptionType | undefined;
   const existingPlatform = projectTag(project, 'platform:') as
     ProjectAdoptionPlatform | undefined;
-  const type = resolution?.type ?? existingType;
+  const type =
+    resolution?.type ??
+    existingType ??
+    (isWorkspaceToolingProject(tree, project) ? 'util' : undefined);
   const kind = type
     ? type === 'app'
       ? 'application'
