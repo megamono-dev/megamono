@@ -1,4 +1,5 @@
 import type { ProjectConfiguration, Tree } from '@nx/devkit';
+import { posix } from 'node:path';
 import { parse } from 'yaml';
 
 export type WorkspaceFramework =
@@ -27,6 +28,7 @@ export interface WorkspaceInventoryDatabase {
   readonly provider: string | null;
   readonly project: string | null;
   readonly migrations: string | null;
+  readonly derivatives?: readonly string[];
 }
 
 export interface WorkspaceInventoryService {
@@ -242,6 +244,115 @@ function prismaProvider(source: string): string | null {
   return datasource?.match(/provider\s*=\s*['"]([^'"]+)['"]/)?.[1] ?? null;
 }
 
+function prismaClientOutput(schema: string, source: string): string | null {
+  const generator = source.match(/generator\s+client\s*\{([\s\S]*?)\}/)?.[1];
+  const output = generator?.match(/output\s*=\s*['"]([^'"]+)['"]/)?.[1];
+  if (!output) return null;
+  return posix.normalize(posix.join(posix.dirname(schema), output));
+}
+
+function projectOutputRoots(project: ProjectConfiguration): string[] {
+  const roots = new Set<string>();
+  for (const target of Object.values(project.targets ?? {})) {
+    const outputs = Array.isArray(target.outputs) ? target.outputs : [];
+    const configured = [
+      ...outputs,
+      ...(typeof target.options?.outputPath === 'string'
+        ? [target.options.outputPath]
+        : []),
+    ];
+    for (const value of configured) {
+      if (typeof value !== 'string') continue;
+      const normalized = value
+        .replaceAll('{projectRoot}', project.root)
+        .replace(/^\{workspaceRoot\}\//, '')
+        .replace(/^\.\//, '')
+        .replace(/\/$/, '');
+      if (normalized && !normalized.includes('{')) roots.add(normalized);
+    }
+  }
+  return [...roots].sort(compare);
+}
+
+function isConventionalGeneratedSchema(path: string): boolean {
+  return /(?:^|\/)(?:src\/)?generated(?:\/|$)/.test(path);
+}
+
+function prismaSchemaInventory(
+  tree: Tree,
+  projects: ReadonlyMap<string, ProjectConfiguration>,
+  files: readonly string[],
+  names: ReadonlyMap<string, string>,
+): WorkspaceInventoryDatabase[] {
+  const schemas = files
+    .filter((path) => /(?:^|\/)schema\.prisma$/.test(path))
+    .sort(compare);
+  const sourceSchemas = schemas.filter(
+    (schema) => !isConventionalGeneratedSchema(schema),
+  );
+  const derivatives = new Map<string, string[]>();
+  const sourceOutputRoots = new Map<string, readonly string[]>();
+  for (const schema of sourceSchemas) {
+    const source = tree.read(schema, 'utf8') ?? '';
+    const projectName = ownerProject(schema, projects);
+    const project = projectName ? projects.get(projectName) : undefined;
+    sourceOutputRoots.set(
+      schema,
+      [
+        ...(prismaClientOutput(schema, source)
+          ? [prismaClientOutput(schema, source)!]
+          : []),
+        ...(project ? projectOutputRoots(project) : []),
+      ].filter((root, index, roots) => roots.indexOf(root) === index),
+    );
+  }
+  const unclaimed: string[] = [];
+  for (const schema of schemas.filter((path) => !sourceSchemas.includes(path))) {
+    const project = ownerProject(schema, projects);
+    const candidates = sourceSchemas
+      .filter((source) => {
+        const sameProject = ownerProject(source, projects) === project;
+        const declaredOutput = (sourceOutputRoots.get(source) ?? []).some(
+          (root) => underRoot(schema, root),
+        );
+        return declaredOutput || (sameProject && isConventionalGeneratedSchema(schema));
+      })
+      .sort((left, right) => {
+        const common = (value: string) => {
+          const leftParts = schema.split('/');
+          const rightParts = value.split('/');
+          let index = 0;
+          while (leftParts[index] === rightParts[index]) index += 1;
+          return index;
+        };
+        return common(right) - common(left) || compare(left, right);
+      });
+    const source = candidates[0];
+    if (!source) {
+      unclaimed.push(schema);
+      continue;
+    }
+    derivatives.set(source, [...(derivatives.get(source) ?? []), schema]);
+  }
+  return [...sourceSchemas, ...unclaimed].sort(compare).map((schema) => {
+    const directory = schema.slice(0, schema.lastIndexOf('/'));
+    const derived = (derivatives.get(schema) ?? []).sort(compare);
+    return {
+      name: names.get(schema) ?? null,
+      adapter: 'prisma' as const,
+      schema,
+      provider: prismaProvider(tree.read(schema, 'utf8') ?? ''),
+      project: ownerProject(schema, projects),
+      migrations: files.some((path) =>
+        underRoot(path, `${directory}/migrations`),
+      )
+        ? `${directory}/migrations`
+        : null,
+      ...(derived.length > 0 ? { derivatives: derived } : {}),
+    };
+  });
+}
+
 function procfileServices(source: string): string[] {
   return source
     .split(/\r?\n/)
@@ -396,27 +507,7 @@ export function createWorkspaceInventory(
     .sort((left, right) => compare(left.name, right.name));
 
   const names = configuredDatabaseNames(tree);
-  const schemas = files
-    .filter((path) => path.endsWith('.prisma'))
-    .sort(compare);
-  const databases = schemas
-    .filter((path) => /(?:^|\/)schema\.prisma$/.test(path))
-    .map((schema): WorkspaceInventoryDatabase => {
-      const directory = schema.slice(0, schema.lastIndexOf('/'));
-      const migrations = files.some((path) =>
-        underRoot(path, `${directory}/migrations`),
-      )
-        ? `${directory}/migrations`
-        : null;
-      return {
-        name: names.get(schema) ?? null,
-        adapter: 'prisma',
-        schema,
-        provider: prismaProvider(tree.read(schema, 'utf8') ?? ''),
-        project: ownerProject(schema, projects),
-        migrations,
-      };
-    });
+  const databases = prismaSchemaInventory(tree, projects, files, names);
 
   const services: WorkspaceInventoryService[] = [];
   const redisProjects = inventoryProjects

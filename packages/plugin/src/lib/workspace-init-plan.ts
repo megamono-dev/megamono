@@ -2013,7 +2013,7 @@ ${values(
 ${values(
   survey.inventory.databases.map(
     (database) =>
-      `${database.name ?? '<name-required>'} — ${database.adapter}/${database.provider ?? 'unknown'} at ${database.schema}; Nx project: ${database.project ?? 'unresolved'}; migrations: ${database.migrations ?? 'none detected'}`,
+      `${database.name ?? '<name-required>'} — ${database.adapter}/${database.provider ?? 'unknown'} at ${database.schema}; Nx project: ${database.project ?? 'unresolved'}; migrations: ${database.migrations ?? 'none detected'}${database.derivatives?.length ? `; generated derivatives: ${database.derivatives.join(', ')}` : ''}`,
   ),
 )}
 

@@ -93,6 +93,11 @@ function starterpacksShapedWorkspace() {
     tree.write(
       `${root}/prisma/schema.prisma`,
       [
+        'generator client {',
+        '  provider = "prisma-client-js"',
+        '  output = "../src/generated/prisma"',
+        '}',
+        '',
         'datasource db {',
         '  provider = "postgresql"',
         `  url = env("${context === 'primary' ? 'DATABASE_URL' : 'AUTH_DATABASE_URL'}")`,
@@ -105,6 +110,10 @@ function starterpacksShapedWorkspace() {
       ].join('\n'),
     );
     tree.write(`${root}/prisma/migrations/init/migration.sql`, 'SELECT 1;\n');
+    tree.write(
+      `${root}/src/generated/prisma/schema.prisma`,
+      tree.read(`${root}/prisma/schema.prisma`, 'utf8') ?? '',
+    );
   }
 
   tree.write(
@@ -152,13 +161,22 @@ describe('Starterpacks-shaped mature workspace adoption', () => {
         name: null,
         schema: 'libs/prisma/schema-auth/prisma/schema.prisma',
         project: 'prisma-auth',
+        derivatives: [
+          'libs/prisma/schema-auth/src/generated/prisma/schema.prisma',
+        ],
       }),
       expect.objectContaining({
         name: null,
         schema: 'libs/prisma/schema/prisma/schema.prisma',
         project: 'prisma-primary',
+        derivatives: [
+          'libs/prisma/schema/src/generated/prisma/schema.prisma',
+        ],
       }),
     ]);
+    expect(renderWorkspaceInitSurvey(survey)).toContain(
+      'generated derivatives: libs/prisma/schema/src/generated/prisma/schema.prisma',
+    );
     expect(survey.inventory.deployments).toContainEqual({
       provider: 'render',
       authority: 'partial-marker',
