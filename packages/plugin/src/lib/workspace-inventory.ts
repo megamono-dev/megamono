@@ -296,12 +296,11 @@ function prismaSchemaInventory(
     const source = tree.read(schema, 'utf8') ?? '';
     const projectName = ownerProject(schema, projects);
     const project = projectName ? projects.get(projectName) : undefined;
+    const clientOutput = prismaClientOutput(schema, source);
     sourceOutputRoots.set(
       schema,
       [
-        ...(prismaClientOutput(schema, source)
-          ? [prismaClientOutput(schema, source)!]
-          : []),
+        ...(clientOutput ? [clientOutput] : []),
         ...(project ? projectOutputRoots(project) : []),
       ].filter((root, index, roots) => roots.indexOf(root) === index),
     );

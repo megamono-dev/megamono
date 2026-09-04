@@ -133,6 +133,12 @@
       "schema": "./dist/generators/playstack-skills/schema.json",
       "description": "Install and synchronize Playstack product skills"
     },
+    "playstack-integrate": {
+      "status": "available",
+      "factory": "./dist/generators/playstack-integrate/playstack-integrate",
+      "schema": "./dist/generators/playstack-integrate/schema.json",
+      "description": "Materialize package-authored application integration wiring"
+    },
     "integration-fathom": {
       "status": "reserved",
       "gate": "Fathom integration generation is reserved for a later wave."

@@ -39,12 +39,15 @@ describe('project adoption classification', () => {
       targets: { e2e: { executor: '@nx/playwright:playwright' } },
     });
     const projects = getProjects(tree);
+    const e2e = projects.get('site-e2e');
+    expect(e2e).toBeDefined();
+    if (!e2e) throw new Error('Expected site-e2e fixture project.');
 
     expect(
       classifyProjectForAdoption(
         tree,
         'site-e2e',
-        projects.get('site-e2e')!,
+        e2e,
         {},
         undefined,
         projects,

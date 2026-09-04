@@ -181,7 +181,12 @@ export async function playstackIntegrateGenerator(
     schemaVersion: 1,
     packages: manifests.map(({ package: name }) => name),
     requirements,
-    files: files.map(({ content: _content, ...file }) => file),
+    files: files.map((file) => ({
+      package: file.package,
+      integration: file.integration,
+      source: file.source,
+      target: file.target,
+    })),
   };
   if (options.dryRun) {
     logger.info(JSON.stringify(plan, null, 2));
