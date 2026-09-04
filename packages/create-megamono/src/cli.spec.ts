@@ -5,6 +5,22 @@ import { pathToFileURL } from 'node:url';
 import { isMainModule, main, resolveInteractive } from './cli.js';
 
 describe('CLI entrypoint', () => {
+  it('reports machine-readable build identity without a workspace name', async () => {
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    try {
+      await expect(main(['--version', '--json'])).resolves.toBe(0);
+      const identity = JSON.parse(String(output.mock.calls[0]?.[0]));
+      expect(identity).toMatchObject({
+        package: 'create-megamono',
+        version: '0.0.1',
+        revision: 'development',
+        buildId: 'development',
+      });
+    } finally {
+      output.mockRestore();
+    }
+  });
+
   it('ends the guided flow with services and optional Springbar setup', async () => {
     const questions: string[] = [];
     const answers = [

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { parseArgs } from 'node:util';
-import { realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
@@ -31,6 +31,35 @@ export const APP_TYPE_OVERVIEWS = {
 export interface InteractivePrompt {
   question(message: string): Promise<string>;
   close(): void;
+}
+
+interface BuildIdentity {
+  readonly schemaVersion: 1;
+  readonly package: string;
+  readonly version: string;
+  readonly revision: string;
+  readonly dirty: boolean;
+  readonly buildId: string;
+}
+
+function buildIdentity(): BuildIdentity {
+  const manifest = JSON.parse(
+    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+  ) as { version: string };
+  try {
+    return JSON.parse(
+      readFileSync(new URL('./build-info.json', import.meta.url), 'utf8'),
+    ) as BuildIdentity;
+  } catch {
+    return {
+      schemaVersion: 1,
+      package: 'create-megamono',
+      version: manifest.version,
+      revision: 'development',
+      dirty: true,
+      buildId: 'development',
+    };
+  }
 }
 
 function commaList(value: string | undefined): string[] | undefined {
@@ -145,8 +174,17 @@ export async function main(
         'package-manager': { type: 'string' },
         'cleanup-on-failure': { type: 'boolean', default: false },
         'dry-run': { type: 'boolean', default: false },
+        version: { type: 'boolean', default: false },
+        json: { type: 'boolean', default: false },
       },
     });
+    if (parsed.values.version) {
+      const identity = buildIdentity();
+      stdout.write(
+        `${parsed.values.json ? JSON.stringify(identity, null, 2) : identity.version}\n`,
+      );
+      return 0;
+    }
     if (parsed.positionals.length === 0 && !stdin.isTTY) {
       throw new CreateMegamonoError('Expected a workspace name.', 2);
     }

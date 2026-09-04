@@ -100,10 +100,12 @@ jobs:
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
           npm exec nx -- "${args[@]}"
       - name: Publish public packages to npm
+        id: publish
         env:
           DIST_TAG: ${{ steps.release.outputs.dist_tag }}
           FIRST_RELEASE: ${{ steps.release.outputs.first_release }}
         run: |
+          node tools/write-build-info.mjs
           args=(release publish --groups=megamono,create-megamono --tag "$DIST_TAG" --access public)
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
           npm exec nx -- "${args[@]}"

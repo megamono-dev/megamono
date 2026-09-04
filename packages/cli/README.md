@@ -48,6 +48,9 @@ verification remains static unless `--smoke` is explicitly passed.
 
 `megamono help adopt`, `megamono help health`, and `megamono help verify`
 print the options for that command rather than repeating root help.
+`megamono --version --json` additionally reports the package version, source
+revision, dirty state, and content-derived build ID. The same identity is
+available from `create-megamono --version --json`.
 
 Hosted authentication is optional and independent of repository discovery:
 

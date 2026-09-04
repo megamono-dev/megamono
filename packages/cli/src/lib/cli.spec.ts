@@ -1694,8 +1694,17 @@ describe('@megamono/cli', () => {
     expect((await runMegamonoCli(['--version'], harness.value)).exitCode).toBe(
       0,
     );
+    expect(
+      (await runMegamonoCli(['--version', '--json'], harness.value)).exitCode,
+    ).toBe(0);
+    expect(JSON.parse(harness.stdout.at(-1) ?? '{}')).toMatchObject({
+      package: '@megamono/cli',
+      version: '0.0.1-test',
+      revision: 'development',
+      buildId: 'development',
+    });
     expect((await runMegamonoCli([], harness.value)).exitCode).toBe(0);
     expect(harness.stdout[0]).toBe('0.0.1-test');
-    expect(harness.stdout[1]).toContain('Usage: megamono');
+    expect(harness.stdout.at(-1)).toContain('Usage: megamono');
   });
 });

@@ -4,7 +4,11 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { stdin, stdout } from 'node:process';
 import enquirer from 'enquirer';
-import { runMegamonoCli, type CommandResult } from './lib/cli.js';
+import {
+  runMegamonoCli,
+  type CommandResult,
+  type MegamonoBuildIdentity,
+} from './lib/cli.js';
 import { createHostedAuthOperations } from './lib/hosted-auth.js';
 
 const { prompt } = enquirer;
@@ -69,9 +73,20 @@ const packageJson = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
 ) as { version: string };
 
+const build = await (async (): Promise<MegamonoBuildIdentity | undefined> => {
+  try {
+    return JSON.parse(
+      await readFile(new URL('./build-info.json', import.meta.url), 'utf8'),
+    ) as MegamonoBuildIdentity;
+  } catch {
+    return undefined;
+  }
+})();
+
 const result = await runMegamonoCli(process.argv.slice(2), {
   cwd: process.cwd(),
   version: packageJson.version,
+  ...(build ? { build } : {}),
   stdout: (message) => process.stdout.write(`${message}\n`),
   stderr: (message) => process.stderr.write(`${message}\n`),
   hostedAuth: createHostedAuthOperations({ open: openExternal }),

@@ -35,6 +35,7 @@ export interface CommandResult {
 export interface MegamonoCliIo {
   readonly cwd: string;
   readonly version: string;
+  readonly build?: MegamonoBuildIdentity;
   stdout(message: string): void;
   stderr(message: string): void;
   selectPlaystackPackages?(
@@ -61,6 +62,15 @@ export interface MegamonoCliIo {
     args: readonly string[],
     options: { readonly cwd: string; readonly capture?: boolean },
   ): Promise<CommandResult>;
+}
+
+export interface MegamonoBuildIdentity {
+  readonly schemaVersion: 1;
+  readonly package: string;
+  readonly version: string;
+  readonly revision: string;
+  readonly dirty: boolean;
+  readonly buildId: string;
 }
 
 export interface ActiveToolchainState {
@@ -209,6 +219,7 @@ Commands:
 
 Global options:
   --version            Print the installed CLI version
+  --version --json     Print version, revision, and build identity
   --help               Show this help
 
 Init-only options:
@@ -2753,7 +2764,22 @@ export async function runMegamonoCli(
       return { exitCode: 0 };
     }
     if (args[0] === '--version' || args[0] === '-v') {
-      io.stdout(io.version);
+      io.stdout(
+        args.includes('--json')
+          ? JSON.stringify(
+              io.build ?? {
+                schemaVersion: 1,
+                package: '@megamono/cli',
+                version: io.version,
+                revision: 'development',
+                dirty: true,
+                buildId: 'development',
+              },
+              null,
+              2,
+            )
+          : io.version,
+      );
       return { exitCode: 0 };
     }
     if (args[0] === 'init') {

@@ -56,6 +56,7 @@ try {
     ...packages.map(({ project }) => project),
     '--output-style=static',
   ]);
+  await run(process.execPath, ['tools/write-build-info.mjs']);
   await run(process.execPath, ['tools/check-packed-exports.mjs']);
   for (const { project, directory } of packages) {
     process.stdout.write(`\nPublishing ${project} to yalc...\n`);
