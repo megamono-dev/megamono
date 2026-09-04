@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoRenderAdopt",
+  "title": "Create a reviewed Render Blueprint proposal",
+  "type": "object",
+  "properties": {
+    "procfile": {
+      "type": "string",
+      "description": "Workspace-relative Procfile to convert when no dashboard inventory exists."
+    },
+    "inventory": {
+      "type": "string",
+      "description": "Workspace-relative render.services.json dashboard inventory."
+    },
+    "serviceProjects": {
+      "type": "string",
+      "description": "JSON adoption map containing explicit service project roots."
+    },
+    "output": {
+      "type": "string",
+      "description": "Review-only Blueprint output path."
+    },
+    "force": {
+      "type": "boolean",
+      "default": false,
+      "description": "Replace an existing proposal output."
+    }
+  }
+}

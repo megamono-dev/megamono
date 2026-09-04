@@ -221,7 +221,7 @@ Cloudflare Workers remain JavaScript projects, but their service, Durable Object
 
 ## Implemented public-validation package — `@megamono/nx-render`
 
-Render deployment topology lives in a repository-owned Blueprint rather than in JavaScript imports. `spec-megamono-0017` defines an inference-only plugin that maps explicit service roots to Nx projects, exposes only the Blueprint's existing build/start/pre-deploy commands, and reports deployment preflight without claiming dashboard-owned configuration. It joins the public release group and the packed Nx compatibility fixture.
+Render deployment topology lives in a repository-owned Blueprint rather than in JavaScript imports. `spec-megamono-0017` defines an inference and validation plugin that maps explicit service roots to Nx projects, exposes only the Blueprint's existing build/start/pre-deploy commands, and reports deployment preflight without claiming dashboard-owned configuration. A bounded `adopt` generator can turn a Procfile or committed `render.services.json` dashboard inventory plus reviewed service mappings into `render.proposed.yaml`. It never writes the authoritative Blueprint, invents services, or generates unverified health routes. The package joins the public release group and the packed Nx compatibility fixture.
 
 ## Documented, demand-driven
 

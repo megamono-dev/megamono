@@ -18,6 +18,7 @@
   "files": [
     "dist",
     "src",
+    "generators.json",
     "!**/*.tsbuildinfo"
   ],
   "nx": {
@@ -68,6 +69,7 @@
     "pnpm": ">=8 <12",
     "npm": ">=9 <12"
   },
+  "generators": "./generators.json",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/megamono-dev/megamono.git",

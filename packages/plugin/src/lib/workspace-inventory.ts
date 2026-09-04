@@ -540,7 +540,7 @@ export function createWorkspaceInventory(
     });
 
   const renderManifests = files.filter((path) =>
-    /(?:^|\/)render\.ya?ml$/.test(path),
+    /(?:^|\/)(?:render\.ya?ml|render\.services\.json)$/.test(path),
   );
   const procfiles = files.filter((path) => /(?:^|\/)Procfile$/.test(path));
   const dockerfiles = files.filter((path) =>

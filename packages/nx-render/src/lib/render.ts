@@ -559,7 +559,7 @@ function workspacePath(workspaceRoot: string, path: string): string {
 }
 
 export const createNodes: CreateNodes<RenderPluginOptions> = [
-  '**/render.yaml',
+  '**/{render.yaml,render.yml,render.services.json}',
   async (
     configFiles: readonly string[] | string,
     options: RenderPluginOptions = {},

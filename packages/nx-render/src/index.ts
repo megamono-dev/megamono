@@ -5,6 +5,7 @@ export {
   parseRenderBlueprint,
   projectsFromRenderBlueprint,
 } from './lib/render';
+export { renderAdoptGenerator } from './generators/adopt/adopt';
 export type {
   RenderBlueprint,
   RenderDiagnostic,
