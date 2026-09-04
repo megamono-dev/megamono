@@ -24,6 +24,28 @@
       "type": "string",
       "description": "Workspace-relative portable library root."
     },
+    "adapters": {
+      "type": "string",
+      "description": "Comma-separated selected Playstack adapter names used to resolve adapter:<name> conditions."
+    },
+    "persistence": {
+      "type": "string",
+      "enum": ["package", "application"],
+      "description": "Persistence ownership used to resolve package-authored persistence conditions and decisions."
+    },
+    "adoptionMode": {
+      "type": "string",
+      "enum": ["fresh", "compare", "shadow", "cutover"],
+      "description": "Migration phase recorded in the integration plan."
+    },
+    "decisions": {
+      "type": "string",
+      "description": "JSON object mapping package-authored decision keys to selected string values."
+    },
+    "conditions": {
+      "type": "string",
+      "description": "JSON object mapping human-readable package conditions to booleans."
+    },
     "dryRun": {
       "type": "boolean",
       "default": false
