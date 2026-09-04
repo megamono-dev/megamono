@@ -5,6 +5,7 @@ Global command dispatcher for adopting Megamono in an existing Nx workspace.
 ```sh
 npm install --global @megamono/cli
 megamono adopt
+megamono adopt --survey --local-packages=yalc
 megamono adopt --profile=pilot --dry-run
 megamono adopt --only=health,inference,lint --write --yes
 ```
@@ -23,8 +24,11 @@ inference without claiming existing CI or release workflows. Every profile
 expands to the same independently runnable modules as `--only`, and the plan
 includes suggested commit boundaries without staging or committing files.
 
-The target workspace must install `@megamono/plugin` as a development
-dependency. The CLI always delegates to the workspace-local Nx and plugin.
+The target workspace needs a local Nx installation. A survey uses the local
+`@megamono/plugin` when available; otherwise the CLI stages a matching plugin
+and Nx runtime in a disposable directory from the selected registry or Yalc
+source. This does not change the repository. `--write` still requires the
+plugin to be installed as a workspace development dependency.
 
 Initialized workspaces expose composable verification without requiring users
 to remember executor target names:

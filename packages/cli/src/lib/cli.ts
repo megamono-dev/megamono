@@ -1,6 +1,14 @@
 import { createRequire } from 'node:module';
-import { access, readFile, readdir, writeFile } from 'node:fs/promises';
+import {
+  access,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { execFile } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { dirname, join, parse, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import {
@@ -280,7 +288,9 @@ Examples:
   megamono init --playstack-packages=auth --playstack-web=apps/storefront --playstack-api=apps/gateway
   megamono init --playstack --local-packages=yalc
 
-The workspace must contain local nx and @megamono/plugin installations.`;
+The workspace must contain local Nx. A read-only survey uses the local plugin
+when present, or stages a matching plugin in a disposable directory from the
+selected registry/Yalc source. Mutation still requires a local plugin.`;
 
 const ADOPT_HELP = `Usage: megamono adopt [generator options]
 
@@ -832,6 +842,85 @@ function localNxCommandInvocation(
     process.execPath,
     [resolve(dirname(manifestPath), relativeBin), ...args],
   ];
+}
+
+function localNxVersion(root: string): string {
+  const require = createRequire(join(root, 'package.json'));
+  const manifestPath = require.resolve(['nx', 'package.json'].join('/'));
+  const manifest = require(manifestPath) as { readonly version?: unknown };
+  if (typeof manifest.version !== 'string' || manifest.version.length === 0) {
+    throw new CliError(
+      'The workspace-local Nx package does not declare a usable version.',
+      3,
+    );
+  }
+  return manifest.version;
+}
+
+async function runEphemeralPluginSurvey(
+  io: MegamonoCliIo,
+  root: string,
+  options: InitOptions,
+): Promise<MegamonoCliResult> {
+  const directory = await mkdtemp(join(tmpdir(), 'megamono-survey-'));
+  try {
+    await writeFile(
+      join(directory, 'package.json'),
+      `${JSON.stringify({ private: true }, null, 2)}\n`,
+      'utf8',
+    );
+    if (options.localPackages === 'yalc') {
+      const added = await io.runCommand(
+        'yalc',
+        ['add', '@megamono/plugin', '--dev', '--no-pure'],
+        { cwd: directory },
+      );
+      if (added.exitCode !== 0) {
+        throw new CliError(
+          'Unable to stage @megamono/plugin from Yalc for the read-only survey. Publish it locally and retry.',
+          3,
+        );
+      }
+    }
+    const packages = [
+      `nx@${localNxVersion(root)}`,
+      ...(options.localPackages === 'registry'
+        ? [`@megamono/plugin@${io.version}`]
+        : []),
+    ];
+    const installed = await io.runCommand(
+      'npm',
+      [
+        'install',
+        '--ignore-scripts',
+        '--no-audit',
+        '--no-fund',
+        '--no-package-lock',
+        '--save-dev',
+        ...packages,
+      ],
+      { cwd: directory },
+    );
+    if (installed.exitCode !== 0) {
+      throw new CliError(
+        `Unable to stage the ephemeral survey runtime from ${options.localPackages}. The repository was not modified.`,
+        3,
+      );
+    }
+    const surveyed = await io.runCommand(
+      process.execPath,
+      [
+        join(directory, 'node_modules', 'nx', 'bin', 'nx.js'),
+        'generate',
+        '@megamono/plugin:workspace-init',
+        ...options.generatorArgs,
+      ],
+      { cwd: root },
+    );
+    return { exitCode: surveyed.exitCode };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 }
 
 interface NxSurfaceProject {
@@ -2218,12 +2307,8 @@ async function runInit(
     if (!localPackageAvailable(root, 'nx')) {
       throw new CliError('The workspace-local nx package is not installed.', 3);
     }
-    if (!localPackageAvailable(root, '@megamono/plugin')) {
-      throw new CliError(
-        '@megamono/plugin must be installed locally before a workspace survey can inspect its Nx graph.',
-        3,
-      );
-    }
+    if (!localPackageAvailable(root, '@megamono/plugin'))
+      return runEphemeralPluginSurvey(io, root, parsedOptions);
     const [command, commandArgs] = localNxCommandInvocation(root, [
       'generate',
       '@megamono/plugin:workspace-init',

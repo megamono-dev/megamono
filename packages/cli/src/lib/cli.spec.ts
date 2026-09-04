@@ -790,6 +790,64 @@ describe('@megamono/cli', () => {
     ]);
   });
 
+  it('stages a missing survey plugin outside the repository', async () => {
+    const root = await workspace('pnpm', ['nx']);
+    const harness = io(root);
+
+    const result = await runMegamonoCli(
+      ['adopt', '--only=health,inference'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(harness.invocations).toHaveLength(2);
+    expect(harness.invocations[0]).toMatchObject({
+      command: 'npm',
+      args: expect.arrayContaining([
+        'install',
+        'nx@0.0.1',
+        '@megamono/plugin@0.0.1-test',
+      ]),
+    });
+    expect(harness.invocations[0]?.cwd).not.toBe(root);
+    expect(harness.invocations[1]).toMatchObject({
+      command: process.execPath,
+      args: expect.arrayContaining([
+        'generate',
+        '@megamono/plugin:workspace-init',
+        '--survey',
+        '--only=health,inference',
+      ]),
+      cwd: root,
+    });
+  });
+
+  it('can stage the missing survey plugin from Yalc', async () => {
+    const root = await workspace('npm', ['nx']);
+    const harness = io(root);
+
+    const result = await runMegamonoCli(
+      ['adopt', '--local-packages=yalc'],
+      harness.value,
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(harness.invocations.map(({ command }) => command)).toEqual([
+      'yalc',
+      'npm',
+      process.execPath,
+    ]);
+    expect(harness.invocations[0]?.args).toEqual([
+      'add',
+      '@megamono/plugin',
+      '--dev',
+      '--no-pure',
+    ]);
+    expect(harness.invocations[1]?.args).not.toContain(
+      '@megamono/plugin@0.0.1-test',
+    );
+  });
+
   it('defaults adopt to a read-only survey and requires write for mutation', async () => {
     const root = await workspace('pnpm');
     const surveyed = io(root);
