@@ -42,6 +42,15 @@ megamono verify container --dockerfile=apps/api/Dockerfile
 megamono add integration --packages=@playstack/rate-limit --api=apps/api --dry-run
 ```
 
+Application integration accepts explicit web, API, worker, and portable roots.
+It consumes the installed packages' signed `playstack.integration.json`
+resources and keeps their semantics package-owned. Mature migrations can select
+`--persistence=application` and
+`--adoption-mode=compare|shadow|cutover`; adapter conditions use
+`--adapters`, while contextual conditions and required decisions use JSON maps.
+The dry run reports existing application references and suggested commit
+boundaries before `--yes` may write ejectable source.
+
 These commands delegate to `megamono:check`, `verify-runtime`,
 `verify-dependencies`, and `verify-container` respectively. Container
 verification remains static unless `--smoke` is explicitly passed.

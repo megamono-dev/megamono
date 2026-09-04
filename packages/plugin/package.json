@@ -108,6 +108,17 @@
           "cwd": "."
         }
       },
+      "e2e-playstack-integrations-yalc": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/playstack-integrations-yalc.e2e.mjs",
+          "cwd": "."
+        }
+      },
       "e2e-nx-compatibility": {
         "executor": "nx:run-commands",
         "cache": false,

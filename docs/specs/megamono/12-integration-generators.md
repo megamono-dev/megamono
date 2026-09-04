@@ -81,6 +81,8 @@ Sentry's Next.js integration has changed shape more than once — config files t
 
 **3. Template ownership stays with Megamono.** The package-owned update workflow in `playstack:45-cli` synchronizes Playstack emissions; it does not update Megamono-owned third-party integration templates. A template change is implemented and fixture-tested in this repository, then distributed in a new `@megamono/plugin` release. Health diagnoses consumer drift but never mutates the installed integration.
 
+This rule applies to Megamono-authored third-party integrations. It does not transfer ownership of Playstack application wiring into Megamono. A Playstack package may publish a digest-pinned `playstack.integration.json` template; `playstack-integrate` validates and ejects that package resource into application ownership while Playstack remains the upstream template authority. The Megamono package retains only the versioned schema consumer, Nx surface mapping, conflict plan, and selected migration record.
+
 **4. The wizard remains the reference.** Not invoked, but periodically run in a scratch single-project repo and diffed against the templates. This is a maintainer task, not automation, and should be documented as such rather than pretended away.
 
 **5. Generated files carry a provenance comment** — template version and the SDK range it targeted. Otherwise there is no way to tell a hand-modified file from a stale generated one.

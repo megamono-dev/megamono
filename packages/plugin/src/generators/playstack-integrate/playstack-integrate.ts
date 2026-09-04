@@ -591,6 +591,20 @@ export async function playstackIntegrateGenerator(
     requirements,
     new Set(files.map(({ target }) => target)),
   );
+  const commitBoundaries = requirements.map((record) => ({
+    id: `integrate-${record.id}`,
+    package: record.package,
+    integration: record.id,
+    files: files
+      .filter(
+        (file) =>
+          file.package === record.package && file.integration === record.id,
+      )
+      .map(({ target }) => target),
+    verification: (record.requirements.requiredTests ?? []).map(
+      ({ id, kind }) => ({ id, kind }),
+    ),
+  }));
   const plan = {
     schemaVersion: 1,
     packages: manifests.map(({ package: name, packageVersion }) => ({
@@ -607,6 +621,7 @@ export async function playstackIntegrateGenerator(
     unresolvedConditions: [...unresolvedConditions].sort(),
     unresolvedDecisions,
     preflight: { conflicts, existingReferences },
+    commitBoundaries,
     requirements,
     files: files.map((file) => ({
       package: file.package,

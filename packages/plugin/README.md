@@ -24,6 +24,31 @@ npm exec nx g @megamono/plugin:workspace-init \
   --yes
 ```
 
+Playstack integration manifests remain package-owned. The generator validates
+the manifest package version and every ejectable template hash, maps each
+surface into an explicit Nx root, and records application-owned output without
+patching an existing composition root. Conditional requirements are resolved
+with `--adapters`, `--persistence`, and an exact JSON `--conditions` map;
+package-authored decisions use `--decisions`. Migration work records
+`--adoptionMode=fresh|compare|shadow|cutover` and emits one suggested commit
+boundary per package integration:
+
+```sh
+npm exec nx g @megamono/plugin:playstack-integrate \
+  --packages=@playstack/nest-auth,@playstack/nest-billing,@playstack/webhooks \
+  --api=apps/api \
+  --persistence=application \
+  --adoptionMode=shadow \
+  --conditions='{"Stripe is selected":true}' \
+  --decisions='{"auth.transport":"cross-origin-refresh-cookie","auth.sessionProjection":"newsbetters-session","billing.priceCatalog":"newsbetters-plans","webhooks.providers":"stripe:default"}' \
+  --dry-run
+```
+
+Dry runs surface unresolved decisions, inactive conditions, duplicate manifest
+requirements, occupied targets, and existing route/provider/environment/config
+references. An accepted write still fails closed until every required condition
+and decision has an explicit value.
+
 Named adoption profiles are shortcuts over the same independent modules:
 `minimal` selects project boundaries and health; `pilot` adds platform
 inference without claiming repository CI or release workflows; `platform` adds

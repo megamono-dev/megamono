@@ -253,6 +253,7 @@ organization account.`;
 
 const ADD_HELP = `Usage: megamono add app [type] [options]
        megamono add database [name] [options]
+       megamono add integration --packages=<names> [options]
        megamono add <module> [options]
 
 Examples:
@@ -269,6 +270,20 @@ Application types: ${APP_TYPE_CHOICES.map(({ name }) => name).join(', ')}
 Web styling: ${WEB_STYLING_CHOICES.map(({ name }) => name).join(', ')}
 Database adapters: ${DATABASE_ADAPTER_CHOICES.map(({ name }) => name).join(', ')}
 Modules: ${ADD_MODULES.join(', ')}
+
+Integration options:
+  --web|--api|--worker|--portable=<root>
+                       Map package-authored surfaces to reviewed Nx roots
+  --adapters=<names>   Resolve adapter:<name> conditions
+  --persistence=package|application
+                       Select database artifact ownership
+  --adoption-mode=fresh|compare|shadow|cutover
+                       Record the migration phase
+  --conditions='<json>'
+                       Resolve package-authored contextual conditions
+  --decisions='<json>' Resolve required package-authored decisions
+  --dry-run            Report templates, overlap, and unresolved choices
+  --yes                Materialize verified templates after review
 
 Add commands require an initialized workspace with local nx and @megamono/plugin.`;
 

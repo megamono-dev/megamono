@@ -99,6 +99,13 @@ describe('Playstack integration generator', () => {
       ),
     ).toMatchObject({
       schemaVersion: 1,
+      commitBoundaries: [
+        {
+          id: 'integrate-nest-rate-limit',
+          package: '@playstack/rate-limit',
+          files: ['apps/api/src/playstack/rate-limit.module.ts'],
+        },
+      ],
       requirements: [
         expect.objectContaining({
           package: '@playstack/rate-limit',
