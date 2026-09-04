@@ -16,6 +16,14 @@
       "type": "string",
       "description": "Workspace-relative API application root."
     },
+    "worker": {
+      "type": "string",
+      "description": "Workspace-relative worker application root."
+    },
+    "portable": {
+      "type": "string",
+      "description": "Workspace-relative portable library root."
+    },
     "dryRun": {
       "type": "boolean",
       "default": false

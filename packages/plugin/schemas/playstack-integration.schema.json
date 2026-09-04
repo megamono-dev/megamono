@@ -1,46 +1,150 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://megamono.com/schemas/playstack-integration.schema.json",
-  "title": "Playstack application integration manifest",
+  "$id": "https://playstack.dev/schemas/playstack.integration.schema.json",
+  "title": "Playstack package integration manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "package", "integrations"],
+  "required": ["version", "package", "packageVersion", "integrations"],
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "package": { "type": "string", "pattern": "^@playstack/[a-z0-9._-]+$" },
+    "version": { "const": 1 },
+    "package": { "type": "string", "pattern": "^@playstack/" },
+    "packageVersion": { "type": "string", "minLength": 1 },
     "integrations": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "surface", "framework", "requirements", "files"],
+        "required": ["id", "surface", "requirements"],
         "properties": {
-          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
-          "surface": { "enum": ["web", "api"] },
-          "framework": { "type": "string" },
-          "requirements": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "routes": { "type": "array", "items": { "type": "string" } },
-              "modules": { "type": "array", "items": { "type": "string" } },
-              "providers": { "type": "array", "items": { "type": "string" } },
-              "environment": { "type": "array", "items": { "type": "string" } },
-              "healthChecks": { "type": "array", "items": { "type": "string" } },
-              "frameworkConfiguration": { "type": "array", "items": { "type": "string" } },
-              "tests": { "type": "array", "items": { "type": "string" } },
-              "rawBody": { "type": "boolean" }
-            }
-          },
-          "files": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+          "surface": { "enum": ["portable", "web", "api", "worker"] },
+          "framework": { "enum": ["react", "next", "nest", "node", "worker"] },
+          "when": { "type": "string" },
+          "templates": {
             "type": "array",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["source", "target"],
+              "required": ["id", "kind", "source", "target", "ejectable", "sha256"],
               "properties": {
-                "source": { "type": "string" },
-                "target": { "type": "string" }
+                "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+                "kind": { "enum": ["module", "provider", "policy", "controller", "health", "test"] },
+                "source": { "type": "string", "pattern": "^templates/" },
+                "target": { "type": "string", "minLength": 1 },
+                "description": { "type": "string" },
+                "when": { "type": "string" },
+                "ejectable": { "const": true },
+                "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              }
+            }
+          },
+          "requirements": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "moduleImports": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["export", "registration"],
+                  "properties": {
+                    "export": { "type": "string" },
+                    "registration": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true }
+                  }
+                }
+              },
+              "providerTokens": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "databaseArtifacts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["package", "required", "formats"],
+                  "properties": {
+                    "package": { "type": "string", "pattern": "^@playstack/" },
+                    "required": { "type": "boolean" },
+                    "formats": { "type": "array", "items": { "enum": ["prisma", "drizzle"] }, "minItems": 1, "uniqueItems": true },
+                    "when": { "type": "string" }
+                  }
+                }
+              },
+              "environment": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["key", "required", "secret"],
+                  "properties": {
+                    "key": { "type": "string" },
+                    "suggestedNames": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+                    "required": { "type": "boolean" },
+                    "secret": { "type": "boolean" },
+                    "when": { "type": "string" }
+                  }
+                }
+              },
+              "routes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["id", "methods", "path", "rawBody"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "methods": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+                    "path": { "type": "string" },
+                    "rawBody": { "type": "boolean" },
+                    "authentication": { "type": "string" }
+                  }
+                }
+              },
+              "healthChecks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["id", "kind", "required"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "kind": { "type": "string" },
+                    "required": { "type": "boolean" },
+                    "when": { "type": "string" }
+                  }
+                }
+              },
+              "frameworkConfiguration": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["key", "value"],
+                  "properties": { "key": { "type": "string" }, "value": {} }
+                }
+              },
+              "requiredTests": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["id", "kind"],
+                  "properties": { "id": { "type": "string" }, "kind": { "type": "string" }, "when": { "type": "string" } }
+                }
+              },
+              "decisions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["key", "prompt", "required"],
+                  "properties": {
+                    "key": { "type": "string" },
+                    "prompt": { "type": "string" },
+                    "required": { "type": "boolean" },
+                    "options": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+                    "when": { "type": "string" }
+                  }
+                }
               }
             }
           }

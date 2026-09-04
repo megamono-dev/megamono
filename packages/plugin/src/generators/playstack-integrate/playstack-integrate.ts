@@ -1,45 +1,104 @@
 import { formatFiles, logger, type GeneratorCallback, type Tree } from '@nx/devkit';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { posix, resolve } from 'node:path';
 
 export interface PlaystackIntegrateGeneratorSchema {
   readonly packages: string;
   readonly web?: string;
   readonly api?: string;
+  readonly worker?: string;
+  readonly portable?: string;
   readonly dryRun?: boolean;
   readonly yes?: boolean;
 }
 
-type Surface = 'web' | 'api';
+type Surface = 'portable' | 'web' | 'api' | 'worker';
+
+interface IntegrationTemplate {
+  readonly id: string;
+  readonly kind: 'module' | 'provider' | 'policy' | 'controller' | 'health' | 'test';
+  readonly source: string;
+  readonly target: string;
+  readonly description?: string;
+  readonly when?: string;
+  readonly ejectable: true;
+  readonly sha256: string;
+}
 
 interface IntegrationRequirements {
-  readonly routes?: readonly string[];
-  readonly modules?: readonly string[];
-  readonly providers?: readonly string[];
-  readonly environment?: readonly string[];
-  readonly healthChecks?: readonly string[];
-  readonly frameworkConfiguration?: readonly string[];
-  readonly tests?: readonly string[];
-  readonly rawBody?: boolean;
+  readonly moduleImports?: readonly {
+    readonly export: string;
+    readonly registration: readonly string[];
+  }[];
+  readonly providerTokens?: readonly string[];
+  readonly databaseArtifacts?: readonly {
+    readonly package: string;
+    readonly required: boolean;
+    readonly formats: readonly ('prisma' | 'drizzle')[];
+    readonly when?: string;
+  }[];
+  readonly environment?: readonly {
+    readonly key: string;
+    readonly suggestedNames?: readonly string[];
+    readonly required: boolean;
+    readonly secret: boolean;
+    readonly when?: string;
+  }[];
+  readonly routes?: readonly {
+    readonly id: string;
+    readonly methods: readonly string[];
+    readonly path: string;
+    readonly rawBody: boolean;
+    readonly authentication?: string;
+  }[];
+  readonly healthChecks?: readonly {
+    readonly id: string;
+    readonly kind: string;
+    readonly required: boolean;
+    readonly when?: string;
+  }[];
+  readonly frameworkConfiguration?: readonly {
+    readonly key: string;
+    readonly value: unknown;
+  }[];
+  readonly requiredTests?: readonly {
+    readonly id: string;
+    readonly kind: string;
+    readonly when?: string;
+  }[];
+  readonly decisions?: readonly {
+    readonly key: string;
+    readonly prompt: string;
+    readonly required: boolean;
+    readonly options?: readonly string[];
+    readonly when?: string;
+  }[];
 }
 
 interface IntegrationManifest {
-  readonly schemaVersion: 1;
+  readonly version: 1;
   readonly package: string;
+  readonly packageVersion: string;
   readonly integrations: readonly {
     readonly id: string;
     readonly surface: Surface;
-    readonly framework: string;
+    readonly framework?: 'react' | 'next' | 'nest' | 'node' | 'worker';
+    readonly when?: string;
     readonly requirements: IntegrationRequirements;
-    readonly files: readonly { readonly source: string; readonly target: string }[];
+    readonly templates?: readonly IntegrationTemplate[];
   }[];
 }
 
 interface PlannedFile {
   readonly package: string;
   readonly integration: string;
+  readonly id: string;
+  readonly kind: IntegrationTemplate['kind'];
+  readonly description?: string;
   readonly source: string;
   readonly target: string;
+  readonly sha256: string;
   readonly content: string;
 }
 
@@ -96,11 +155,27 @@ function manifest(tree: Tree, name: string): IntegrationManifest {
   const candidate = value as Partial<IntegrationManifest> | null;
   if (
     !candidate ||
-    candidate.schemaVersion !== 1 ||
+    candidate.version !== 1 ||
     candidate.package !== name ||
+    typeof candidate.packageVersion !== 'string' ||
+    candidate.packageVersion.length === 0 ||
     !Array.isArray(candidate.integrations)
   )
     throw new Error(`${path} does not satisfy integration schema version 1.`);
+  const packageJsonPath = packagePath(name, 'package.json');
+  const packageJsonSource = readPackageFile(tree, packageJsonPath);
+  if (!packageJsonSource)
+    throw new Error(`${packageJsonPath} is required to verify the integration manifest.`);
+  let packageVersion: unknown;
+  try {
+    packageVersion = (JSON.parse(packageJsonSource) as { version?: unknown }).version;
+  } catch {
+    throw new Error(`${packageJsonPath} is not valid JSON.`);
+  }
+  if (packageVersion !== candidate.packageVersion)
+    throw new Error(
+      `${path} declares packageVersion ${candidate.packageVersion}, but ${packageJsonPath} declares ${String(packageVersion)}.`,
+    );
   return candidate as IntegrationManifest;
 }
 
@@ -115,7 +190,8 @@ function resolvedTarget(
     .replaceAll('{integrationId}', integration);
   if (replaced.includes('{'))
     throw new Error(`Integration target ${target} contains an unsupported placeholder.`);
-  return safePath(replaced, 'Integration target');
+  const safe = safePath(replaced, 'Integration target');
+  return safe.startsWith(`${root}/`) ? safe : safePath(posix.join(root, safe), 'Integration target');
 }
 
 function requirementRecord(
@@ -136,8 +212,10 @@ export async function playstackIntegrateGenerator(
   options: PlaystackIntegrateGeneratorSchema,
 ): Promise<GeneratorCallback> {
   const roots: Partial<Record<Surface, string>> = {
+    ...(options.portable ? { portable: safePath(options.portable, '--portable') } : {}),
     ...(options.web ? { web: safePath(options.web, '--web') } : {}),
     ...(options.api ? { api: safePath(options.api, '--api') } : {}),
+    ...(options.worker ? { worker: safePath(options.worker, '--worker') } : {}),
   };
   const manifests = packageNames(options.packages).map((name) => manifest(tree, name));
   const files: PlannedFile[] = [];
@@ -150,16 +228,32 @@ export async function playstackIntegrateGenerator(
           `${source.package} integration ${integration.id} requires --${integration.surface}=<Nx project root>.`,
         );
       requirements.push(requirementRecord(source, integration));
-      for (const file of integration.files) {
-        const sourcePath = packagePath(source.package, safePath(file.source, 'Integration source'));
+      for (const template of integration.templates ?? []) {
+        if (
+          template.ejectable !== true ||
+          !/^[a-f0-9]{64}$/.test(template.sha256)
+        )
+          throw new Error(
+            `${source.package} integration template ${template.id} has invalid ownership or integrity metadata.`,
+          );
+        const sourcePath = packagePath(source.package, safePath(template.source, 'Integration source'));
         const content = readPackageFile(tree, sourcePath);
         if (content === null)
-          throw new Error(`${source.package} integration source ${file.source} is missing.`);
+          throw new Error(`${source.package} integration source ${template.source} is missing.`);
+        const actualHash = createHash('sha256').update(content).digest('hex');
+        if (actualHash !== template.sha256)
+          throw new Error(
+            `${source.package} integration template ${template.id} failed SHA-256 verification.`,
+          );
         files.push({
           package: source.package,
           integration: integration.id,
-          source: file.source,
-          target: resolvedTarget(file.target, integration.surface, root, integration.id),
+          id: template.id,
+          kind: template.kind,
+          ...(template.description ? { description: template.description } : {}),
+          source: template.source,
+          target: resolvedTarget(template.target, integration.surface, root, integration.id),
+          sha256: template.sha256,
           content,
         });
       }
@@ -179,13 +273,20 @@ export async function playstackIntegrateGenerator(
   }
   const plan = {
     schemaVersion: 1,
-    packages: manifests.map(({ package: name }) => name),
+    packages: manifests.map(({ package: name, packageVersion }) => ({
+      name,
+      version: packageVersion,
+    })),
     requirements,
     files: files.map((file) => ({
       package: file.package,
       integration: file.integration,
+      id: file.id,
+      kind: file.kind,
+      ...(file.description ? { description: file.description } : {}),
       source: file.source,
       target: file.target,
+      sha256: file.sha256,
     })),
   };
   if (options.dryRun) {
