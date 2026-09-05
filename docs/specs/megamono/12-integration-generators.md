@@ -166,7 +166,7 @@ Generators emit secret **names**, never values:
 | Postmark    | `POSTMARK_SERVER_TOKEN`                                                                                                 |
 | Stripe      | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`                                                                            |
 
-## V1 decisions and sequencing
+## Playstack application integration adoption
 
 ### Per-integration migration ledger
 
@@ -240,6 +240,8 @@ composition; they do not text-replace arbitrary package template source.
 
 Equivalence does not certify behavioral compatibility, bypass verification, or
 transfer ownership. Existing files remain application-owned and unchanged.
+
+## V1 decisions and sequencing
 
 - Wave 1 implements `integration-sentry` for Next.js Pages Router, Nest, Expo, and Cloudflare Worker projects. A surface combination without a maintained fixture is refused rather than partially configured.
 - Fathom, Postmark, and Stripe names and option contracts are reserved for later waves. They do not appear in the published generator collection until their templates and referenced Playstack fixtures pass the same acceptance suite.

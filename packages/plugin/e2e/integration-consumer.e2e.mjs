@@ -86,8 +86,21 @@ try {
   await put('apps/api/project.json', {
     name: 'api',
     projectType: 'application',
-    targets: {},
+    targets: {
+      contract: {
+        executor: 'nx:run-commands',
+        options: { command: 'node verify.cjs' },
+      },
+    },
   });
+  await put(
+    '.github/workflows/ci.yml',
+    'name: CI\non: [push]\njobs:\n  quality:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm ci\n',
+  );
+  await put(
+    'verify.cjs',
+    "require('node:assert/strict').equal(require('./build/main.js').bootstrap(), 'ready');\n",
+  );
   await put('tsconfig.json', {
     compilerOptions: {
       target: 'ES2022',
@@ -119,7 +132,9 @@ try {
           id: 'fixture',
           surface: 'api',
           framework: 'node',
-          requirements: {},
+          requirements: {
+            requiredTests: [{ id: 'runtime-ready', kind: 'integration' }],
+          },
           templates: [
             {
               id: 'provider',
@@ -144,6 +159,10 @@ try {
     `${join(plugin, 'generators.json')}:playstack-integrate`,
     '--packages=@playstack/integration-fixture',
     '--api=apps/api',
+    '--verificationProject=api',
+    '--verification={"@playstack/integration-fixture:fixture:runtime-ready":"api:contract"}',
+    '--ciWorkflow=.github/workflows/ci.yml',
+    '--ciJob=quality',
     '--yes',
     '--interactive=false',
   ];
@@ -167,6 +186,44 @@ try {
     '-e',
     `require('node:assert/strict').equal(require(${JSON.stringify(join(root, 'build/main.js'))}).bootstrap(), 'ready')`,
   ]);
+  run(process.execPath, [nx, 'run', 'api:playstack-verify']);
+  const workflow = require('yaml').parse(
+    await readFile(join(root, '.github/workflows/ci.yml'), 'utf8'),
+  );
+  run('/bin/sh', ['-c', workflow.jobs.quality.steps.at(-1).run]);
+  const integration = '@playstack/integration-fixture:fixture';
+  run(process.execPath, [
+    ...args,
+    `--migrationStages=${JSON.stringify({ [integration]: { stage: 'compare' } })}`,
+  ]);
+  const ledgerPath = join(root, '.megamono/playstack-integrations.json');
+  const ledger = JSON.parse(await readFile(ledgerPath, 'utf8'));
+  assert.equal(ledger.integrations[integration].stage, 'compare');
+  await put('verification.json', {
+    schemaVersion: 1,
+    integration,
+    fingerprint: ledger.integrations[integration].fingerprint,
+    stage: 'shadow',
+    result: 'passed',
+    checks: ['runtime-ready'],
+  });
+  await put(
+    'rollback.md',
+    'Restore the previous provider and run the runtime contract.',
+  );
+  run(process.execPath, [
+    ...args,
+    `--migrationStages=${JSON.stringify({ [integration]: { stage: 'shadow', verificationReport: 'verification.json', rollbackPlan: 'rollback.md' } })}`,
+  ]);
+  assert.equal(
+    JSON.parse(await readFile(ledgerPath, 'utf8')).integrations[integration]
+      .stage,
+    'shadow',
+  );
+  await put('verify.cjs', "throw new Error('contract failure');\n");
+  assert.throws(() =>
+    run(process.execPath, [nx, 'run', 'api:playstack-verify']),
+  );
   await writeFile(target, 'export const applicationOwned = true;\n');
   assert.throws(() => run(process.execPath, args));
   assert.equal(
@@ -174,7 +231,7 @@ try {
     'export const applicationOwned = true;\n',
   );
   console.log(
-    'Packed Nx integration consumer: dry-run, rerun, compiled runtime, and edit protection passed.',
+    'Packed Nx integration consumer: dry-run, rerun, compiled runtime, Nx/CI verification, migration ledger, failure propagation, and edit protection passed.',
   );
 } finally {
   await rm(root, { recursive: true, force: true });

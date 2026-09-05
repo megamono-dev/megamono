@@ -146,7 +146,7 @@ describe('Playstack integration generator', () => {
       false,
     );
     const plan = JSON.parse(
-      tree.read('.megamono/playstack-integration-plan.json', 'utf8')!,
+      tree.read('.megamono/playstack-integration-plan.json', 'utf8') ?? '{}',
     );
     expect(plan.files[0]).toMatchObject({ target: path, reused: true });
     expect(plan.selections.equivalences).toContainEqual(

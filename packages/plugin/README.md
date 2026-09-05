@@ -56,6 +56,36 @@ application build or endpoint integration tests. Dedicated persistence/phase
 options cannot contradict package decision values. Re-running preserves
 formatting-equivalent output, while substantive user edits remain fail-closed.
 
+For mature application wiring, `--equivalences` is a reviewed JSON map:
+environment requirement keys map to variable names; declared module/provider
+symbols map to `existing:libs/example/src/module.ts#ExportedModule`; and
+`package:integration:template` keys can map to `existing:<file>` to reuse that
+file instead of generating a duplicate. The referenced keys/files/exports are
+validated. Environment mappings record bindings without rewriting arbitrary
+template code. These mappings are declarations of application ownership, not
+automatic proof of behavioral equivalence.
+
+`--verification` maps every active `package:integration:test` ID from the plan to
+an existing `project:target`; `--verificationProject` selects the project for a
+`playstack-verify` aggregator. Optionally pass both `--ciWorkflow` and `--ciJob`
+to append one reviewed verification step to an existing GitHub workflow job.
+No installation, release, signing, or deployment steps are replaced.
+
+The persistent `.megamono/playstack-integrations.json` ledger tracks each
+integration independently. `--adoptionMode` remains advisory; actual recorded
+transitions use `--migrationStages` with a JSON `package:integration` map. Start
+with `{ "stage": "compare" }`. Moving to shadow/cutover/rollback also requires
+`verificationReport` and `rollbackPlan` workspace file paths. The JSON report
+must contain `schemaVersion: 1`, the `integration` key, the current plan's
+`fingerprint`, the target `stage`, `result: "passed"`, and a nonempty `checks`
+array covering all required test IDs. These are application-reviewed
+attestations: the generator records their digests but never executes a traffic
+cutover, database migration, or rollback. Invalid transitions fail before writes.
+
+Shared composition-root generation and multi-project monorepo import remain
+separate work; these options do not modify `AppModule` or lift the existing
+single-root-package import restriction.
+
 Named adoption profiles are shortcuts over the same independent modules:
 `minimal` selects project boundaries and health; `pilot` adds platform
 inference without claiming repository CI or release workflows; `platform` adds

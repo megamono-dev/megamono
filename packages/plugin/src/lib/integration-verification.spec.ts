@@ -34,28 +34,30 @@ describe('reviewed integration verification', () => {
       ...options,
       ciWorkflow: path,
       ciJob: 'quality',
-    })!;
+    });
+    if (!plan?.workflow) throw new Error('Expected a workflow proposal.');
+    const workflow = plan.workflow;
     expect(tree.listChanges()).toEqual(before);
     expect(plan.configuration.dependsOn).toEqual([
       { projects: ['api'], target: 'test' },
     ]);
-    const updated = parse(plan.workflow!.content);
+    const updated = parse(workflow.content);
     expect(updated.jobs.release).toEqual(parse(content).jobs.release);
     expect(updated.jobs.quality.steps.slice(0, 2)).toEqual(
       parse(content).jobs.quality.steps,
     );
-    expect(plan.workflow!.content).toContain('# application-owned CI');
+    expect(workflow.content).toContain('# application-owned CI');
     expect(updated.jobs.quality.steps[2].run).toContain(
       "require.resolve('nx/package.json')",
     );
-    tree.write(path, plan.workflow!.content);
+    tree.write(path, workflow.content);
     expect(
       planIntegrationVerification(tree, projects, [requirement], {
         ...options,
         ciWorkflow: path,
         ciJob: 'quality',
       })?.workflow?.content,
-    ).toBe(plan.workflow!.content);
+    ).toBe(workflow.content);
   });
 
   it.each([
