@@ -186,6 +186,10 @@ or security configuration are inferred from names. The dry-run describes every
 file; `.megamono/playstack-compositions.json` records formatted root hashes for
 pristine updates. Modified roots are ejected application code and fail closed.
 Repeated runs do not duplicate barrel exports or AppModule imports.
+The migration fingerprint includes the reviewed composition project, module
+bindings, and optional application connection. A composition change during
+shadow or cutover requires rollback against the previous contract before new
+verification can be accepted.
 
 ### Per-integration migration ledger
 

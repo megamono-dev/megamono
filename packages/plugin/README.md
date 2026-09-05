@@ -26,8 +26,9 @@ npm exec nx g @megamono/plugin:workspace-init \
 
 Playstack integration manifests remain package-owned. The generator validates
 the full published JSON schema, manifest package version, and every ejectable template hash, maps each
-surface into an explicit Nx root, and records application-owned output without
-patching an existing composition root. Conditional requirements are resolved
+surface into an explicit Nx root, and records application-owned output. Existing
+composition roots change only through an explicitly reviewed `--composition`
+connection. Conditional requirements are resolved
 with `--adapters`, `--persistence`, and an exact JSON `--conditions` map;
 package-authored decisions use `--decisions`. Migration work records
 `--adoptionMode=fresh|compare|shadow|cutover` and emits one suggested commit
@@ -109,6 +110,9 @@ modules must be explicitly selected and directly exported with static `@Module`
 metadata. The shared module and barrel are generated there, and the optional
 connection adds a single AppModule import without replacing its existing metadata.
 Dynamic AppModule imports and identifier collisions require manual review.
+The migration ledger binds the reviewed composition project, module selections,
+and AppModule connection. Changing them during shadow or cutover requires rolling
+back the previous contract first, just like changing a package integration.
 Generated root hashes permit pristine updates, while edited roots fail closed.
 Provider registration arguments are never guessed from package export names.
 

@@ -297,5 +297,12 @@ export function planIntegrationComposition(
       updated = `import { PlaystackPlatformModule } from ${JSON.stringify(connection.importPath)};\n${updated}`;
     writes.push({ target: connection.file, content: updated });
   }
-  return { project: options.project, target, modules, writes, state };
+  return {
+    project: options.project,
+    target,
+    modules,
+    writes,
+    state,
+    selection: options,
+  };
 }

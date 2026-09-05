@@ -885,6 +885,9 @@ export async function playstackIntegrateGenerator(
           root: roots[record.surface],
           requirements: record.requirements,
           persistence: options.persistence,
+          ...(composition && record.framework === 'nest'
+            ? { composition: composition.selection }
+            : {}),
           decisions: Object.fromEntries(
             decisionKeys.map((key) => [key, selectedDecisions[key]]),
           ),

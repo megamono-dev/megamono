@@ -157,6 +157,39 @@ describe('Playstack integration generator', () => {
     expect(app).toContain('// application owned');
     await playstackIntegrateGenerator(tree, options);
     expect(tree.read('apps/api/src/app.module.ts', 'utf8')).toBe(app);
+    const ledgerPath = '.megamono/playstack-integrations.json';
+    const ledgerBefore = tree.read(ledgerPath, 'utf8') ?? '{}';
+    const ledger = JSON.parse(ledgerBefore);
+    const record = ledger.integrations['@playstack/rate-limit:nest-rate-limit'];
+    const previousFingerprint = record.fingerprint;
+    record.stage = 'shadow';
+    record.history.push({ stage: 'shadow', fingerprint: previousFingerprint });
+    tree.write(ledgerPath, JSON.stringify(ledger));
+    tree.write(
+      'libs/platform/playstack/src/extra.module.ts',
+      "import { Module } from '@nestjs/common';\n@Module({}) export class ExtraModule {}\n",
+    );
+    const changed = JSON.parse(options.composition);
+    changed.modules.push({
+      file: 'libs/platform/playstack/src/extra.module.ts',
+      export: 'ExtraModule',
+    });
+    await expect(
+      playstackIntegrateGenerator(tree, {
+        ...options,
+        composition: JSON.stringify(changed),
+      }),
+    ).rejects.toThrow('changed during shadow');
+    tree.write(ledgerPath, ledgerBefore);
+    await playstackIntegrateGenerator(tree, {
+      ...options,
+      composition: JSON.stringify(changed),
+    });
+    expect(
+      JSON.parse(tree.read(ledgerPath, 'utf8') ?? '{}').integrations[
+        '@playstack/rate-limit:nest-rate-limit'
+      ].fingerprint,
+    ).not.toBe(previousFingerprint);
     tree.write(
       'libs/platform/playstack/src/playstack-platform.module.ts',
       '// manually ejected\n',
