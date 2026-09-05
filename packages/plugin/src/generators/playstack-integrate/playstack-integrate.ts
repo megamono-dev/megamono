@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { posix, resolve } from 'node:path';
 import Ajv2020 from 'ajv/dist/2020';
+import { format } from 'prettier';
 
 const integrationValidator = new Ajv2020({
   allErrors: true,
@@ -629,7 +630,19 @@ export async function playstackIntegrateGenerator(
     );
   for (const file of files) {
     const current = tree.read(file.target, 'utf8');
-    if (current !== null && current !== file.content)
+    let unchanged = current === file.content;
+    if (current !== null && !unchanged) {
+      try {
+        // Compare both sides with one formatter configuration; repository
+        // formatting must not turn our own output into a content conflict.
+        unchanged =
+          (await format(current, { filepath: file.target })) ===
+          (await format(file.content, { filepath: file.target }));
+      } catch {
+        // Unknown syntax/formatters remain fail-closed.
+      }
+    }
+    if (current !== null && !unchanged)
       throw new Error(
         `${file.target} already exists with repository-owned content; integration generation is fail-closed.`,
       );
@@ -773,7 +786,8 @@ export async function playstackIntegrateGenerator(
     throw new Error(
       `Integration generation found incompatible manifest requirements: ${conflicts.join(' ')}`,
     );
-  for (const file of files) tree.write(file.target, file.content);
+  for (const file of files)
+    if (!tree.exists(file.target)) tree.write(file.target, file.content);
   tree.write(
     '.megamono/playstack-integration-plan.json',
     `${JSON.stringify(plan, null, 2)}\n`,

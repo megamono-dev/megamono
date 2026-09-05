@@ -83,6 +83,36 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it('is stable after repository formatting and preserves real user edits', async () => {
+    const tree = fixture();
+    tree.write('.prettierrc', '{"singleQuote":false}');
+    const manifest = integrationManifest(tree);
+    const content = "export const message='hello';\n";
+    manifest.integrations[0].templates[0].sha256 = createHash('sha256')
+      .update(content)
+      .digest('hex');
+    tree.write(
+      'node_modules/@playstack/rate-limit/templates/rate-limit.module.ts',
+      content,
+    );
+    writeIntegrationManifest(tree, manifest);
+    const options = {
+      packages: '@playstack/rate-limit',
+      api: 'apps/api',
+      yes: true,
+    };
+    await playstackIntegrateGenerator(tree, options);
+    const target = 'apps/api/src/playstack/rate-limit.module.ts';
+    const formatted = tree.read(target, 'utf8');
+    expect(formatted).toBe('export const message = "hello";\n');
+    await playstackIntegrateGenerator(tree, options);
+    expect(tree.read(target, 'utf8')).toBe(formatted);
+    tree.write(target, 'export const message = "user change";\n');
+    await expect(playstackIntegrateGenerator(tree, options)).rejects.toThrow(
+      'repository-owned content',
+    );
+    expect(tree.read(target, 'utf8')).toContain('user change');
+  });
   it.each([
     [
       'unsupported framework',
