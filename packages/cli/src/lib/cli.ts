@@ -903,11 +903,39 @@ function localNxVersion(root: string): string {
   return manifest.version;
 }
 
+async function surveyNpmInvocation(): Promise<
+  readonly [string, readonly string[]]
+> {
+  // Do not execute a PATH-selected npm shim: its shebang may select a different
+  // Node major than the one that passed the CLI's compatibility preflight.
+  const candidates = [
+    resolve(
+      dirname(process.execPath),
+      '../lib/node_modules/npm/bin/npm-cli.js',
+    ),
+    resolve(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'),
+    resolve(dirname(process.execPath), '../share/nodejs/npm/bin/npm-cli.js'),
+  ];
+  for (const candidate of candidates) {
+    try {
+      await access(candidate);
+      return [process.execPath, [candidate]];
+    } catch {
+      // Try the next standard Node distribution layout.
+    }
+  }
+  throw new CliError(
+    `Cannot locate npm alongside the active Node runtime (${process.execPath}). Install npm for this Node installation before running an ephemeral survey; the repository has not been changed.`,
+    3,
+  );
+}
+
 async function runEphemeralPluginSurvey(
   io: MegamonoCliIo,
   root: string,
   options: InitOptions,
 ): Promise<MegamonoCliResult> {
+  const [npmCommand, npmArgs] = await surveyNpmInvocation();
   const directory = await mkdtemp(join(tmpdir(), 'megamono-survey-'));
   try {
     await writeFile(
@@ -935,8 +963,9 @@ async function runEphemeralPluginSurvey(
         : []),
     ];
     const installed = await io.runCommand(
-      'npm',
+      npmCommand,
       [
+        ...npmArgs,
         'install',
         '--ignore-scripts',
         '--no-audit',

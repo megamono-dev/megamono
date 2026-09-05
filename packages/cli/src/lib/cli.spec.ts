@@ -849,8 +849,9 @@ describe('@megamono/cli', () => {
     expect(result.exitCode).toBe(0);
     expect(harness.invocations).toHaveLength(2);
     expect(harness.invocations[0]).toMatchObject({
-      command: 'npm',
+      command: process.execPath,
       args: expect.arrayContaining([
+        expect.stringMatching(/npm\/bin\/npm-cli\.js$/),
         'install',
         'nx@23.1.1',
         '@megamono/plugin@0.0.1-test',
@@ -889,7 +890,7 @@ describe('@megamono/cli', () => {
     expect(result.exitCode).toBe(0);
     expect(harness.invocations.map(({ command }) => command)).toEqual([
       'yalc',
-      'npm',
+      process.execPath,
       process.execPath,
     ]);
     expect(harness.invocations[0]?.args).toEqual([

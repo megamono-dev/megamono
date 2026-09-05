@@ -29,6 +29,9 @@ The target workspace needs a local Nx installation. A survey uses the local
 and Nx runtime in a disposable directory from the selected registry or Yalc
 source. This does not change the repository. `--write` still requires the
 plugin to be installed as a workspace development dependency.
+Staging invokes npm with the CLI's active Node executable, not a PATH-selected
+Node shim. npm must be installed alongside that Node distribution; if it is
+missing, the survey stops without modifying the workspace.
 
 Initialized workspaces expose composable verification without requiring users
 to remember executor target names:

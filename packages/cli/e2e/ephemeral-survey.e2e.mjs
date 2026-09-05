@@ -48,7 +48,8 @@ try {
       output += message;
     },
     async runCommand(command, args, options) {
-      if (command === 'npm') {
+      if (args[0]?.endsWith('/npm/bin/npm-cli.js')) {
+        assert.equal(command, process.execPath);
         // Substitute only transport/install. Nx and the built generator execute
         // for real, outside the consumer's module search path.
         await mkdir(join(options.cwd, 'node_modules/@megamono'), {
