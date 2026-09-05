@@ -41,7 +41,9 @@ try {
   const result = await runMegamonoCli(['adopt', '--format=json'], {
     cwd: root,
     version: '0.0.1',
-    stdout() {},
+    stdout(message) {
+      output += message;
+    },
     stderr(message) {
       output += message;
     },

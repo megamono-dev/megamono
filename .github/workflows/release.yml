@@ -71,6 +71,7 @@ jobs:
       - run: npm exec nx -- run @megamono/cli:e2e-local-packages --skip-nx-cache
       - run: npm exec nx -- run @megamono/cli:e2e-ephemeral-survey --skip-nx-cache
       - run: npm exec nx -- run plugin:e2e-collections-local-registry --skip-nx-cache
+      - run: npm exec nx -- run @megamono/plugin:e2e-integration-consumer --skip-nx-cache
       - run: npm exec nx -- run plugin:e2e-convert-local-registry --skip-nx-cache
       - run: npm exec nx -- run @megamono/plugin:e2e-nx-compatibility --skip-nx-cache
       - run: npm exec nx -- run create-megamono:e2e-selection-matrix-local-registry --skip-nx-cache

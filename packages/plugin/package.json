@@ -38,6 +38,16 @@
   ],
   "nx": {
     "targets": {
+      "e2e-integration-consumer": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/integration-consumer.e2e.mjs"
+        }
+      },
       "sync-collections": {
         "executor": "nx:run-commands",
         "cache": false,
