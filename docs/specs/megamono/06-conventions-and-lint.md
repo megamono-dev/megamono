@@ -165,6 +165,18 @@ One manually dispatched workflow owns both channels. It derives prerelease ID, n
 
 GitHub environments provide the external protection layer. `npm-next` permits `main` and protected `release/*` branches. `npm-latest` permits only `main`, requires reviewers, and should prevent self-approval. The workflow also enforces those ref rules in code, requires a clean checkout after its packed fixtures, and pushes its version commit back to the selected authorized branch rather than unconditionally targeting `main`.
 
+Stable promotion additionally compares the clean checkout's Git tree with every
+published `next` package's registry-reported `gitHead` tree. Missing revision
+metadata, unavailable history, or source differences fail closed. An identical
+tree reached through a merge is acceptable; changed source must first ship and
+be evaluated as another `next` release. This verifies source identity, not
+bit-for-bit reproducibility of rebuilt artifacts.
+
+Versioning updates both packaged compatibility registries' internal Megamono
+scaffold pins before rebuilding, committing, and tagging. Third-party framework
+pins remain the tested compatibility baseline. Release checks reject stale
+internal pins so a new entry package cannot silently install an older plugin.
+
 Publishing uses npm trusted publishing from `megamono-dev/megamono/.github/workflows/release.yml`, with `id-token: write`, Node 24, and npm 11.5.1 or newer. Because npm permits only one trusted publisher per package, its optional environment field remains unset; the repository's two GitHub environments still gate their respective jobs. Public-repository publication receives npm provenance automatically. A temporary npm token may bootstrap trust configuration outside this workflow, but no long-lived publish token belongs in the committed release path.
 
 GitHub Packages is not used for Megamono because its npm namespace would have to match the repository owner (`megamono-dev`), which would force a temporary `@megamono-dev/*` rename. A self-hosted registry remains unnecessary.
