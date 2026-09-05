@@ -158,6 +158,8 @@ interface PlannedFile {
 type ConditionState = 'active' | 'inactive' | 'unresolved';
 
 interface ConditionSelection {
+  readonly decisions: Readonly<Record<string, string>>;
+  readonly declaredDecisions: ReadonlySet<string>;
   readonly adapters: ReadonlySet<string>;
   readonly adaptersSpecified: boolean;
   readonly persistence?: 'package' | 'application';
@@ -235,6 +237,19 @@ function conditionState(
   selection: ConditionSelection,
 ): ConditionState {
   if (!when) return 'active';
+  if (when.startsWith('decision:')) {
+    const match = /^decision:([^=\s]+)=(\S.*)$/.exec(when);
+    if (!match || !selection.declaredDecisions.has(match[1]))
+      throw new Error(
+        `Condition ${when} must reference a package-declared decision using decision:<key>=<value>.`,
+      );
+    const value = selection.decisions[match[1]];
+    return value === undefined
+      ? 'unresolved'
+      : value === match[2]
+        ? 'active'
+        : 'inactive';
+  }
   if (when.startsWith('adapter:')) {
     const adapter = when.slice('adapter:'.length);
     return !selection.adaptersSpecified
@@ -527,7 +542,18 @@ export async function playstackIntegrateGenerator(
   options: PlaystackIntegrateGeneratorSchema,
 ): Promise<GeneratorCallback> {
   const adapters = commaValues(options.adapters);
+  const selectedDecisions = jsonRecord(
+    options.decisions,
+    '--decisions',
+    (entry): entry is string =>
+      typeof entry === 'string' &&
+      entry.trim().length > 0 &&
+      entry === entry.trim(),
+  );
+  const declaredDecisions = new Set<string>();
   const selection: ConditionSelection = {
+    decisions: selectedDecisions,
+    declaredDecisions,
     adapters: new Set(adapters),
     adaptersSpecified: options.adapters !== undefined,
     ...(options.persistence ? { persistence: options.persistence } : {}),
@@ -537,11 +563,6 @@ export async function playstackIntegrateGenerator(
       (entry): entry is boolean => typeof entry === 'boolean',
     ),
   };
-  const selectedDecisions = jsonRecord(
-    options.decisions,
-    '--decisions',
-    (entry): entry is string => typeof entry === 'string' && entry.length > 0,
-  );
   for (const [key, value] of Object.entries(selectedDecisions)) {
     const dedicated = key.endsWith('.persistence')
       ? options.persistence
@@ -564,6 +585,34 @@ export async function playstackIntegrateGenerator(
   const manifests = packageNames(options.packages).map((name) =>
     manifest(tree, name),
   );
+  for (const source of manifests)
+    for (const integration of source.integrations)
+      for (const decision of integration.requirements.decisions ?? []) {
+        declaredDecisions.add(decision.key);
+        if (selectedDecisions[decision.key] === undefined) {
+          const dedicated = decision.key.endsWith('.persistence')
+            ? options.persistence
+            : decision.key.endsWith('.adoptionMode')
+              ? options.adoptionMode
+              : undefined;
+          if (dedicated !== undefined)
+            selectedDecisions[decision.key] = dedicated;
+        }
+        const selected = selectedDecisions[decision.key];
+        if (
+          selected !== undefined &&
+          decision.options &&
+          !decision.options.includes(selected)
+        )
+          throw new Error(
+            `Decision ${decision.key} must be one of: ${decision.options.join(', ')}.`,
+          );
+      }
+  for (const key of Object.keys(selectedDecisions))
+    if (!declaredDecisions.has(key))
+      throw new Error(
+        `Decision ${key} is not declared by the selected packages; a supplied choice cannot add unsupported package behavior.`,
+      );
   const artifactProvenance = Object.fromEntries(
     manifests.map((source) => [
       source.package,

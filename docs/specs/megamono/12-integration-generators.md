@@ -231,6 +231,39 @@ any generated file, target, workflow, or ledger is changed.
 
 ### Consumer verification and CI composition
 
+#### Package-owned policy gates
+
+Packages declare policy choices using `requirements.decisions`: a stable key,
+prompt, `required: true`, and an `options` list where the package supports a
+bounded set of behaviors. Megamono does not supply authentication, account,
+refresh, email-linking, or native-storage defaults. Blank, misspelled, or
+unsupported selections fail before mutation. Recording a choice cannot make an
+unsupported behavior available in a package.
+
+The existing string `when` field can use `decision:<key>=<value>` to condition a
+template, test, or integration on an explicit declared choice. Gate routes and
+module/provider requirements through their owning integration; those records
+do not themselves support a `when` field. For example,
+`decision:auth.registration=enabled` includes a signup controller only when the
+package declares that decision and the consumer explicitly selects `enabled`.
+A missing choice remains unresolved; a different supported choice excludes the
+conditioned wiring. Such conditions cannot be overridden through free-form
+`--conditions` booleans. Put required policy decisions in an unconditional
+integration so the application must still review a disabled surface.
+Excluding wiring from a new plan never deletes previously generated,
+application-owned files. Disabling an existing route still requires reviewing
+its module registration, rollback, and negative-case tests.
+
+These examples describe the manifest mechanism, not current Playstack auth
+support. Package authors must publish the implementation, templates, supported
+options, and negative-case tests together. Do not declare strict refresh,
+email-less identities, multi-owner accounts, or native multi-account behavior
+until the selected package actually implements them. Unsupported Prismark
+requirements should retain application-owned services or remain blocked.
+Changing selected policy choices changes the migration fingerprint; no package
+install or generated controller proves policy parity. Local vault data and
+native credential-store resets are never consequences of integration generation.
+
 #### Environment-qualified evidence
 
 `--qualification` accepts a reviewed JSON map from an active

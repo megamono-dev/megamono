@@ -87,6 +87,115 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it.each([
+    'missing',
+    'unsupported',
+    'unknown',
+    'blank',
+    'disabled',
+    'enabled',
+    'undeclared-condition',
+  ])('requires explicit package-owned policy gates: %s', async (scenario) => {
+    const tree = fixture();
+    const manifest = integrationManifest(tree);
+    // Synthetic contract: these options are not claims about current Playstack support.
+    manifest.integrations[0].requirements.decisions = [
+      {
+        key: 'auth.registration',
+        prompt: 'Enable production signup?',
+        required: true,
+        options: ['disabled', 'enabled'],
+      },
+      {
+        key: 'auth.identityLinking',
+        prompt: 'Select linking policy.',
+        required: true,
+        options: ['explicit-proof'],
+      },
+      {
+        key: 'accounts.ownership',
+        prompt: 'Select ownership.',
+        required: true,
+        options: ['single-owner'],
+      },
+    ];
+    manifest.integrations[0].templates[0].when =
+      scenario === 'undeclared-condition'
+        ? 'decision:auth.typo=enabled'
+        : 'decision:auth.registration=enabled';
+    manifest.integrations.push({
+      id: 'registration',
+      surface: 'api',
+      framework: 'nest',
+      when: 'decision:auth.registration=enabled',
+      requirements: {
+        routes: [
+          {
+            id: 'register',
+            methods: ['POST'],
+            path: '/auth/register',
+            rawBody: false,
+          },
+        ],
+      },
+      templates: [],
+    });
+    writeIntegrationManifest(tree, manifest);
+    const decisions = {
+      ...(scenario === 'missing'
+        ? {}
+        : {
+            'auth.registration':
+              scenario === 'enabled'
+                ? 'enabled'
+                : scenario === 'blank'
+                  ? '   '
+                  : 'disabled',
+          }),
+      'auth.identityLinking': 'explicit-proof',
+      'accounts.ownership':
+        scenario === 'unsupported' ? 'multi-owner' : 'single-owner',
+      ...(scenario === 'unknown' ? { 'auth.refreshReplaay': 'strict' } : {}),
+    };
+    const before = tree.listChanges();
+    const invoke = () =>
+      playstackIntegrateGenerator(tree, {
+        packages: '@playstack/rate-limit',
+        api: 'apps/api',
+        decisions: JSON.stringify(decisions),
+        conditions: JSON.stringify({
+          'decision:auth.registration=enabled': true,
+        }),
+        yes: true,
+      });
+    if (!['enabled', 'disabled'].includes(scenario)) {
+      const errors: Record<string, string> = {
+        missing: 'unresolved conditions',
+        unsupported: 'must be one of',
+        unknown: 'not declared',
+        blank: 'valid values',
+        'undeclared-condition': 'must reference',
+      };
+      await expect(invoke()).rejects.toThrow(errors[scenario]);
+      expect(tree.listChanges()).toEqual(before);
+      return;
+    }
+    await invoke();
+    const plan = JSON.parse(
+      tree.read('.megamono/playstack-integration-plan.json', 'utf8') ?? '{}',
+    );
+    expect(tree.exists('apps/api/src/playstack/rate-limit.module.ts')).toBe(
+      scenario === 'enabled',
+    );
+    expect(
+      plan.requirements.flatMap(
+        (entry: { requirements: { routes?: unknown[] } }) =>
+          entry.requirements.routes ?? [],
+      ),
+    ).toHaveLength(scenario === 'enabled' ? 1 : 0);
+    expect(plan.selections.decisions).toEqual(decisions);
+  });
+
   it('invalidates evidence when installed runtime bytes change without a version or manifest change', async () => {
     const tree = fixture();
     const options = {
@@ -114,6 +223,31 @@ describe('Playstack integration generator', () => {
       'changed during shadow',
     );
     expect(tree.listChanges()).toEqual(before);
+  });
+
+  it('resolves declared dedicated decisions before evaluating conditional templates', async () => {
+    const tree = fixture();
+    const manifest = integrationManifest(tree);
+    manifest.integrations[0].requirements.decisions = [
+      {
+        key: 'auth.persistence',
+        prompt: 'Select persistence.',
+        required: true,
+        options: ['package', 'application'],
+      },
+    ];
+    manifest.integrations[0].templates[0].when =
+      'decision:auth.persistence=application';
+    writeIntegrationManifest(tree, manifest);
+    await playstackIntegrateGenerator(tree, {
+      packages: '@playstack/rate-limit',
+      api: 'apps/api',
+      persistence: 'application',
+      yes: true,
+    });
+    expect(tree.exists('apps/api/src/playstack/rate-limit.module.ts')).toBe(
+      true,
+    );
   });
   it('emits Nest wiring into a shared library, connects AppModule once, and protects edits', async () => {
     const tree = fixture();
