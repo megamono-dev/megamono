@@ -4,6 +4,10 @@
   "title": "Materialize package-authored Playstack integration wiring",
   "type": "object",
   "properties": {
+    "composition": {
+      "type": "string",
+      "description": "Reviewed JSON composition: existing Nx library project, configured Nest modules [{file,export}], optional connect {file,module,importPath}. Nest templates are emitted into the library."
+    },
     "packages": {
       "type": "string",
       "description": "Comma-separated installed @playstack package names."

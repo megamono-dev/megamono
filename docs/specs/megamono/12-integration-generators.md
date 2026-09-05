@@ -168,6 +168,25 @@ Generators emit secret **names**, never values:
 
 ## Playstack application integration adoption
 
+### Shared Nest composition library
+
+`--composition` selects an existing Nx library project and explicit configured
+module bindings (`file`, `export`). Nest integration templates are materialized
+under that library rather than under the application. Megamono emits and exports
+`PlaystackPlatformModule`, importing and re-exporting those modules. Library
+creation and its package-manager/TypeScript build conventions use the normal Nx
+library generator; composition never invents or replaces those settings.
+
+An optional `connect` object selects the application module file, class name,
+and existing library import path. Megamono adds the one import to static Nest
+metadata, preserving other imports/providers/controllers and comments. Dynamic
+metadata, ambiguous identifiers, overlapping template output, missing module
+exports, and unresolved library aliases fail before writes. No provider arguments
+or security configuration are inferred from names. The dry-run describes every
+file; `.megamono/playstack-compositions.json` records formatted root hashes for
+pristine updates. Modified roots are ejected application code and fail closed.
+Repeated runs do not duplicate barrel exports or AppModule imports.
+
 ### Per-integration migration ledger
 
 The generator persists `.megamono/playstack-integrations.json`, keyed by

@@ -7,6 +7,10 @@ import {
   type Tree,
 } from '@nx/devkit';
 import { nestRoutes } from '../../lib/nest-routes';
+import {
+  COMPOSITION_STATE,
+  planIntegrationComposition,
+} from '../../lib/integration-composition';
 import { planIntegrationVerification } from '../../lib/integration-verification';
 import {
   INTEGRATION_MIGRATIONS_PATH,
@@ -52,6 +56,7 @@ export interface PlaystackIntegrateGeneratorSchema {
   readonly ciWorkflow?: string;
   readonly ciJob?: string;
   readonly migrationStages?: string;
+  readonly composition?: string;
   readonly dryRun?: boolean;
   readonly yes?: boolean;
 }
@@ -566,6 +571,11 @@ export async function playstackIntegrateGenerator(
       );
   }
   const files: PlannedFile[] = [];
+  const compositionProject = options.composition
+    ? getProjects(tree).get(JSON.parse(options.composition).project)
+    : undefined;
+  if (options.composition && !compositionProject)
+    throw new Error('Composition requires an existing Nx library project.');
   const requirements: RequirementRecord[] = [];
   const unresolvedConditions = new Set<string>();
   for (const source of manifests) {
@@ -629,7 +639,9 @@ export async function playstackIntegrateGenerator(
           target: resolvedTarget(
             template.target,
             integration.surface,
-            root,
+            integration.framework === 'nest' && compositionProject
+              ? compositionProject.root
+              : root,
             integration.id,
           ),
           sha256: template.sha256,
@@ -814,6 +826,20 @@ export async function playstackIntegrateGenerator(
       ({ id, kind }) => ({ id, kind }),
     ),
   }));
+  const composition = planIntegrationComposition(
+    tree,
+    getProjects(tree),
+    files,
+    options.composition,
+  );
+  if (
+    composition?.writes.some((write) =>
+      files.some((file) => file.target === write.target),
+    )
+  )
+    throw new Error(
+      'Composition output overlaps a package-authored template; choose a separate composition library layout.',
+    );
   const verification = planIntegrationVerification(
     tree,
     getProjects(tree),
@@ -908,6 +934,19 @@ export async function playstackIntegrateGenerator(
     commitBoundaries,
     ...(verification ? { verification } : {}),
     migrations,
+    ...(composition
+      ? {
+          composition: {
+            project: composition.project,
+            target: composition.target,
+            modules: composition.modules,
+            files: composition.writes.map((file) => ({
+              target: file.target,
+              sha256: integrationFingerprint(file.content),
+            })),
+          },
+        }
+      : {}),
     requirements,
     files: files.map((file) => ({
       package: file.package,
@@ -950,6 +989,9 @@ export async function playstackIntegrateGenerator(
     );
   for (const file of files)
     if (!tree.exists(file.target)) tree.write(file.target, file.content);
+  if (composition)
+    for (const file of composition.writes)
+      tree.write(file.target, file.content);
   if (verification) {
     const project = getProjects(tree).get(verification.project);
     if (!project)
@@ -975,6 +1017,15 @@ export async function playstackIntegrateGenerator(
     `${JSON.stringify(migrations, null, 2)}\n`,
   );
   await formatFiles(tree);
+  if (composition) {
+    composition.state.files[composition.target] = integrationFingerprint(
+      tree.read(composition.target, 'utf8'),
+    );
+    tree.write(
+      COMPOSITION_STATE,
+      `${JSON.stringify(composition.state, null, 2)}\n`,
+    );
+  }
   return () => undefined;
 }
 

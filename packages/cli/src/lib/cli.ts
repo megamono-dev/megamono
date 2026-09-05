@@ -290,6 +290,8 @@ Integration options:
                        Append verification to an explicitly selected existing job
   --migration-stages='<json>'
                        Record verified compare/shadow/cutover/rollback transitions
+  --composition='<json>'
+                       Generate a shared Nest library module and optional AppModule connection
   --dry-run            Report templates, overlap, and unresolved choices
   --yes                Materialize verified templates after review
 

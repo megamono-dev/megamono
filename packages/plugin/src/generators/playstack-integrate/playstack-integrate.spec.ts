@@ -87,6 +87,108 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it('emits Nest wiring into a shared library, connects AppModule once, and protects edits', async () => {
+    const tree = fixture();
+    addProjectConfiguration(tree, 'platform', {
+      root: 'libs/platform/playstack',
+      sourceRoot: 'libs/platform/playstack/src',
+      projectType: 'library',
+    });
+    tree.write(
+      'tsconfig.base.json',
+      JSON.stringify({
+        compilerOptions: {
+          paths: {
+            '@fixture/platform': ['libs/platform/playstack/src/index.ts'],
+          },
+        },
+      }),
+    );
+    tree.write(
+      'apps/api/src/app.module.ts',
+      "import { Module as NestModule } from '@nestjs/common';\n// application owned\n@NestModule({ providers: [] }) export class AppModule {}\n",
+    );
+    const content =
+      "import { Module } from '@nestjs/common';\n@Module({}) export class RateLimitModule {}\n";
+    const manifest = integrationManifest(tree);
+    manifest.integrations[0].templates[0].sha256 = createHash('sha256')
+      .update(content)
+      .digest('hex');
+    writeIntegrationManifest(tree, manifest);
+    tree.write(
+      'node_modules/@playstack/rate-limit/templates/rate-limit.module.ts',
+      content,
+    );
+    const options = {
+      packages: '@playstack/rate-limit',
+      api: 'apps/api',
+      yes: true,
+      composition: JSON.stringify({
+        project: 'platform',
+        modules: [
+          {
+            file: 'libs/platform/playstack/src/playstack/rate-limit.module.ts',
+            export: 'RateLimitModule',
+          },
+        ],
+        connect: {
+          file: 'apps/api/src/app.module.ts',
+          module: 'AppModule',
+          importPath: '@fixture/platform',
+        },
+      }),
+    };
+    await playstackIntegrateGenerator(tree, { ...options, dryRun: true });
+    expect(
+      tree.exists('libs/platform/playstack/src/playstack-platform.module.ts'),
+    ).toBe(false);
+    await playstackIntegrateGenerator(tree, options);
+    expect(tree.exists('apps/api/src/playstack/rate-limit.module.ts')).toBe(
+      false,
+    );
+    expect(
+      tree.read(
+        'libs/platform/playstack/src/playstack-platform.module.ts',
+        'utf8',
+      ),
+    ).toContain('RateLimitModule as Integration0');
+    const app = tree.read('apps/api/src/app.module.ts', 'utf8');
+    expect(app).toContain('imports: [PlaystackPlatformModule]');
+    expect(app).toContain('// application owned');
+    await playstackIntegrateGenerator(tree, options);
+    expect(tree.read('apps/api/src/app.module.ts', 'utf8')).toBe(app);
+    tree.write(
+      'libs/platform/playstack/src/playstack-platform.module.ts',
+      '// manually ejected\n',
+    );
+    await expect(playstackIntegrateGenerator(tree, options)).rejects.toThrow(
+      'modified content',
+    );
+  });
+
+  it('refuses an invalid composition binding before emitting any templates', async () => {
+    const tree = fixture();
+    addProjectConfiguration(tree, 'platform', {
+      root: 'libs/platform',
+      projectType: 'library',
+    });
+    await expect(
+      playstackIntegrateGenerator(tree, {
+        packages: '@playstack/rate-limit',
+        api: 'apps/api',
+        yes: true,
+        composition: JSON.stringify({
+          project: 'platform',
+          modules: [
+            { file: 'apps/api/existing.module.ts', export: 'Existing' },
+          ],
+        }),
+      }),
+    ).rejects.toThrow('inside the selected library');
+    expect(
+      tree.exists('libs/platform/src/playstack/rate-limit.module.ts'),
+    ).toBe(false);
+  });
   it('wires required tests into Nx only after an accepted plan, and reruns safely', async () => {
     const tree = fixture();
     const manifest = integrationManifest(tree);

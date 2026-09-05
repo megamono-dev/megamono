@@ -82,9 +82,35 @@ array covering all required test IDs. These are application-reviewed
 attestations: the generator records their digests but never executes a traffic
 cutover, database migration, or rollback. Invalid transitions fail before writes.
 
-Shared composition-root generation and multi-project monorepo import remain
-separate work; these options do not modify `AppModule` or lift the existing
-single-root-package import restriction.
+Shared Nest composition is opt-in with `--composition='<json>'`:
+
+```json
+{
+  "project": "playstack-platform",
+  "modules": [
+    {
+      "file": "libs/platform/playstack/src/auth/auth.module.ts",
+      "export": "AuthModule"
+    }
+  ],
+  "connect": {
+    "file": "apps/api/src/app/app.module.ts",
+    "module": "AppModule",
+    "importPath": "@my-org/playstack-platform"
+  }
+}
+```
+
+Create the library using the workspace's normal Nx library generator first, so
+its package-manager registration, TypeScript references, and build configuration
+remain correct for that workspace. The import path must already identify that
+library. Selected Nest templates are emitted into this library; configured
+modules must be explicitly selected and directly exported with static `@Module`
+metadata. The shared module and barrel are generated there, and the optional
+connection adds a single AppModule import without replacing its existing metadata.
+Dynamic AppModule imports and identifier collisions require manual review.
+Generated root hashes permit pristine updates, while edited roots fail closed.
+Provider registration arguments are never guessed from package export names.
 
 Named adoption profiles are shortcuts over the same independent modules:
 `minimal` selects project boundaries and health; `pilot` adds platform
