@@ -192,6 +192,14 @@ The command refuses unknown and `ejectable: false` artifacts before mutation. An
 
 Every run begins with the same deterministic survey:
 
+Project-local WXT configurations, browser manifests (Manifest V2/V3), and
+Figma plugin manifests are distinct inventory evidence. Figma plugins use the
+general `platform:extension` classification; they do not enable browser
+extension build targets. Unrelated PWA manifests are not extension evidence.
+Next router mode is reported as Pages, App, or mixed. Nest API and queue-worker
+roles are reported independently, including applications hosting both; queue
+hosting does not change a Node project's platform to Cloudflare `worker`.
+
 - resolved Nx project names, roots, evidence-backed application/library types, per-project platforms, targets, and tags;
 - root package-manager ownership and active package-manager, Node, Nx, and TypeScript versions;
 - supported and unsupported non-JavaScript manifests;

@@ -1,9 +1,17 @@
 import type { ProjectConfiguration, Tree } from '@nx/devkit';
 import { posix } from 'node:path';
 import { parse } from 'yaml';
+import { extensionEvidence } from './extension-evidence';
 
 export type WorkspaceFramework =
-  'nest' | 'next' | 'expo' | 'react-native' | 'vite';
+  | 'nest'
+  | 'next'
+  | 'expo'
+  | 'react-native'
+  | 'vite'
+  | 'wxt'
+  | 'browser-extension'
+  | 'figma';
 export type WorkspaceServiceKind = 'cache' | 'queue';
 
 export interface WorkspaceInventoryEvidence {
@@ -16,6 +24,7 @@ export interface WorkspaceInventoryProject {
   readonly root: string;
   readonly frameworks: readonly WorkspaceInventoryEvidence[];
   readonly nextRouter?: 'app' | 'mixed' | 'pages';
+  readonly roles: readonly ('api' | 'worker')[];
   readonly externalPackages: readonly string[];
   readonly environmentNames: readonly string[];
   readonly serviceKinds: readonly WorkspaceServiceKind[];
@@ -208,6 +217,8 @@ function frameworkEvidence(options: {
     ...marker(/(?:^|\/)vite\.config\.[cm]?[jt]s$/),
     ...(targetSource.includes('@nx/vite') ? ['nx-target:@nx/vite'] : []),
   ]);
+  for (const marker of extensionEvidence(options.tree, options.root))
+    add(marker.framework, [marker.path]);
   return result.sort((left, right) => compare(left.value, right.value));
 }
 
@@ -306,7 +317,9 @@ function prismaSchemaInventory(
     );
   }
   const unclaimed: string[] = [];
-  for (const schema of schemas.filter((path) => !sourceSchemas.includes(path))) {
+  for (const schema of schemas.filter(
+    (path) => !sourceSchemas.includes(path),
+  )) {
     const project = ownerProject(schema, projects);
     const candidates = sourceSchemas
       .filter((source) => {
@@ -314,7 +327,10 @@ function prismaSchemaInventory(
         const declaredOutput = (sourceOutputRoots.get(source) ?? []).some(
           (root) => underRoot(schema, root),
         );
-        return declaredOutput || (sameProject && isConventionalGeneratedSchema(schema));
+        return (
+          declaredOutput ||
+          (sameProject && isConventionalGeneratedSchema(schema))
+        );
       })
       .sort((left, right) => {
         const common = (value: string) => {
@@ -487,6 +503,17 @@ export function createWorkspaceInventory(
         name,
         root: project.root,
         frameworks,
+        roles: [
+          ...(frameworks.some(({ value }) => value === 'nest') &&
+          /@Controller\s*\(/.test(source)
+            ? (['api'] as const)
+            : []),
+          ...(/@Processor\s*\(|\bnew\s+Worker\s*\(|\bextends\s+WorkerHost\b/.test(
+            source,
+          ) && serviceKinds.includes('queue')
+            ? (['worker'] as const)
+            : []),
+        ],
         ...(frameworks.some(({ value }) => value === 'next') &&
         (appRouter || pagesRouter)
           ? {

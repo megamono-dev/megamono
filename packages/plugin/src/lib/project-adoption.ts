@@ -1,5 +1,6 @@
 import type { ProjectConfiguration, Tree } from '@nx/devkit';
 import { isSafeWorkspaceRelativePath } from './config';
+import { extensionEvidence } from './extension-evidence';
 
 export const PROJECT_ADOPTION_TYPES = [
   'app',
@@ -128,6 +129,8 @@ function inferKind(
     add('library', `${firstRootSegment}/ project root`);
 
   const commands = commandText(project);
+  for (const marker of extensionEvidence(tree, project.root))
+    add('application', `${marker.framework} manifest: ${marker.path}`);
   if (/\b(?:next|nest|webpack-cli)\s+(?:dev|start|serve)\b/.test(commands))
     add('application', 'executable framework target');
   if (
@@ -170,7 +173,9 @@ function inferPlatform(
   };
 
   if (isWorkspaceToolingProject(tree, project))
-    return { evidence: ['workspace-root dependencies are not project evidence'] };
+    return {
+      evidence: ['workspace-root dependencies are not project evidence'],
+    };
 
   if (
     ['next.config.js', 'next.config.mjs', 'next.config.ts'].some((name) =>
@@ -210,6 +215,8 @@ function inferPlatform(
     add('apple', 'Apple manifest');
   if (tree.exists(`${root}/Cargo.toml`)) add('rust', 'Cargo manifest');
   if (tree.exists(`${root}/composer.json`)) add('php', 'Composer manifest');
+  for (const marker of extensionEvidence(tree, root))
+    add('extension', `${marker.framework} manifest: ${marker.path}`);
 
   if (candidates.size === 0 && projects) {
     for (const dependencyName of project.implicitDependencies ?? []) {
@@ -219,9 +226,7 @@ function inferPlatform(
       const tagged = projectTag(dependency, 'platform:');
       if (
         tagged &&
-        PROJECT_ADOPTION_PLATFORMS.includes(
-          tagged as ProjectAdoptionPlatform,
-        )
+        PROJECT_ADOPTION_PLATFORMS.includes(tagged as ProjectAdoptionPlatform)
       ) {
         add(
           tagged as ProjectAdoptionPlatform,
