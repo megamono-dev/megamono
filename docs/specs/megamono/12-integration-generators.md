@@ -193,6 +193,17 @@ verification can be accepted.
 
 ### Per-integration migration ledger
 
+Plans include installed-artifact provenance for each selected package and its
+required internal Playstack/Megamono closure: actual content and manifest digests,
+available build identities, and installed dependency/peer versions. The ledger
+fingerprint binds this snapshot, so same-version runtime changes invalidate old
+evidence even when manifests/templates are unchanged. No install is performed.
+Consumer `.yalc` payload mismatches block writes; a differing same-version local
+Yalc store is advisory because the installed build remains authoritative. Store
+signatures and build-info claims never substitute for hashing installed bytes.
+Missing required internal packages and incompatible/missing required peers must
+be repaired explicitly. A snapshot is provenance, not runtime certification.
+
 The generator persists `.megamono/playstack-integrations.json`, keyed by
 `package:integration`, preserving unselected integrations. Each entry records its
 package version, contract fingerprint, current stage, and append-only transition

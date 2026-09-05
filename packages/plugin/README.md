@@ -57,6 +57,12 @@ application build or endpoint integration tests. Dedicated persistence/phase
 options cannot contradict package decision values. Re-running preserves
 formatting-equivalent output, while substantive user edits remain fail-closed.
 
+Integration plans also report installed artifact/manifest hashes, internal
+dependency closure and peer versions. Runtime changes at the same package version
+invalidate migration evidence. A stale installed copy relative to the consumer's
+`.yalc` payload blocks generation; a newer same-version Yalc store is reported
+without silently adopting it. Refresh dependencies explicitly before continuing.
+
 For mature application wiring, `--equivalences` is a reviewed JSON map:
 environment requirement keys map to variable names; declared module/provider
 symbols map to `existing:libs/example/src/module.ts#ExportedModule`; and

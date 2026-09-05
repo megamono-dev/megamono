@@ -12,6 +12,7 @@ import {
   planIntegrationComposition,
 } from '../../lib/integration-composition';
 import { planIntegrationVerification } from '../../lib/integration-verification';
+import { collectIntegrationProvenance } from '../../lib/integration-provenance';
 import {
   INTEGRATION_MIGRATIONS_PATH,
   integrationFingerprint,
@@ -561,6 +562,12 @@ export async function playstackIntegrateGenerator(
   const manifests = packageNames(options.packages).map((name) =>
     manifest(tree, name),
   );
+  const artifactProvenance = Object.fromEntries(
+    manifests.map((source) => [
+      source.package,
+      collectIntegrationProvenance(tree, [source.package]),
+    ]),
+  );
   const projectRoots = new Set(
     [...getProjects(tree).values()].map((project) => project.root),
   );
@@ -882,6 +889,7 @@ export async function playstackIntegrateGenerator(
         fingerprint: integrationFingerprint({
           manifest: source.integrations.find(({ id }) => id === record.id),
           version: source.packageVersion,
+          artifacts: artifactProvenance[source.package].fingerprint,
           root: roots[record.surface],
           requirements: record.requirements,
           persistence: options.persistence,
@@ -923,6 +931,7 @@ export async function playstackIntegrateGenerator(
       name,
       version: packageVersion,
     })),
+    artifactProvenance,
     selections: {
       adapters,
       equivalences,
@@ -977,6 +986,13 @@ export async function playstackIntegrateGenerator(
   if (!options.yes)
     throw new Error(
       'Integration generation requires --yes after reviewing --dry-run.',
+    );
+  const artifactErrors = Object.values(artifactProvenance)
+    .flatMap((snapshot) => snapshot.findings)
+    .filter((finding) => finding.severity === 'error');
+  if (artifactErrors.length)
+    throw new Error(
+      `Installed artifact preflight failed: ${artifactErrors.map((finding) => finding.message).join(' ')}`,
     );
   if (unresolvedConditions.size > 0)
     throw new Error(

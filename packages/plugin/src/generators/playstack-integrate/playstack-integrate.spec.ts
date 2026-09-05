@@ -87,6 +87,34 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it('invalidates evidence when installed runtime bytes change without a version or manifest change', async () => {
+    const tree = fixture();
+    const options = {
+      packages: '@playstack/rate-limit',
+      api: 'apps/api',
+      yes: true,
+    };
+    tree.write(
+      'node_modules/@playstack/rate-limit/dist/index.js',
+      'exports.limit = 1;',
+    );
+    await playstackIntegrateGenerator(tree, options);
+    const path = '.megamono/playstack-integrations.json';
+    const ledger = JSON.parse(tree.read(path, 'utf8') ?? '{}');
+    const record = ledger.integrations['@playstack/rate-limit:nest-rate-limit'];
+    record.stage = 'shadow';
+    record.history.push({ stage: 'shadow', fingerprint: record.fingerprint });
+    tree.write(path, JSON.stringify(ledger));
+    tree.write(
+      'node_modules/@playstack/rate-limit/dist/index.js',
+      'exports.limit = 2;',
+    );
+    const before = tree.listChanges();
+    await expect(playstackIntegrateGenerator(tree, options)).rejects.toThrow(
+      'changed during shadow',
+    );
+    expect(tree.listChanges()).toEqual(before);
+  });
   it('emits Nest wiring into a shared library, connects AppModule once, and protects edits', async () => {
     const tree = fixture();
     addProjectConfiguration(tree, 'platform', {
