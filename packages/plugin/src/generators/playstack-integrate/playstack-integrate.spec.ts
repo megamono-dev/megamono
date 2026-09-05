@@ -1,10 +1,15 @@
 import { createHash } from 'node:crypto';
+import { addProjectConfiguration } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { describe, expect, it } from 'vitest';
 import { playstackIntegrateGenerator } from './playstack-integrate';
 
 function fixture() {
   const tree = createTreeWithEmptyWorkspace();
+  addProjectConfiguration(tree, 'api', {
+    root: 'apps/api',
+    projectType: 'application',
+  });
   const content = 'export class RateLimitModule {}\n';
   const sha256 = createHash('sha256').update(content).digest('hex');
   tree.write(
@@ -78,6 +83,52 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it('rejects unknown Nx destinations before writing', async () => {
+    const tree = fixture();
+    await expect(
+      playstackIntegrateGenerator(tree, {
+        packages: '@playstack/rate-limit',
+        api: 'apps/typo',
+        yes: true,
+      }),
+    ).rejects.toThrow('not an existing Nx project root');
+    expect(tree.exists('apps/typo')).toBe(false);
+  });
+
+  it('rejects composed Nest route collisions but distinguishes HTTP methods', async () => {
+    const tree = fixture();
+    const manifest = integrationManifest(tree);
+    manifest.integrations[0].requirements.routes = [
+      {
+        id: 'refresh',
+        methods: ['POST'],
+        path: '/auth/refresh',
+        rawBody: false,
+      },
+    ];
+    writeIntegrationManifest(tree, manifest);
+    tree.write(
+      'apps/api/src/auth.controller.ts',
+      "import { Controller, Post as Route } from '@nestjs/common';\n@Controller('auth') export class Auth { @Route('refresh') refresh() {} }\n",
+    );
+    await expect(
+      playstackIntegrateGenerator(tree, {
+        packages: '@playstack/rate-limit',
+        api: 'apps/api',
+        yes: true,
+      }),
+    ).rejects.toThrow('Existing Nest route POST /auth/refresh');
+    expect(tree.exists('.megamono/playstack-integration-plan.json')).toBe(
+      false,
+    );
+    manifest.integrations[0].requirements.routes[0].methods = ['GET'];
+    writeIntegrationManifest(tree, manifest);
+    await playstackIntegrateGenerator(tree, {
+      packages: '@playstack/rate-limit',
+      api: 'apps/api',
+      yes: true,
+    });
+  });
   it('materializes package-authored wiring as application-owned source', async () => {
     const tree = fixture();
 
@@ -88,10 +139,7 @@ describe('Playstack integration generator', () => {
     });
 
     expect(
-      tree.read(
-        'apps/api/src/playstack/rate-limit.module.ts',
-        'utf8',
-      ),
+      tree.read('apps/api/src/playstack/rate-limit.module.ts', 'utf8'),
     ).toBe('export class RateLimitModule {}\n');
     expect(
       JSON.parse(
@@ -238,9 +286,7 @@ describe('Playstack integration generator', () => {
     });
     expect(plan.unresolvedConditions).toEqual([]);
     expect(plan.unresolvedDecisions).toEqual([]);
-    expect(
-      plan.requirements[0].requirements.databaseArtifacts,
-    ).toEqual([]);
+    expect(plan.requirements[0].requirements.databaseArtifacts).toEqual([]);
   });
 
   it('fails closed when required conditions or decisions are unresolved', async () => {
@@ -299,7 +345,10 @@ describe('Playstack integration generator', () => {
     );
     expect(plan.preflight.existingReferences).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ category: 'route', key: '/rate-limit/status' }),
+        expect.objectContaining({
+          category: 'route',
+          key: '/rate-limit/status',
+        }),
         expect.objectContaining({
           category: 'provider',
           key: 'PLAYSTACK_RATE_LIMIT_STORE',

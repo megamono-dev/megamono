@@ -1,4 +1,11 @@
-import { formatFiles, logger, type GeneratorCallback, type Tree } from '@nx/devkit';
+import {
+  formatFiles,
+  getProjects,
+  logger,
+  type GeneratorCallback,
+  type Tree,
+} from '@nx/devkit';
+import { nestRoutes } from '../../lib/nest-routes';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { posix, resolve } from 'node:path';
@@ -22,7 +29,8 @@ type Surface = 'portable' | 'web' | 'api' | 'worker';
 
 interface IntegrationTemplate {
   readonly id: string;
-  readonly kind: 'module' | 'provider' | 'policy' | 'controller' | 'health' | 'test';
+  readonly kind:
+    'module' | 'provider' | 'policy' | 'controller' | 'health' | 'test';
   readonly source: string;
   readonly target: string;
   readonly description?: string;
@@ -129,12 +137,21 @@ function safePath(value: string, label: string): string {
 }
 
 function packageNames(value: string): string[] {
-  const names = [...new Set(value.split(',').map((name) => name.trim()).filter(Boolean))];
+  const names = [
+    ...new Set(
+      value
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean),
+    ),
+  ];
   if (
     names.length === 0 ||
     names.some((name) => !/^@playstack\/[a-z0-9][a-z0-9._-]*$/.test(name))
   )
-    throw new Error('--packages must contain installed @playstack/<name> packages.');
+    throw new Error(
+      '--packages must contain installed @playstack/<name> packages.',
+    );
   return names.sort();
 }
 
@@ -287,10 +304,13 @@ function manifest(tree: Tree, name: string): IntegrationManifest {
   const packageJsonPath = packagePath(name, 'package.json');
   const packageJsonSource = readPackageFile(tree, packageJsonPath);
   if (!packageJsonSource)
-    throw new Error(`${packageJsonPath} is required to verify the integration manifest.`);
+    throw new Error(
+      `${packageJsonPath} is required to verify the integration manifest.`,
+    );
   let packageVersion: unknown;
   try {
-    packageVersion = (JSON.parse(packageJsonSource) as { version?: unknown }).version;
+    packageVersion = (JSON.parse(packageJsonSource) as { version?: unknown })
+      .version;
   } catch {
     throw new Error(`${packageJsonPath} is not valid JSON.`);
   }
@@ -311,9 +331,13 @@ function resolvedTarget(
     .replaceAll(`{${surface}Root}`, root)
     .replaceAll('{integrationId}', integration);
   if (replaced.includes('{'))
-    throw new Error(`Integration target ${target} contains an unsupported placeholder.`);
+    throw new Error(
+      `Integration target ${target} contains an unsupported placeholder.`,
+    );
   const safe = safePath(replaced, 'Integration target');
-  return safe.startsWith(`${root}/`) ? safe : safePath(posix.join(root, safe), 'Integration target');
+  return safe.startsWith(`${root}/`)
+    ? safe
+    : safePath(posix.join(root, safe), 'Integration target');
 }
 
 function requirementRecord(
@@ -332,7 +356,9 @@ function requirementRecord(
 
 type RequirementRecord = ReturnType<typeof requirementRecord>;
 
-function manifestConflicts(requirements: readonly RequirementRecord[]): string[] {
+function manifestConflicts(
+  requirements: readonly RequirementRecord[],
+): string[] {
   const conflicts = new Set<string>();
   const routes = new Map<string, string>();
   const framework = new Map<string, string>();
@@ -342,7 +368,7 @@ function manifestConflicts(requirements: readonly RequirementRecord[]): string[]
     const owner = `${record.package}:${record.id}`;
     for (const route of record.requirements.routes ?? []) {
       for (const method of route.methods) {
-        const key = `${method.toUpperCase()} ${route.path}`;
+        const key = `${record.surface}:${method.toUpperCase()} ${route.path}`;
         const routeOwner = `${owner}:${route.id}`;
         const previous = routes.get(key);
         if (previous)
@@ -379,7 +405,9 @@ function manifestConflicts(requirements: readonly RequirementRecord[]): string[]
       });
       const previous = decisions.get(decision.key);
       if (previous !== undefined && previous !== signature)
-        conflicts.add(`Decision ${decision.key} has incompatible declarations.`);
+        conflicts.add(
+          `Decision ${decision.key} has incompatible declarations.`,
+        );
       decisions.set(decision.key, signature);
     }
   }
@@ -426,12 +454,14 @@ function existingRequirementReferences(
         .filter(({ content }) => content.includes(key))
         .map(({ path }) => path)
         .slice(0, 10);
-      if (matches.length > 0) references.push({ category, key, files: matches });
+      if (matches.length > 0)
+        references.push({ category, key, files: matches });
     };
     for (const record of requirements.filter(
       (entry) => entry.surface === surface,
     )) {
-      for (const route of record.requirements.routes ?? []) add('route', route.path);
+      for (const route of record.requirements.routes ?? [])
+        add('route', route.path);
       for (const token of record.requirements.providerTokens ?? [])
         add('provider', token);
       for (const entry of record.requirements.environment ?? [])
@@ -442,7 +472,9 @@ function existingRequirementReferences(
     }
   }
   return references.sort((left, right) =>
-    `${left.category}:${left.key}`.localeCompare(`${right.category}:${right.key}`),
+    `${left.category}:${left.key}`.localeCompare(
+      `${right.category}:${right.key}`,
+    ),
   );
 }
 
@@ -467,12 +499,25 @@ export async function playstackIntegrateGenerator(
     (entry): entry is string => typeof entry === 'string' && entry.length > 0,
   );
   const roots: Partial<Record<Surface, string>> = {
-    ...(options.portable ? { portable: safePath(options.portable, '--portable') } : {}),
+    ...(options.portable
+      ? { portable: safePath(options.portable, '--portable') }
+      : {}),
     ...(options.web ? { web: safePath(options.web, '--web') } : {}),
     ...(options.api ? { api: safePath(options.api, '--api') } : {}),
     ...(options.worker ? { worker: safePath(options.worker, '--worker') } : {}),
   };
-  const manifests = packageNames(options.packages).map((name) => manifest(tree, name));
+  const manifests = packageNames(options.packages).map((name) =>
+    manifest(tree, name),
+  );
+  const projectRoots = new Set(
+    [...getProjects(tree).values()].map((project) => project.root),
+  );
+  for (const [surface, root] of Object.entries(roots)) {
+    if (!projectRoots.has(root))
+      throw new Error(
+        `--${surface}=${root} is not an existing Nx project root.`,
+      );
+  }
   const files: PlannedFile[] = [];
   const requirements: RequirementRecord[] = [];
   const unresolvedConditions = new Set<string>();
@@ -511,10 +556,15 @@ export async function playstackIntegrateGenerator(
           throw new Error(
             `${source.package} integration template ${template.id} has invalid ownership or integrity metadata.`,
           );
-        const sourcePath = packagePath(source.package, safePath(template.source, 'Integration source'));
+        const sourcePath = packagePath(
+          source.package,
+          safePath(template.source, 'Integration source'),
+        );
         const content = readPackageFile(tree, sourcePath);
         if (content === null)
-          throw new Error(`${source.package} integration source ${template.source} is missing.`);
+          throw new Error(
+            `${source.package} integration source ${template.source} is missing.`,
+          );
         const actualHash = createHash('sha256').update(content).digest('hex');
         if (actualHash !== template.sha256)
           throw new Error(
@@ -525,9 +575,16 @@ export async function playstackIntegrateGenerator(
           integration: integration.id,
           id: template.id,
           kind: template.kind,
-          ...(template.description ? { description: template.description } : {}),
+          ...(template.description
+            ? { description: template.description }
+            : {}),
           source: template.source,
-          target: resolvedTarget(template.target, integration.surface, root, integration.id),
+          target: resolvedTarget(
+            template.target,
+            integration.surface,
+            root,
+            integration.id,
+          ),
           sha256: template.sha256,
           content,
         });
@@ -535,10 +592,13 @@ export async function playstackIntegrateGenerator(
     }
   }
   const duplicate = files.find(
-    (file, index) => files.findIndex(({ target }) => target === file.target) !== index,
+    (file, index) =>
+      files.findIndex(({ target }) => target === file.target) !== index,
   );
   if (duplicate)
-    throw new Error(`Multiple integration artifacts target ${duplicate.target}.`);
+    throw new Error(
+      `Multiple integration artifacts target ${duplicate.target}.`,
+    );
   for (const file of files) {
     const current = tree.read(file.target, 'utf8');
     if (current !== null && current !== file.content)
@@ -585,6 +645,37 @@ export async function playstackIntegrateGenerator(
       integration,
     }));
   const conflicts = manifestConflicts(requirements);
+  for (const record of requirements) {
+    if (record.framework !== 'nest' || !record.requirements.routes?.length)
+      continue;
+    const root = roots[record.surface];
+    if (!root) continue;
+    for (const file of projectFiles(tree, root)) {
+      if (files.some((planned) => planned.target === file)) continue;
+      const existing = nestRoutes(tree.read(file, 'utf8') ?? '', file);
+      if (existing.unresolved)
+        conflicts.push(
+          `Dynamic Nest routes in ${file} require explicit review before adding routes.`,
+        );
+      for (const route of record.requirements.routes) {
+        if (
+          existing.routes.some(
+            (found) =>
+              found.path === route.path &&
+              route.methods.some(
+                (method) =>
+                  found.method === 'ALL' ||
+                  method.toUpperCase() === 'ALL' ||
+                  found.method === method.toUpperCase(),
+              ),
+          )
+        )
+          conflicts.push(
+            `Existing Nest route ${route.methods.join(',')} ${route.path} in ${file} conflicts with ${record.package}:${record.id}.`,
+          );
+      }
+    }
+  }
   const existingReferences = existingRequirementReferences(
     tree,
     roots,
@@ -639,7 +730,9 @@ export async function playstackIntegrateGenerator(
     return () => undefined;
   }
   if (!options.yes)
-    throw new Error('Integration generation requires --yes after reviewing --dry-run.');
+    throw new Error(
+      'Integration generation requires --yes after reviewing --dry-run.',
+    );
   if (unresolvedConditions.size > 0)
     throw new Error(
       `Integration generation has unresolved conditions: ${[...unresolvedConditions].sort().join(', ')}. Pass --conditions='<json>'.`,

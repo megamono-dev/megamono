@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
+import { addProjectConfiguration } from '@nx/devkit';
 import { resolve } from 'node:path';
 
 const execFileAsync = promisify(execFile);
@@ -45,6 +46,10 @@ assert(
 );
 
 const tree = createTreeWithEmptyWorkspace();
+addProjectConfiguration(tree, 'api', {
+  root: 'apps/api',
+  projectType: 'application',
+});
 for (const packageName of packageNames) {
   const packageRoot = resolve(
     yalcStore,
@@ -52,8 +57,13 @@ for (const packageName of packageNames) {
     ...packageName.split('/'),
     packageVersion,
   );
-  const manifest = await json(resolve(packageRoot, 'playstack.integration.json'));
-  const packageJson = await readFile(resolve(packageRoot, 'package.json'), 'utf8');
+  const manifest = await json(
+    resolve(packageRoot, 'playstack.integration.json'),
+  );
+  const packageJson = await readFile(
+    resolve(packageRoot, 'package.json'),
+    'utf8',
+  );
   tree.write(`node_modules/${packageName}/package.json`, packageJson);
   tree.write(
     `node_modules/${packageName}/playstack.integration.json`,
@@ -95,14 +105,23 @@ const plan = JSON.parse(
 );
 assert(plan.unresolvedConditions.length === 0, 'Conditions remain unresolved.');
 assert(plan.unresolvedDecisions.length === 0, 'Decisions remain unresolved.');
-assert(plan.preflight.conflicts.length === 0, 'Manifest requirements conflict.');
-assert(plan.files.length === 7, `Expected 7 templates, received ${plan.files.length}.`);
+assert(
+  plan.preflight.conflicts.length === 0,
+  'Manifest requirements conflict.',
+);
+assert(
+  plan.files.length === 7,
+  `Expected 7 templates, received ${plan.files.length}.`,
+);
 assert(
   plan.commitBoundaries.length === 3,
   `Expected 3 commit boundaries, received ${plan.commitBoundaries.length}.`,
 );
 for (const file of plan.files) {
-  assert(tree.exists(file.target), `Integration output ${file.target} is missing.`);
+  assert(
+    tree.exists(file.target),
+    `Integration output ${file.target} is missing.`,
+  );
 }
 
 process.stdout.write(
