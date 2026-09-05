@@ -3,8 +3,10 @@ import type {
   ImportResolutions,
   ImportVerifyMode,
 } from '../../lib/repository-import';
+import type { MonorepoSelection } from '../../lib/monorepo-import';
 
 export interface ImportExecutorSchema {
+  readonly monorepo?: MonorepoSelection;
   readonly source: string;
   readonly ref?: string;
   readonly expectedSourceSha?: string;

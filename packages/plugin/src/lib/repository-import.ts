@@ -17,6 +17,11 @@ import {
   type RepositoryDocumentType,
 } from './docs';
 import { isPackageManager, type PackageManager } from './package-manager';
+import {
+  planMonorepoImport,
+  type MonorepoImportPlan,
+  type MonorepoSelection,
+} from './monorepo-import';
 
 const executeFile = promisify(execFile);
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -32,6 +37,7 @@ export interface ImportResolutions {
 }
 
 export interface RepositoryImportOptions {
+  readonly monorepo?: MonorepoSelection;
   readonly source: string;
   readonly ref?: string;
   readonly expectedSourceSha?: string;
@@ -97,11 +103,13 @@ export interface ImportRoutedModuleReference {
 }
 
 export interface ImportExpectedGraphDependency {
+  readonly fromProject?: string;
   readonly project: string;
   readonly packageName: string;
 }
 
 export interface RepositoryImportAnalysis {
+  readonly monorepo?: MonorepoImportPlan;
   readonly schemaVersion: 1;
   readonly source: string;
   readonly sourceKind: 'local' | 'remote';
@@ -177,6 +185,8 @@ interface PackageManifest {
   readonly scripts?: Readonly<Record<string, string>>;
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly devDependencies?: Readonly<Record<string, string>>;
+  readonly optionalDependencies?: Readonly<Record<string, string>>;
+  readonly peerDependencies?: Readonly<Record<string, string>>;
   readonly workspaces?: unknown;
 }
 
@@ -201,6 +211,7 @@ export interface RepositoryImportAnalysisInput {
   readonly projectNames?: readonly string[];
   readonly targetProjects?: readonly {
     readonly name: string;
+    readonly root?: string;
     readonly packageName?: string;
   }[];
 }
@@ -1179,6 +1190,8 @@ function manifestDependencies(
   return {
     ...(manifest.dependencies ?? {}),
     ...(manifest.devDependencies ?? {}),
+    ...(manifest.optionalDependencies ?? {}),
+    ...(manifest.peerDependencies ?? {}),
   };
 }
 
@@ -1351,12 +1364,14 @@ export async function analyzeRepositoryImport(
       });
     }
     if (
-      snapshot.manifest.workspaces ||
-      snapshot.files.includes('pnpm-workspace.yaml')
+      !options.monorepo &&
+      (snapshot.manifest.workspaces ||
+        snapshot.files.includes('pnpm-workspace.yaml'))
     ) {
       blockers.push({
         code: 'import-unsupported-source-shape',
-        message: 'V1 imports one root package, not a source monorepo.',
+        message:
+          'A source monorepo requires an explicit reviewed monorepo.projects map.',
       });
     }
     const sourcePackageManager =
@@ -1383,7 +1398,7 @@ export async function analyzeRepositoryImport(
       });
     }
 
-    const routing = hostConfig
+    let routing = hostConfig
       ? await repositoryRoutes(
           workspaceRoot,
           snapshot,
@@ -1392,6 +1407,35 @@ export async function analyzeRepositoryImport(
         )
       : { routes: [], topicsToExtend: [], issues: [] };
     blockers.push(...routing.issues);
+    if (options.monorepo)
+      for (const source of ['pnpm-workspace.yaml', '.npmrc', '.yarnrc.yml']) {
+        if (snapshot.files.includes(source)) {
+          const destination = posix.join(
+            '.megamono/imports',
+            options.name,
+            'source-infrastructure',
+            source,
+          );
+          if (await exists(join(workspaceRoot, destination)))
+            blockers.push({
+              code: 'import-route-destination-collision',
+              subject: destination,
+              message: 'An import route destination is already owned.',
+            });
+          routing = {
+            ...routing,
+            routes: [
+              ...routing.routes,
+              {
+                source,
+                destination,
+                action: 'archive',
+                reason: 'infrastructure',
+              },
+            ],
+          };
+        }
+      }
     const moduleReferences = await sourceModuleReferences(snapshot);
     const sourceFileSet = new Set(snapshot.files);
     const routesBySource = new Map(
@@ -1459,7 +1503,7 @@ export async function analyzeRepositoryImport(
           subject: packageName,
           message: 'Multiple target Nx projects claim the imported package.',
         });
-      } else if (owners[0] && owners[0] !== options.name) {
+      } else if (!options.monorepo && owners[0] && owners[0] !== options.name) {
         expectedGraphDependencies.push({ project: owners[0], packageName });
       }
     }
@@ -1710,6 +1754,35 @@ export async function analyzeRepositoryImport(
       }
     }
 
+    let monorepo: MonorepoImportPlan | undefined;
+    if (options.monorepo) {
+      try {
+        if (options.history !== 'subtree')
+          throw new Error(
+            'Monorepo imports currently require subtree history preservation.',
+          );
+        if ((options.verify ?? 'config') !== 'build')
+          throw new Error(
+            'Monorepo imports require verify=build; every imported project must be verified.',
+          );
+        monorepo = await planMonorepoImport({
+          workspaceRoot,
+          destination,
+          name: options.name,
+          packageManager,
+          selection: options.monorepo,
+          files: snapshot.files,
+          read: (path) => readCommitFile(snapshot.root, snapshot.sha, path),
+          targetProjects: input.targetProjects ?? [],
+        });
+        expectedGraphDependencies.push(...monorepo.edges);
+      } catch (error) {
+        blockers.push({
+          code: 'import-monorepo-preflight',
+          message: (error as Error).message,
+        });
+      }
+    }
     const sortedBlockers = blockers.sort(
       (left, right) =>
         left.code.localeCompare(right.code) ||
@@ -1717,6 +1790,7 @@ export async function analyzeRepositoryImport(
     );
     return {
       schemaVersion: 1,
+      ...(monorepo ? { monorepo } : {}),
       source: snapshot.display,
       sourceKind: snapshot.kind,
       sourceSha: snapshot.sha,
@@ -1780,8 +1854,8 @@ export function renderRepositoryImportReport(
       `- \`${sourceFile}\` imports \`${specifier}\` (\`${targetSource}\` routes to \`${targetDestination}\`)`,
   );
   const graphDependencyLines = analysis.expectedGraphDependencies.map(
-    ({ project, packageName }) =>
-      `- \`${analysis.name}\` → \`${project}\` via \`${packageName}\``,
+    ({ project, packageName, fromProject }) =>
+      `- \`${fromProject ?? analysis.name}\` → \`${project}\` via \`${packageName}\``,
   );
   return `${[
     '# Megamono repository import analysis',
@@ -1795,6 +1869,31 @@ export function renderRepositoryImportReport(
     `- History: \`${analysis.history ?? 'not selected'}\``,
     `- Verification: \`${analysis.verify}\``,
     `- Ready: \`${analysis.ready}\``,
+    ...(analysis.monorepo
+      ? [
+          '',
+          '## Reviewed monorepo projects',
+          '',
+          ...analysis.monorepo.projects.map(
+            (p) =>
+              `- ${p.action}: \`${p.root}\` → \`${p.name}\` at \`${p.destination}\`${p.packageName ? ` (${p.packageName})` : ''}`,
+          ),
+          '',
+          '### Reviewed Nx configurations',
+          '',
+          '```json',
+          JSON.stringify(
+            analysis.monorepo.projects
+              .filter((p) => p.action === 'import')
+              .map((p) => p.configuration),
+            null,
+            2,
+          ),
+          '```',
+          '',
+          'Reused duplicate directories are removed only from the newly grafted copy; their bytes remain in the graft history. Source Nx/workspace/CI settings remain inactive.',
+        ]
+      : []),
     '',
     '## Existing commands',
     '',

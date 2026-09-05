@@ -308,6 +308,65 @@ and squash carries only the approved snapshot. Filter-repo requires a compatible
 `git-filter-repo` executable on `PATH`; squash additionally requires
 `--allow-history-loss`.
 
+### Import a workspace with several projects
+
+Use a reviewed Nx target configuration for the structured `monorepo` option.
+For example, add a named configuration under the existing `megamono:import`
+target in `tools/megamono/project.json` (or wherever that project lives):
+
+```json
+{
+  "configurations": {
+    "sdk-workspace": {
+      "source": "../sdk-workspace",
+      "name": "sdk-workspace",
+      "destination": "libs/imported-sdk",
+      "history": "subtree",
+      "verify": "build",
+      "monorepo": {
+        "projects": {
+          "packages/sdk": { "action": "reuse", "project": "existing-sdk" },
+          "packages/email": {
+            "action": "import",
+            "name": "email",
+            "configuration": {
+              "projectType": "library",
+              "tags": ["platform:node", "scope:shared", "type:util"],
+              "targets": {
+                "build": {
+                  "executor": "nx:run-commands",
+                  "options": {
+                    "command": "node build.cjs",
+                    "cwd": "libs/imported-sdk/packages/email"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Commit that configuration before analysis; the host branch must be clean.
+Run `npm exec nx -- run megamono:import:sdk-workspace` to inspect it, then repeat
+with `--expectedSourceSha=<reported-full-sha> --execute` after approval. The map
+must cover every static source project. `reuse` requires the same package
+identity and compatible versions; alternatively use `action: "import"` with a
+new `name` and `packageName` to retain a renamed implementation.
+
+The common destination preserves the source's internal directory layout.
+Reviewed targets must account for the new workspace root and retain existing
+tests/lint. Source Nx plugins and root scripts are not installed as a second
+workspace. Every imported project must build, and its expected graph edges must
+exist before the integration commit. Reused duplicates are removed only from
+the grafted copy and remain recoverable in Git history. TypeScript references
+to host projects are redirected; aliases/relative imports into discarded
+duplicates fail preflight. Complex workspace selectors and inference-only
+source projects require static declarations first.
+
 ## Validate a workspace
 
 ```sh

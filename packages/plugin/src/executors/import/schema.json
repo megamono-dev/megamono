@@ -5,6 +5,18 @@
   "description": "Inspect an immutable source commit and reconcile it with a Megamono host before any history graft.",
   "type": "object",
   "properties": {
+    "monorepo": {
+      "type": "object",
+      "description": "Opt-in reviewed multi-project import. Every static source project root must be mapped to import (name, optional packageName, complete configuration) or reuse (host project). Requires subtree and verify=build.",
+      "properties": {
+        "projects": {
+          "type": "object",
+          "additionalProperties": { "type": "object" }
+        }
+      },
+      "required": ["projects"],
+      "additionalProperties": false
+    },
     "source": {
       "type": "string",
       "minLength": 1,

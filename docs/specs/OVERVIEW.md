@@ -43,7 +43,9 @@ Public release channels are `next` and `latest`. Versioning synchronizes interna
   and deliver explicitly approved draft pull requests; it owns no additional
   repository-shaping capability.
 - Automatic model invocation from hooks, CI, or schedules.
-- Monorepo-into-monorepo imports.
+- Automatic monorepo consolidation or arbitrary per-project relocation.
+  Explicitly mapped monorepo imports support subtree history, reviewed identity
+  renames/reuse, and mandatory graph/build verification (spec 10).
 - Gradle reimplementation where the official Nx plugin suffices.
 - Provider-template publishing for email; v1 email rendering is send-time and gated on the external mail contract.
 - Any Playstack generator whose referenced fixture contract is unavailable.

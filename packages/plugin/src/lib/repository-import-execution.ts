@@ -26,6 +26,8 @@ import {
   type RepositoryImportOptions,
 } from './repository-import';
 import { packageManagerExec } from './package-manager';
+import { monorepoSelectionSchema } from './monorepo-import';
+import { integrationFingerprint } from './integration-migrations';
 
 const executeFile = promisify(execFile);
 
@@ -44,6 +46,7 @@ export type ImportCommandRunner = (
 ) => Promise<string | void>;
 
 export interface RepositoryImportMarker {
+  readonly monorepoSelectionHash?: string;
   readonly schemaVersion: 1 | 2;
   readonly name: string;
   readonly source: string;
@@ -248,7 +251,11 @@ function graphDependenciesAreValid(value: unknown): boolean {
           typeof dependency === 'object' &&
           typeof (dependency as { project?: unknown }).project === 'string' &&
           typeof (dependency as { packageName?: unknown }).packageName ===
-            'string',
+            'string' &&
+          ((dependency as { fromProject?: unknown }).fromProject ===
+            undefined ||
+            typeof (dependency as { fromProject?: unknown }).fromProject ===
+              'string'),
       ))
   );
 }
@@ -280,7 +287,9 @@ export async function readRepositoryImportMarker(
     !/^[a-f0-9]{40}$/i.test(marker.graftCommit ?? '') ||
     (marker.schemaVersion === 2 && !Array.isArray(marker.repositoryRoutes)) ||
     !collisionRewritesAreValid(marker.collisionRewrites) ||
-    !graphDependenciesAreValid(marker.expectedGraphDependencies)
+    !graphDependenciesAreValid(marker.expectedGraphDependencies) ||
+    (marker.monorepoSelectionHash !== undefined &&
+      !/^[a-f0-9]{64}$/.test(marker.monorepoSelectionHash))
   ) {
     throw new ImportPreflightError(
       'import-invalid-marker',
@@ -296,6 +305,14 @@ export async function completedRepositoryImport(
 ): Promise<RepositoryImportMarker | undefined> {
   const marker = await readRepositoryImportMarker(workspaceRoot, options.name);
   if (!marker) return undefined;
+  const selectionHash = options.monorepo
+    ? integrationFingerprint(monorepoSelectionSchema.parse(options.monorepo))
+    : undefined;
+  if (marker.monorepoSelectionHash !== selectionHash)
+    throw new ImportPreflightError(
+      'import-marker-conflict',
+      'The completed import uses a different monorepo project map.',
+    );
   const destination = normalizedImportDestination(
     options.name,
     options.destination,
@@ -339,6 +356,18 @@ export async function assertNoPartialRepositoryImport(
 }
 
 function projectConfiguration(analysis: RepositoryImportAnalysis) {
+  if (analysis.monorepo)
+    return {
+      name: analysis.name,
+      projectType: 'library',
+      tags: [
+        'platform:node',
+        'scope:shared',
+        'type:util',
+        'visibility:internal',
+      ],
+      targets: {},
+    };
   const targets = Object.fromEntries(
     Object.entries(analysis.commands).map(([name, command]) => [
       name,
@@ -449,7 +478,12 @@ async function integratePackageManifests(
   }
   for (const conflict of analysis.dependencyConflicts) {
     if (!conflict.resolution) continue;
-    for (const section of ['dependencies', 'devDependencies'] as const) {
+    for (const section of [
+      'dependencies',
+      'devDependencies',
+      'optionalDependencies',
+      'peerDependencies',
+    ] as const) {
       const dependencies = app[section];
       if (
         dependencies &&
@@ -464,6 +498,65 @@ async function integratePackageManifests(
   }
   await writeJson(rootPath, root);
   await writeJson(appPath, app);
+}
+
+async function integrateMonorepo(
+  workspaceRoot: string,
+  analysis: RepositoryImportAnalysis,
+) {
+  if (!analysis.monorepo) return;
+  const rootPath = join(workspaceRoot, 'package.json');
+  const root = JSON.parse(await readFile(rootPath, 'utf8'));
+  const imported = JSON.parse(
+    await readFile(
+      join(workspaceRoot, analysis.destination, 'package.json'),
+      'utf8',
+    ),
+  );
+  // Keep the selected host workspace authoritative for toolchain resolution.
+  for (const section of [
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+    'peerDependencies',
+  ]) {
+    if (!imported[section]) continue;
+    root[section] ??= {};
+    for (const [name, version] of Object.entries(imported[section])) {
+      const resolution = analysis.dependencyConflicts.find(
+        (c) => c.name === name,
+      )?.resolution;
+      const owners = [
+        'dependencies',
+        'devDependencies',
+        'optionalDependencies',
+        'peerDependencies',
+      ].filter((key) => Object.hasOwn(root[key] ?? {}, name));
+      if (owners.length) {
+        if (resolution)
+          for (const owner of owners) root[owner][name] = resolution;
+      } else root[section][name] = resolution ?? version;
+    }
+  }
+  for (const project of analysis.monorepo.projects) {
+    const copiedRoot = join(workspaceRoot, analysis.destination, project.root);
+    if (project.action === 'reuse') {
+      // Only remove the newly grafted duplicate, never the host or source copy.
+      // The original bytes remain recoverable from the history graft commit.
+      await rm(copiedRoot, { recursive: true });
+      continue;
+    }
+    await writeJson(
+      join(workspaceRoot, project.destination, 'project.json'),
+      project.configuration,
+    );
+    if (await exists(join(copiedRoot, 'package.json'))) {
+      if (analysis.packageManager === 'pnpm')
+        await addPnpmWorkspace(workspaceRoot, project.destination);
+      else addWorkspace(root, project.destination);
+    }
+  }
+  await writeJson(rootPath, root);
 }
 
 async function integrateDocumentationTopics(
@@ -695,10 +788,32 @@ function verificationCommands(
     command('config', ['run', 'megamono:check']),
     command('config', ['show', 'project', analysis.name, '--json']),
   ];
-  if (analysis.expectedGraphDependencies.length > 0) {
+  if (analysis.monorepo)
+    for (const project of analysis.monorepo.projects)
+      if (project.action === 'import')
+        commands.push(
+          command('config', ['show', 'project', project.name, '--json']),
+        );
+  if (analysis.expectedGraphDependencies.length > 0 || analysis.monorepo) {
     commands.push(command('graph', ['graph', '--print'], true));
   }
   if (analysis.verify === 'build') {
+    if (analysis.monorepo) {
+      for (const project of analysis.monorepo.projects)
+        if (project.action === 'import')
+          for (const phase of ['build', 'test', 'lint'] as const) {
+            if (
+              (
+                project.configuration?.targets as
+                  Record<string, unknown> | undefined
+              )?.[phase]
+            )
+              commands.push(
+                command(phase, ['run', `${project.name}:${phase}`]),
+              );
+          }
+      return commands;
+    }
     for (const phase of ['build', 'test', 'lint'] as const) {
       if (!analysis.commands[phase]) continue;
       commands.push(command(phase, ['run', `${analysis.name}:${phase}`]));
@@ -711,7 +826,8 @@ function assertExpectedGraphDependencies(
   analysis: RepositoryImportAnalysis,
   output: string | void,
 ): void {
-  if (analysis.expectedGraphDependencies.length === 0) return;
+  if (analysis.expectedGraphDependencies.length === 0 && !analysis.monorepo)
+    return;
   if (typeof output !== 'string') {
     throw new Error(
       'Nx graph verification did not return machine-readable output.',
@@ -719,6 +835,7 @@ function assertExpectedGraphDependencies(
   }
   let graph: {
     graph?: {
+      nodes?: Record<string, unknown>;
       dependencies?: Readonly<
         Record<string, readonly { readonly target?: string }[]>
       >;
@@ -731,13 +848,17 @@ function assertExpectedGraphDependencies(
       cause: error,
     });
   }
-  const actual = new Set(
-    (graph.graph?.dependencies?.[analysis.name] ?? []).flatMap(({ target }) =>
-      target ? [target] : [],
-    ),
-  );
+  if (
+    analysis.monorepo?.projects.some(
+      (project) => !graph.graph?.nodes?.[project.name],
+    )
+  )
+    throw new Error('Nx graph is missing a reviewed monorepo project.');
   const missing = analysis.expectedGraphDependencies.filter(
-    ({ project }) => !actual.has(project),
+    ({ project, fromProject }) =>
+      !(graph.graph?.dependencies?.[fromProject ?? analysis.name] ?? []).some(
+        ({ target }) => target === project,
+      ),
   );
   if (missing.length > 0) {
     throw new Error(
@@ -800,6 +921,20 @@ export async function executeRepositoryImport(
     throw new ImportDecisionError(issue.code, issue.message);
   }
   let docsRoot: string;
+  if (
+    analysis.monorepo &&
+    (history !== 'subtree' ||
+      analysis.verify !== 'build' ||
+      analysis.sourceSha !== options.expectedSourceSha ||
+      !options.monorepo ||
+      integrationFingerprint(
+        monorepoSelectionSchema.parse(options.monorepo),
+      ) !== analysis.monorepo.selectionHash)
+  )
+    throw new ImportDecisionError(
+      'import-monorepo-plan-changed',
+      'Monorepo execution requires the exact reviewed project map, source SHA, subtree strategy, and build verification.',
+    );
   try {
     docsRoot = (await readMegamonoConfig(workspaceRoot)).docs.root;
   } catch (error) {
@@ -902,9 +1037,18 @@ export async function executeRepositoryImport(
     if (history !== 'filter-repo') {
       await rename(join(workspaceRoot, staging), destination);
     }
+    if (analysis.monorepo) {
+      for (const rewrite of analysis.monorepo.rewrites)
+        await writeFile(
+          join(destination, rewrite.source),
+          rewrite.content,
+          'utf8',
+        );
+    }
     await integratePackageManifests(workspaceRoot, analysis);
     await migrateRepositoryRoutes(workspaceRoot, analysis);
     await applyCollisionRewrites(workspaceRoot, analysis);
+    await integrateMonorepo(workspaceRoot, analysis);
     await integrateDocumentationTopics(workspaceRoot, analysis);
     await writeJson(
       join(workspaceRoot, analysis.destination, 'project.json'),
@@ -919,6 +1063,9 @@ export async function executeRepositoryImport(
       'utf8',
     );
     const marker: RepositoryImportMarker = {
+      ...(analysis.monorepo
+        ? { monorepoSelectionHash: analysis.monorepo.selectionHash }
+        : {}),
       schemaVersion: 2,
       name: analysis.name,
       source: analysis.source,

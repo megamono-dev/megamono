@@ -6,7 +6,7 @@ visibility: internal
 projects: [megamono]
 topics: [import, migration, git]
 summary: Defines analysis and recoverable import of one external repository with history into a Megamono host.
-date: 2026-08-23
+date: 2026-09-05
 supersedes: null
 references:
   [
@@ -136,12 +136,55 @@ A single operation that absorbs everything is the version that gets abandoned ha
 
 Execution creates a history-graft commit first. It then applies integration changes without committing, installs from the root lockfile, and runs the selected validation. Only successful validation creates the final integration commit. A failure leaves the branch and working tree intact with `MEGAMONO-RECOVERY.md`; the executor never rewinds history automatically and never pushes.
 
+## Reviewed monorepo-to-monorepo imports
+
+A source with workspace packages requires an explicit `monorepo.projects` map
+keyed by every discovered source project root. Discovery reads immutable Git
+files (`project.json` and workspace-matched `package.json`) without executing
+source Nx plugins. Plugin-only inference and complex workspace selectors need
+explicit static configuration before import; they are not silently guessed.
+
+This bounded path requires `history: subtree`, `verify: build`, and the reviewed
+source SHA. It retains each imported project's relative layout beneath one
+destination prefix. Each project must select one action:
+
+- `import`: specify its host Nx name, optional replacement package identity,
+  and reviewed project type, tags, targets, and implicit dependencies. A build
+  target is mandatory; existing explicit test/lint verification must be retained.
+  Commands must use host-relative paths or an explicitly configured working
+  directory. Source root Nx target defaults and plugins are not activated.
+- `reuse`: select a host Nx project with the same package identity and a version
+  satisfying all imported consumers. Only the duplicate in the newly grafted
+  copy is removed. Its bytes remain recoverable from the history-graft commit;
+  neither original repository nor the host implementation is deleted.
+
+Package renames update selected manifests and static JS/TS module specifiers.
+TypeScript references to reused projects are redirected to verified host paths.
+Relative source imports or path aliases into a reused implementation are refused
+until the source uses its package identity. Nested non-workspace package fixtures
+are not renamed. Arbitrary semantic code rewriting and per-project relocation
+are outside this contract.
+
+Source root workspace, Nx, CI, package-manager configuration and lockfiles are
+archived as inactive infrastructure. Source root scripts are not transplanted;
+dependencies are reconciled with the host, and child packages are registered in
+the host workspace. The import root is a tooling library, not a second active
+workspace. Package-local dependencies remain package-local.
+
+Execution checks every mapped project in the actual Nx graph, dependency edges,
+and all reviewed build/test/lint targets before the final integration commit.
+A failed check leaves the graft and recovery report, not a successful import.
+The completion marker binds the reviewed project map as well as the source SHA
+and destination; a changed map cannot be mistaken for an idempotent replay.
+
 ## V1 decisions and deferrals
 
 - Subtree is the default history strategy. `filter-repo` is opt-in and requires the external binary range recorded in `@megamono/plugin/compatibility.json`; preflight refuses an absent or incompatible binary. Squash requires `--allow-history-loss` in addition to `--execute`.
 - A source may contain a single JS app plus SwiftPM or Cargo surfaces when the matching Wave 1 plugin is installed. Toolchain-version conflicts block execution and appear in analysis; they are never silently reconciled.
 - The source repository remains read-only. Import never writes a redirect, archives the source, changes its default branch, or modifies its settings.
-- Monorepo-into-monorepo and organization-wide analysis are out of v1 scope.
+- Automatic monorepo consolidation, arbitrary project relocation, and
+  organization-wide analysis remain out of scope. Monorepo imports require the
+  complete reviewed map and subtree/build gates above.
 - The import executor remains local and requests no GitHub token. An optional
   hosted service may invoke the same released analysis and execution contract in
   a disposable workspace and deliver its result as a draft pull request after

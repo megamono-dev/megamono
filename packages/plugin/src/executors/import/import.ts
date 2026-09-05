@@ -53,6 +53,7 @@ const runExecutor: PromiseExecutor<ImportExecutorSchema> = async (
           )?.js?.packageName;
           return {
             name,
+            root: node.data.root,
             ...(typeof packageName === 'string' ? { packageName } : {}),
           };
         },
