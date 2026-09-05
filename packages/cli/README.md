@@ -2,6 +2,13 @@
 
 Global command dispatcher for adopting Megamono in an existing Nx workspace.
 
+Surveys, health/verification targets, project discovery, and delegated dry runs
+execute the installed tool's declared `bin` with the CLI's current Node runtime.
+They never invoke package-manager reconciliation or download a missing tool.
+Repair missing executables through an explicit dependency installation. A survey
+that needs an ephemeral plugin still stages its dependencies outside the consumer.
+Ordinary write/install commands retain the selected package manager.
+
 ```sh
 npm install --global @megamono/cli
 megamono adopt

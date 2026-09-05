@@ -58,8 +58,27 @@ async function workspace(
   for (const packageName of packages) {
     await json(
       join(root, 'node_modules', ...packageName.split('/'), 'package.json'),
-      { name: packageName, version: '0.0.1' },
+      {
+        name: packageName,
+        version: '0.0.1',
+        ...(['nx', '@playstack/cli'].includes(packageName)
+          ? {
+              bin: {
+                [packageName === 'nx' ? 'nx' : 'playstack']: './bin/cli.js',
+              },
+            }
+          : {}),
+      },
     );
+    if (['nx', '@playstack/cli'].includes(packageName)) {
+      await mkdir(join(root, 'node_modules', packageName, 'bin'), {
+        recursive: true,
+      });
+      await writeFile(
+        join(root, 'node_modules', packageName, 'bin/cli.js'),
+        '// fixture executable',
+      );
+    }
   }
   if (packages.includes('@megamono/plugin')) {
     await json(
@@ -402,10 +421,9 @@ describe('@megamono/cli', () => {
     ).toBe(0);
     expect(harness.invocations).toEqual([
       {
-        command: 'pnpm',
+        command: process.execPath,
         args: [
-          'exec',
-          'nx',
+          expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
           'generate',
           '@megamono/plugin:workspace-init',
           '--only=docs',
@@ -434,8 +452,7 @@ describe('@megamono/cli', () => {
 
     expect(result.exitCode).toBe(0);
     expect(harness.invocations[0]?.args).toEqual([
-      'exec',
-      'nx',
+      expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
       'generate',
       '@megamono/plugin:playstack-integrate',
       '--packages=@playstack/rate-limit',
@@ -444,12 +461,9 @@ describe('@megamono/cli', () => {
     ]);
   });
 
-  it.each([
-    ['yarn', 'yarn', ['nx', 'generate']],
-    ['bun', 'bunx', ['nx', 'generate']],
-  ] as const)(
-    'uses the %s command family in an adopted workspace',
-    async (manager, command, prefix) => {
+  it.each(['npm', 'pnpm', 'yarn', 'bun'] as const)(
+    'uses installed Node/Nx for a %s workspace dry run',
+    async (manager) => {
       const root = await workspace(manager);
       const harness = io(root);
       const result = await runMegamonoCli(
@@ -458,14 +472,24 @@ describe('@megamono/cli', () => {
       );
       expect(result.exitCode).toBe(0);
       expect(harness.invocations[0]).toMatchObject({
-        command,
+        command: process.execPath,
         args: expect.arrayContaining([
-          ...prefix,
+          expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
+          'generate',
           '@megamono/plugin:workspace-init',
         ]),
       });
     },
   );
+
+  it('fails diagnostics without repairing a missing installed executable', async () => {
+    const root = await workspace('pnpm');
+    await rm(join(root, 'node_modules/nx/bin/cli.js'));
+    const harness = io(root);
+    expect((await runMegamonoCli(['health'], harness.value)).exitCode).toBe(3);
+    expect(harness.invocations).toEqual([]);
+    expect(harness.stderr.join('\n')).toContain('diagnostics never install');
+  });
 
   it('delegates an explicit application through the canonical generator', async () => {
     const root = await workspace('pnpm', [
@@ -820,7 +844,7 @@ describe('@megamono/cli', () => {
       {
         command: process.execPath,
         args: [
-          expect.stringMatching(/node_modules\/nx\/bin\/nx\.js$/),
+          expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
           'generate',
           '@megamono/plugin:workspace-init',
           '--survey',
@@ -839,6 +863,11 @@ describe('@megamono/cli', () => {
       version: '23.1.1',
       bin: { nx: './dist/bin/nx.js' },
     });
+    await mkdir(join(root, 'node_modules/nx/dist/bin'), { recursive: true });
+    await writeFile(
+      join(root, 'node_modules/nx/dist/bin/nx.js'),
+      '// fixture executable',
+    );
     const harness = io(root);
 
     const result = await runMegamonoCli(
@@ -963,19 +992,26 @@ describe('@megamono/cli', () => {
     ).toBe(0);
 
     expect(harness.invocations.map(({ args }) => args)).toEqual([
-      ['exec', 'nx', 'run', 'megamono:check', '--profile=migration'],
       [
-        'exec',
-        'nx',
+        expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
+        'run',
+        'megamono:check',
+        '--profile=migration',
+      ],
+      [
+        expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
         'run',
         'megamono:verify-runtime',
         '--project=api',
         '--outputPath=dist/apps/api',
       ],
-      ['exec', 'nx', 'run', 'megamono:verify-dependencies'],
       [
-        'exec',
-        'nx',
+        expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
+        'run',
+        'megamono:verify-dependencies',
+      ],
+      [
+        expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
         'run',
         'megamono:verify-container',
         '--dockerfile=apps/api/Dockerfile',
@@ -994,10 +1030,9 @@ describe('@megamono/cli', () => {
 
     expect(result.exitCode).toBe(0);
     expect(harness.invocations[0]).toMatchObject({
-      command: 'pnpm',
+      command: process.execPath,
       args: [
-        'exec',
-        'nx',
+        expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
         'generate',
         '@megamono/plugin:workspace-init',
         '--profile=pilot',
@@ -1096,20 +1131,37 @@ describe('@megamono/cli', () => {
         capture: false,
       },
       {
-        command: 'pnpm',
-        args: ['exec', 'nx', 'show', 'projects', '--json'],
+        command: process.execPath,
+        args: [
+          expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
+          'show',
+          'projects',
+          '--json',
+        ],
         cwd: root,
         capture: true,
       },
       {
-        command: 'pnpm',
-        args: ['exec', 'nx', 'show', 'project', 'api', '--json'],
+        command: process.execPath,
+        args: [
+          expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
+          'show',
+          'project',
+          'api',
+          '--json',
+        ],
         cwd: root,
         capture: true,
       },
       {
-        command: 'pnpm',
-        args: ['exec', 'nx', 'show', 'project', 'web', '--json'],
+        command: process.execPath,
+        args: [
+          expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
+          'show',
+          'project',
+          'web',
+          '--json',
+        ],
         cwd: root,
         capture: true,
       },
@@ -1201,7 +1253,8 @@ describe('@megamono/cli', () => {
     ).toBe(false);
     expect(
       harness.invocations.find(
-        ({ args }) => args.includes('playstack') && args.includes('add'),
+        ({ args }) =>
+          args.some((arg) => arg.includes('playstack')) && args.includes('add'),
       )?.args,
     ).toEqual(
       expect.arrayContaining([
@@ -1212,8 +1265,7 @@ describe('@megamono/cli', () => {
       ]),
     );
     expect(harness.invocations.at(-1)?.args).toEqual([
-      'exec',
-      'playstack',
+      expect.stringMatching(/node_modules\/@playstack\/cli\/bin\/cli\.js$/),
       'init',
       '--survey',
     ]);
@@ -1312,20 +1364,37 @@ describe('@megamono/cli', () => {
         capture: false,
       },
       {
-        command: 'npm',
-        args: ['exec', 'nx', '--', 'show', 'projects', '--json'],
+        command: process.execPath,
+        args: [
+          expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
+          'show',
+          'projects',
+          '--json',
+        ],
         cwd: root,
         capture: true,
       },
       {
-        command: 'npm',
-        args: ['exec', 'nx', '--', 'show', 'project', 'gateway', '--json'],
+        command: process.execPath,
+        args: [
+          expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
+          'show',
+          'project',
+          'gateway',
+          '--json',
+        ],
         cwd: root,
         capture: true,
       },
       {
-        command: 'npm',
-        args: ['exec', 'nx', '--', 'show', 'project', 'storefront', '--json'],
+        command: process.execPath,
+        args: [
+          expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
+          'show',
+          'project',
+          'storefront',
+          '--json',
+        ],
         cwd: root,
         capture: true,
       },

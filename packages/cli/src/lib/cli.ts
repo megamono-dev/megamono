@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { existsSync } from 'node:fs';
 import {
   access,
   mkdtemp,
@@ -867,7 +868,14 @@ function nxInvocation(
   manager: PackageManager,
   generatorArgs: readonly string[],
   generator = 'workspace-init',
+  root?: string,
 ): readonly [string, readonly string[]] {
+  if (root && diagnosticArgs(generatorArgs))
+    return localNxCommandInvocation(root, [
+      'generate',
+      `@megamono/plugin:${generator}`,
+      ...generatorArgs,
+    ]);
   return packageManagerAdapter(manager).exec('nx', [
     'generate',
     `@megamono/plugin:${generator}`,
@@ -875,29 +883,50 @@ function nxInvocation(
   ]);
 }
 
-function nxCommandInvocation(
-  manager: PackageManager,
+function diagnosticArgs(args: readonly string[]): boolean {
+  return args.some((arg) =>
+    [
+      '--dry-run',
+      '--dry-run=true',
+      '--dryRun',
+      '--dryRun=true',
+      '--survey',
+      '--survey=true',
+    ].includes(arg),
+  );
+}
+
+function localPackageInvocation(
+  root: string,
+  packageName: string,
+  executable: string,
   args: readonly string[],
 ): readonly [string, readonly string[]] {
-  return packageManagerAdapter(manager).exec('nx', args);
+  const require = createRequire(join(root, 'package.json'));
+  const manifestPath = require.resolve([packageName, 'package.json'].join('/'));
+  const manifest = require(manifestPath) as {
+    readonly bin?: string | Readonly<Record<string, string>>;
+  };
+  const relativeBin =
+    typeof manifest.bin === 'string'
+      ? manifest.bin
+      : manifest.bin?.[executable];
+  if (!relativeBin || !existsSync(resolve(dirname(manifestPath), relativeBin)))
+    throw new CliError(
+      `The installed ${packageName} package is missing its ${executable} executable. Repair the dependency explicitly before retrying; diagnostics never install packages.`,
+      3,
+    );
+  return [
+    process.execPath,
+    [resolve(dirname(manifestPath), relativeBin), ...args],
+  ];
 }
 
 function localNxCommandInvocation(
   root: string,
   args: readonly string[],
 ): readonly [string, readonly string[]] {
-  const require = createRequire(join(root, 'package.json'));
-  const manifestPath = require.resolve(['nx', 'package.json'].join('/'));
-  const manifest = require(manifestPath) as {
-    readonly bin?: string | Readonly<Record<string, string>>;
-  };
-  const relativeBin =
-    (typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.nx) ??
-    './bin/nx.js';
-  return [
-    process.execPath,
-    [resolve(dirname(manifestPath), relativeBin), ...args],
-  ];
+  return localPackageInvocation(root, 'nx', 'nx', args);
 }
 
 function localNxVersion(root: string): string {
@@ -1040,10 +1069,11 @@ async function inspectNxSurfaceProjects(
   io: MegamonoCliIo,
   workspace: Workspace,
 ): Promise<readonly NxSurfaceProject[]> {
-  const [listCommand, listArgs] = nxCommandInvocation(
-    workspace.packageManager,
-    ['show', 'projects', '--json'],
-  );
+  const [listCommand, listArgs] = localNxCommandInvocation(workspace.root, [
+    'show',
+    'projects',
+    '--json',
+  ]);
   const listed = await io.runCommand(listCommand, listArgs, {
     cwd: workspace.root,
     capture: true,
@@ -1075,10 +1105,12 @@ async function inspectNxSurfaceProjects(
 
   const projects: NxSurfaceProject[] = [];
   for (const name of [...names].sort()) {
-    const [showCommand, showArgs] = nxCommandInvocation(
-      workspace.packageManager,
-      ['show', 'project', name, '--json'],
-    );
+    const [showCommand, showArgs] = localNxCommandInvocation(workspace.root, [
+      'show',
+      'project',
+      name,
+      '--json',
+    ]);
     const shown = await io.runCommand(showCommand, showArgs, {
       cwd: workspace.root,
       capture: true,
@@ -1283,7 +1315,12 @@ async function runGenerate(
       3,
     );
   }
-  const [command, commandArgs] = nxInvocation(manager, args.slice(1), name);
+  const [command, commandArgs] = nxInvocation(
+    manager,
+    args.slice(1),
+    name,
+    root,
+  );
   const result = await io.runCommand(command, commandArgs, { cwd: root });
   return { exitCode: result.exitCode };
 }
@@ -1291,7 +1328,10 @@ async function runGenerate(
 function playstackInvocation(
   manager: PackageManager,
   args: readonly string[],
+  root?: string,
 ): readonly [string, readonly string[]] {
+  if (root && diagnosticArgs(args))
+    return localPackageInvocation(root, '@playstack/cli', 'playstack', args);
   return packageManagerAdapter(manager).exec('playstack', args);
 }
 
@@ -1823,6 +1863,7 @@ async function addPlaystackCapabilities(
     const [command, commandArgs] = playstackInvocation(
       workspace.packageManager,
       args,
+      workspace.root,
     );
     await runRequired(
       io,
@@ -2223,6 +2264,7 @@ async function runAdd(
       workspace.packageManager,
       [`--only=${subject}`, ...options.args],
       'workspace-init',
+      workspace.root,
     );
     const result = await io.runCommand(command, commandArgs, {
       cwd: workspace.root,
@@ -2241,6 +2283,7 @@ async function runAdd(
       workspace.packageManager,
       parsed.args,
       'playstack-integrate',
+      workspace.root,
     );
     const generated = await io.runCommand(command, commandArgs, {
       cwd: workspace.root,
@@ -2274,6 +2317,7 @@ async function runAdd(
       workspace.packageManager,
       generatorArgs,
       'database',
+      workspace.root,
     );
     const generated = await io.runCommand(command, commandArgs, {
       cwd: workspace.root,
@@ -2342,6 +2386,7 @@ async function runAdd(
     workspace.packageManager,
     generatorArgs,
     'app',
+    workspace.root,
   );
   const generated = await io.runCommand(command, commandArgs, {
     cwd: workspace.root,
@@ -2486,6 +2531,8 @@ async function runInit(
   const [nxCommand, nxArgs] = nxInvocation(
     workspace.packageManager,
     options.generatorArgs,
+    'workspace-init',
+    root,
   );
   const initialized = await io.runCommand(nxCommand, nxArgs, {
     cwd: workspace.root,
@@ -2505,6 +2552,7 @@ async function runInit(
     const [command, commandArgs] = playstackInvocation(
       workspace.packageManager,
       ['init', '--survey'],
+      root,
     );
     const previewed = await io.runCommand(command, commandArgs, {
       cwd: workspace.root,
@@ -2526,6 +2574,7 @@ async function runInit(
   const [playstackCommand, playstackArgs] = playstackInvocation(
     workspace.packageManager,
     ['init', ...(options.survey ? ['--survey'] : [])],
+    root,
   );
   const configured = await io.runCommand(playstackCommand, playstackArgs, {
     cwd: workspace.root,
@@ -2573,7 +2622,7 @@ async function runWorkspaceTarget(
       `@megamono/plugin is not installed locally. Run: ${pluginInstallInstruction(packageManager, 'registry')}.`,
       3,
     );
-  const [command, commandArgs] = nxCommandInvocation(packageManager, [
+  const [command, commandArgs] = localNxCommandInvocation(root, [
     'run',
     target,
     ...args,
