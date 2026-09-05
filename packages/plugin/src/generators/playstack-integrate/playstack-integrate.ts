@@ -2,10 +2,12 @@ import {
   formatFiles,
   getProjects,
   logger,
+  updateProjectConfiguration,
   type GeneratorCallback,
   type Tree,
 } from '@nx/devkit';
 import { nestRoutes } from '../../lib/nest-routes';
+import { planIntegrationVerification } from '../../lib/integration-verification';
 import {
   validateIntegrationEquivalences,
   type IntegrationEquivalence,
@@ -40,6 +42,10 @@ export interface PlaystackIntegrateGeneratorSchema {
   readonly decisions?: string;
   readonly conditions?: string;
   readonly equivalences?: string;
+  readonly verification?: string;
+  readonly verificationProject?: string;
+  readonly ciWorkflow?: string;
+  readonly ciJob?: string;
   readonly dryRun?: boolean;
   readonly yes?: boolean;
 }
@@ -800,6 +806,16 @@ export async function playstackIntegrateGenerator(
       ({ id, kind }) => ({ id, kind }),
     ),
   }));
+  const verification = planIntegrationVerification(
+    tree,
+    getProjects(tree),
+    requirements.flatMap((record) =>
+      (record.requirements.requiredTests ?? []).map(
+        ({ id }) => `${record.package}:${record.id}:${id}`,
+      ),
+    ),
+    options,
+  );
   const plan = {
     schemaVersion: 1,
     packages: manifests.map(({ package: name, packageVersion }) => ({
@@ -818,6 +834,7 @@ export async function playstackIntegrateGenerator(
     unresolvedDecisions,
     preflight: { conflicts, existingReferences },
     commitBoundaries,
+    ...(verification ? { verification } : {}),
     requirements,
     files: files.map((file) => ({
       package: file.package,
@@ -860,6 +877,18 @@ export async function playstackIntegrateGenerator(
     );
   for (const file of files)
     if (!tree.exists(file.target)) tree.write(file.target, file.content);
+  if (verification) {
+    const project = getProjects(tree).get(verification.project)!;
+    updateProjectConfiguration(tree, verification.project, {
+      ...project,
+      targets: {
+        ...project.targets,
+        [verification.target]: verification.configuration,
+      },
+    });
+    if (verification.workflow)
+      tree.write(verification.workflow.path, verification.workflow.content);
+  }
   tree.write(
     '.megamono/playstack-integration-plan.json',
     `${JSON.stringify(plan, null, 2)}\n`,

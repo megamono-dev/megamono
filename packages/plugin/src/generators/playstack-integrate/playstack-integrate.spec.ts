@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
-import { addProjectConfiguration } from '@nx/devkit';
+import {
+  addProjectConfiguration,
+  getProjects,
+  updateProjectConfiguration,
+} from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { describe, expect, it } from 'vitest';
 import { playstackIntegrateGenerator } from './playstack-integrate';
@@ -83,6 +87,44 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it('wires required tests into Nx only after an accepted plan, and reruns safely', async () => {
+    const tree = fixture();
+    const manifest = integrationManifest(tree);
+    manifest.integrations[0].requirements.requiredTests = [
+      { id: 'rate-limit-contract', kind: 'integration' },
+    ];
+    writeIntegrationManifest(tree, manifest);
+    updateProjectConfiguration(tree, 'api', {
+      root: 'apps/api',
+      targets: {
+        test: {
+          executor: 'nx:run-commands',
+          options: { command: 'node --test' },
+        },
+      },
+    });
+    const options = {
+      packages: '@playstack/rate-limit',
+      api: 'apps/api',
+      yes: true,
+      verificationProject: 'api',
+      verification: JSON.stringify({
+        '@playstack/rate-limit:nest-rate-limit:rate-limit-contract': 'api:test',
+      }),
+    };
+    await playstackIntegrateGenerator(tree, { ...options, dryRun: true });
+    expect(
+      getProjects(tree).get('api')?.targets?.['playstack-verify'],
+    ).toBeUndefined();
+    await playstackIntegrateGenerator(tree, options);
+    expect(
+      getProjects(tree).get('api')?.targets?.['playstack-verify'],
+    ).toMatchObject({
+      executor: 'nx:noop',
+      dependsOn: [{ projects: ['api'], target: 'test' }],
+    });
+    await playstackIntegrateGenerator(tree, options);
+  });
   it('records reviewed environment mappings and reuses an application-owned template without changing it', async () => {
     const tree = fixture();
     const path = 'libs/storage/src/storage.module.ts';

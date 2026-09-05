@@ -168,6 +168,25 @@ Generators emit secret **names**, never values:
 
 ## V1 decisions and sequencing
 
+### Consumer verification and CI composition
+
+`--verification` maps every active `package:integration:test` requirement to an
+existing `project:target`. `--verificationProject` selects the existing Nx
+project receiving a non-cached `playstack-verify` aggregation target. Mapping
+arbitrary shell commands, missing targets, incomplete requirements, or another
+verification aggregator is refused. The selected targets and their tests remain
+application-owned; declaring a mapping does not claim that the test passed.
+
+With an explicit `--ciWorkflow=.github/workflows/ci.yml --ciJob=quality`, the
+generator appends one idempotent verification step to that job after preview and
+confirmation. The job must already have a steps sequence. It preserves existing
+steps, comments, jobs, triggers, permissions, secrets, and release ownership;
+missing workflows and reusable-workflow jobs are not silently replaced. The
+step resolves installed Nx through its package manifest and uses Node directly,
+without a package-manager install or registry lookup. The repository must supply
+its normal toolchain and dependency-install steps. Existing conflicting targets
+or verification steps require review before any mutation.
+
 ### Reviewed existing-integration equivalences
 
 `playstack-integrate --equivalences='<json>'` accepts application-reviewed

@@ -284,6 +284,10 @@ Integration options:
   --decisions='<json>' Resolve required package-authored decisions
   --equivalences='<json>'
                        Map requirements and templates to reviewed existing wiring
+  --verification='<json>' --verification-project=<Nx name>
+                       Map required test IDs to existing Nx targets
+  --ci-workflow=<path> --ci-job=<name>
+                       Append verification to an explicitly selected existing job
   --dry-run            Report templates, overlap, and unresolved choices
   --yes                Materialize verified templates after review
 

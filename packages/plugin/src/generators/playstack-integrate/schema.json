@@ -50,6 +50,22 @@
       "type": "string",
       "description": "Reviewed JSON mapping of environment keys to names, module/provider symbols to existing:file#export, or package:integration:template keys to existing:file."
     },
+    "verification": {
+      "type": "string",
+      "description": "Reviewed JSON map from each package:integration:test ID to an existing project:target."
+    },
+    "verificationProject": {
+      "type": "string",
+      "description": "Existing Nx project receiving the playstack-verify aggregator target."
+    },
+    "ciWorkflow": {
+      "type": "string",
+      "description": "Explicit existing GitHub workflow to augment after review."
+    },
+    "ciJob": {
+      "type": "string",
+      "description": "Explicit existing CI job receiving the verification step; install/toolchain setup remains repository-owned."
+    },
     "dryRun": {
       "type": "boolean",
       "default": false
