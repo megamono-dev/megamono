@@ -83,6 +83,53 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it.each([
+    [
+      'unsupported framework',
+      (manifest: ReturnType<typeof integrationManifest>) => {
+        manifest.integrations[0].framework = 'unsupported';
+      },
+    ],
+    [
+      'unknown requirement',
+      (manifest: ReturnType<typeof integrationManifest>) => {
+        manifest.integrations[0].requirements.mandatoryDecision = true;
+      },
+    ],
+    [
+      'invalid route',
+      (manifest: ReturnType<typeof integrationManifest>) => {
+        manifest.integrations[0].requirements.routes = [{ path: '/refresh' }];
+      },
+    ],
+  ])('rejects the full manifest schema: %s', async (_label, change) => {
+    const tree = fixture();
+    const manifest = integrationManifest(tree);
+    change(manifest);
+    writeIntegrationManifest(tree, manifest);
+    await expect(
+      playstackIntegrateGenerator(tree, {
+        packages: '@playstack/rate-limit',
+        api: 'apps/api',
+        yes: true,
+      }),
+    ).rejects.toThrow('does not satisfy integration schema');
+    expect(tree.exists('.megamono/playstack-integration-plan.json')).toBe(
+      false,
+    );
+  });
+
+  it('rejects contradictory dedicated and package decisions', async () => {
+    await expect(
+      playstackIntegrateGenerator(fixture(), {
+        packages: '@playstack/rate-limit',
+        api: 'apps/api',
+        persistence: 'application',
+        decisions: '{"auth.persistence":"package"}',
+        yes: true,
+      }),
+    ).rejects.toThrow('conflicts with the dedicated option');
+  });
   it('rejects unknown Nx destinations before writing', async () => {
     const tree = fixture();
     await expect(

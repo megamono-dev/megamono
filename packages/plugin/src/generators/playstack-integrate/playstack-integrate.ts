@@ -9,6 +9,19 @@ import { nestRoutes } from '../../lib/nest-routes';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { posix, resolve } from 'node:path';
+import Ajv2020 from 'ajv/dist/2020';
+
+const integrationValidator = new Ajv2020({
+  allErrors: true,
+  strict: true,
+}).compile(
+  JSON.parse(
+    readFileSync(
+      resolve(__dirname, '../../../schemas/playstack-integration.schema.json'),
+      'utf8',
+    ),
+  ),
+);
 
 export interface PlaystackIntegrateGeneratorSchema {
   readonly packages: string;
@@ -291,6 +304,10 @@ function manifest(tree: Tree, name: string): IntegrationManifest {
   } catch {
     throw new Error(`${path} is not valid JSON.`);
   }
+  if (!integrationValidator(value))
+    throw new Error(
+      `${path} does not satisfy integration schema version 1: ${new Ajv2020().errorsText(integrationValidator.errors)}`,
+    );
   const candidate = value as Partial<IntegrationManifest> | null;
   if (
     !candidate ||
@@ -498,6 +515,17 @@ export async function playstackIntegrateGenerator(
     '--decisions',
     (entry): entry is string => typeof entry === 'string' && entry.length > 0,
   );
+  for (const [key, value] of Object.entries(selectedDecisions)) {
+    const dedicated = key.endsWith('.persistence')
+      ? options.persistence
+      : key.endsWith('.adoptionMode')
+        ? options.adoptionMode
+        : undefined;
+    if (dedicated !== undefined && dedicated !== value)
+      throw new Error(
+        `Decision ${key}=${value} conflicts with the dedicated option ${dedicated}.`,
+      );
+  }
   const roots: Partial<Record<Surface, string>> = {
     ...(options.portable
       ? { portable: safePath(options.portable, '--portable') }
