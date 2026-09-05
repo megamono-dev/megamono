@@ -168,6 +168,33 @@ Generators emit secret **names**, never values:
 
 ## V1 decisions and sequencing
 
+### Reviewed existing-integration equivalences
+
+`playstack-integrate --equivalences='<json>'` accepts application-reviewed
+equivalences without changing the package-authored manifest schema:
+
+```json
+{
+  "auth.allowedOrigins": "AUTH_ALLOWED_ORIGINS",
+  "StorageModule": "existing:libs/storage/src/storage.module.ts#PackageStorageModule",
+  "@playstack/nest-storage:nest-storage:storage-module": "existing:libs/storage/src/storage.module.ts"
+}
+```
+
+Environment keys must be active manifest requirement keys and values must be
+variable names, never credentials. Module/provider keys must be active declared
+symbols, and mappings identify an existing workspace file and exported symbol.
+Template keys use `package:integration:template`; an explicit mapping reuses the
+application file instead of emitting that template. Reused Nest controllers must
+statically cover the integration's declared routes. Unknown keys, missing files,
+missing exports, and unsafe paths fail before writes. Plans record the reviewed
+authority and reused-file digest; ordinary source-reference detection is not an
+equivalence decision. Environment mappings document the binding for application
+composition; they do not text-replace arbitrary package template source.
+
+Equivalence does not certify behavioral compatibility, bypass verification, or
+transfer ownership. Existing files remain application-owned and unchanged.
+
 - Wave 1 implements `integration-sentry` for Next.js Pages Router, Nest, Expo, and Cloudflare Worker projects. A surface combination without a maintained fixture is refused rather than partially configured.
 - Fathom, Postmark, and Stripe names and option contracts are reserved for later waves. They do not appear in the published generator collection until their templates and referenced Playstack fixtures pass the same acceptance suite.
 - Playstack lint and skills wiring are published after passing their external package fixtures. They remain independently runnable and are never an implicit side effect of another generator.

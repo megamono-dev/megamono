@@ -83,6 +83,63 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it('records reviewed environment mappings and reuses an application-owned template without changing it', async () => {
+    const tree = fixture();
+    const path = 'libs/storage/src/storage.module.ts';
+    const content = 'export class PackageStorageModule {}\n';
+    tree.write(path, content);
+    const options = {
+      packages: '@playstack/rate-limit',
+      api: 'apps/api',
+      yes: true,
+      equivalences: JSON.stringify({
+        'cache.redisUrl': 'CACHE_REDIS_URL',
+        RateLimitModule: `existing:${path}#PackageStorageModule`,
+        '@playstack/rate-limit:nest-rate-limit:rate-limit-module': `existing:${path}`,
+      }),
+    };
+    await playstackIntegrateGenerator(tree, options);
+    expect(tree.read(path, 'utf8')).toBe(content);
+    expect(tree.exists('apps/api/src/playstack/rate-limit.module.ts')).toBe(
+      false,
+    );
+    const plan = JSON.parse(
+      tree.read('.megamono/playstack-integration-plan.json', 'utf8')!,
+    );
+    expect(plan.files[0]).toMatchObject({ target: path, reused: true });
+    expect(plan.selections.equivalences).toContainEqual(
+      expect.objectContaining({
+        key: 'cache.redisUrl',
+        value: 'CACHE_REDIS_URL',
+      }),
+    );
+    await playstackIntegrateGenerator(tree, options);
+  });
+
+  it.each([
+    { unknown: 'REDIS_URL' },
+    { 'cache.redisUrl': 'redis://secret@host' },
+    { RateLimitModule: 'existing:../outside.ts#Module' },
+    { RateLimitModule: 'existing:libs/missing.ts#Module' },
+    { RateLimitModule: 'existing:libs/storage.ts#Missing' },
+  ])(
+    'rejects invalid equivalences before any generated writes: %j',
+    async (equivalences) => {
+      const tree = fixture();
+      tree.write('libs/storage.ts', 'export class StorageModule {}');
+      await expect(
+        playstackIntegrateGenerator(tree, {
+          packages: '@playstack/rate-limit',
+          api: 'apps/api',
+          yes: true,
+          equivalences: JSON.stringify(equivalences),
+        }),
+      ).rejects.toThrow();
+      expect(tree.exists('apps/api/src/playstack/rate-limit.module.ts')).toBe(
+        false,
+      );
+    },
+  );
   it('is stable after repository formatting and preserves real user edits', async () => {
     const tree = fixture();
     tree.write('.prettierrc', '{"singleQuote":false}');

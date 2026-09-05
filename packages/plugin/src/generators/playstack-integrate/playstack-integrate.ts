@@ -6,6 +6,10 @@ import {
   type Tree,
 } from '@nx/devkit';
 import { nestRoutes } from '../../lib/nest-routes';
+import {
+  validateIntegrationEquivalences,
+  type IntegrationEquivalence,
+} from '../../lib/integration-equivalences';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { posix, resolve } from 'node:path';
@@ -35,6 +39,7 @@ export interface PlaystackIntegrateGeneratorSchema {
   readonly adoptionMode?: 'fresh' | 'compare' | 'shadow' | 'cutover';
   readonly decisions?: string;
   readonly conditions?: string;
+  readonly equivalences?: string;
   readonly dryRun?: boolean;
   readonly yes?: boolean;
 }
@@ -127,6 +132,7 @@ interface PlannedFile {
   readonly target: string;
   readonly sha256: string;
   readonly content: string;
+  readonly reused?: boolean;
 }
 
 type ConditionState = 'active' | 'inactive' | 'unresolved';
@@ -620,6 +626,63 @@ export async function playstackIntegrateGenerator(
       }
     }
   }
+  const equivalenceKinds = new Map<string, IntegrationEquivalence['kind']>();
+  for (const record of requirements) {
+    for (const entry of record.requirements.environment ?? [])
+      equivalenceKinds.set(entry.key, 'environment');
+    for (const entry of record.requirements.moduleImports ?? [])
+      equivalenceKinds.set(entry.export, 'module');
+    for (const token of record.requirements.providerTokens ?? [])
+      equivalenceKinds.set(token, 'provider');
+  }
+  for (const file of files)
+    equivalenceKinds.set(
+      `${file.package}:${file.integration}:${file.id}`,
+      'template',
+    );
+  const equivalences = validateIntegrationEquivalences(
+    tree,
+    jsonRecord(
+      options.equivalences,
+      '--equivalences',
+      (value): value is string => typeof value === 'string',
+    ),
+    equivalenceKinds,
+  );
+  for (let index = 0; index < files.length; index++) {
+    const file = files[index];
+    const mapping = equivalences.find(
+      ({ key }) => key === `${file.package}:${file.integration}:${file.id}`,
+    );
+    if (!mapping?.file) continue;
+    const content = tree.read(mapping.file, 'utf8')!;
+    if (file.kind === 'controller') {
+      const declared = nestRoutes(content, mapping.file);
+      const expected =
+        requirements.find(
+          (record) =>
+            record.package === file.package && record.id === file.integration,
+        )?.requirements.routes ?? [];
+      if (
+        declared.unresolved ||
+        expected.some((route) =>
+          route.methods.some(
+            (method) =>
+              !declared.routes.some(
+                (found) =>
+                  found.path === route.path &&
+                  (found.method === method.toUpperCase() ||
+                    found.method === 'ALL'),
+              ),
+          ),
+        )
+      )
+        throw new Error(
+          `Reused controller ${mapping.file} does not statically cover the declared integration routes.`,
+        );
+    }
+    files[index] = { ...file, target: mapping.file, content, reused: true };
+  }
   const duplicate = files.find(
     (file, index) =>
       files.findIndex(({ target }) => target === file.target) !== index,
@@ -745,6 +808,7 @@ export async function playstackIntegrateGenerator(
     })),
     selections: {
       adapters,
+      equivalences,
       ...(options.persistence ? { persistence: options.persistence } : {}),
       ...(options.adoptionMode ? { adoptionMode: options.adoptionMode } : {}),
       conditions: selection.conditions,
@@ -764,6 +828,14 @@ export async function playstackIntegrateGenerator(
       source: file.source,
       target: file.target,
       sha256: file.sha256,
+      ...(file.reused
+        ? {
+            reused: true,
+            contentSha256: createHash('sha256')
+              .update(file.content)
+              .digest('hex'),
+          }
+        : {}),
     })),
   };
   if (options.dryRun) {

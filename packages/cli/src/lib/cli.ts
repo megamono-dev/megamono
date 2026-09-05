@@ -282,6 +282,8 @@ Integration options:
   --conditions='<json>'
                        Resolve package-authored contextual conditions
   --decisions='<json>' Resolve required package-authored decisions
+  --equivalences='<json>'
+                       Map requirements and templates to reviewed existing wiring
   --dry-run            Report templates, overlap, and unresolved choices
   --yes                Materialize verified templates after review
 

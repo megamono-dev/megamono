@@ -46,6 +46,10 @@
       "type": "string",
       "description": "JSON object mapping human-readable package conditions to booleans."
     },
+    "equivalences": {
+      "type": "string",
+      "description": "Reviewed JSON mapping of environment keys to names, module/provider symbols to existing:file#export, or package:integration:template keys to existing:file."
+    },
     "dryRun": {
       "type": "boolean",
       "default": false
