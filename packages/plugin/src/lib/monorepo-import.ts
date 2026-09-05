@@ -518,15 +518,24 @@ export async function planMonorepoImport(input: {
       const edits: { start: number; end: number; text: string }[] = [];
       const visit = (node: ts.Node) => {
         if (
-          ts.isStringLiteral(node) &&
+          ts.isStringLiteralLike(node) &&
           (((ts.isImportDeclaration(node.parent) ||
             ts.isExportDeclaration(node.parent)) &&
             node.parent.moduleSpecifier === node) ||
+            (ts.isExternalModuleReference(node.parent) &&
+              node.parent.expression === node) ||
+            (ts.isLiteralTypeNode(node.parent) &&
+              ts.isImportTypeNode(node.parent.parent) &&
+              node.parent.parent.argument === node.parent) ||
             (ts.isCallExpression(node.parent) &&
               node.parent.arguments[0] === node &&
               (node.parent.expression.kind === ts.SyntaxKind.ImportKeyword ||
                 (ts.isIdentifier(node.parent.expression) &&
-                  node.parent.expression.text === 'require'))))
+                  node.parent.expression.text === 'require') ||
+                (ts.isPropertyAccessExpression(node.parent.expression) &&
+                  ts.isIdentifier(node.parent.expression.expression) &&
+                  node.parent.expression.expression.text === 'require' &&
+                  node.parent.expression.name.text === 'resolve'))))
         ) {
           if (
             node.text.startsWith('.') &&

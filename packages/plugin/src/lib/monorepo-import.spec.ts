@@ -142,6 +142,37 @@ describe('reviewed monorepo project planning', () => {
     ).toEqual({ '@fixture/imported-sdk': '^1.0.0' });
   });
 
+  it('renames type imports, import-equals, literal dynamic imports and resolution calls without changing ordinary strings', async () => {
+    const file = 'packages/email/src/types.ts';
+    const input = [
+      "type Sdk = import('@fixture/sdk').Sdk;",
+      "import sdk = require('@fixture/sdk');",
+      "const location = require.resolve('@fixture/sdk/subpath');",
+      'const load = () => import(`@fixture/sdk`);',
+      "const description = '@fixture/sdk';",
+    ].join('\n');
+    const result = await plan(
+      { ...source, [file]: input },
+      {
+        projects: {
+          ...selection.projects,
+          'packages/sdk': {
+            action: 'import',
+            name: 'imported-sdk',
+            packageName: '@fixture/imported-sdk',
+            configuration,
+          },
+        },
+      },
+    );
+    const content = result.rewrites.find((r) => r.source === file)?.content;
+    expect(content?.match(/@fixture\/imported-sdk/g)).toHaveLength(4);
+    expect(content).toContain("const description = '@fixture/sdk'");
+    await expect(
+      plan({ ...source, [file]: "type Sdk = import('../../sdk/src').Sdk;" }),
+    ).rejects.toThrow('relative path');
+  });
+
   it('rejects incomplete maps, occupied identities and missing build verification', async () => {
     await expect(plan(source, { projects: {} })).rejects.toThrow('Missing:');
     await expect(
