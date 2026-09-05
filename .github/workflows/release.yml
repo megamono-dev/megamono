@@ -69,6 +69,7 @@ jobs:
       - run: npm exec nx -- run nx-cloudflare:e2e-local-registry --skip-nx-cache
       - run: npm exec nx -- run nx-extension:e2e-local-registry --skip-nx-cache
       - run: npm exec nx -- run @megamono/cli:e2e-local-packages --skip-nx-cache
+      - run: npm exec nx -- run @megamono/cli:e2e-ephemeral-survey --skip-nx-cache
       - run: npm exec nx -- run plugin:e2e-collections-local-registry --skip-nx-cache
       - run: npm exec nx -- run plugin:e2e-convert-local-registry --skip-nx-cache
       - run: npm exec nx -- run @megamono/plugin:e2e-nx-compatibility --skip-nx-cache

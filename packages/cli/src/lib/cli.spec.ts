@@ -834,6 +834,11 @@ describe('@megamono/cli', () => {
 
   it('stages a missing survey plugin outside the repository', async () => {
     const root = await workspace('pnpm', ['nx']);
+    await json(join(root, 'node_modules/nx/package.json'), {
+      name: 'nx',
+      version: '23.1.1',
+      bin: { nx: './dist/bin/nx.js' },
+    });
     const harness = io(root);
 
     const result = await runMegamonoCli(
@@ -847,7 +852,7 @@ describe('@megamono/cli', () => {
       command: 'npm',
       args: expect.arrayContaining([
         'install',
-        'nx@0.0.1',
+        'nx@23.1.1',
         '@megamono/plugin@0.0.1-test',
       ]),
     });
@@ -856,12 +861,20 @@ describe('@megamono/cli', () => {
       command: process.execPath,
       args: expect.arrayContaining([
         'generate',
-        '@megamono/plugin:workspace-init',
-        '--survey',
+        expect.stringMatching(
+          /megamono-survey-.*\/node_modules\/@megamono\/plugin\/generators.json:workspace-init$/,
+        ),
+        '--survey=true',
         '--only=health,inference',
       ]),
       cwd: root,
     });
+    expect(harness.invocations[1]?.args[0]).toMatch(
+      /node_modules\/nx\/dist\/bin\/nx.js$/,
+    );
+    expect(harness.invocations[1]?.args).toEqual(
+      expect.arrayContaining(['--dry-run', '--survey=true']),
+    );
   });
 
   it('can stage the missing survey plugin from Yalc', async () => {

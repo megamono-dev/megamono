@@ -27,6 +27,22 @@
   ],
   "nx": {
     "targets": {
+      "e2e-ephemeral-survey": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build",
+          {
+            "projects": [
+              "@megamono/plugin"
+            ],
+            "target": "build"
+          }
+        ],
+        "options": {
+          "command": "node packages/cli/e2e/ephemeral-survey.e2e.mjs"
+        }
+      },
       "build": {
         "executor": "@nx/js:tsc",
         "outputs": [

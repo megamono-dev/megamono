@@ -84,6 +84,9 @@ async function commandOutput(
     const result = await executeFile(command, [...args], {
       cwd: workspaceRoot,
       encoding: 'utf8',
+      // Corepack shims can attempt network access even for --version. A
+      // read-only survey must remain bounded when an optional tool is absent.
+      timeout: 5_000,
     });
     return result.stdout.trim();
   } catch {

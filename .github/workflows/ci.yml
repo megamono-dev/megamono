@@ -64,3 +64,4 @@ jobs:
       - run: python -m pip install 'git-filter-repo>=2.47,<3'
       - run: npm exec nx -- run megamono-docs:validate --output-style=static
       - run: npm exec nx -- affected -t lint test build --exclude=tag:platform:apple --output-style=static
+      - run: npm exec nx -- affected -t e2e-ephemeral-survey --exclude=tag:platform:apple --output-style=static

@@ -953,16 +953,21 @@ async function runEphemeralPluginSurvey(
         3,
       );
     }
-    const surveyed = await io.runCommand(
-      process.execPath,
-      [
-        join(directory, 'node_modules', 'nx', 'bin', 'nx.js'),
-        'generate',
-        '@megamono/plugin:workspace-init',
-        ...options.generatorArgs,
-      ],
-      { cwd: root },
-    );
+    // Run the workspace's declared Nx executable. A staged launcher would
+    // redispatch to local Nx anyway; an absolute collection keeps the temporary
+    // plugin resolvable without adding it to the consumer's dependencies.
+    const [command, args] = localNxCommandInvocation(root, [
+      'generate',
+      `${join(directory, 'node_modules', '@megamono', 'plugin', 'generators.json')}:workspace-init`,
+      ...options.generatorArgs.filter(
+        (argument) =>
+          !/^--(?:survey|dry-run|dryRun|interactive)(?:=|$)/.test(argument),
+      ),
+      '--survey=true',
+      '--dry-run',
+      '--interactive=false',
+    ]);
+    const surveyed = await io.runCommand(command, args, { cwd: root });
     return { exitCode: surveyed.exitCode };
   } finally {
     await rm(directory, { recursive: true, force: true });
