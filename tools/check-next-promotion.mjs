@@ -21,7 +21,14 @@ const manifests = [
 
 export function validateNextPromotion(packages) {
   const failures = [];
-  for (const { name, currentVersion, publishedVersion } of packages) {
+  for (const {
+    name,
+    currentVersion,
+    publishedVersion,
+    currentTree,
+    publishedTree,
+    publishedRevision,
+  } of packages) {
     if (!/^\d+\.\d+\.\d+-next\.\d+$/.test(currentVersion)) {
       failures.push(
         `${name}: current version ${currentVersion} is not a next prerelease`,
@@ -32,6 +39,15 @@ export function validateNextPromotion(packages) {
         `${name}: npm next is ${publishedVersion || '(missing)'}, expected ${currentVersion}`,
       );
     }
+    if (
+      !/^[a-f0-9]{40}$/.test(publishedRevision ?? '') ||
+      !/^[a-f0-9]{40}$/.test(publishedTree ?? '') ||
+      currentTree !== publishedTree
+    ) {
+      failures.push(
+        `${name}: checkout source does not match the published next revision; publish and evaluate a new next version first`,
+      );
+    }
   }
   if (failures.length > 0) {
     throw new Error(
@@ -40,31 +56,51 @@ export function validateNextPromotion(packages) {
   }
 }
 
-async function publishedNextVersion(name) {
+async function publishedNext(name) {
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   try {
     const { stdout } = await execFileAsync(
       npm,
-      ['view', `${name}@next`, 'version', '--json'],
+      ['view', `${name}@next`, '--json'],
       { encoding: 'utf8' },
     );
     const value = JSON.parse(stdout);
-    return typeof value === 'string' ? value : '';
+    return value && typeof value === 'object' ? value : {};
   } catch {
-    return '';
+    return {};
   }
 }
 
 async function main() {
+  const git = async (...args) =>
+    (
+      await execFileAsync('git', args, { cwd: root, encoding: 'utf8' })
+    ).stdout.trim();
+  if (await git('status', '--porcelain', '--untracked-files=all'))
+    throw new Error('Stable promotion requires a clean checkout.');
+  const currentTree = await git('rev-parse', 'HEAD^{tree}');
   const packages = await Promise.all(
     manifests.map(async (manifestPath) => {
       const manifest = JSON.parse(
         await readFile(join(root, manifestPath), 'utf8'),
       );
+      const published = await publishedNext(manifest.name);
+      const publishedRevision = published.gitHead;
+      let publishedTree = '';
+      if (/^[a-f0-9]{40}$/.test(publishedRevision ?? '')) {
+        try {
+          publishedTree = await git('rev-parse', `${publishedRevision}^{tree}`);
+        } catch {
+          /* Missing source history must fail closed, not skip verification. */
+        }
+      }
       return {
         name: manifest.name,
         currentVersion: manifest.version,
-        publishedVersion: await publishedNextVersion(manifest.name),
+        publishedVersion: published.version,
+        publishedRevision,
+        currentTree,
+        publishedTree,
       };
     }),
   );

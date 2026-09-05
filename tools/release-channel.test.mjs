@@ -100,6 +100,9 @@ test('requires every stable package to match its published next version', () => 
         name: '@megamono/plugin',
         currentVersion: '0.1.0-next.3',
         publishedVersion: '0.1.0-next.3',
+        publishedRevision: 'a'.repeat(40),
+        currentTree: 'b'.repeat(40),
+        publishedTree: 'b'.repeat(40),
       },
     ]),
   );
@@ -113,5 +116,31 @@ test('requires every stable package to match its published next version', () => 
         },
       ]),
     /Stable promotion preflight failed/,
+  );
+});
+
+test('stable promotion rejects changed source or missing registry revision even when versions match', () => {
+  const published = {
+    name: '@megamono/plugin',
+    currentVersion: '0.1.0-next.3',
+    publishedVersion: '0.1.0-next.3',
+    publishedRevision: 'a'.repeat(40),
+    currentTree: 'b'.repeat(40),
+    publishedTree: 'b'.repeat(40),
+  };
+  assert.doesNotThrow(() => validateNextPromotion([published]));
+  assert.throws(
+    () =>
+      validateNextPromotion([{ ...published, currentTree: 'c'.repeat(40) }]),
+    /source does not match/,
+  );
+  assert.throws(
+    () =>
+      validateNextPromotion([{ ...published, publishedRevision: undefined }]),
+    /source does not match/,
+  );
+  assert.throws(
+    () => validateNextPromotion([{ ...published, publishedTree: '' }]),
+    /source does not match/,
   );
 });
