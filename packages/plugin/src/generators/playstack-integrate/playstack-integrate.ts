@@ -9,6 +9,11 @@ import {
 import { nestRoutes } from '../../lib/nest-routes';
 import { planIntegrationVerification } from '../../lib/integration-verification';
 import {
+  INTEGRATION_MIGRATIONS_PATH,
+  integrationFingerprint,
+  planIntegrationMigrations,
+} from '../../lib/integration-migrations';
+import {
   validateIntegrationEquivalences,
   type IntegrationEquivalence,
 } from '../../lib/integration-equivalences';
@@ -46,6 +51,7 @@ export interface PlaystackIntegrateGeneratorSchema {
   readonly verificationProject?: string;
   readonly ciWorkflow?: string;
   readonly ciJob?: string;
+  readonly migrationStages?: string;
   readonly dryRun?: boolean;
   readonly yes?: boolean;
 }
@@ -661,7 +667,9 @@ export async function playstackIntegrateGenerator(
       ({ key }) => key === `${file.package}:${file.integration}:${file.id}`,
     );
     if (!mapping?.file) continue;
-    const content = tree.read(mapping.file, 'utf8')!;
+    const content = tree.read(mapping.file, 'utf8');
+    if (content === null)
+      throw new Error(`Reused integration file disappeared: ${mapping.file}.`);
     if (file.kind === 'controller') {
       const declared = nestRoutes(content, mapping.file);
       const expected =
@@ -816,6 +824,70 @@ export async function playstackIntegrateGenerator(
     ),
     options,
   );
+  const migrations = planIntegrationMigrations(
+    tree,
+    requirements.map((record) => {
+      const source = manifests.find(
+        (manifest) => manifest.package === record.package,
+      );
+      if (!source)
+        throw new Error(
+          `Missing selected integration manifest ${record.package}.`,
+        );
+      const decisionKeys = (record.requirements.decisions ?? [])
+        .map(({ key }) => key)
+        .filter((key) => !key.endsWith('.adoptionMode'));
+      const equivalenceKeys = new Set([
+        ...(record.requirements.environment ?? []).map(({ key }) => key),
+        ...(record.requirements.moduleImports ?? []).map(
+          ({ export: name }) => name,
+        ),
+        ...(record.requirements.providerTokens ?? []),
+        ...files
+          .filter(
+            (file) =>
+              file.package === record.package && file.integration === record.id,
+          )
+          .map((file) => `${file.package}:${file.integration}:${file.id}`),
+      ]);
+      return {
+        key: `${record.package}:${record.id}`,
+        version: source.packageVersion,
+        fingerprint: integrationFingerprint({
+          manifest: source.integrations.find(({ id }) => id === record.id),
+          version: source.packageVersion,
+          root: roots[record.surface],
+          requirements: record.requirements,
+          persistence: options.persistence,
+          decisions: Object.fromEntries(
+            decisionKeys.map((key) => [key, selectedDecisions[key]]),
+          ),
+          equivalences: equivalences.filter(({ key }) =>
+            equivalenceKeys.has(key),
+          ),
+          verification: Object.fromEntries(
+            Object.entries(verification?.mappings ?? {}).filter(([key]) =>
+              key.startsWith(`${record.package}:${record.id}:`),
+            ),
+          ),
+          files: files
+            .filter(
+              (file) =>
+                file.package === record.package &&
+                file.integration === record.id,
+            )
+            .map((file) => ({
+              target: file.target,
+              sha256: createHash('sha256').update(file.content).digest('hex'),
+            })),
+        }),
+        requiredTests: (record.requirements.requiredTests ?? []).map(
+          ({ id }) => id,
+        ),
+      };
+    }),
+    options.migrationStages,
+  );
   const plan = {
     schemaVersion: 1,
     packages: manifests.map(({ package: name, packageVersion }) => ({
@@ -835,6 +907,7 @@ export async function playstackIntegrateGenerator(
     preflight: { conflicts, existingReferences },
     commitBoundaries,
     ...(verification ? { verification } : {}),
+    migrations,
     requirements,
     files: files.map((file) => ({
       package: file.package,
@@ -878,7 +951,11 @@ export async function playstackIntegrateGenerator(
   for (const file of files)
     if (!tree.exists(file.target)) tree.write(file.target, file.content);
   if (verification) {
-    const project = getProjects(tree).get(verification.project)!;
+    const project = getProjects(tree).get(verification.project);
+    if (!project)
+      throw new Error(
+        `Verification project disappeared: ${verification.project}.`,
+      );
     updateProjectConfiguration(tree, verification.project, {
       ...project,
       targets: {
@@ -892,6 +969,10 @@ export async function playstackIntegrateGenerator(
   tree.write(
     '.megamono/playstack-integration-plan.json',
     `${JSON.stringify(plan, null, 2)}\n`,
+  );
+  tree.write(
+    INTEGRATION_MIGRATIONS_PATH,
+    `${JSON.stringify(migrations, null, 2)}\n`,
   );
   await formatFiles(tree);
   return () => undefined;

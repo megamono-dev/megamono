@@ -168,6 +168,33 @@ Generators emit secret **names**, never values:
 
 ## V1 decisions and sequencing
 
+### Per-integration migration ledger
+
+The generator persists `.megamono/playstack-integrations.json`, keyed by
+`package:integration`, preserving unselected integrations. Each entry records its
+package version, contract fingerprint, current stage, and append-only transition
+history. The fingerprint covers the selected manifest, templates, surface roots,
+conditions, decisions, equivalences, and verification mapping. A changed
+pre-cutover contract restarts planning; changes while shadow/cutover is recorded
+require a recorded rollback against the prior contract first.
+
+`--adoptionMode` remains advisory plan metadata for compatibility. Authoritative
+ledger changes use `--migrationStages` with per-integration objects containing
+`stage`, `verificationReport`, and `rollbackPlan`. The allowed sequence is
+`planned → compare → shadow → cutover → rollback → compare`; shadow can also
+roll back directly. Repeating an unchanged stage is idempotent. Shadow, cutover,
+and rollback require an existing rollback document and a JSON verification
+receipt with `schemaVersion: 1`, matching `integration`, `fingerprint`, target
+`stage`, `result: "passed"`, and nonempty `checks` covering every active required
+test ID. Plans expose the fingerprint needed by the application test/reporting
+workflow. Receipt and rollback file digests are retained with the transition.
+
+Receipts are application-reviewed attestations, not independent test execution
+or cryptographic proof. Megamono validates their scope and records them; it never
+performs traffic cutover, data migration, or rollback as a ledger side effect.
+Dry runs do not write the ledger. Invalid transitions or evidence fail before
+any generated file, target, workflow, or ledger is changed.
+
 ### Consumer verification and CI composition
 
 `--verification` maps every active `package:integration:test` requirement to an

@@ -70,6 +70,10 @@
       "type": "boolean",
       "default": false
     },
+    "migrationStages": {
+      "type": "string",
+      "description": "Reviewed JSON package:integration transition map with stage, verificationReport and rollbackPlan paths; separate from advisory adoptionMode."
+    },
     "yes": {
       "type": "boolean",
       "default": false

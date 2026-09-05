@@ -288,6 +288,8 @@ Integration options:
                        Map required test IDs to existing Nx targets
   --ci-workflow=<path> --ci-job=<name>
                        Append verification to an explicitly selected existing job
+  --migration-stages='<json>'
+                       Record verified compare/shadow/cutover/rollback transitions
   --dry-run            Report templates, overlap, and unresolved choices
   --yes                Materialize verified templates after review
 
