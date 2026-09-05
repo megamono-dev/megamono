@@ -64,4 +64,10 @@ jobs:
       - run: python -m pip install 'git-filter-repo>=2.47,<3'
       - run: npm exec nx -- run megamono-docs:validate --output-style=static
       - run: npm exec nx -- affected -t lint test build --exclude=tag:platform:apple --output-style=static
-      - run: npm exec nx -- affected -t e2e-ephemeral-survey e2e-integration-consumer --exclude=tag:platform:apple --output-style=static
+      - run: npm exec nx -- affected -t e2e-ephemeral-survey e2e-integration-consumer e2e-prismark-consumer --exclude=tag:platform:apple --output-style=static
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prismark-consumer-qualification
+          path: tmp/prismark-consumer/
+          if-no-files-found: ignore

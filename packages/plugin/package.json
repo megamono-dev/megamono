@@ -38,6 +38,19 @@
   ],
   "nx": {
     "targets": {
+      "e2e-prismark-consumer": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "outputs": [
+          "{workspaceRoot}/tmp/prismark-consumer"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/prismark-consumer.e2e.mjs"
+        }
+      },
       "e2e-integration-consumer": {
         "executor": "nx:run-commands",
         "cache": false,
