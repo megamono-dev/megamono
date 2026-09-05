@@ -4,13 +4,14 @@ Megamono is an MIT-licensed set of Nx development tools for creating, maintainin
 
 > Megamono shapes the repository. Runtime libraries shape the product.
 
-## Fixed v1 baseline
+## Scaffold baseline and adoption compatibility
 
-- Node.js 24, npm 11 workspaces, Nx 23.1, and TypeScript 6.0.
-- macOS and Linux. Windows and non-npm package managers fail preflight in v1.
-- One core `@megamono/plugin`, plus Wave 1 Apple/Cargo and Wave 2 extension/Laravel plugins.
-- `create-megamono` is the only bootstrap binary. Established Nx workspaces use the additive, modular `workspace-init` generator; plain npm repositories run `nx init` only as the prerequisite to structural conversion.
-- Nx plugins export `createNodes` and `createDependencies`; the deprecated `createNodesV2` alias is not used.
+- New workspaces use Node.js 24, Nx 23.1, and TypeScript 6.0. npm is the default; pnpm, Yarn, and Bun are supported compatibility options.
+- Existing workspaces retain their package manager and supported toolchain: core adoption accepts Nx 17–23, TypeScript 5.2–6, and Node.js 18.18–24. Inference plugins require Nx 18 or newer. Exact ranges are defined in the implementation contract and packaged compatibility registry.
+- Bootstrap supports macOS and Linux. Platform-neutral adoption also supports Windows; native capability requirements are checked separately.
+- Eight packages: `@megamono/plugin`, `@megamono/cli`, `create-megamono`, and the Apple, Cargo, Cloudflare, extension, and Render Nx plugins. Unimplemented roadmap plugins are not implied to be available.
+- `create-megamono` bootstraps new workspaces. `megamono adopt` surveys established Nx workspaces before an explicitly requested write; `megamono init` and `megamono add` expose the same additive primitives. A missing survey plugin can be staged temporarily without adding a consumer dependency. Mutation requires the local plugin.
+- Inference plugins adapt to the supported Nx callback contracts; API compatibility is verified at the declared version anchors.
 - Generators plan before writing, support dry-run and non-interactive execution, are idempotent, never persist secrets, and never commit, push, deploy, or run database migrations.
 
 History import is deliberately an executor rather than a generator because it must create local Git commits. It requires explicit execution and history-strategy flags, never pushes, and treats the source repository as read-only.
@@ -30,6 +31,10 @@ Structural rules are split by capability: ESLint handles source imports, `megamo
 `@megamono/plugin` owns workspace, docs, skills, conventions, health, conversion, integration, Playstack-wiring, content, and email machinery. Those are internal modules, not separately versioned packages. Language graph plugins remain separate because their toolchains and release cadence are independent.
 
 Megamono can emit a Playstack runtime import, but no `@megamono/*` package has a runtime dependency on Playstack. `org-playstack/playstack-pro` initially owns the qualified `playstack:` contract namespace. A generator remains reserved and unpublished until the referenced package supplies install, compatibility, configuration, tier, schema-fragment, and fixture artifacts; Megamono never requires a sibling checkout of the Playstack repository.
+
+Playstack owns integration manifests and templates. Megamono validates the complete manifest schema, maps selected surfaces to existing Nx projects, verifies template hashes, and checks static Nest routes before ejecting application-owned wiring. Dynamic routes require manual review; the planner is not a substitute for application integration tests. Migration phase selections record intent, not an automatically implemented shadow-write or cutover mechanism.
+
+Public release channels are `next` and `latest`. Versioning synchronizes internal scaffold pins before committing and tagging. Stable promotion requires a clean checkout whose source tree matches every package's registry-reported `next` revision; a changed source tree must go through another prerelease.
 
 ## Deliberate public-package v1 exclusions
 

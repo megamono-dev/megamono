@@ -25,7 +25,7 @@ npm exec nx g @megamono/plugin:workspace-init \
 ```
 
 Playstack integration manifests remain package-owned. The generator validates
-the manifest package version and every ejectable template hash, maps each
+the full published JSON schema, manifest package version, and every ejectable template hash, maps each
 surface into an explicit Nx root, and records application-owned output without
 patching an existing composition root. Conditional requirements are resolved
 with `--adapters`, `--persistence`, and an exact JSON `--conditions` map;
@@ -48,6 +48,13 @@ Dry runs surface unresolved decisions, inactive conditions, duplicate manifest
 requirements, occupied targets, and existing route/provider/environment/config
 references. An accepted write still fails closed until every required condition
 and decision has an explicit value.
+
+Selected roots must be existing Nx projects. Static Nest controller/method
+decorators are composed for route collision checks, including aliased imports;
+dynamic declarations require manual review. These checks do not replace an
+application build or endpoint integration tests. Dedicated persistence/phase
+options cannot contradict package decision values. Re-running preserves
+formatting-equivalent output, while substantive user edits remain fail-closed.
 
 Named adoption profiles are shortcuts over the same independent modules:
 `minimal` selects project boundaries and health; `pilot` adds platform
