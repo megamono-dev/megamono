@@ -17,6 +17,7 @@ import {
   INTEGRATION_MIGRATIONS_PATH,
   integrationFingerprint,
   planIntegrationMigrations,
+  qualificationRequirementsSchema,
 } from '../../lib/integration-migrations';
 import {
   validateIntegrationEquivalences,
@@ -58,6 +59,7 @@ export interface PlaystackIntegrateGeneratorSchema {
   readonly ciJob?: string;
   readonly migrationStages?: string;
   readonly composition?: string;
+  readonly qualification?: string;
   readonly dryRun?: boolean;
   readonly yes?: boolean;
 }
@@ -857,6 +859,21 @@ export async function playstackIntegrateGenerator(
     ),
     options,
   );
+  const qualification = qualificationRequirementsSchema.parse(
+    JSON.parse(options.qualification ?? '{}'),
+  );
+  const testKeys = new Set(
+    requirements.flatMap((record) =>
+      (record.requirements.requiredTests ?? []).map(
+        ({ id }) => `${record.package}:${record.id}:${id}`,
+      ),
+    ),
+  );
+  for (const key of Object.keys(qualification))
+    if (!testKeys.has(key))
+      throw new Error(
+        `Qualification ${key} is not an active package integration test.`,
+      );
   const migrations = planIntegrationMigrations(
     tree,
     requirements.map((record) => {
@@ -890,6 +907,11 @@ export async function playstackIntegrateGenerator(
           manifest: source.integrations.find(({ id }) => id === record.id),
           version: source.packageVersion,
           artifacts: artifactProvenance[source.package].fingerprint,
+          qualification: Object.fromEntries(
+            Object.entries(qualification).filter(([key]) =>
+              key.startsWith(`${record.package}:${record.id}:`),
+            ),
+          ),
           root: roots[record.surface],
           requirements: record.requirements,
           persistence: options.persistence,
@@ -921,6 +943,19 @@ export async function playstackIntegrateGenerator(
         requiredTests: (record.requirements.requiredTests ?? []).map(
           ({ id }) => id,
         ),
+        requiredEnvironments: Object.fromEntries(
+          (record.requirements.requiredTests ?? []).flatMap(({ id }) => {
+            const environments =
+              qualification[`${record.package}:${record.id}:${id}`];
+            return environments ? [[id, environments]] : [];
+          }),
+        ),
+        requiredTestKinds: Object.fromEntries(
+          (record.requirements.requiredTests ?? []).map(({ id, kind }) => [
+            id,
+            kind,
+          ]),
+        ),
       };
     }),
     options.migrationStages,
@@ -932,6 +967,7 @@ export async function playstackIntegrateGenerator(
       version: packageVersion,
     })),
     artifactProvenance,
+    qualification,
     selections: {
       adapters,
       equivalences,

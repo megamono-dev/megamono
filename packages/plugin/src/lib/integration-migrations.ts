@@ -41,7 +41,7 @@ const requestsSchema = z.record(
     })
     .strict(),
 );
-const receiptSchema = z
+const legacyReceiptSchema = z
   .object({
     schemaVersion: z.literal(1),
     integration: z.string(),
@@ -51,12 +51,65 @@ const receiptSchema = z
     checks: z.array(z.string().min(1)).min(1),
   })
   .strict();
+export const qualificationEnvironment = z.enum([
+  'unit',
+  'in-memory',
+  'real-database',
+  'typecheck',
+  'browser-bundle',
+  'tauri-build',
+  'expo-build',
+  'native-device',
+  'live-provider',
+  'clean-install',
+  'container',
+]);
+export const qualificationRequirementsSchema = z.record(
+  z.string(),
+  z.array(qualificationEnvironment).min(1),
+);
+const qualifiedReceiptSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    integration: z.string(),
+    fingerprint: digest,
+    stage: stage.exclude(['planned', 'compare']),
+    result: z.literal('passed'),
+    sourceRevision: z.string().regex(/^[a-f0-9]{40}$/),
+    runtime: z
+      .object({
+        node: z.string().min(1),
+        platform: z.string().min(1),
+        versions: z.record(z.string(), z.string()),
+      })
+      .strict(),
+    checks: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            kind: z.string().min(1),
+            status: z.enum(['passed', 'failed', 'skipped', 'not-run']),
+            environment: qualificationEnvironment,
+            evidence: evidence.optional(),
+          })
+          .strict(),
+      )
+      .min(1),
+  })
+  .strict();
+const receiptSchema = z.discriminatedUnion('schemaVersion', [
+  legacyReceiptSchema,
+  qualifiedReceiptSchema,
+]);
 
 export interface IntegrationMigrationInput {
   readonly key: string;
   readonly version: string;
   readonly fingerprint: string;
   readonly requiredTests: readonly string[];
+  readonly requiredEnvironments?: Readonly<Record<string, readonly string[]>>;
+  readonly requiredTestKinds?: Readonly<Record<string, string>>;
 }
 
 export function integrationFingerprint(value: unknown): string {
@@ -165,14 +218,61 @@ export function planIntegrationMigrations(
       const report = readEvidence(tree, request.verificationReport);
       const receipt = receiptSchema.parse(JSON.parse(report.content));
       if (
+        receipt.schemaVersion === 1 &&
+        Object.keys(record.requiredEnvironments ?? {}).length
+      )
+        throw new Error(
+          'Environment-qualified integrations require a schemaVersion 2 verification receipt.',
+        );
+      const passed =
+        receipt.schemaVersion === 1
+          ? receipt.checks
+          : receipt.checks
+              .filter((check) => check.status === 'passed')
+              .map((check) => check.id);
+      if (
         receipt.integration !== record.key ||
         receipt.fingerprint !== record.fingerprint ||
         receipt.stage !== request.stage ||
-        record.requiredTests.some((id) => !receipt.checks.includes(id))
+        record.requiredTests.some((id) => !passed.includes(id))
       )
         throw new Error(
           `Verification receipt for ${record.key} must match the current fingerprint, transition stage, and all required tests.`,
         );
+      if (receipt.schemaVersion === 2) {
+        const identities = receipt.checks.map(
+          (check) => `${check.id}:${check.environment}`,
+        );
+        if (
+          new Set(identities).size !== identities.length ||
+          receipt.checks.some((check) => check.status === 'failed')
+        )
+          throw new Error(
+            'Qualification receipt contains duplicate or failed checks.',
+          );
+        for (const id of record.requiredTests) {
+          const checks = receipt.checks.filter(
+            (check) => check.id === id && check.status === 'passed',
+          );
+          const kind = record.requiredTestKinds?.[id];
+          if (kind && checks.some((check) => check.kind !== kind))
+            throw new Error(
+              `Qualification ${id} must use its declared test kind ${kind}.`,
+            );
+          for (const environment of record.requiredEnvironments?.[id] ?? [])
+            if (!checks.some((check) => check.environment === environment))
+              throw new Error(
+                `Qualification ${id} requires passing ${environment} evidence; skipped or different environments do not qualify.`,
+              );
+        }
+        for (const check of receipt.checks)
+          if (
+            check.evidence &&
+            readEvidence(tree, check.evidence.path).reference.sha256 !==
+              check.evidence.sha256
+          )
+            throw new Error(`Qualification evidence changed for ${check.id}.`);
+      }
       verification = report.reference;
       rollback = readEvidence(tree, request.rollbackPlan).reference;
     }

@@ -62,6 +62,10 @@
       "type": "string",
       "description": "Existing Nx project receiving the playstack-verify aggregator target."
     },
+    "qualification": {
+      "type": "string",
+      "description": "Reviewed JSON map from package:integration:test ID to required environments (real-database, native-device, live-provider, typecheck, browser-bundle, tauri-build, expo-build, clean-install, container, unit, in-memory). Binds migration evidence to these environments."
+    },
     "ciWorkflow": {
       "type": "string",
       "description": "Explicit existing GitHub workflow to augment after review."

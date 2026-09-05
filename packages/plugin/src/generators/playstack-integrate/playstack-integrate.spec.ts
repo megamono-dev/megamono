@@ -271,6 +271,11 @@ describe('Playstack integration generator', () => {
       api: 'apps/api',
       yes: true,
       verificationProject: 'api',
+      qualification: JSON.stringify({
+        '@playstack/rate-limit:nest-rate-limit:rate-limit-contract': [
+          'real-database',
+        ],
+      }),
       verification: JSON.stringify({
         '@playstack/rate-limit:nest-rate-limit:rate-limit-contract': 'api:test',
       }),
@@ -287,6 +292,24 @@ describe('Playstack integration generator', () => {
       dependsOn: [{ projects: ['api'], target: 'test' }],
     });
     await playstackIntegrateGenerator(tree, options);
+    const qualifiedFingerprint = JSON.parse(
+      tree.read('.megamono/playstack-integrations.json', 'utf8') ?? '{}',
+    ).integrations['@playstack/rate-limit:nest-rate-limit'].fingerprint;
+    await playstackIntegrateGenerator(tree, {
+      ...options,
+      qualification: '{}',
+    });
+    expect(
+      JSON.parse(
+        tree.read('.megamono/playstack-integrations.json', 'utf8') ?? '{}',
+      ).integrations['@playstack/rate-limit:nest-rate-limit'].fingerprint,
+    ).not.toBe(qualifiedFingerprint);
+    await expect(
+      playstackIntegrateGenerator(tree, {
+        ...options,
+        qualification: '{"unknown:test":["real-database"]}',
+      }),
+    ).rejects.toThrow('not an active');
   });
   it('records reviewed environment mappings and reuses an application-owned template without changing it', async () => {
     const tree = fixture();

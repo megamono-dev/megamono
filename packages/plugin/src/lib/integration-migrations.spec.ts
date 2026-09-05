@@ -14,6 +14,98 @@ const record = {
 };
 
 describe('integration migration ledger', () => {
+  it.each([
+    'passed',
+    'failed',
+    'skipped',
+    'not-run',
+    'wrong-environment',
+    'wrong-kind',
+    'legacy',
+    'duplicate',
+    'changed-evidence',
+  ])(
+    'qualifies real-database receipts without treating %s as equivalent evidence',
+    (scenario) => {
+      const tree = createTreeWithEmptyWorkspace();
+      const qualified = {
+        ...record,
+        requiredEnvironments: { 'refresh-reuse': ['real-database'] },
+        requiredTestKinds: { 'refresh-reuse': 'security' },
+      };
+      tree.write(
+        INTEGRATION_MIGRATIONS_PATH,
+        JSON.stringify(
+          planIntegrationMigrations(
+            tree,
+            [qualified],
+            JSON.stringify({ [record.key]: { stage: 'compare' } }),
+          ),
+        ),
+      );
+      tree.write('rollback.md', 'Restore the previous session implementation.');
+      const check = {
+        id: 'refresh-reuse',
+        kind: scenario === 'wrong-kind' ? 'compile' : 'security',
+        status: ['failed', 'skipped', 'not-run'].includes(scenario)
+          ? scenario
+          : 'passed',
+        environment:
+          scenario === 'wrong-environment' ? 'in-memory' : 'real-database',
+        ...(scenario === 'changed-evidence'
+          ? { evidence: { path: 'test.log', sha256: '0'.repeat(64) } }
+          : {}),
+      };
+      tree.write('test.log', 'actual test output');
+      const receipt = {
+        schemaVersion: 2,
+        integration: record.key,
+        fingerprint: record.fingerprint,
+        stage: 'shadow',
+        result: 'passed',
+        sourceRevision: 'a'.repeat(40),
+        runtime: {
+          node: process.version,
+          platform: process.platform,
+          versions: { prisma: '7.0.0' },
+        },
+        checks: [check, ...(scenario === 'duplicate' ? [check] : [])],
+      };
+      tree.write(
+        'report.json',
+        JSON.stringify(
+          scenario === 'legacy'
+            ? {
+                schemaVersion: 1,
+                integration: record.key,
+                fingerprint: record.fingerprint,
+                stage: 'shadow',
+                result: 'passed',
+                checks: ['refresh-reuse'],
+              }
+            : receipt,
+        ),
+      );
+      const request = () =>
+        planIntegrationMigrations(
+          tree,
+          [qualified],
+          JSON.stringify({
+            [record.key]: {
+              stage: 'shadow',
+              verificationReport: 'report.json',
+              rollbackPlan: 'rollback.md',
+            },
+          }),
+        );
+      const before = tree.listChanges();
+      if (scenario === 'passed')
+        expect(request().integrations[record.key].stage).toBe('shadow');
+      else expect(request).toThrow();
+      expect(tree.listChanges()).toEqual(before);
+    },
+  );
+
   it('requires ordered transitions, current verification, and rollback evidence while preserving other integrations', () => {
     const tree = createTreeWithEmptyWorkspace();
     const other = { ...record, key: '@playstack/storage:storage' };

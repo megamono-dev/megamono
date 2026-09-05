@@ -231,6 +231,57 @@ any generated file, target, workflow, or ledger is changed.
 
 ### Consumer verification and CI composition
 
+#### Environment-qualified evidence
+
+`--qualification` accepts a reviewed JSON map from an active
+`package:integration:test` key to required environments. For example,
+`{"@playstack/auth:nest-auth:refresh-reuse":["real-database"]}` requires that
+specific contract to pass against a real database. Keys must match the selected
+manifest's test IDs; this example does not assert that every auth manifest
+declares that ID. Changes invalidate the integration fingerprint.
+
+Environment-qualified transitions require a schema-version 2 receipt:
+
+```json
+{
+  "schemaVersion": 2,
+  "integration": "@playstack/auth:nest-auth",
+  "fingerprint": "<current 64-character integration fingerprint>",
+  "stage": "shadow",
+  "result": "passed",
+  "sourceRevision": "<40-character application Git revision>",
+  "runtime": {
+    "node": "v24.18.0",
+    "platform": "linux",
+    "versions": { "prisma": "7.0.0" }
+  },
+  "checks": [
+    {
+      "id": "refresh-reuse",
+      "kind": "security",
+      "status": "passed",
+      "environment": "real-database"
+    }
+  ]
+}
+```
+
+Each check records `passed`, `failed`, `skipped`, or `not-run`. Skipped/not-run
+checks never satisfy a required contract. Failed checks, duplicate
+test/environment pairs, mismatched test kinds, missing required environments,
+or changed optional `{path, sha256}` evidence reject the transition. Supported
+environments also include unit, in-memory, typecheck, browser-bundle, tauri-build,
+expo-build, native-device, live-provider, clean-install, and container.
+Native compilation is not native-device evidence; an in-memory test is not a
+Postgres concurrency test. Version-1 receipts remain supported only when no
+environment requirements have been selected.
+
+Receipts are reviewed attestations from repository-owned test runners, not
+independent certification: Megamono does not prove that a claimed physical
+transaction, source revision, device, or provider was used. Attach reproducible
+logs and review the runner. Never point mutation-based contract suites at
+production data or turn them into startup readiness checks.
+
 `--verification` maps every active `package:integration:test` requirement to an
 existing `project:target`. `--verificationProject` selects the existing Nx
 project receiving a non-cached `playstack-verify` aggregation target. Mapping
