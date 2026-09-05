@@ -95,10 +95,14 @@ jobs:
           PREID: ${{ steps.release.outputs.preid }}
           SPECIFIER: ${{ steps.release.outputs.specifier }}
         run: |
-          args=(release version "$SPECIFIER" --groups=megamono,create-megamono --git-commit --git-tag)
+          args=(release version "$SPECIFIER" --groups=megamono,create-megamono --git-commit=false --git-tag=false)
           if [ -n "$PREID" ]; then args+=(--preid "$PREID"); fi
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
           npm exec nx -- "${args[@]}"
+          node tools/sync-release-pins.mjs
+          npm exec nx -- run-many -t build
+          npm run packages:check-exports
+          node tools/commit-release.mjs
       - name: Publish public packages to npm
         id: publish
         env:
