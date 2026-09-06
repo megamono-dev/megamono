@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "title": "Laravel application",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "directory": { "type": "string" },
+    "scope": { "type": "string" },
+    "laravelVersion": { "type": "string", "default": "^13.0" },
+    "runtime": { "enum": ["system", "herd"], "default": "system" },
+    "herdDomain": {
+      "type": "string",
+      "description": "Explicit Herd link target site name, without .test. Does not register automatically."
+    },
+    "phpVersion": {
+      "type": "string",
+      "description": "Optional explicit herd-isolate target version. Does not change PHP automatically."
+    }
+  },
+  "required": ["name"],
+  "additionalProperties": false
+}

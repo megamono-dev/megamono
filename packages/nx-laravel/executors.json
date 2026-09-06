@@ -1,0 +1,14 @@
+{
+  "executors": {
+    "command": {
+      "implementation": "./dist/executors/command",
+      "schema": "./dist/executors/command.schema.json",
+      "description": "Run project-local PHP/Composer/Herd commands without shell interpolation"
+    },
+    "setup": {
+      "implementation": "./dist/executors/setup",
+      "schema": "./dist/executors/setup.schema.json",
+      "description": "Materialize the official Laravel skeleton into a reviewed generated project"
+    }
+  }
+}

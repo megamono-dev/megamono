@@ -1,0 +1,76 @@
+{
+  "name": "@megamono/nx-laravel",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    "./build-info.json": "./dist/build-info.json",
+    ".": {
+      "@megamono/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "!**/*.tsbuildinfo",
+    "generators.json",
+    "executors.json"
+  ],
+  "generators": "./generators.json",
+  "executors": "./executors.json",
+  "nx": {
+    "name": "nx-laravel",
+    "targets": {
+      "build": {
+        "executor": "@nx/js:tsc",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "outputPath": "packages/nx-laravel/dist",
+          "main": "packages/nx-laravel/src/index.ts",
+          "tsConfig": "packages/nx-laravel/tsconfig.lib.json",
+          "rootDir": "packages/nx-laravel/src",
+          "generatePackageJson": false,
+          "assets": [
+            {
+              "input": "./packages/nx-laravel/src",
+              "glob": "**/!(*.ts)",
+              "output": "."
+            }
+          ]
+        }
+      }
+    },
+    "tags": [
+      "platform:node",
+      "scope:shared",
+      "type:util"
+    ]
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "peerDependencies": {
+    "@nx/devkit": ">=22 <24",
+    "nx": ">=22 <24"
+  },
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/megamono-dev/megamono.git",
+    "directory": "packages/nx-laravel"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  }
+}

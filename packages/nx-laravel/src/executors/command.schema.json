@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "root": { "type": "string" },
+    "tool": { "enum": ["php", "composer", "herd", "npm"] },
+    "args": { "type": "array", "items": { "type": "string" } },
+    "runtime": { "enum": ["system", "herd"], "default": "system" }
+  },
+  "required": ["root", "tool", "args"],
+  "additionalProperties": false
+}
