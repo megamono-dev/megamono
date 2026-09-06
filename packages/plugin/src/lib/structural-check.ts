@@ -249,6 +249,8 @@ function validateDependencies(
 }
 
 interface PackageManifest {
+  generators?: string;
+  executors?: string;
   readonly name?: string;
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly devDependencies?: Readonly<Record<string, string>>;
@@ -282,6 +284,21 @@ async function validateManifests(
   diagnostics: Diagnostic[],
 ): Promise<void> {
   const rootManifest = await readManifest(join(workspaceRoot, 'package.json'));
+  // Plugin authors may compose other local Megamono plugins. This does not
+  // permit applications (or Playstack packages) to ship Megamono at runtime.
+  const localTooling = new Set<string>();
+  for (const node of Object.values(graph.nodes)) {
+    const manifest = await readManifest(
+      join(workspaceRoot, node.data.root, 'package.json'),
+    );
+    if (
+      node.type === 'lib' &&
+      manifest?.name?.startsWith('@megamono/') &&
+      (typeof manifest.generators === 'string' ||
+        typeof manifest.executors === 'string')
+    )
+      localTooling.add(manifest.name);
+  }
   for (const field of [
     'dependencies',
     'peerDependencies',
@@ -323,6 +340,13 @@ async function validateManifests(
       'optionalDependencies',
     ] as const) {
       for (const packageName of megamonoPackages(manifest[field])) {
+        if (
+          node.type === 'lib' &&
+          manifest.name &&
+          localTooling.has(manifest.name) &&
+          localTooling.has(packageName)
+        )
+          continue;
         diagnostics.push(
           projectDiagnostic(
             'megamono-dev-only',
