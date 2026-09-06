@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "title": "NativePHP application",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "directory": { "type": "string" },
+    "scope": { "type": "string" },
+    "laravelVersion": { "type": "string", "default": "^13.0" },
+    "runtime": { "enum": ["system", "herd"], "default": "system" },
+    "herdDomain": { "type": "string" },
+    "phpVersion": { "type": "string" },
+    "platform": { "enum": ["desktop", "mobile"] },
+    "appId": {
+      "type": "string",
+      "description": "Required reverse-domain application identifier."
+    }
+  },
+  "required": ["name", "platform", "appId"],
+  "additionalProperties": false
+}

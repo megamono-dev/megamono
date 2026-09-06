@@ -1,0 +1,85 @@
+{
+  "name": "@megamono/nx-phpnative",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    "./build-info.json": "./dist/build-info.json",
+    ".": {
+      "@megamono/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "!**/*.tsbuildinfo",
+    "generators.json"
+  ],
+  "generators": "./generators.json",
+  "nx": {
+    "name": "nx-phpnative",
+    "targets": {
+      "e2e-php-consumer": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/nx-phpnative/e2e/consumer.mjs"
+        }
+      },
+      "build": {
+        "executor": "@nx/js:tsc",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "outputPath": "packages/nx-phpnative/dist",
+          "main": "packages/nx-phpnative/src/index.ts",
+          "tsConfig": "packages/nx-phpnative/tsconfig.lib.json",
+          "rootDir": "packages/nx-phpnative/src",
+          "generatePackageJson": false,
+          "assets": [
+            {
+              "input": "./packages/nx-phpnative/src",
+              "glob": "**/!(*.ts)",
+              "output": "."
+            }
+          ]
+        }
+      }
+    },
+    "tags": [
+      "platform:node",
+      "scope:shared",
+      "type:util"
+    ]
+  },
+  "dependencies": {
+    "tslib": "^2.3.0",
+    "@megamono/nx-laravel": "0.0.1"
+  },
+  "peerDependencies": {
+    "@nx/devkit": ">=22 <24",
+    "nx": ">=22 <24"
+  },
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/megamono-dev/megamono.git",
+    "directory": "packages/nx-phpnative"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  }
+}

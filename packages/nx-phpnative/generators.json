@@ -1,0 +1,9 @@
+{
+  "generators": {
+    "application": {
+      "factory": "./dist/generators/application",
+      "schema": "./dist/generators/schema.json",
+      "description": "Create a staged NativePHP application project"
+    }
+  }
+}
