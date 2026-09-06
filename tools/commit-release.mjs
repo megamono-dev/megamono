@@ -16,6 +16,8 @@ const directories = [
   'nx-cloudflare',
   'nx-extension',
   'nx-render',
+  'nx-laravel',
+  'nx-phpnative',
   'create-megamono',
 ];
 const allowed = new Set([

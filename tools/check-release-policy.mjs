@@ -55,6 +55,13 @@ const publicPackages = new Map([
       directory: 'packages/create-megamono',
     },
   ],
+  ...['nx-laravel', 'nx-phpnative'].map((name) => [
+    `@megamono/${name}`,
+    {
+      manifest: `packages/${name}/package.json`,
+      directory: `packages/${name}`,
+    },
+  ]),
 ]);
 const expectedProjects = [
   '@megamono/cli',
@@ -64,6 +71,8 @@ const expectedProjects = [
   'nx-cloudflare',
   'nx-extension',
   'nx-render',
+  'nx-laravel',
+  'nx-phpnative',
 ];
 const expectedRepository = 'git+https://github.com/megamono-dev/megamono.git';
 const expectedRegistry = 'https://registry.npmjs.org';
@@ -123,4 +132,6 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Public release policy passed for all 8 Megamono packages.');
+console.log(
+  `Public release policy passed for all ${publicPackages.size} Megamono packages.`,
+);

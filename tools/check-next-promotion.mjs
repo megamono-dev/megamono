@@ -16,6 +16,8 @@ const manifests = [
   'packages/nx-cloudflare/package.json',
   'packages/nx-extension/package.json',
   'packages/nx-render/package.json',
+  'packages/nx-laravel/package.json',
+  'packages/nx-phpnative/package.json',
   'packages/create-megamono/package.json',
 ];
 

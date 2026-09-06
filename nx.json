@@ -61,7 +61,9 @@
           "nx-cargo",
           "nx-cloudflare",
           "nx-extension",
-          "nx-render"
+          "nx-render",
+          "nx-laravel",
+          "nx-phpnative"
         ],
         "projectsRelationship": "fixed",
         "releaseTag": {

@@ -164,6 +164,10 @@ This is an early library generator but not a Wave 1 language-plugin prerequisite
 
 ### `@megamono/nx-laravel`
 
+**Initial implementation (2026-09-06):** `application` plans separate Laravel roots; explicit `setup` fetches the upstream skeleton with dependencies/scripts/plugins disabled. Composer/Laravel inference, required local path-repository edges, non-cached PHP targets and opt-in Herd link/isolate targets are implemented. `@megamono/nx-phpnative:application` adds separate desktop 2/mobile 4 roots and explicit native install/run/package targets. Mobile 4 requires PHP 8.4; application environments, databases, signing and native SDKs remain host-owned. See the package READMEs for the two-stage workflow. These packages are registered for release, not automatically published by this change.
+
+The packed Nx consumer fixture verifies dry-run, multiple roots, ignored native output and Composer graph edges after a clean frozen npm install. Its opt-in Composer mode fetches real upstream skeletons. This is not native build/device qualification. The following shared-library/Blade/Inertia work and `create-megamono` shorthand integration remain roadmap items, not completed generators.
+
 - Inference from `composer.json`.
 - **Graph edges: Composer `path` repositories.** Same shape as SPM, different manifest.
 - Generates the shared package properly — path repository wired into every consuming app, PSR-4 autoload configured. This is the fiddly bit people get wrong.

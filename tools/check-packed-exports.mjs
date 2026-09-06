@@ -16,6 +16,8 @@ const packageDirectories = [
   'packages/nx-cloudflare',
   'packages/nx-extension',
   'packages/nx-render',
+  'packages/nx-laravel',
+  'packages/nx-phpnative',
   'packages/plugin',
 ];
 

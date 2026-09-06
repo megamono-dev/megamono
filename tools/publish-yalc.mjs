@@ -15,6 +15,8 @@ const packages = [
   { project: 'nx-cloudflare', directory: 'packages/nx-cloudflare' },
   { project: 'nx-extension', directory: 'packages/nx-extension' },
   { project: 'nx-render', directory: 'packages/nx-render' },
+  { project: 'nx-laravel', directory: 'packages/nx-laravel' },
+  { project: 'nx-phpnative', directory: 'packages/nx-phpnative' },
   { project: 'create-megamono', directory: 'packages/create-megamono' },
 ];
 

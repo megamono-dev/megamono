@@ -26,6 +26,12 @@
     },
     {
       "path": "./packages/nx-render"
+    },
+    {
+      "path": "./packages/nx-laravel"
+    },
+    {
+      "path": "./packages/nx-phpnative"
     }
   ],
   "compilerOptions": {}
