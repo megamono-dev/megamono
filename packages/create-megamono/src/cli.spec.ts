@@ -5,6 +5,26 @@ import { pathToFileURL } from 'node:url';
 import { isMainModule, main, resolveInteractive } from './cli.js';
 
 describe('CLI entrypoint', () => {
+  it.each([
+    ['--help'],
+    ['-h'],
+    ['occupied-name', '--invalid-option', '--help'],
+  ])('prints help before workspace validation: %s', async (...args) => {
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    try {
+      await expect(main(args)).resolves.toBe(0);
+      expect(output).toHaveBeenCalledWith(
+        expect.stringContaining('type[:name]'),
+      );
+      expect(output).toHaveBeenCalledWith(
+        expect.stringContaining('--local-packages=yalc'),
+      );
+      expect(output).toHaveBeenCalledWith(expect.stringContaining('--dry-run'));
+    } finally {
+      output.mockRestore();
+    }
+  });
+
   it('reports machine-readable build identity without a workspace name', async () => {
     const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
     try {

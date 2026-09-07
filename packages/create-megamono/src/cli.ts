@@ -28,6 +28,31 @@ export const APP_TYPE_OVERVIEWS = {
   extension: 'Browser extension',
 } as const satisfies Record<(typeof APP_IDS)[number], string>;
 
+export const HELP = `Usage: create-megamono <name> [type[:name] ...] [options]
+
+App types:
+${APP_IDS.map((type) => `  ${type.padEnd(9)} ${APP_TYPE_OVERVIEWS[type]}`).join('\n')}
+
+Use positional descriptors or --apps=<comma-separated descriptors>, not both.
+Names are optional; repeated types need distinct names.
+
+Options:
+  --styling=<choice>       ${WEB_STYLING_OPTIONS.join(', ')}
+  --local-packages=yalc    Use locally published packages and their dependency closure
+  --package-manager=<name> npm, pnpm, yarn, bun
+  --interactive=false     Disable guided prompts
+  --database-adapter=<id>  ${DATABASE_ADAPTERS.join(', ')}
+  --services=<ids>         ${SERVICE_IDS.join(', ')}
+  --service-runner=<id>    ${SERVICE_RUNNERS.join(', ')}
+  --dry-run               Print the plan without creating a workspace
+  --version [--json]      Print installed build identity
+  --help, -h              Show help without prompts, installs, or writes
+
+Examples:
+  create-megamono studio site:marketing extension:grids extension:guides api web:admin
+  create-megamono studio --apps=site,api --styling=chakra --local-packages=yalc --interactive=false --dry-run
+`;
+
 export interface InteractivePrompt {
   question(message: string): Promise<string>;
   close(): void;
@@ -154,6 +179,10 @@ export async function main(
   argv: readonly string[] = process.argv.slice(2),
 ): Promise<number> {
   try {
+    if (argv.includes('--help') || argv.includes('-h')) {
+      stdout.write(HELP);
+      return 0;
+    }
     const parsed = parseArgs({
       args: [...argv],
       allowPositionals: true,
