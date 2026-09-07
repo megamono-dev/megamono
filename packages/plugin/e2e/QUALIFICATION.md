@@ -1,5 +1,31 @@
 # Packed consumer qualification
 
+## Generated Next.js and Playstack UI
+
+`npm exec nx -- run @megamono/plugin:e2e-web-ui-consumer` generates both App
+Router and Pages Router Chakra sites using the packed Megamono plugin and local
+Nx generators. It resolves the real Yalc Chakra/App UI internal dependency/peer
+closure, installs the generated consumer dependencies independently, composes an
+application-owned custom theme, and runs lint, production webpack builds,
+TypeScript 6 checks, and Chromium hydration/filtering/keyboard/navigation checks.
+The theme uses explicit fixed light colors; automatic color-mode integration is
+not claimed. Reports and the resolved lockfile are written to
+`tmp/web-ui-consumer/`. Missing artifacts or failed browser checks fail the target.
+The fixture preserves the scaffold's Chakra/Emotion versions for the UI peers
+and verifies shared Chakra module resolution: separate provider copies can
+otherwise compile successfully and fail during prerendering. Each workspace
+declares the Playstack packages it imports. Typechecking uses Nx's generated
+base configuration, including its default `skipLibCheck` policy; this is consumer
+typechecking, not exhaustive validation of dependency declaration files.
+
+This opt-in lane requires locally published Playstack packages, registry access,
+and Chromium. It is not silently added to ordinary CI, which has no Yalc store.
+Generation shares the local Nx toolchain; this is not a clean bootstrap test of
+`create-megamono`, nor a test of the pending Playstack UI installation recipe.
+TypeScript 7 requires a separate qualified lane before widening supported ranges.
+
+## Portable Prisma and native-boundary composition
+
 Run `npm exec nx -- run @megamono/plugin:e2e-prismark-consumer` under Node 24.
 The target packs the current plugin and a **synthetic** package-authored
 integration contract, resolves pinned public dependencies into a temporary

@@ -16,7 +16,10 @@ describe('Playstack workspace compatibility', () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write(
       'package.json',
-      JSON.stringify({ engines: { node: '>=24 <25' }, devDependencies: { eslint } }),
+      JSON.stringify({
+        engines: { node: '>=24 <25' },
+        devDependencies: { eslint },
+      }),
     );
     const check = () =>
       assertPlaystackWorkspaceCompatibility(tree, { eslint: true });

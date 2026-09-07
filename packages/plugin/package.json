@@ -38,6 +38,19 @@
   ],
   "nx": {
     "targets": {
+      "e2e-web-ui-consumer": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "outputs": [
+          "{workspaceRoot}/tmp/web-ui-consumer"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/web-ui-consumer.e2e.mjs"
+        }
+      },
       "e2e-prismark-consumer": {
         "executor": "nx:run-commands",
         "cache": false,
