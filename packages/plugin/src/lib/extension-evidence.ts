@@ -18,11 +18,45 @@ export function extensionEvidence(
     const path = `${root}/${name}`;
     if (tree.exists(path)) result.push({ framework: 'wxt', path });
   }
-  for (const name of [
-    'manifest.json',
-    'public/manifest.json',
-    'src/manifest.json',
-  ]) {
+  let configured: unknown;
+  try {
+    configured = JSON.parse(tree.read(`${root}/package.json`, 'utf8') ?? '{}')
+      ?.megamono?.extension?.manifests;
+  } catch {
+    /* Invalid package metadata is not positive evidence. */
+  }
+  const safeConfigured = Array.isArray(configured)
+    ? configured.filter(
+        (name): name is string =>
+          typeof name === 'string' &&
+          name.endsWith('.json') &&
+          !name.includes('\\') &&
+          !name
+            .split('/')
+            .some((part) =>
+              [
+                '',
+                '.',
+                '..',
+                'node_modules',
+                '.yalc',
+                'dist',
+                'build',
+                '.output',
+                'generated',
+                '.git',
+              ].includes(part),
+            ),
+      )
+    : [];
+  for (const name of new Set([
+    ...['', 'public/', 'src/'].flatMap((prefix) =>
+      ['manifest.json', 'manifest.chrome.json', 'manifest.firefox.json'].map(
+        (name) => `${prefix}${name}`,
+      ),
+    ),
+    ...safeConfigured,
+  ])) {
     const path = `${root}/${name}`;
     try {
       const manifest = JSON.parse(tree.read(path, 'utf8') ?? '{}');

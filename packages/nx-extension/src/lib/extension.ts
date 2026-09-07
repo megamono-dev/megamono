@@ -29,6 +29,7 @@ export interface WxtConfigRecord {
   readonly framework?: 'wxt' | 'manifest';
   readonly manifestVersion?: 2 | 3;
   readonly scripts?: Readonly<Record<string, string>>;
+  readonly manifestPaths?: readonly string[];
 }
 
 let diagnostics: ExtensionDiagnostic[] = [];
@@ -113,13 +114,62 @@ function nearestPackageRoot(path: string, workspaceRoot: string): string {
   let current = dirname(resolve(workspaceRoot, path));
   const boundary = resolve(workspaceRoot);
   while (current.startsWith(boundary)) {
-    if (existsSync(resolve(current, 'package.json')))
-      return normalizePath(current.slice(boundary.length).replace(/^\//, ''));
+    if (
+      existsSync(resolve(current, 'package.json')) ||
+      existsSync(resolve(current, 'project.json'))
+    )
+      return (
+        normalizePath(current.slice(boundary.length).replace(/^\//, '')) || '.'
+      );
     if (current === boundary) break;
     current = dirname(current);
   }
   const directory = normalizePath(dirname(path));
   return basename(directory) === 'public' ? dirname(directory) : directory;
+}
+
+const generatedSegments = new Set([
+  'node_modules',
+  '.yalc',
+  'dist',
+  'build',
+  '.output',
+  'generated',
+  '.git',
+]);
+
+function sourcePath(path: string): boolean {
+  return !normalizePath(path)
+    .split('/')
+    .some((part) => generatedSegments.has(part));
+}
+
+/** Explicit source manifests are package-relative, never executable configuration. */
+function configuredManifests(path: string, workspaceRoot: string): string[] {
+  const manifest = JSON.parse(
+    readFileSync(resolve(workspaceRoot, path), 'utf8'),
+  );
+  const names: unknown = manifest?.megamono?.extension?.manifests;
+  if (names === undefined) return [];
+  if (
+    !Array.isArray(names) ||
+    names.some(
+      (name) =>
+        typeof name !== 'string' ||
+        !name.endsWith('.json') ||
+        name.startsWith('/') ||
+        name.includes('\\') ||
+        name
+          .split('/')
+          .some((part: string) => !part || part === '.' || part === '..') ||
+        !sourcePath(name),
+    )
+  ) {
+    throw new Error(
+      `${path}: megamono.extension.manifests must contain source-only package-relative JSON paths.`,
+    );
+  }
+  return names.map((name: string) => normalizePath(`${dirname(path)}/${name}`));
 }
 
 function recordForManifest(
@@ -334,6 +384,9 @@ export function projectsFromWxtConfigs(
           'megamono:extension': {
             schemaVersion: 1,
             configPath: record.configPath,
+            ...(record.manifestPaths
+              ? { manifestPaths: record.manifestPaths }
+              : {}),
             framework: record.framework ?? 'wxt',
             ...(record.manifestVersion
               ? { manifestVersion: record.manifestVersion }
@@ -351,7 +404,7 @@ export function projectsFromWxtConfigs(
 }
 
 export const createNodes: CreateNodes<ExtensionPluginOptions> = [
-  '**/{wxt.config.{ts,js,mjs,mts},manifest.json}',
+  '**/{wxt.config.{ts,js,mjs,mts},manifest{,.chrome,.firefox}.json,package.json}',
   async (
     configFiles: readonly string[] | string,
     options: ExtensionPluginOptions = {},
@@ -359,19 +412,45 @@ export const createNodes: CreateNodes<ExtensionPluginOptions> = [
   ) => {
     diagnostics = [];
     const single = typeof configFiles === 'string';
-    const files = single ? [configFiles] : configFiles;
+    const inputs = (single ? [configFiles] : configFiles).filter(sourcePath);
+    const files = [
+      ...new Set(
+        inputs.flatMap((path) =>
+          basename(path) === 'package.json'
+            ? configuredManifests(path, context.workspaceRoot)
+            : [path],
+        ),
+      ),
+    ];
     const records = files
       .map((path) =>
-        basename(path) === 'manifest.json'
+        !basename(path).startsWith('wxt.config.')
           ? recordForManifest(path, context.workspaceRoot, options)
           : recordForConfig(path, context.workspaceRoot, options),
       )
       .filter((record): record is WxtConfigRecord => record !== null)
       .sort((left, right) => left.configPath.localeCompare(right.configPath));
+    const grouped = new Map<string, WxtConfigRecord>();
+    for (const record of records) {
+      const previous = grouped.get(record.root);
+      grouped.set(record.root, {
+        ...(previous ?? record),
+        ...(record.framework === 'manifest'
+          ? {
+              manifestPaths: [
+                ...new Set([
+                  ...(previous?.manifestPaths ?? []),
+                  record.configPath,
+                ]),
+              ].sort(),
+            }
+          : {}),
+      });
+    }
     for (const diagnostic of diagnostics) {
       process.stderr.write(`@megamono/nx-extension: ${diagnostic.message}\n`);
     }
-    const results = records.map(
+    const results = [...grouped.values()].map(
       (record) =>
         [
           [record.configPath],

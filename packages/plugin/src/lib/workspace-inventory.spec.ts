@@ -4,6 +4,49 @@ import { createWorkspaceInventory } from './workspace-inventory';
 import { classifyProjectForAdoption } from './project-adoption';
 
 describe('mixed application inventory', () => {
+  it('classifies browser variants and configured source manifests without generated copies', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const manifest = JSON.stringify({
+      name: 'Browser',
+      manifest_version: 3,
+      version: '1.0.0',
+    });
+    tree.write('apps/extension/manifest.chrome.json', manifest);
+    tree.write('apps/extension/manifest.firefox.json', manifest);
+    tree.write('apps/extension/dist/manifest.json', manifest);
+    tree.write(
+      'apps/custom/package.json',
+      JSON.stringify({
+        megamono: {
+          extension: {
+            manifests: [
+              'config/browser.json',
+              '../outside.json',
+              'dist/manifest.json',
+            ],
+          },
+        },
+      }),
+    );
+    tree.write('apps/custom/config/browser.json', manifest);
+    tree.write('apps/custom/dist/manifest.json', manifest);
+    const projects = new Map([
+      ['extension', { root: 'apps/extension' }],
+      ['custom', { root: 'apps/custom' }],
+    ]);
+    for (const [name, project] of projects)
+      expect(classifyProjectForAdoption(tree, name, project).platform).toBe(
+        'extension',
+      );
+    const inventory = createWorkspaceInventory(tree, projects, []);
+    expect(
+      inventory.projects.every((project) =>
+        project.frameworks.some(({ value }) => value === 'browser-extension'),
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(inventory)).not.toContain('dist/manifest.json');
+  });
+
   it('distinguishes Figma, WXT, generic extensions and unrelated manifests', () => {
     const tree = createTreeWithEmptyWorkspace();
     const fixtures = [

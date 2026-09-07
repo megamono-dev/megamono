@@ -21,6 +21,95 @@ function record(overrides: Partial<WxtConfigRecord> = {}): WxtConfigRecord {
 }
 
 describe('WXT project inference', () => {
+  it('groups browser-specific source manifests and preserves Vite scripts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'nx-extension-browsers-'));
+    const files = [
+      'apps/extension/manifest.chrome.json',
+      'apps/extension/manifest.firefox.json',
+      'apps/extension/dist/manifest.json',
+    ];
+    await mkdir(join(root, 'apps/extension/dist'), { recursive: true });
+    await writeFile(
+      join(root, 'apps/extension/package.json'),
+      JSON.stringify({
+        name: '@fixture/extension',
+        scripts: { build: 'vite build' },
+      }),
+    );
+    for (const path of files)
+      await writeFile(
+        join(root, path),
+        JSON.stringify({
+          manifest_version: 3,
+          name: 'Fixture',
+          version: '1.0.0',
+        }),
+      );
+    const callback = createNodes[1] as unknown as (
+      files: string[],
+      options: object,
+      context: { workspaceRoot: string },
+    ) => Promise<
+      readonly (readonly [
+        unknown,
+        { projects: Record<string, ProjectConfiguration> },
+      ])[]
+    >;
+    const results = await callback(files, {}, { workspaceRoot: root });
+    expect(results).toHaveLength(1);
+    const project = results[0][1].projects['apps/extension'];
+    expect(project.targets).toEqual({
+      build: {
+        executor: 'nx:run-script',
+        cache: true,
+        options: { script: 'build' },
+      },
+    });
+    expect(project.metadata?.['megamono:extension']).toMatchObject({
+      manifestPaths: files.slice(0, 2),
+    });
+  });
+
+  it('accepts explicit package-relative manifests and rejects escaping paths', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'nx-extension-configured-'));
+    await mkdir(join(root, 'apps/extension/config'), { recursive: true });
+    const path = 'apps/extension/package.json';
+    await writeFile(
+      join(root, path),
+      JSON.stringify({
+        name: '@fixture/extension',
+        megamono: { extension: { manifests: ['config/browser.json'] } },
+      }),
+    );
+    await writeFile(
+      join(root, 'apps/extension/config/browser.json'),
+      JSON.stringify({
+        manifest_version: 3,
+        name: 'Fixture',
+        version: '1.0.0',
+      }),
+    );
+    const callback = createNodes[1] as unknown as (
+      file: string,
+      options: object,
+      context: { workspaceRoot: string },
+    ) => Promise<{ projects: Record<string, ProjectConfiguration> }>;
+    expect(
+      (await callback(path, {}, { workspaceRoot: root })).projects[
+        'apps/extension'
+      ],
+    ).toBeDefined();
+    await writeFile(
+      join(root, path),
+      JSON.stringify({
+        megamono: { extension: { manifests: ['../outside.json'] } },
+      }),
+    );
+    await expect(callback(path, {}, { workspaceRoot: root })).rejects.toThrow(
+      'package-relative',
+    );
+  });
+
   it('emits distinct browser build and package targets', () => {
     const projects = projectsFromWxtConfigs([record()]);
     const project = projects['apps/extension'];
