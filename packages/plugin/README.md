@@ -190,6 +190,17 @@ npm exec nx -- run megamono:verify-runtime --project=api \
 
 The verifier never builds or changes dependencies implicitly. Build the project
 first, and provide `--outputPath` when its build target does not declare one.
+Extraction parses JavaScript syntax; quoted examples, comments, regex literals,
+and locally shadowed `require` calls are not external dependencies. Static
+imports/re-exports, global CommonJS `require`, and literal dynamic imports are
+inspected, including executable expressions inside template literals. Malformed
+JavaScript, non-literal module loads, or an empty output directory produce
+`runtime-analysis-incomplete` errors, never a passing zero-file report. No audited
+code is executed. This is bounded static analysis, not proof of production
+resolution: custom loaders, evaluated code and dependency aliases still require
+bundler/runtime evidence and a clean deployment install. Keep it advisory while
+qualifying a repository's actual emitted output; do not suppress all missing
+dependency findings to work around an unsupported loader.
 
 The companion workspace audit checks pnpm/Corepack pins, active Node and pnpm,
 workspace package membership, and known executables or preload modules used by

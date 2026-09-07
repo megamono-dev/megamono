@@ -1,6 +1,7 @@
 import { builtinModules } from 'node:module';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { extname, join, relative, resolve } from 'node:path';
+import ts = require('typescript');
 
 const BUILT_INS = new Set(
   builtinModules.flatMap((name) => [name, name.replace(/^node:/, '')]),
@@ -10,6 +11,7 @@ const JAVASCRIPT_EXTENSIONS = new Set(['.js', '.cjs', '.mjs']);
 export type RuntimeDependencyFindingCode =
   | 'runtime-dependency-dev-only'
   | 'runtime-dependency-missing'
+  | 'runtime-analysis-incomplete'
   | 'runtime-output-missing';
 
 export interface RuntimeDependencyFinding {
@@ -76,20 +78,75 @@ function packageName(specifier: string): string | null {
   return normalized.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
 }
 
-export function externalSpecifiers(source: string): readonly string[] {
+export function analyzeRuntimeImports(source: string, filename = 'bundle.js') {
   const found = new Set<string>();
-  const patterns = [
-    /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-    /\bfrom\s*['"]([^'"]+)['"]/g,
-    /\bimport\s*['"]([^'"]+)['"]/g,
-  ];
-  for (const pattern of patterns)
-    for (const match of source.matchAll(pattern)) {
-      const name = packageName(match[1]);
+  const issues: string[] = [];
+  const file = ts.createSourceFile(
+    filename,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  );
+  const options: ts.CompilerOptions = {
+    allowJs: true,
+    noLib: true,
+    noResolve: true,
+    types: [],
+  };
+  const host = ts.createCompilerHost(options);
+  host.getSourceFile = (name) => (name === filename ? file : undefined);
+  host.fileExists = (name) => name === filename;
+  host.readFile = (name) => (name === filename ? source : undefined);
+  // Binding is local only: never resolve or execute imports in the audited output.
+  const program = ts.createProgram([filename], options, host);
+  const checker = program.getTypeChecker();
+  const location = (position: number) => {
+    const { line, character } = file.getLineAndCharacterOfPosition(position);
+    return `${line + 1}:${character + 1}`;
+  };
+  for (const diagnostic of program.getSyntacticDiagnostics(file))
+    issues.push(
+      `${location(diagnostic.start ?? 0)}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`,
+    );
+  const add = (node: ts.Node | undefined, owner: ts.Node) => {
+    if (
+      node &&
+      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+    ) {
+      const name = packageName(node.text);
       if (name) found.add(name);
+    } else {
+      issues.push(
+        `${location(owner.getStart(file))}: Non-literal module load requires runtime/bundler verification.`,
+      );
     }
-  return [...found].sort(compare);
+  };
+  const visit = (node: ts.Node) => {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      if (node.moduleSpecifier) add(node.moduleSpecifier, node);
+    } else if (ts.isCallExpression(node)) {
+      if (
+        node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) &&
+          node.expression.text === 'require' &&
+          !checker.getSymbolAtLocation(node.expression)?.declarations?.length)
+      )
+        add(node.arguments[0], node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return { packages: [...found].sort(compare), issues };
+}
+
+export function externalSpecifiers(source: string): readonly string[] {
+  const analysis = analyzeRuntimeImports(source);
+  if (analysis.issues.length)
+    throw new Error(
+      `Runtime import analysis is incomplete: ${analysis.issues.join('; ')}`,
+    );
+  return analysis.packages;
 }
 
 async function readManifest(path: string): Promise<PackageManifest | null> {
@@ -144,9 +201,32 @@ export async function verifyRuntimeDependencies(options: {
       ],
     };
   const evidence = new Map<string, Set<string>>();
-  for (const file of await filesUnder(output)) {
+  const incomplete: RuntimeDependencyFinding[] = [];
+  const javascriptFiles = await filesUnder(output);
+  if (!javascriptFiles.length)
+    incomplete.push({
+      code: 'runtime-analysis-incomplete',
+      package: null,
+      severity: 'error',
+      evidence: [options.outputPath],
+      message:
+        'No JavaScript output files were inspected; check the selected build output path.',
+    });
+  for (const file of javascriptFiles) {
     const source = await readFile(file, 'utf8');
-    for (const dependency of externalSpecifiers(source)) {
+    const analysis = analyzeRuntimeImports(source, file);
+    if (analysis.issues.length)
+      incomplete.push({
+        code: 'runtime-analysis-incomplete',
+        package: null,
+        severity: 'error',
+        evidence: analysis.issues.map(
+          (issue) => `${relative(options.workspaceRoot, file)}:${issue}`,
+        ),
+        message:
+          'Static runtime analysis is incomplete; verify unresolved loads or invalid output before treating this report as passing.',
+      });
+    for (const dependency of analysis.packages) {
       const paths = evidence.get(dependency) ?? new Set<string>();
       paths.add(relative(options.workspaceRoot, file));
       evidence.set(dependency, paths);
@@ -187,7 +267,7 @@ export async function verifyRuntimeDependencies(options: {
       relative(options.workspaceRoot, path),
     ),
     externalPackages: [...evidence.keys()].sort(compare),
-    findings: findings.sort(
+    findings: [...findings, ...incomplete].sort(
       (left, right) =>
         compare(left.package ?? '', right.package ?? '') ||
         compare(left.code, right.code),
