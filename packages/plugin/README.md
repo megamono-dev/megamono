@@ -72,6 +72,14 @@ validated. Environment mappings record bindings without rewriting arbitrary
 template code. These mappings are declarations of application ownership, not
 automatic proof of behavioral equivalence.
 
+Integration plans include a `readiness` section distinguishing inspected package
+installation, manifest/template availability, planned versus generated/reused
+wiring, and required test targets. Dry runs report packages without integration
+manifests as preflight conflicts; write mode still refuses to invent their wiring.
+An integration with no selected templates remains application-owned, not complete.
+Verification is always `not-run` by this generator: mapped Nx targets and recorded
+migration stages are not evidence that application/provider tests just passed.
+
 `--verification` maps every active `package:integration:test` ID from the plan to
 an existing `project:target`; `--verificationProject` selects the project for a
 `playstack-verify` aggregator. Optionally pass both `--ciWorkflow` and `--ciJob`

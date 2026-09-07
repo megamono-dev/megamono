@@ -2,10 +2,11 @@ import { createHash } from 'node:crypto';
 import {
   addProjectConfiguration,
   getProjects,
+  logger,
   updateProjectConfiguration,
 } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { playstackIntegrateGenerator } from './playstack-integrate';
 
 function fixture() {
@@ -87,6 +88,71 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it('reports missing manifests in a read-only plan without implying integration readiness', async () => {
+    const tree = fixture();
+    tree.delete(
+      'node_modules/@playstack/rate-limit/playstack.integration.json',
+    );
+    const before = tree.listChanges();
+    const output = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    try {
+      await playstackIntegrateGenerator(tree, {
+        packages: '@playstack/rate-limit',
+        api: 'apps/api',
+        dryRun: true,
+      });
+      const plan = JSON.parse(String(output.mock.calls.at(-1)?.[0]));
+      expect(plan.readiness).toMatchObject({
+        verification: 'not-run',
+        packages: [
+          {
+            package: '@playstack/rate-limit',
+            manifest: 'missing',
+            integrations: [],
+          },
+        ],
+      });
+      expect(plan.preflight.conflicts).toHaveLength(1);
+      expect(tree.listChanges()).toEqual(before);
+      await expect(
+        playstackIntegrateGenerator(tree, {
+          packages: '@playstack/rate-limit',
+          api: 'apps/api',
+          yes: true,
+        }),
+      ).rejects.toThrow('cannot be generated');
+    } finally {
+      output.mockRestore();
+    }
+  });
+
+  it.each([true, false])(
+    'distinguishes templates from test qualification: templates=%s',
+    async (hasTemplates) => {
+      const tree = fixture();
+      const manifest = integrationManifest(tree);
+      if (!hasTemplates) manifest.integrations[0].templates = [];
+      manifest.integrations[0].requirements.requiredTests = [
+        { id: 'behavior', kind: 'integration' },
+      ];
+      writeIntegrationManifest(tree, manifest);
+      await playstackIntegrateGenerator(tree, {
+        packages: '@playstack/rate-limit',
+        api: 'apps/api',
+        yes: true,
+      });
+      const plan = JSON.parse(
+        tree.read('.megamono/playstack-integration-plan.json', 'utf8') ?? '{}',
+      );
+      expect(plan.readiness.verification).toBe('not-run');
+      expect(plan.readiness.packages[0].integrations[0]).toMatchObject({
+        templates: hasTemplates ? 'available' : 'none-selected',
+        wiring: hasTemplates ? 'generated-or-reused' : 'application-owned',
+        requiredTests: [{ id: 'behavior', target: null, status: 'not-run' }],
+      });
+    },
+  );
+
   it.each([
     'missing',
     'unsupported',

@@ -584,9 +584,29 @@ export async function playstackIntegrateGenerator(
     ...(options.api ? { api: safePath(options.api, '--api') } : {}),
     ...(options.worker ? { worker: safePath(options.worker, '--worker') } : {}),
   };
-  const manifests = packageNames(options.packages).map((name) =>
-    manifest(tree, name),
-  );
+  const missingManifests: string[] = [];
+  const manifests = packageNames(options.packages).map((name) => {
+    if (
+      !readPackageFile(tree, packagePath(name, 'playstack.integration.json')) &&
+      options.dryRun
+    ) {
+      const installed = JSON.parse(
+        readPackageFile(tree, packagePath(name, 'package.json')) ?? '{}',
+      );
+      if (installed.name !== name || typeof installed.version !== 'string')
+        throw new Error(
+          `${name} is not installed with a valid package manifest.`,
+        );
+      missingManifests.push(name);
+      return {
+        version: 1 as const,
+        package: name,
+        packageVersion: installed.version,
+        integrations: [],
+      };
+    }
+    return manifest(tree, name);
+  });
   for (const source of manifests)
     for (const integration of source.integrations)
       for (const decision of integration.requirements.decisions ?? []) {
@@ -834,7 +854,13 @@ export async function playstackIntegrateGenerator(
       package: name,
       integration,
     }));
-  const conflicts = manifestConflicts(requirements);
+  const conflicts = [
+    ...manifestConflicts(requirements),
+    ...missingManifests.map(
+      (name) =>
+        `${name} has no integration manifest; installation does not supply generated application wiring.`,
+    ),
+  ];
   for (const record of requirements) {
     if (record.framework !== 'nest' || !record.requirements.routes?.length)
       continue;
@@ -1069,6 +1095,69 @@ export async function playstackIntegrateGenerator(
   }
   const plan = {
     schemaVersion: 1,
+    readiness: {
+      scope: 'application-wiring',
+      installation: 'installed-artifacts-inspected',
+      // This generator never runs application tests. A reviewed ledger is a
+      // separate attestation, not a runtime qualification result.
+      verification: 'not-run',
+      packages: manifests.map((source) => ({
+        package: source.package,
+        manifest: missingManifests.includes(source.package)
+          ? 'missing'
+          : 'available',
+        integrations: requirements
+          .filter((record) => record.package === source.package)
+          .map((record) => {
+            const selected = files.filter(
+              (file) =>
+                file.package === record.package &&
+                file.integration === record.id,
+            );
+            const key = `${record.package}:${record.id}`;
+            return {
+              id: record.id,
+              templates: selected.length ? 'available' : 'none-selected',
+              wiring: !selected.length
+                ? 'application-owned'
+                : options.dryRun
+                  ? selected.every((file) => tree.exists(file.target))
+                    ? 'present'
+                    : 'planned'
+                  : 'generated-or-reused',
+              requiredTests: (record.requirements.requiredTests ?? []).map(
+                ({ id }) => ({
+                  id,
+                  target: verification?.mappings[`${key}:${id}`] ?? null,
+                  status: 'not-run',
+                }),
+              ),
+              recordedMigrationStage: migrations.integrations[key].stage,
+            };
+          }),
+      })),
+      limitations: [
+        'Package installation and template generation do not qualify an application integration.',
+        'Test targets and migration attestations require separately reviewed application evidence.',
+        ...(missingManifests.length
+          ? [
+              'Packages without manifests require documented application-owned wiring.',
+            ]
+          : []),
+        ...(requirements.some(
+          (record) =>
+            !files.some(
+              (file) =>
+                file.package === record.package &&
+                file.integration === record.id,
+            ),
+        )
+          ? [
+              'Some selected integrations have no active templates; requirements still need application-owned implementation.',
+            ]
+          : []),
+      ],
+    },
     packages: manifests.map(({ package: name, packageVersion }) => ({
       name,
       version: packageVersion,
