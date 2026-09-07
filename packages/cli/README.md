@@ -71,6 +71,27 @@ print the options for that command rather than repeating root help.
 revision, dirty state, and content-derived build ID. The same identity is
 available from `create-megamono --version --json`.
 
+Use read-only artifact diagnostics before evaluating a same-version Yalc update:
+
+```sh
+megamono diagnostics packages --json
+megamono diagnostics packages --packages=@megamono/plugin,@playstack/cli --yalc-store=/path/to/.yalc
+megamono diagnostics packages --source-root=/path/to/megamono
+```
+
+The report inventories declared packages and Megamono store packages, compares
+manifest semantics and emitted `dist` bytes, and displays available build metadata.
+It distinguishes installed `node_modules`, consumer `.yalc`, every stored version,
+optional source repository builds, and resolvable PATH-selected CLI packages.
+Matching versions/build labels are not a substitute for matching artifact bytes.
+Exit 1 requests review of drift, unreadable artifacts, or pushed-but-uninstalled
+payloads. It never runs package installation or executes inspected CLIs.
+An opaque PATH wrapper cannot be resolved this way; the report does not certify it.
+Source builds are not proof of unbuilt source freshness, and this bounded check
+does not qualify runtime behavior, peers, source-condition exports, or deployment.
+Reconcile each consumer explicitly after reviewing its package-manager plan;
+do not assume `yalc push` refreshes an existing installed dependency tree.
+
 Hosted authentication is optional and independent of repository discovery:
 
 ```sh

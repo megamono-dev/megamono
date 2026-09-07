@@ -230,6 +230,45 @@ afterEach(async () => {
 });
 
 describe('@megamono/cli', () => {
+  it('runs artifact diagnostics locally without invoking a package manager or another CLI', async () => {
+    const root = await workspace('pnpm');
+    const store = join(root, 'store');
+    await json(join(store, 'packages/@megamono/plugin/0.0.1/package.json'), {
+      name: '@megamono/plugin',
+      version: '0.0.1',
+    });
+    await mkdir(join(store, 'packages/@megamono/plugin/0.0.1/dist'), {
+      recursive: true,
+    });
+    await writeFile(
+      join(store, 'packages/@megamono/plugin/0.0.1/dist/index.js'),
+      'export {};',
+    );
+    const runCommand = vi.fn();
+    const output: string[] = [];
+    const result = await runMegamonoCli(
+      [
+        'diagnostics',
+        'packages',
+        '--packages=@megamono/plugin',
+        `--yalc-store=${store}`,
+        '--json',
+      ],
+      {
+        cwd: root,
+        version: '0.0.1',
+        stdout: (message) => output.push(message),
+        stderr: () => undefined,
+        runCommand,
+      },
+    );
+    expect(result.exitCode).toBe(1); // Fixture installation has no emitted files.
+    expect(JSON.parse(output[0]).packages[0].locations[0].status).toBe(
+      'unreadable',
+    );
+    expect(runCommand).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['adopt', 'Usage: megamono adopt'],
     ['health', 'Usage: megamono health'],

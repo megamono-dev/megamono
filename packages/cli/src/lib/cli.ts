@@ -13,6 +13,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, parse, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import {
+  ARTIFACT_HELP,
+  artifactDiagnosticOptions,
+  diagnoseArtifacts,
+} from './artifact-diagnostics.js';
+import {
   isPackageManager,
   packageManagerAdapter,
   type PackageManager,
@@ -215,6 +220,7 @@ Commands:
   account list|use     List or switch personal and organization accounts
   health               Run workspace checks with a package-source profile
   verify <kind>        Verify runtime, dependency, or container portability
+  diagnostics packages Compare installed, Yalc, source-build and PATH CLI artifacts
   generate <name>      Run an available local Megamono generator
   help                 Show this help
 
@@ -369,6 +375,7 @@ function helpForTopic(topic: string | undefined): string {
     database: DATABASE_HELP,
     health: HEALTH_HELP,
     verify: VERIFY_HELP,
+    diagnostics: ARTIFACT_HELP,
     auth: AUTH_HELP,
     account: ACCOUNT_HELP,
   };
@@ -2896,6 +2903,37 @@ export async function runMegamonoCli(
         return { exitCode: 0 };
       }
       return await runInit(args.slice(1), io);
+    }
+    if (args[0] === 'diagnostics') {
+      if (args.includes('--help') || args.includes('-h')) {
+        io.stdout(ARTIFACT_HELP);
+        return { exitCode: 0 };
+      }
+      if (args[1] !== 'packages') throw new CliError(ARTIFACT_HELP, 2);
+      const root = await findWorkspaceRoot(io.cwd).catch(() => resolve(io.cwd));
+      const options = artifactDiagnosticOptions(args.slice(2), root);
+      const report = diagnoseArtifacts(options);
+      io.stdout(
+        options.json
+          ? JSON.stringify(report, null, 2)
+          : [
+              `Package artifact diagnostics (${report.comparisonScope}; read-only)`,
+              ...report.packages.flatMap((entry) => [
+                entry.name,
+                ...entry.locations.map(
+                  (location) =>
+                    `  ${location.kind}: ${location.status}${location.version ? ` @${location.version}` : ''}${location.digest ? ` ${location.digest.slice(0, 12)}` : ''} — ${location.path}`,
+                ),
+                ...entry.findings.map((finding) => `  REVIEW: ${finding}`),
+              ]),
+              ...report.limitations,
+            ].join('\n'),
+      );
+      return {
+        exitCode: report.packages.some((entry) => entry.findings.length)
+          ? 1
+          : 0,
+      };
     }
     if (args[0] === 'adopt') {
       if (args[1] === '--help' || args[1] === '-h') {
