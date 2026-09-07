@@ -1362,6 +1362,37 @@ describe('@megamono/cli', () => {
     );
   });
 
+  it.each(['^9.39.0', '^10.0.0', '>=9 <11', '^11.0.0', '>=9', 'latest'])(
+    'uses the plugin ESLint range for CLI preflight: %s',
+    async (eslint) => {
+      const root = await workspace('npm');
+      await json(
+        join(root, 'node_modules/@megamono/plugin/compatibility.json'),
+        { playstackIntegration: { node: '>=20', eslint: '>=9 <11' } },
+      );
+      const manifest = JSON.parse(
+        await readFile(join(root, 'package.json'), 'utf8'),
+      );
+      await json(join(root, 'package.json'), {
+        ...manifest,
+        engines: { node: '>=24 <25' },
+        devDependencies: { ...manifest.devDependencies, eslint },
+      });
+      const harness = io(root);
+      await runMegamonoCli(
+        ['init', '--playstack-packages=@playstack/lint'],
+        harness.value,
+      );
+      const supported = ['^9.39.0', '^10.0.0', '>=9 <11'].includes(eslint);
+      expect(
+        harness.stderr.some((message) =>
+          message.includes('Playstack lint requires ESLint'),
+        ),
+      ).toBe(!supported);
+      if (!supported) expect(harness.invocations).toEqual([]);
+    },
+  );
+
   it('prompts for capabilities when playstack-packages has no value', async () => {
     const root = await workspace('npm');
     const projects = {

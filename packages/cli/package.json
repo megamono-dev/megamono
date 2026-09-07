@@ -88,6 +88,7 @@
   },
   "dependencies": {
     "enquirer": "2.3.6",
+    "semver": "7.8.5",
     "tslib": "^2.3.0"
   },
   "peerDependencies": {

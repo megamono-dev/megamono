@@ -1,6 +1,7 @@
 import { getProjects, readJson, type Tree } from '@nx/devkit';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { subset, validRange } from 'semver';
 import { megamonoConfigSchema } from '../lib/config';
 import {
   parseVersionNumber,
@@ -83,7 +84,12 @@ export function assertPlaystackWorkspaceCompatibility(
   }
   if (options.eslint) {
     const eslint = workspaceDependencyVersion(tree, 'eslint');
-    if (parseVersionNumber(eslint)?.major !== 9) {
+    if (
+      !eslint ||
+      !validRange(eslint) ||
+      !validRange(playstackCompatibility.eslint) ||
+      !subset(eslint, playstackCompatibility.eslint)
+    ) {
       throw new PlaystackWorkspaceIntegrationError(
         `Playstack lint requires ESLint ${playstackCompatibility.eslint}; the workspace resolves ${eslint ?? 'no ESLint version'}.`,
       );

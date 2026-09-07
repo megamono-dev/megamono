@@ -12,6 +12,7 @@ import { execFile } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, parse, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { subset, validRange } from 'semver';
 import {
   ARTIFACT_HELP,
   artifactDiagnosticOptions,
@@ -2018,7 +2019,9 @@ async function assertPlaystackCompatibility(
       manifest.devDependencies?.eslint ?? manifest.dependencies?.eslint;
     if (
       typeof declaredEslint !== 'string' ||
-      versionMajor(declaredEslint) !== 9
+      !validRange(declaredEslint) ||
+      !validRange(compatibility.eslint) ||
+      !subset(declaredEslint, compatibility.eslint)
     ) {
       throw new CliError(
         `Playstack lint requires ESLint ${compatibility.eslint}; the workspace declares ${

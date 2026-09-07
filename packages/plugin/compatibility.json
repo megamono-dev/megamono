@@ -42,7 +42,7 @@
   },
   "playstackIntegration": {
     "node": ">=20",
-    "eslint": "^9.0.0"
+    "eslint": ">=9 <11"
   },
   "compatibilityTests": {
     "stable": [
