@@ -1,5 +1,13 @@
 # `@megamono/plugin`
 
+Web/site generation supports `--router=pages|app` (Pages Router remains the
+default). For example, `megamono add app site --router=app --styling=chakra`.
+App Router emits a server `layout.tsx` with metadata, a server `page.tsx`, and
+client `providers.tsx`/billboard files. Chakra's system is constructed/imported
+within the client boundary, not passed as a serialized server prop. Router
+selection is not a migration command: a conflicting existing router is refused,
+and rerunning a matching project preserves application-owned theme/provider edits.
+
 Nx generators, executors, and ESLint rules for Megamono workspaces. The package
 implements versioned workspace configuration, documentation lifecycle tooling,
 repository structural checks, and deterministic repository health reporting.

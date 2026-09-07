@@ -32,6 +32,73 @@ function snapshot(tree: ReturnType<typeof workspace>): string {
 }
 
 describe('app generator', () => {
+  it.each([
+    'chakra',
+    'emotion',
+    'css-modules',
+    'inline',
+    'tailwind',
+    'panda',
+    'stylex',
+  ] as const)(
+    'generates App Router %s behind a client boundary and preserves reruns',
+    async (styling) => {
+      const tree = workspace();
+      const options = {
+        type: 'site' as const,
+        router: 'app' as const,
+        styling,
+        scope: 'fixture',
+        interactive: false,
+        yes: true,
+      };
+      await appGenerator(tree, options);
+      expect(tree.exists('apps/site/src/pages')).toBe(false);
+      const layout = tree.read('apps/site/src/app/layout.tsx', 'utf8') ?? '';
+      expect(layout).toContain('export const metadata');
+      expect(layout).not.toContain('megamonoSystem');
+      expect(layout).not.toContain('use client');
+      expect(tree.read('apps/site/src/app/providers.tsx', 'utf8')).toContain(
+        'use client',
+      );
+      expect(
+        tree.read('apps/site/src/app/billboard.tsx', 'utf8'),
+      ).not.toContain('next/head');
+      expect(tree.read('apps/site/src/app/page.tsx', 'utf8')).toContain(
+        "from './billboard'",
+      );
+      if (styling === 'chakra') {
+        expect(tree.read('apps/site/src/app/providers.tsx', 'utf8')).toContain(
+          'value={megamonoSystem}',
+        );
+        tree.write(
+          'packages/theme/src/lib/system.ts',
+          '// application-owned customization\n',
+        );
+      }
+      const before = snapshot(tree);
+      await appGenerator(tree, options);
+      expect(snapshot(tree)).toBe(before);
+      await expect(
+        appGenerator(tree, { ...options, router: 'pages' }),
+      ).rejects.toThrow('different router');
+    },
+  );
+
+  it('rejects router options on non-web applications before writing', async () => {
+    const tree = workspace();
+    const before = snapshot(tree);
+    await expect(
+      appGenerator(tree, {
+        type: 'api',
+        router: 'app',
+        interactive: false,
+        yes: true,
+      }),
+    ).rejects.toThrow('only to web/site');
+    expect(snapshot(tree)).toBe(before);
+  });
+
   it('composes the maintained web preset and is idempotent', async () => {
     const tree = workspace();
     await appGenerator(tree, {

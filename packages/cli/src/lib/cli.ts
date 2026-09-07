@@ -142,7 +142,7 @@ export interface DatabaseAdapterChoice {
 }
 
 export const APP_TYPE_CHOICES: readonly AppTypeChoice[] = [
-  { name: 'web', message: 'Web — Next Pages Router with selectable styling' },
+  { name: 'web', message: 'Web — Next.js with selectable router and styling' },
   { name: 'site', message: 'Site — Next marketing surface' },
   { name: 'api', message: 'API — Nest composition root and feature library' },
   { name: 'worker', message: 'Worker — Cloudflare Worker' },
@@ -276,6 +276,7 @@ Examples:
 
 Application types: ${APP_TYPE_CHOICES.map(({ name }) => name).join(', ')}
 Web styling: ${WEB_STYLING_CHOICES.map(({ name }) => name).join(', ')}
+Next.js router: --router=pages|app (web/site only; default pages)
 Database adapters: ${DATABASE_ADAPTER_CHOICES.map(({ name }) => name).join(', ')}
 Modules: ${ADD_MODULES.join(', ')}
 

@@ -77,6 +77,7 @@ export interface CreateMegamonoInput {
   databaseAdapter?: string;
   databaseName?: string;
   styling?: string;
+  router?: string;
   serviceRunner?: string;
   integrations?: readonly string[];
   interactive?: boolean;
@@ -101,6 +102,7 @@ export interface NormalizedCreateOptions {
   databaseAdapter: DatabaseAdapter;
   databaseName?: string;
   styling: WebStyling;
+  router: 'pages' | 'app';
   serviceRunner: ServiceRunner;
   integrations: string[];
   install: boolean;
@@ -360,6 +362,11 @@ export function normalizeCreateOptions(
       input.styling ?? 'chakra',
       new Set<string>(WEB_STYLING_OPTIONS),
     ),
+    router: requireEnum<'pages' | 'app'>(
+      'web router',
+      input.router ?? 'pages',
+      new Set(['pages', 'app']),
+    ),
     serviceRunner: requireEnum<ServiceRunner>(
       'service runner',
       input.serviceRunner ?? 'none',
@@ -614,7 +621,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
           `--scope=${options.scope}`,
           `--workspaceName=${options.name}`,
           ...(app.type === 'web' || app.type === 'site'
-            ? [`--styling=${options.styling}`]
+            ? [`--styling=${options.styling}`, `--router=${options.router}`]
             : []),
           `--requestedApps=${options.apps.join(',')}`,
           `--requestedServices=${options.services.join(',')}`,

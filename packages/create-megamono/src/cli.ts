@@ -38,6 +38,7 @@ Names are optional; repeated types need distinct names.
 
 Options:
   --styling=<choice>       ${WEB_STYLING_OPTIONS.join(', ')}
+  --router=pages|app       Next.js router for web/site apps (default: pages)
   --local-packages=yalc    Use locally published packages and their dependency closure
   --package-manager=<name> npm, pnpm, yarn, bun
   --interactive=false     Disable guided prompts
@@ -146,6 +147,13 @@ export async function resolveInteractive(
         : (input.databaseName ??
             (await prompt.question('Database name [primary]: '))) ||
           'primary';
+    const router = apps?.some((app) =>
+      ['web', 'site'].includes(app.split(':', 1)[0]),
+    )
+      ? (input.router ??
+        ((await prompt.question('Next.js router (pages, app) [pages]: ')) ||
+          'pages'))
+      : input.router;
     const services =
       input.services !== undefined
         ? input.services
@@ -168,6 +176,7 @@ export async function resolveInteractive(
       databaseAdapter,
       databaseName,
       styling,
+      router,
       serviceRunner,
     };
   } finally {
@@ -194,6 +203,7 @@ export async function main(
         'database-adapter': { type: 'string' },
         'database-name': { type: 'string' },
         styling: { type: 'string' },
+        router: { type: 'string' },
         'service-runner': { type: 'string' },
         integrations: { type: 'string' },
         interactive: { type: 'string' },
@@ -240,6 +250,7 @@ export async function main(
       databaseAdapter: parsed.values['database-adapter'],
       databaseName: parsed.values['database-name'],
       styling: parsed.values.styling,
+      router: parsed.values.router,
       serviceRunner: parsed.values['service-runner'],
       integrations: commaList(parsed.values.integrations),
       interactive,

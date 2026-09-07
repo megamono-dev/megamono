@@ -53,6 +53,11 @@
       ],
       "description": "Styling tool used to render the generated web/site billboard. Auto detects the workspace and falls back to CSS Modules."
     },
+    "router": {
+      "type": "string",
+      "enum": ["pages", "app"],
+      "description": "Next.js router for web/site applications. Defaults to Pages Router; not a router migration command."
+    },
     "interactive": {
       "type": "boolean",
       "default": true,

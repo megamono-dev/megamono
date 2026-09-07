@@ -105,6 +105,7 @@ interface NormalizedAppOptions {
   readonly tags: readonly string[];
   readonly port?: number;
   readonly styling?: ResolvedWebStyling;
+  readonly router?: 'pages' | 'app';
   readonly packageManager: PackageManager;
   readonly workspaceName: string;
   readonly requestedApps: readonly AppType[];
@@ -339,6 +340,16 @@ async function normalizeOptions(
     type === 'web' || type === 'site'
       ? await resolveWebStyling(tree, raw)
       : undefined;
+  if (
+    raw.router !== undefined &&
+    (!['pages', 'app'].includes(raw.router) || !['web', 'site'].includes(type))
+  )
+    throw new AppGeneratorError(
+      'Router must be pages or app and applies only to web/site applications.',
+      2,
+      'options',
+    );
+  const router = styling ? (raw.router ?? 'pages') : undefined;
   return {
     type,
     name,
@@ -355,6 +366,7 @@ async function normalizeOptions(
     ],
     port: selectedPort,
     ...(styling ? { styling } : {}),
+    ...(router ? { router } : {}),
     packageManager: packageManager(tree),
     workspaceName: raw.workspaceName?.trim() || identity.name,
     requestedApps: csv<AppType>(raw.requestedApps, APP_TYPE_SET),
@@ -434,7 +446,20 @@ function assertProjectPreflight(
   const rooted = [...projects.entries()].find(
     ([, project]) => project.root === options.directory,
   );
-  if (named && projectMatches(named, options)) return 'noop';
+  if (named && projectMatches(named, options)) {
+    if (
+      options.router &&
+      tree.exists(
+        `${options.directory}/src/${options.router === 'app' ? 'pages' : 'app'}`,
+      )
+    )
+      throw new AppGeneratorError(
+        'Existing application uses a different router; router migration requires a separate reviewed change.',
+        3,
+        'conflict',
+      );
+    return 'noop';
+  }
   if (named || rooted || tree.exists(options.directory)) {
     const occupied = named
       ? `project ${options.projectName}`
@@ -461,6 +486,7 @@ function renderPlan(options: NormalizedAppOptions): string {
     `- Tags: ${options.tags.join(', ')}`,
     ...(options.port ? [`- Port: ${options.port}`] : []),
     ...(options.styling ? [`- Styling: ${options.styling}`] : []),
+    ...(options.router ? [`- Router: ${options.router}`] : []),
     '',
     '## Ordered operations',
     '',
@@ -818,13 +844,15 @@ async function createWebApp(
   options: NormalizedAppOptions,
 ): Promise<readonly (GeneratorCallback | void)[]> {
   const styling = options.styling ?? 'css-modules';
+  const appRouter = options.router === 'app';
+  const routeRoot = `${options.directory}/src/${appRouter ? 'app' : 'pages'}`;
   const callbacks: (GeneratorCallback | void)[] = [];
   if (styling === 'chakra') callbacks.push(await ensureTheme(tree, options));
   callbacks.push(
     await generator('@nx/next', 'applicationGenerator')(tree, {
       name: options.projectName,
       directory: options.directory,
-      appDir: false,
+      appDir: appRouter,
       src: true,
       style: 'css',
       linter: 'eslint',
@@ -869,8 +897,23 @@ async function createWebApp(
   const e2eRoot = `${options.directory}-e2e`;
   if (tree.exists(`${e2eRoot}/package.json`))
     updatePackage(tree, `${e2eRoot}/package.json`, options);
-  tree.delete(`${options.directory}/src/pages/index.module.css`);
-  if (styling === 'chakra') {
+  tree.delete(`${routeRoot}/index.module.css`);
+  if (appRouter) {
+    tree.delete(`${routeRoot}/page.module.css`);
+    tree.delete(`${routeRoot}/global.css`);
+    tree.write(
+      `${routeRoot}/providers.tsx`,
+      `'use client';\n\nimport type { ReactNode } from 'react';\n${styling === 'chakra' ? `import { ChakraProvider } from '@chakra-ui/react';\nimport { megamonoSystem } from '@${options.scope}/theme';\n` : ''}\nexport function Providers({ children }: { children: ReactNode }) {\n  return ${styling === 'chakra' ? '<ChakraProvider value={megamonoSystem}>{children}</ChakraProvider>' : '<>{children}</>'};\n}\n`,
+    );
+    tree.write(
+      `${routeRoot}/layout.tsx`,
+      `import type { Metadata } from 'next';\nimport type { ReactNode } from 'react';\nimport { Providers } from './providers';\n${styling !== 'chakra' ? "import './styles.css';\n" : ''}\nexport const metadata: Metadata = { title: ${JSON.stringify(`${options.workspaceName} · Built with Megamono`)} };\n\nexport default function RootLayout({ children }: { children: ReactNode }) {\n  return <html lang="en"><body><Providers>{children}</Providers></body></html>;\n}\n`,
+    );
+    tree.write(
+      `${routeRoot}/page.tsx`,
+      "import Billboard from './billboard';\n\nexport default function Page() { return <Billboard />; }\n",
+    );
+  } else if (styling === 'chakra') {
     tree.delete(`${options.directory}/src/pages/styles.css`);
     tree.write(
       `${options.directory}/src/pages/_app.tsx`,
@@ -881,8 +924,10 @@ async function createWebApp(
       `${options.directory}/src/pages/_app.tsx`,
       `import './styles.css';\nimport type { AppProps } from 'next/app';\n\nexport default function App({ Component, pageProps }: AppProps) {\n  return <Component {...pageProps} />;\n}\n`,
     );
+  }
+  if (styling !== 'chakra') {
     tree.write(
-      `${options.directory}/src/pages/styles.css`,
+      `${routeRoot}/styles.css`,
       styling === 'tailwind'
         ? '@import "tailwindcss";\n'
         : styling === 'panda'
@@ -891,10 +936,7 @@ async function createWebApp(
     );
   }
   if (styling === 'css-modules') {
-    tree.write(
-      `${options.directory}/src/pages/index.module.css`,
-      billboardCss(),
-    );
+    tree.write(`${routeRoot}/index.module.css`, billboardCss());
   }
   if (styling === 'tailwind') {
     tree.write(
@@ -937,34 +979,44 @@ async function createWebApp(
       `${options.directory}/postcss.config.cjs`,
       `module.exports = { plugins: { '@stylexjs/postcss-plugin': { include: ['${options.directory}/src/**/*.{js,jsx,ts,tsx}'] } } };\n`,
     );
-    tree.write(`${options.directory}/src/pages/styles.css`, '@stylex;\n');
+    tree.write(`${routeRoot}/styles.css`, '@stylex;\n');
   }
   tree.write(
-    `${options.directory}/src/pages/index.tsx`,
-    styling === 'chakra'
-      ? chakraBillboardSource(options)
-      : styledBillboardSource(
-          {
-            workspaceName: options.workspaceName,
-            surfaces: (options.requestedApps.length
-              ? options.requestedApps
-              : [options.type]
-            ).map((type) => APP_LABELS[type]),
-            services: options.requestedServices.map((service) =>
-              service === 'postgres' ? 'PostgreSQL' : service,
-            ),
-            commands: [
-              `${packageManagerAdapter(options.packageManager).nx} show projects`,
-              `${packageManagerAdapter(options.packageManager).nx} graph`,
-              `${packageManagerAdapter(options.packageManager).nx} run megamono:check`,
-            ],
-          },
-          styling,
-        ),
+    `${routeRoot}/${appRouter ? 'billboard' : 'index'}.tsx`,
+    webRouterSource(
+      styling === 'chakra'
+        ? chakraBillboardSource(options)
+        : styledBillboardSource(
+            {
+              workspaceName: options.workspaceName,
+              surfaces: (options.requestedApps.length
+                ? options.requestedApps
+                : [options.type]
+              ).map((type) => APP_LABELS[type]),
+              services: options.requestedServices.map((service) =>
+                service === 'postgres' ? 'PostgreSQL' : service,
+              ),
+              commands: [
+                `${packageManagerAdapter(options.packageManager).nx} show projects`,
+                `${packageManagerAdapter(options.packageManager).nx} graph`,
+                `${packageManagerAdapter(options.packageManager).nx} run megamono:check`,
+              ],
+            },
+            styling,
+          ),
+      appRouter,
+    ),
   );
   tree.write(`${e2eRoot}/src/example.spec.ts`, billboardE2eSource(options));
   configureE2ePackage(tree, options);
   return callbacks;
+}
+
+/** Adapt only our own billboard template; App Router metadata lives in the server layout. */
+function webRouterSource(source: string, appRouter: boolean): string {
+  return appRouter
+    ? `'use client';\n${source.replace("import Head from 'next/head';", '').replace(/<Head>[\s\S]*?<\/Head>/g, '')}`
+    : source;
 }
 
 async function createApiApp(

@@ -48,6 +48,7 @@ describe('CLI entrypoint', () => {
       'drizzle',
       'stylex',
       'events',
+      'app',
       'postgres, redis',
       'springbar',
     ];
@@ -69,6 +70,7 @@ describe('CLI entrypoint', () => {
       databaseAdapter: 'drizzle',
       databaseName: 'events',
       styling: 'stylex',
+      router: 'app',
       serviceRunner: 'springbar',
     });
     expect(questions[0]).toContain('Application types:');
@@ -82,7 +84,14 @@ describe('CLI entrypoint', () => {
 
   it('asks for web styling when a guided app uses a custom name', async () => {
     const questions: string[] = [];
-    const answers = ['site:marketing', 'none', 'css-modules', '', 'none'];
+    const answers = [
+      'site:marketing',
+      'none',
+      'css-modules',
+      'pages',
+      '',
+      'none',
+    ];
     const resolved = await resolveInteractive(
       { name: 'named-site', interactive: true },
       {
@@ -147,11 +156,15 @@ describe('CLI entrypoint', () => {
           '--apps=web',
           '--interactive=false',
           '--package-manager=pnpm',
+          '--router=app',
           '--dry-run',
         ]),
       ).resolves.toBe(0);
       expect(output).toHaveBeenCalledWith(
         expect.stringContaining('"pnpm" "dlx" "create-nx-workspace@23.1.1"'),
+      );
+      expect(output).toHaveBeenCalledWith(
+        expect.stringContaining('--router=app'),
       );
     } finally {
       output.mockRestore();
