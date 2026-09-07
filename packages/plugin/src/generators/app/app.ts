@@ -822,6 +822,11 @@ async function ensureTheme(
     ...value,
     name: `@${options.scope}/theme`,
     private: true,
+    // This private, unbuilt workspace library is consumed directly by Next.
+    // Publish a source entry rather than relying solely on TS path aliases.
+    exports: {
+      '.': { types: './src/index.ts', default: './src/index.ts' },
+    },
     dependencies: {
       ...((value.dependencies as Record<string, string> | undefined) ?? {}),
       '@chakra-ui/react': packageVersion('@chakra-ui/react'),

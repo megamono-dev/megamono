@@ -53,6 +53,14 @@ describe('app generator', () => {
         yes: true,
       };
       await appGenerator(tree, options);
+      if (styling === 'chakra') {
+        expect(
+          JSON.parse(tree.read('packages/theme/package.json', 'utf8') ?? '{}')
+            .exports,
+        ).toEqual({
+          '.': { types: './src/index.ts', default: './src/index.ts' },
+        });
+      }
       expect(tree.exists('apps/site/src/pages')).toBe(false);
       const layout = tree.read('apps/site/src/app/layout.tsx', 'utf8') ?? '';
       expect(layout).toContain('export const metadata');
