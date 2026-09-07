@@ -1911,8 +1911,10 @@ function parseAddOptions(args: readonly string[]): AddOptions {
   return {
     args: forwarded,
     localPackages,
-    dryRun: forwarded.some(
-      (argument) => argument === '--dry-run' || argument === '--dryRun=true',
+    dryRun: forwarded.some((argument) =>
+      ['--dry-run', '--dry-run=true', '--dryRun', '--dryRun=true'].includes(
+        argument,
+      ),
     ),
     yes: forwarded.some(
       (argument) => argument === '--yes' || argument === '--yes=true',
@@ -2292,7 +2294,7 @@ async function runAdd(
       );
     const [command, commandArgs] = nxInvocation(
       workspace.packageManager,
-      parsed.args,
+      [...parsed.args, ...(parsed.dryRun ? ['--planOnly=true'] : [])],
       'playstack-integrate',
       workspace.root,
     );

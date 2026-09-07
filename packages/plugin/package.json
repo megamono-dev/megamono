@@ -38,6 +38,25 @@
   ],
   "nx": {
     "targets": {
+      "e2e-ui-bootstrap": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build",
+          {
+            "projects": [
+              "create-megamono"
+            ],
+            "target": "build"
+          }
+        ],
+        "outputs": [
+          "{workspaceRoot}/tmp/ui-bootstrap"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/ui-bootstrap.e2e.mjs"
+        }
+      },
       "e2e-web-ui-consumer": {
         "executor": "nx:run-commands",
         "cache": false,

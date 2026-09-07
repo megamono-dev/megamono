@@ -1,5 +1,31 @@
 # Packed consumer qualification
 
+## Full App Router UI bootstrap
+
+`npm exec nx -- run @megamono/plugin:e2e-ui-bootstrap` runs the packed
+`create-megamono` CLI, the real Yalc Playstack `chakra` and `app-ui` recipes,
+and the installed Megamono `playstack-integrate` generator. It reviews dry-run
+plans, chooses App Router/fixed light mode/English/public fixture rows, and
+connects the emitted provider to the scaffold's existing theme. Recipe and
+integration reruns must preserve that application-owned composition.
+
+The harness publishes current Megamono builds only into a private temporary
+Yalc store and snapshots the required Playstack publications from the user's
+store. It never pushes, modifies adopter repositories, or updates global CLIs.
+It then copies the complete workspace and `.yalc` payload to a clean directory,
+makes the original workspace and private store unavailable, and runs `npm ci`
+without lockfile changes. Typecheck, the generated lint configuration, production
+build, and Chromium hydration/keyboard filtering/navigation run in that clean
+consumer. Original scaffold files are not substituted with hand-built projects.
+Application-owned provider composition and the public example route are explicit.
+
+`tmp/ui-bootstrap/` records checks (including failed stages), resolved versions,
+source revision/dirty status, package file hashes, recipe/integration plans, and
+the clean-bootstrap file hashes and lockfile. A successful run qualifies only
+that recorded combination. This opt-in target requires registry access, local
+Playstack publications, and Chromium. It is not an auth/cache/provider test or
+a claim that ignored `.yalc` directories alone are sufficient for CI.
+
 ## Generated Next.js and Playstack UI
 
 `npm exec nx -- run @megamono/plugin:e2e-web-ui-consumer` generates both App
@@ -21,7 +47,8 @@ typechecking, not exhaustive validation of dependency declaration files.
 This opt-in lane requires locally published Playstack packages, registry access,
 and Chromium. It is not silently added to ordinary CI, which has no Yalc store.
 Generation shares the local Nx toolchain; this is not a clean bootstrap test of
-`create-megamono`, nor a test of the pending Playstack UI installation recipe.
+`create-megamono`, nor a test of Playstack UI installation recipes (use the full
+bootstrap target above for that workflow).
 TypeScript 7 requires a separate qualified lane before widening supported ranges.
 
 ## Portable Prisma and native-boundary composition

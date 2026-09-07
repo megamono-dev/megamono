@@ -474,31 +474,35 @@ describe('@megamono/cli', () => {
     ]);
   });
 
-  it('delegates package-authored integration wiring to the plugin', async () => {
-    const root = await workspace('pnpm');
-    const harness = io(root);
+  it.each(['--dry-run', '--dry-run=true', '--dryRun', '--dryRun=true'])(
+    'delegates integration planning via %s without requiring yes',
+    async (planningFlag) => {
+      const root = await workspace('pnpm');
+      const harness = io(root);
 
-    const result = await runMegamonoCli(
-      [
-        'add',
-        'integration',
+      const result = await runMegamonoCli(
+        [
+          'add',
+          'integration',
+          '--packages=@playstack/rate-limit',
+          '--api=apps/api',
+          planningFlag,
+        ],
+        harness.value,
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(harness.invocations[0]?.args).toEqual([
+        expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
+        'generate',
+        '@megamono/plugin:playstack-integrate',
         '--packages=@playstack/rate-limit',
         '--api=apps/api',
-        '--dry-run',
-      ],
-      harness.value,
-    );
-
-    expect(result.exitCode).toBe(0);
-    expect(harness.invocations[0]?.args).toEqual([
-      expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),
-      'generate',
-      '@megamono/plugin:playstack-integrate',
-      '--packages=@playstack/rate-limit',
-      '--api=apps/api',
-      '--dry-run',
-    ]);
-  });
+        planningFlag,
+        '--planOnly=true',
+      ]);
+    },
+  );
 
   it.each(['npm', 'pnpm', 'yarn', 'bun'] as const)(
     'uses installed Node/Nx for a %s workspace dry run',

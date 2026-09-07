@@ -63,6 +63,7 @@ export interface PlaystackIntegrateGeneratorSchema {
   readonly qualification?: string;
   readonly migrationContracts?: string;
   readonly dryRun?: boolean;
+  readonly planOnly?: boolean;
   readonly yes?: boolean;
 }
 
@@ -543,6 +544,9 @@ export async function playstackIntegrateGenerator(
   tree: Tree,
   options: PlaystackIntegrateGeneratorSchema,
 ): Promise<GeneratorCallback> {
+  // Nx consumes its reserved dryRun flag before invoking generators.
+  // Keep dryRun for programmatic callers and a non-reserved CLI planning flag.
+  options = { ...options, dryRun: options.dryRun || options.planOnly };
   const adapters = commaValues(options.adapters);
   const selectedDecisions = jsonRecord(
     options.decisions,

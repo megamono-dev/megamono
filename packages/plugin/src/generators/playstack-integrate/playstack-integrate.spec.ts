@@ -88,6 +88,22 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it('supports a non-reserved Nx planning flag without requiring yes or writing files', async () => {
+    const tree = fixture();
+    const before = tree.listChanges();
+    const log = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    try {
+      await playstackIntegrateGenerator(tree, {
+        packages: '@playstack/rate-limit',
+        api: 'apps/api',
+        planOnly: true,
+      });
+      expect(tree.listChanges()).toEqual(before);
+      expect(log).toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
+  });
   it('reports missing manifests in a read-only plan without implying integration readiness', async () => {
     const tree = fixture();
     tree.delete(

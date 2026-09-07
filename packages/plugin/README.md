@@ -22,7 +22,7 @@ For a mature mixed workspace, survey first and resolve only genuine ambiguity:
 
 ```sh
 npm exec nx g @megamono/plugin:workspace-init --survey --format=json
-npm exec nx g @megamono/plugin:playstack-integrate --packages=@playstack/rate-limit --api=apps/api --dry-run
+npm exec nx g @megamono/plugin:playstack-integrate --packages=@playstack/rate-limit --api=apps/api --planOnly
 npm exec nx g @megamono/plugin:workspace-init --profile=pilot --dry-run
 npm exec nx g @megamono/plugin:workspace-init \
   --only=docs,agents,ci,lint \
@@ -31,6 +31,10 @@ npm exec nx g @megamono/plugin:workspace-init \
   --ciMode=auto \
   --yes
 ```
+
+For direct Nx integration planning, use `--planOnly`: Nx consumes its reserved
+`--dry-run` option before invoking generators. `megamono add integration
+--dry-run` forwards the planning option automatically.
 
 Playstack integration manifests remain package-owned. The generator validates
 the full published JSON schema, manifest package version, and every ejectable template hash, maps each
@@ -50,7 +54,7 @@ npm exec nx g @megamono/plugin:playstack-integrate \
   --adoptionMode=shadow \
   --conditions='{"Stripe is selected":true}' \
   --decisions='{"auth.transport":"cross-origin-refresh-cookie","auth.sessionProjection":"newsbetters-session","billing.priceCatalog":"newsbetters-plans","webhooks.providers":"stripe:default"}' \
-  --dry-run
+  --planOnly
 ```
 
 Dry runs surface unresolved decisions, inactive conditions, duplicate manifest
