@@ -236,7 +236,8 @@ The verifier never builds or changes dependencies implicitly. Build the project
 first, and provide `--outputPath` when its build target does not declare one.
 Extraction parses JavaScript syntax; quoted examples, comments, regex literals,
 and locally shadowed `require` calls are not external dependencies. Static
-imports/re-exports, global CommonJS `require`, and literal dynamic imports are
+imports/re-exports, global CommonJS `require`, Node `createRequire` bindings,
+their `require.resolve` calls, and literal dynamic imports are
 inspected, including executable expressions inside template literals. Malformed
 JavaScript, non-literal module loads, or an empty output directory produce
 `runtime-analysis-incomplete` errors, never a passing zero-file report. No audited

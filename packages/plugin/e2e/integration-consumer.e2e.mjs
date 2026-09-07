@@ -169,6 +169,35 @@ try {
   run(process.execPath, [...args, '--dryRun']);
   const target = join(root, 'apps/api/src/playstack/provider.ts');
   await assert.rejects(readFile(target), { code: 'ENOENT' });
+  const profileArgs = args.filter(
+    (arg) =>
+      !['--verification', '--ciWorkflow', '--ciJob'].some((prefix) =>
+        arg.startsWith(prefix),
+      ),
+  );
+  profileArgs.push(
+    '--migrationContracts={"@playstack/integration-fixture:fixture":["queue-jobs"]}',
+  );
+  run(process.execPath, [...profileArgs, '--dryRun']);
+  await assert.rejects(readFile(target), { code: 'ENOENT' });
+  run(process.execPath, profileArgs);
+  const profilePlan = JSON.parse(
+    await readFile(
+      join(root, '.megamono/playstack-integration-plan.json'),
+      'utf8',
+    ),
+  );
+  assert.deepEqual(
+    profilePlan.qualification[
+      '@playstack/integration-fixture:fixture:migration.queue-payload-compatibility'
+    ],
+    ['real-queue'],
+  );
+  const generatedWithProfile = await readFile(target, 'utf8');
+  assert.throws(() =>
+    run(process.execPath, [...profileArgs, '--adoptionMode=cutover']),
+  );
+  assert.equal(await readFile(target, 'utf8'), generatedWithProfile);
   run(process.execPath, args);
   const first = await readFile(target, 'utf8');
   run(process.execPath, args);
@@ -230,8 +259,39 @@ try {
     await readFile(target, 'utf8'),
     'export const applicationOwned = true;\n',
   );
+  const { verifyRuntimeDependencies } = require(
+    join(plugin, 'dist/lib/runtime-verification.js'),
+  );
+  await put(
+    'runtime-fixture/main.cjs',
+    'const example = `import "@mui/material"; require("expo-font")`;\n// require("comment-only")\nconst real = require("tslib");\n',
+  );
+  const runtimeOptions = {
+    workspaceRoot: root,
+    project: 'api',
+    projectRoot: 'apps/api',
+    outputPath: 'runtime-fixture',
+  };
+  const runtime = await verifyRuntimeDependencies(runtimeOptions);
+  assert.deepEqual(runtime.externalPackages, ['tslib']);
+  assert.equal(runtime.findings.length, 1);
+  assert.equal(runtime.findings[0].code, 'runtime-dependency-missing');
+  await put(
+    'runtime-fixture/esm.mjs',
+    'import { createRequire } from "node:module"; const load = createRequire(import.meta.url); load("esm-runtime");',
+  );
+  assert.deepEqual(
+    (await verifyRuntimeDependencies(runtimeOptions)).externalPackages,
+    ['esm-runtime', 'tslib'],
+  );
+  await put('runtime-fixture/dynamic.mjs', 'import(packageName);');
+  assert.ok(
+    (await verifyRuntimeDependencies(runtimeOptions)).findings.some(
+      ({ code }) => code === 'runtime-analysis-incomplete',
+    ),
+  );
   console.log(
-    'Packed Nx integration consumer: dry-run, rerun, compiled runtime, Nx/CI verification, migration ledger, failure propagation, and edit protection passed.',
+    'Packed Nx integration consumer: dry-run, rerun, compiled runtime, Nx/CI verification, migration ledger, contract-profile cutover gate, syntax-aware runtime reports, failure propagation, and edit protection passed. Real queue/database policy qualification is not part of this fixture.',
   );
 } finally {
   await rm(root, { recursive: true, force: true });

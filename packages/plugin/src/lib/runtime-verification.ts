@@ -101,6 +101,70 @@ export function analyzeRuntimeImports(source: string, filename = 'bundle.js') {
   // Binding is local only: never resolve or execute imports in the audited output.
   const program = ts.createProgram([filename], options, host);
   const checker = program.getTypeChecker();
+  const declarations = (node: ts.Identifier) =>
+    checker.getSymbolAtLocation(node)?.declarations ?? [];
+  const globalRequire = (node: ts.Expression) =>
+    ts.isIdentifier(node) &&
+    node.text === 'require' &&
+    !declarations(node).length;
+  const nodeModuleImport = (node: ts.Node): boolean => {
+    let parent: ts.Node | undefined = node;
+    while (parent && !ts.isImportDeclaration(parent)) parent = parent.parent;
+    return Boolean(
+      parent &&
+      ts.isImportDeclaration(parent) &&
+      ts.isStringLiteral(parent.moduleSpecifier) &&
+      ['module', 'node:module'].includes(parent.moduleSpecifier.text),
+    );
+  };
+  const nodeModuleCall = (node: ts.Expression) =>
+    ts.isCallExpression(node) &&
+    globalRequire(node.expression) &&
+    node.arguments.length === 1 &&
+    ts.isStringLiteral(node.arguments[0]) &&
+    ['module', 'node:module'].includes(node.arguments[0].text);
+  const createRequireFactory = (node: ts.Expression): boolean => {
+    if (ts.isIdentifier(node))
+      return declarations(node).some(
+        (declaration) =>
+          (ts.isImportSpecifier(declaration) &&
+            (declaration.propertyName ?? declaration.name).text ===
+              'createRequire' &&
+            nodeModuleImport(declaration)) ||
+          (ts.isBindingElement(declaration) &&
+            (declaration.propertyName ?? declaration.name).getText(file) ===
+              'createRequire' &&
+            ts.isVariableDeclaration(declaration.parent.parent) &&
+            Boolean(
+              declaration.parent.parent.initializer &&
+              nodeModuleCall(declaration.parent.parent.initializer),
+            )),
+      );
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      node.name.text === 'createRequire'
+    )
+      return (
+        nodeModuleCall(node.expression) ||
+        (ts.isIdentifier(node.expression) &&
+          declarations(node.expression).some(
+            (declaration) =>
+              ts.isNamespaceImport(declaration) &&
+              nodeModuleImport(declaration),
+          ))
+      );
+    return false;
+  };
+  const commonJsLoader = (node: ts.Expression): boolean =>
+    globalRequire(node) ||
+    (ts.isIdentifier(node) &&
+      declarations(node).some(
+        (declaration) =>
+          ts.isVariableDeclaration(declaration) &&
+          declaration.initializer &&
+          ts.isCallExpression(declaration.initializer) &&
+          createRequireFactory(declaration.initializer.expression),
+      ));
   const location = (position: number) => {
     const { line, character } = file.getLineAndCharacterOfPosition(position);
     return `${line + 1}:${character + 1}`;
@@ -128,9 +192,10 @@ export function analyzeRuntimeImports(source: string, filename = 'bundle.js') {
     } else if (ts.isCallExpression(node)) {
       if (
         node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === 'require' &&
-          !checker.getSymbolAtLocation(node.expression)?.declarations?.length)
+        commonJsLoader(node.expression) ||
+        (ts.isPropertyAccessExpression(node.expression) &&
+          node.expression.name.text === 'resolve' &&
+          commonJsLoader(node.expression.expression))
       )
         add(node.arguments[0], node);
     }

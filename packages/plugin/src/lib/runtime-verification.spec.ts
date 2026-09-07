@@ -79,6 +79,31 @@ describe('runtime dependency verification', () => {
     expect(analyzeRuntimeImports(source).issues.length).toBeGreaterThan(0);
     expect(() => externalSpecifiers(source)).toThrow('incomplete');
   });
+  it.each([
+    'import { createRequire as makeRequire } from "node:module"; const require = makeRequire(import.meta.url);',
+    'import * as nodeModule from "node:module"; const require = nodeModule.createRequire(import.meta.url);',
+    'const {createRequire} = require("node:module"); const load = createRequire(__filename);',
+  ])('recognizes Node createRequire loaders: %s', (prefix) => {
+    const loader = prefix.includes('const load') ? 'load' : 'require';
+    expect(
+      externalSpecifiers(
+        `${prefix} ${loader}("runtime-package"); ${loader}.resolve("resolve-package");`,
+      ),
+    ).toEqual(['resolve-package', 'runtime-package']);
+    expect(
+      analyzeRuntimeImports(`${prefix} ${loader}(dynamicName);`).issues.length,
+    ).toBeGreaterThan(0);
+  });
+  it('does not treat an application createRequire function as a Node loader', () => {
+    expect(
+      externalSpecifiers(
+        'function createRequire() { return custom; } const require = createRequire(); require("not-node");',
+      ),
+    ).toEqual([]);
+    expect(
+      externalSpecifiers('require.resolve("resolution-dependency");'),
+    ).toEqual(['resolution-dependency']);
+  });
 
   it('does not return a clean report for unresolved imports or malformed JavaScript', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-runtime-incomplete-'));
