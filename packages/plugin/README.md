@@ -186,6 +186,17 @@ into a workspace file, replace any `<review-…>` placeholders, and pass that
 file with `--adoptionMap` or `--docsAdoptionMap`; pass the reviewed Render map
 inline as described below.
 
+Package-manifest Nx projects are included; `project.json` is not required.
+Shared Worker libraries can be classified from an explicit
+`@cloudflare/workers-types` entry in their local TypeScript configuration.
+Names such as `workers-shared` alone are not platform evidence: review their
+type/platform through the adoption map when configuration is inconclusive.
+Browser-specific extension manifests and package-authored
+`megamono.extension.manifests` declarations are also recognized without WXT.
+Render service mappings remain reviewed decisions even when command evidence
+suggests a project. The Basemarks-shaped regression fixture exercises these
+cases while preserving repository-owned CI, release gates, and unrelated files.
+
 When a repository-owned `render.yaml` is present, the inference module installs
 `@megamono/nx-render`. That plugin attaches only explicitly rooted or mapped
 services, preserves the Blueprint as deployment authority, and exposes bounded

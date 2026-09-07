@@ -204,6 +204,24 @@ function inferPlatform(
     )
   )
     add('worker', 'Wrangler configuration');
+  for (const name of [
+    'tsconfig.json',
+    'tsconfig.lib.json',
+    'tsconfig.app.json',
+  ]) {
+    const config = readJsonObject(tree, `${root}/${name}`);
+    const types = (config.compilerOptions as { types?: unknown } | undefined)
+      ?.types;
+    if (
+      Array.isArray(types) &&
+      types.some(
+        (type) =>
+          typeof type === 'string' &&
+          /^@cloudflare\/workers-types(?:\/|$)/.test(type),
+      )
+    )
+      add('worker', `${name} explicitly selects Cloudflare Worker types`);
+  }
   if (
     tree.exists(`${root}/Package.swift`) ||
     tree
