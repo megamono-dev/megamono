@@ -13,6 +13,7 @@ import {
 } from '../../lib/integration-composition';
 import { planIntegrationVerification } from '../../lib/integration-verification';
 import { collectIntegrationProvenance } from '../../lib/integration-provenance';
+import { selectMigrationContracts } from '../../lib/integration-migration-contracts';
 import {
   INTEGRATION_MIGRATIONS_PATH,
   integrationFingerprint,
@@ -60,6 +61,7 @@ export interface PlaystackIntegrateGeneratorSchema {
   readonly migrationStages?: string;
   readonly composition?: string;
   readonly qualification?: string;
+  readonly migrationContracts?: string;
   readonly dryRun?: boolean;
   readonly yes?: boolean;
 }
@@ -870,6 +872,30 @@ export async function playstackIntegrateGenerator(
     requirements,
     new Set(files.map(({ target }) => target)),
   );
+  const migrationContracts = selectMigrationContracts(
+    requirements.map((record) => `${record.package}:${record.id}`),
+    options.migrationContracts,
+  );
+  for (const [index, record] of requirements.entries()) {
+    const extra =
+      migrationContracts[`${record.package}:${record.id}`]?.tests ?? [];
+    if (!extra.length) continue;
+    const prior = record.requirements.requiredTests ?? [];
+    if (extra.some((test) => prior.some(({ id }) => id === test.id)))
+      throw new Error(
+        'Application migration contract IDs overlap package-authored tests.',
+      );
+    requirements[index] = {
+      ...record,
+      requirements: {
+        ...record.requirements,
+        requiredTests: [
+          ...prior,
+          ...extra.map(({ id, kind }) => ({ id, kind })),
+        ],
+      },
+    };
+  }
   const commitBoundaries = requirements.map((record) => ({
     id: `integrate-${record.id}`,
     package: record.package,
@@ -911,6 +937,14 @@ export async function playstackIntegrateGenerator(
   const qualification = qualificationRequirementsSchema.parse(
     JSON.parse(options.qualification ?? '{}'),
   );
+  for (const [key, contract] of Object.entries(migrationContracts))
+    for (const test of contract.tests) {
+      const testKey = `${key}:${test.id}`;
+      // Caller qualification can strengthen, never remove, the profile minimum.
+      qualification[testKey] = [
+        ...new Set([...test.environments, ...(qualification[testKey] ?? [])]),
+      ];
+    }
   const testKeys = new Set(
     requirements.flatMap((record) =>
       (record.requirements.requiredTests ?? []).map(
@@ -952,6 +986,9 @@ export async function playstackIntegrateGenerator(
       return {
         key: `${record.package}:${record.id}`,
         version: source.packageVersion,
+        requireEvidence: Boolean(
+          migrationContracts[`${record.package}:${record.id}`],
+        ),
         fingerprint: integrationFingerprint({
           manifest: source.integrations.find(({ id }) => id === record.id),
           version: source.packageVersion,
@@ -1009,6 +1046,27 @@ export async function playstackIntegrateGenerator(
     }),
     options.migrationStages,
   );
+  for (const key of Object.keys(migrationContracts)) {
+    const record = requirements.find(
+      (entry) => `${entry.package}:${entry.id}` === key,
+    );
+    if (!record)
+      throw new Error(`Missing active migration integration ${key}.`);
+    const requestedModes = [
+      options.adoptionMode,
+      ...(record.requirements.decisions ?? [])
+        .filter(({ key }) => key.endsWith('.adoptionMode'))
+        .map(({ key }) => selectedDecisions[key]),
+    ];
+    for (const mode of new Set(requestedModes))
+      if (
+        (mode === 'shadow' || mode === 'cutover') &&
+        migrations.integrations[key].stage !== mode
+      )
+        conflicts.push(
+          `${key} requests ${mode} generation but its qualified migration stage is ${migrations.integrations[key].stage}; supply the matching reviewed migration transition and evidence first.`,
+        );
+  }
   const plan = {
     schemaVersion: 1,
     packages: manifests.map(({ package: name, packageVersion }) => ({
@@ -1016,6 +1074,7 @@ export async function playstackIntegrateGenerator(
       version: packageVersion,
     })),
     artifactProvenance,
+    migrationContracts,
     qualification,
     selections: {
       adapters,

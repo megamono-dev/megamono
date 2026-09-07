@@ -55,6 +55,7 @@ export const qualificationEnvironment = z.enum([
   'unit',
   'in-memory',
   'real-database',
+  'real-queue',
   'typecheck',
   'browser-bundle',
   'tauri-build',
@@ -110,6 +111,7 @@ export interface IntegrationMigrationInput {
   readonly requiredTests: readonly string[];
   readonly requiredEnvironments?: Readonly<Record<string, readonly string[]>>;
   readonly requiredTestKinds?: Readonly<Record<string, string>>;
+  readonly requireEvidence?: boolean;
 }
 
 export function integrationFingerprint(value: unknown): string {
@@ -219,7 +221,8 @@ export function planIntegrationMigrations(
       const receipt = receiptSchema.parse(JSON.parse(report.content));
       if (
         receipt.schemaVersion === 1 &&
-        Object.keys(record.requiredEnvironments ?? {}).length
+        (record.requireEvidence ||
+          Object.keys(record.requiredEnvironments ?? {}).length)
       )
         throw new Error(
           'Environment-qualified integrations require a schemaVersion 2 verification receipt.',
@@ -255,6 +258,10 @@ export function planIntegrationMigrations(
             (check) => check.id === id && check.status === 'passed',
           );
           const kind = record.requiredTestKinds?.[id];
+          if (record.requireEvidence && checks.some((check) => !check.evidence))
+            throw new Error(
+              `Qualification ${id} requires hashed application evidence, not just a passed label.`,
+            );
           if (kind && checks.some((check) => check.kind !== kind))
             throw new Error(
               `Qualification ${id} must use its declared test kind ${kind}.`,

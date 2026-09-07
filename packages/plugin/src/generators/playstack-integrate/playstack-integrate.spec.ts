@@ -445,6 +445,91 @@ describe('Playstack integration generator', () => {
       }),
     ).rejects.toThrow('not an active');
   });
+  it('adds reviewed application migration contracts without allowing qualification or wiring to omit them', async () => {
+    const tree = fixture();
+    const key = '@playstack/rate-limit:nest-rate-limit';
+    // Synthetic fixture: a host may attach queue contracts to its own selected integration.
+    const options = {
+      packages: '@playstack/rate-limit',
+      api: 'apps/api',
+      yes: true,
+      migrationContracts: JSON.stringify({ [key]: ['queue-jobs'] }),
+      qualification: JSON.stringify({
+        [`${key}:migration.queue-payload-compatibility`]: ['unit'],
+      }),
+    };
+    const before = tree.listChanges();
+    await playstackIntegrateGenerator(tree, { ...options, dryRun: true });
+    expect(tree.listChanges()).toEqual(before);
+    await playstackIntegrateGenerator(tree, options);
+    const plan = JSON.parse(
+      tree.read('.megamono/playstack-integration-plan.json', 'utf8') ?? '{}',
+    );
+    expect(plan.migrationContracts[key].profiles).toEqual(['queue-jobs']);
+    expect(
+      plan.qualification[`${key}:migration.queue-payload-compatibility`],
+    ).toEqual(['real-queue', 'unit']);
+    expect(plan.requirements[0].requirements.requiredTests).toEqual(
+      expect.arrayContaining([
+        { id: 'migration.queue-payload-compatibility', kind: 'integration' },
+        { id: 'migration.queue-scheduler-recovery', kind: 'integration' },
+      ]),
+    );
+    const unchanged = tree.listChanges();
+    await expect(
+      playstackIntegrateGenerator(tree, {
+        ...options,
+        verificationProject: 'api',
+        verification: '{}',
+      }),
+    ).rejects.toThrow('every active');
+    expect(tree.listChanges()).toEqual(unchanged);
+    const fingerprint = JSON.parse(
+      tree.read('.megamono/playstack-integrations.json', 'utf8') ?? '{}',
+    ).integrations[key].fingerprint;
+    await playstackIntegrateGenerator(tree, {
+      ...options,
+      migrationContracts: undefined,
+      qualification: undefined,
+    });
+    expect(
+      JSON.parse(
+        tree.read('.megamono/playstack-integrations.json', 'utf8') ?? '{}',
+      ).integrations[key].fingerprint,
+    ).not.toBe(fingerprint);
+  });
+  it.each(['option', 'decision'])(
+    'cannot bypass profile evidence using an adoption-mode %s',
+    async (modeSource) => {
+      const tree = fixture();
+      const key = '@playstack/rate-limit:nest-rate-limit';
+      const manifest = integrationManifest(tree);
+      manifest.integrations[0].requirements.decisions = [
+        {
+          key: 'queue.adoptionMode',
+          prompt: 'Adoption mode',
+          required: false,
+          options: ['compare', 'shadow', 'cutover'],
+        },
+      ];
+      writeIntegrationManifest(tree, manifest);
+      const before = tree.listChanges();
+      await expect(
+        playstackIntegrateGenerator(tree, {
+          packages: '@playstack/rate-limit',
+          api: 'apps/api',
+          yes: true,
+          migrationContracts: JSON.stringify({ [key]: ['queue-jobs'] }),
+          ...(modeSource === 'option'
+            ? { adoptionMode: 'cutover' as const }
+            : {
+                decisions: JSON.stringify({ 'queue.adoptionMode': 'cutover' }),
+              }),
+        }),
+      ).rejects.toThrow('qualified migration stage');
+      expect(tree.listChanges()).toEqual(before);
+    },
+  );
   it('records reviewed environment mappings and reuses an application-owned template without changing it', async () => {
     const tree = fixture();
     const path = 'libs/storage/src/storage.module.ts';

@@ -64,7 +64,11 @@
     },
     "qualification": {
       "type": "string",
-      "description": "Reviewed JSON map from package:integration:test ID to required environments (real-database, native-device, live-provider, typecheck, browser-bundle, tauri-build, expo-build, clean-install, container, unit, in-memory). Binds migration evidence to these environments."
+      "description": "Reviewed JSON map from package:integration:test ID to required environments (real-database, real-queue, native-device, live-provider, typecheck, browser-bundle, tauri-build, expo-build, clean-install, container, unit, in-memory). Binds migration evidence to these environments."
+    },
+    "migrationContracts": {
+      "type": "string",
+      "description": "Reviewed JSON package:integration map to migration profiles: queue-jobs, application-persistence, auth-policy, billing-cutover. Supplements package tests and requires qualified hashed evidence for stage transitions."
     },
     "ciWorkflow": {
       "type": "string",

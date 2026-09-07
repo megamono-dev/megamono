@@ -315,6 +315,41 @@ transaction, source revision, device, or provider was used. Attach reproducible
 logs and review the runner. Never point mutation-based contract suites at
 production data or turn them into startup readiness checks.
 
+#### Reviewed application migration contracts
+
+`--migrationContracts` supplements package-authored tests with opt-in host
+acceptance profiles, keyed by an active `package:integration`:
+`queue-jobs`, `application-persistence`, `auth-policy`, and `billing-cutover`.
+The emitted plan includes the selected profiles, contract descriptions, added
+test IDs and minimum environments. Package tests remain required too.
+
+- Queue migration requires producer/worker envelope and identity compatibility,
+  scheduler behavior and drain/recovery evidence against `real-queue`. A passing
+  Queuebert monitoring check is not job compatibility.
+- Application persistence requires real-database behavior and rollback tests;
+  generated throwing stubs and typechecks cannot qualify the selected profile.
+- Auth requires reviewed session-policy and transport tests. Idle/absolute
+  expiry, session caps, refresh grace, membership and optional SSO policy remain
+  application decisions, not implicit replacement defaults.
+- Billing requires projection comparison plus single-writer authority/recovery
+  tests. Comparison alone cannot qualify authoritative cutover. Marketplace
+  settlement and product licensing effects remain application-owned.
+
+Profile minimum environments are unioned with `--qualification`, never replaced
+by weaker caller settings. Every required passed check must have hashed,
+nonempty workspace-owned evidence in a version-2 receipt. The existing stage
+sequence, rollback document and fingerprint rules still apply. A selected
+profile also blocks writes when requested shadow/cutover generation (via
+`--adoptionMode` or a package `.adoptionMode` decision) disagrees with the
+qualified ledger stage. Dry-run planning exposes that disagreement as a conflict.
+
+Profiles are optional: omitting them leaves pre-existing fingerprints unchanged.
+Selecting/removing/changing contract tests or environments changes the fingerprint
+and cannot silently change an integration already in shadow/cutover. The
+contracts are reviewed attestations, not proof that arbitrary tests or adapters
+implement the described semantics. Fresh/prelaunch apps may choose native
+contracts directly; legacy adaptation is not a prerequisite.
+
 `--verification` maps every active `package:integration:test` requirement to an
 existing `project:target`. `--verificationProject` selects the existing Nx
 project receiving a non-cached `playstack-verify` aggregation target. Mapping

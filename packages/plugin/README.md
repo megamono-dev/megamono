@@ -89,6 +89,50 @@ array covering all required test IDs. These are application-reviewed
 attestations: the generator records their digests but never executes a traffic
 cutover, database migration, or rollback. Invalid transitions fail before writes.
 
+### Application migration contract gates
+
+Use `--migrationContracts` to supplement package manifests with reviewed
+application acceptance requirements. Keys are active `package:integration` IDs
+from the survey/plan (do not guess them); values select one or more profiles:
+
+| Profile                   | Required proof before shadow/cutover                                                                                                                                                                      |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queue-jobs`              | Producer/worker payload, envelope, job ID and Redis-prefix compatibility; scheduler, delayed/retried job and drain/recovery tests against a real queue. Queuebert monitoring checks alone do not qualify. |
+| `application-persistence` | Implemented adapter behavior, uniqueness/tenant isolation and injected physical-transaction rollback against a real database. Generated throwing stubs or a typecheck do not qualify.                     |
+| `auth-policy`             | Real-database session policy tests for reviewed expiry, session caps, replay/grace and membership; transport security tests including SSO where enabled. Policy values remain application-owned.          |
+| `billing-cutover`         | Real-database projection comparison plus single-writer authority and rollback tests. Comparison is not authorization to enable a second writer. Marketplace policy remains application-owned.             |
+
+For example, `--migrationContracts='{"@playstack/queues:nest-queues":["queue-jobs"]}'`
+is valid only when that exact integration appears in the selected plan. Review
+the emitted `migrationContracts` descriptions, `requiredTests`, and
+`qualification` before mapping **every** test ID through `--verification`.
+The existing verification aggregator and optional reviewed CI step include these
+tests; existing deployment/release gates remain untouched.
+
+Profiles are opt-in and do not change existing fingerprints when omitted.
+For selected profiles, a requested shadow/cutover adoption mode (including a
+package's `.adoptionMode` decision) must match the qualified ledger stage before
+files can be written. A dry run shows the mismatch as a preflight conflict.
+Selected profile tests and environment requirements participate in the integration
+fingerprint. `--qualification` may add environments, but cannot weaken profile
+minimums. `real-queue` means an actual queue backend, including a disposable local
+Redis-backed queue—not an in-memory fake or a dashboard assertion.
+
+Profile-qualified shadow/cutover/rollback transitions require schemaVersion 2
+receipts with source revision, runtime versions and passed checks matching each
+required ID, kind and environment. Every required passed check must reference
+nonempty application-owned evidence using `{ "path": "reports/test.log",
+"sha256": "<64-character SHA-256>" }`; the generator verifies those file hashes.
+A matching reviewed rollback file is still required. Skipped tests, stale files,
+compile-only substitutes and legacy passed-label receipts cannot satisfy these
+gates. These remain reviewed attestations, not automatic certification of test
+content, a scan proving adapters complete, or execution of a traffic cutover.
+
+Fontstack-style adoption can therefore proceed with governance and infrastructure
+while keeping identity/account and queue/billing cutovers separately gated.
+Select native Playstack contracts directly when appropriate; application-owned
+persistence and legacy migration scaffolds are not mandatory for prelaunch apps.
+
 Shared Nest composition is opt-in with `--composition='<json>'`:
 
 ```json
