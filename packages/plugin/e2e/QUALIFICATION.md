@@ -19,12 +19,61 @@ build, and Chromium hydration/keyboard filtering/navigation run in that clean
 consumer. Original scaffold files are not substituted with hand-built projects.
 Application-owned provider composition and the public example route are explicit.
 
-`tmp/ui-bootstrap/` records checks (including failed stages), resolved versions,
+`tmp/ui-bootstrap/<lane>/` records checks (including failed stages), resolved versions,
 source revision/dirty status, package file hashes, recipe/integration plans, and
 the clean-bootstrap file hashes and lockfile. A successful run qualifies only
 that recorded combination. This opt-in target requires registry access, local
 Playstack publications, and Chromium. It is not an auth/cache/provider test or
 a claim that ignored `.yalc` directories alone are sufficient for CI.
+
+### Version lanes and qualification boundaries
+
+Run `npm exec nx -- run @megamono/plugin:e2e-ui-version-matrix` to exercise all
+four lanes, or select one with
+`npm exec nx -- run @megamono/plugin:e2e-ui-bootstrap --args='--lane=newer-ui'`.
+For a subset, pass `--args='--lanes=scaffold,scaffold-eslint10'` to the matrix
+target. It writes a separately named subset summary and never treats unselected
+lanes as passing. Do not run overlapping lane selections concurrently.
+The default lane is `scaffold`. Pins live in `ui-qualification.mjs`; these are
+fixture selections, not edits to Megamono's compatibility declarations.
+
+| Lane                | Next / Next ESLint config | Chakra | TypeScript | ESLint / @eslint/js |
+| ------------------- | ------------------------- | ------ | ---------- | ------------------- |
+| `scaffold`          | 16.1.7                    | 3.36.1 | 6.0.3      | 9.39.5 / 9.39.5     |
+| `scaffold-eslint10` | 16.1.7                    | 3.36.1 | 6.0.3      | 10.6.0 / 10.0.1     |
+| `newer-ui`          | 16.3.3                    | 3.37.0 | 6.0.3      | 9.39.5 / 9.39.5     |
+| `newer-ui-eslint10` | 16.3.3                    | 3.37.0 | 6.0.3      | 10.6.0 / 10.0.1     |
+
+Each lane creates a fresh workspace with the supported generator, then explicitly
+selects its dependency combination before installing recipes. Existing app/theme
+peer declarations are aligned with the root selection to prevent duplicate Chakra
+contexts. The prior scaffold install/lockfile is parked outside the consumer
+before resolving that combination; no stale installed peer graph is reused.
+No peer-conflict bypasses or lint-rule suppression are used. The fixture
+asserts the resolved versions after clean installation; other transitive versions,
+including React and the Nx toolchain, are recorded in the report and lockfile.
+
+`matrix.json` aggregates the lane reports and returns failure if **any** lane
+fails. A failing lint stack remains failed even if its peer ranges permit
+installation. Later checks are reported as `not-run`, never inferred from another
+lane. These opt-in candidates are not promised to pass just because they are
+listed. Each lane's `qualification` section is the authoritative result; missing
+stages mean incomplete evidence. Unit tests for selection, manifest pinning and
+report classification run through `@megamono/plugin:test-ui-qualification`.
+
+Changing scaffold pins requires separately reviewing the recorded combination.
+TypeScript 7, system/dark-mode composition, live auth/cache interactions and
+vulnerability qualification remain outside these lanes. A green UI fixture is
+not a product-release or security certification.
+
+Local qualification on 2026-09-07 passed the `scaffold` and `newer-ui` ESLint 9
+lanes through clean install, generated lint, production build, typecheck and
+browser interaction. Both ESLint 10 lanes failed fresh dependency resolution:
+the generated workspace pins `eslint-plugin-import@2.31.0`, whose ESLint peer
+range ends at 9. Their downstream lint/build/browser checks were not run. This is
+not an ESLint 10 qualification and must not be hidden with peer overrides.
+See each dated lane report for the exact artifact hashes and dependency lock;
+future runs must collect their own evidence.
 
 ## Generated Next.js and Playstack UI
 

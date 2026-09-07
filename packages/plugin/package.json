@@ -38,6 +38,31 @@
   ],
   "nx": {
     "targets": {
+      "test-ui-qualification": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "node --test packages/plugin/e2e/ui-qualification.test.mjs"
+        }
+      },
+      "e2e-ui-version-matrix": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build",
+          {
+            "projects": [
+              "create-megamono"
+            ],
+            "target": "build"
+          }
+        ],
+        "outputs": [
+          "{workspaceRoot}/tmp/ui-bootstrap"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/ui-version-matrix.e2e.mjs"
+        }
+      },
       "e2e-ui-bootstrap": {
         "executor": "nx:run-commands",
         "cache": false,

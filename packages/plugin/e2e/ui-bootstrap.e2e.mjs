@@ -17,6 +17,11 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import {
+  pinManifest,
+  qualificationSummary,
+  selectLane,
+} from './ui-qualification.mjs';
 
 const workspace = resolve(import.meta.dirname, '../../..');
 const compatibility = JSON.parse(
@@ -25,10 +30,11 @@ const compatibility = JSON.parse(
     'utf8',
   ),
 );
+const lane = selectLane(process.argv.slice(2), compatibility);
 const temporary = await mkdtemp(join(tmpdir(), 'megamono-ui-bootstrap-'));
 const consumer = join(temporary, 'consumer');
 const store = join(temporary, 'yalc-store');
-const reportRoot = join(workspace, 'tmp/ui-bootstrap');
+const reportRoot = join(workspace, 'tmp/ui-bootstrap', lane.name);
 const exec = promisify(execFile);
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const put = async (file, value) => {
@@ -66,6 +72,7 @@ const run = async (command, args, cwd = consumer) => {
   return result.stdout;
 };
 const report = {
+  lane,
   schemaVersion: 1,
   status: 'running',
   startedAt: new Date().toISOString(),
@@ -228,17 +235,43 @@ try {
   );
   const themeFile = join(consumer, 'packages/theme/src/lib/system.ts');
   const originalTheme = await readFile(themeFile, 'utf8');
-  await check('select-existing-ui-peers', async () => {
+  await check('select-version-combination', async () => {
     const rootFile = join(consumer, 'package.json');
     const manifest = JSON.parse(await readFile(rootFile, 'utf8'));
+    await put(join(reportRoot, 'scaffold-package.json'), manifest);
     const theme = JSON.parse(
       await readFile(join(consumer, 'packages/theme/package.json'), 'utf8'),
     );
     // Recipes install at the workspace root. Reuse the generated theme's peers
     // there, instead of letting npm introduce a second Chakra context version.
     manifest.dependencies = { ...manifest.dependencies, ...theme.dependencies };
-    await put(rootFile, manifest);
-    return JSON.stringify(theme.dependencies);
+    const selectedManifest = pinManifest(manifest, lane.versions, true);
+    await put(rootFile, selectedManifest);
+    await put(join(reportRoot, 'selected-package.json'), selectedManifest);
+    for (const file of [
+      'apps/site/package.json',
+      'packages/theme/package.json',
+    ]) {
+      const destination = join(consumer, file);
+      await put(
+        destination,
+        pinManifest(
+          JSON.parse(await readFile(destination, 'utf8')),
+          lane.versions,
+        ),
+      );
+    }
+    // Resolve independently of the scaffold's old locked/installed peer graph.
+    await rename(
+      join(consumer, 'node_modules'),
+      join(temporary, 'scaffold-node-modules'),
+    );
+    await rename(
+      join(consumer, 'package-lock.json'),
+      join(temporary, 'scaffold-package-lock.json'),
+    );
+    await run('npm', ['install', '--ignore-scripts']);
+    return JSON.stringify(lane);
   });
   const recipe = (capability) => [
     playstack,
@@ -383,8 +416,30 @@ try {
       '@chakra-ui/react',
       'eslint',
       '@nx/next',
-    ].map((name) => [name, request(`${name}/package.json`).version]),
+      'eslint-config-next',
+      '@eslint/js',
+    ].map((name) => [
+      name,
+      request(join(clean, 'node_modules', name, 'package.json')).version,
+    ]),
   );
+  await check('selected-versions', () => {
+    for (const [name, version] of Object.entries(lane.versions))
+      assert.equal(
+        report.versions[name],
+        version,
+        `Unexpected ${name} resolution`,
+      );
+    const appRequest = createRequire(join(clean, 'apps/site/package.json'));
+    const uiRequest = createRequire(
+      join(clean, 'node_modules/@playstack/app-ui/package.json'),
+    );
+    assert.equal(
+      appRequest.resolve('@chakra-ui/react'),
+      uiRequest.resolve('@chakra-ui/react'),
+      'Duplicate Chakra contexts',
+    );
+  });
   await check('clean-graph', () =>
     run('npm', ['exec', 'nx', '--', 'show', 'projects', '--json'], clean),
   );
@@ -481,6 +536,7 @@ try {
   throw error;
 } finally {
   server?.kill('SIGTERM');
+  report.qualification = qualificationSummary(report.checks);
   await put(join(reportRoot, 'report.json'), report);
   await rm(temporary, { recursive: true, force: true });
 }
