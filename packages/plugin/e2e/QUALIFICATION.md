@@ -143,3 +143,33 @@ therefore is not clean-install evidence. `e2e-playstack-integrations-yalc`
 checks real locally packed Playstack manifests, internal closures, and template
 materialization in a virtual Nx tree. Its external-peer metadata is synthetic;
 it is not a runtime, provider, or external-peer installation test.
+
+## Actual emitted billing template set
+
+Run `npm exec nx -- run @megamono/plugin:e2e-billing-template-consumer`.
+This opt-in lane packs Megamono and the real Yalc Nest Billing dependency
+closure, installs real Nest 11/TypeScript 6/Jest declarations, performs a clean
+`npm ci`, and invokes the installed integration generator. Every emitted
+TypeScript file, including tests, is compiled together regardless of production
+tsconfig exclusions. If compilation passes, emitted direct-controller tests run
+separately. No templates are repaired in the fixture. The lane never publishes,
+registers Yalc installations, or changes adopter repositories.
+
+Reports, template/tarball hashes, compiler diagnostics, and the resolved lockfile
+are saved in `tmp/billing-template-consumer/`. Failed compilation fails the Nx
+target; downstream checks are explicitly not-run. HTTP authorization with a real
+account guard, database correctness and live Stripe behavior are **not** proven
+by a permissive direct-controller test. Registry access and local Playstack
+artifacts are prerequisites; ordinary CI does not acquire a hidden Yalc dependency.
+
+September 8, 2026: packing, dependency installation, clean installation and actual
+generation passed. The published `@playstack/nest-billing@0.1.0-beta.1` test
+(declared template hash `1cac3fa876ace8288a093b0159c93722e659ad4eeeca7418c4b8718aaab8d20a`)
+failed TS2345 because its checkout body omits `idempotencyKey`. Compilation and
+direct-controller execution remain blocked until Playstack republishes the fix.
+This is a recorded failed qualification, not an expected-failure pass.
+
+`npm exec nx -- run @megamono/plugin:test-emitted-typescript` independently proves
+that the compiler catches a missing required field in an excluded test and
+accepts the correctly paired controller/test. This tool regression is not a
+substitute for passing the actual published-artifact lane.

@@ -38,6 +38,25 @@
   ],
   "nx": {
     "targets": {
+      "test-emitted-typescript": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "node --test packages/plugin/e2e/emitted-typescript.test.mjs"
+        }
+      },
+      "e2e-billing-template-consumer": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "outputs": [
+          "{workspaceRoot}/tmp/billing-template-consumer"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/billing-template-consumer.e2e.mjs"
+        }
+      },
       "test-ui-qualification": {
         "executor": "nx:run-commands",
         "options": {
