@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -950,9 +951,35 @@ describe('@megamono/cli', () => {
     );
   });
 
-  it('can stage the missing survey plugin from Yalc', async () => {
+  it('copies survey artifacts without registering or changing the Yalc store or repository', async () => {
     const root = await workspace('npm', ['nx']);
-    const harness = io(root);
+    const store = await mkdtemp(join(tmpdir(), 'megamono-survey-store-'));
+    fixtures.push(store);
+    const artifact = join(store, 'packages/@megamono/plugin/0.0.1');
+    await json(join(artifact, 'package.json'), {
+      name: '@megamono/plugin',
+      version: '0.0.1',
+    });
+    await json(join(store, 'installations.json'), { sentinel: ['unchanged'] });
+    const before = await readFile(join(root, 'package.json'), 'utf8');
+    let staged = '';
+    const harness = io(root, (invocation) => {
+      if (invocation.command === 'yalc') {
+        expect(invocation.args).toEqual(['dir']);
+        return { exitCode: 0, stdout: store };
+      }
+      if (invocation.args.includes('install')) {
+        staged = invocation.cwd;
+        expect(
+          JSON.parse(readFileSync(join(staged, 'package.json'), 'utf8'))
+            .devDependencies,
+        ).toEqual({ '@megamono/plugin': 'file:./plugin' });
+        expect(readFileSync(join(staged, 'plugin/package.json'), 'utf8')).toBe(
+          readFileSync(join(artifact, 'package.json'), 'utf8'),
+        );
+      }
+      return { exitCode: 0 };
+    });
 
     const result = await runMegamonoCli(
       ['adopt', '--local-packages=yalc'],
@@ -965,15 +992,52 @@ describe('@megamono/cli', () => {
       process.execPath,
       process.execPath,
     ]);
-    expect(harness.invocations[0]?.args).toEqual([
-      'add',
-      '@megamono/plugin',
-      '--dev',
-      '--no-pure',
-    ]);
+    expect(harness.invocations[0]?.args).toEqual(['dir']);
     expect(harness.invocations[1]?.args).not.toContain(
       '@megamono/plugin@0.0.1-test',
     );
+    expect(await readFile(join(root, 'package.json'), 'utf8')).toBe(before);
+    expect(
+      JSON.parse(await readFile(join(store, 'installations.json'), 'utf8')),
+    ).toEqual({ sentinel: ['unchanged'] });
+    await expect(readFile(join(staged, 'package.json'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(readFile(join(root, 'yalc.lock'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('reports missing Yalc survey artifacts before installing a runtime', async () => {
+    const root = await workspace('npm', ['nx']);
+    const harness = io(root, () => ({
+      exitCode: 0,
+      stdout: join(root, 'missing-store'),
+    }));
+    await expect(
+      runMegamonoCli(['adopt', '--local-packages=yalc'], harness.value),
+    ).resolves.toEqual({ exitCode: 3 });
+    expect(harness.stderr.join('\n')).toContain(
+      'store has no @megamono/plugin',
+    );
+    expect(harness.invocations).toHaveLength(1);
+  });
+
+  it('distinguishes unreadable Yalc inventory from a missing publication', async () => {
+    const root = await workspace('npm', ['nx']);
+    const store = join(root, 'not-a-directory');
+    await writeFile(store, 'fixture');
+    const harness = io(root, () => ({ exitCode: 0, stdout: store }));
+    expect(
+      await runMegamonoCli(['adopt', '--local-packages=yalc'], harness.value),
+    ).toEqual({ exitCode: 3 });
+    expect(harness.stderr.join('\n')).toContain(
+      'Unable to read the yalc store',
+    );
+    expect(harness.stderr.join('\n')).not.toContain(
+      'Publish a compatible package',
+    );
+    expect(harness.invocations).toHaveLength(1);
   });
 
   it('defaults adopt to a read-only survey and requires write for mutation', async () => {

@@ -7,6 +7,13 @@ execute the installed tool's declared `bin` with the CLI's current Node runtime.
 They never invoke package-manager reconciliation or download a missing tool.
 Repair missing executables through an explicit dependency installation. A survey
 that needs an ephemeral plugin still stages its dependencies outside the consumer.
+Yalc surveys read the store and copy the plugin into private temporary staging;
+they never run `yalc add` or register that staging directory in the shared Yalc
+installation registry. Staging is removed on success or failure. Installing the
+temporary runtime can still require registry access and package-manager cache
+writes; read-only refers to the consumer and Yalc installation state, not a
+network-free operation. Missing artifacts and unreadable store paths have
+distinct diagnostics.
 Ordinary write/install commands retain the selected package manager.
 
 ```sh

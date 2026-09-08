@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import {
   access,
+  cp,
   mkdtemp,
   readFile,
   readdir,
@@ -992,14 +993,27 @@ async function runEphemeralPluginSurvey(
       'utf8',
     );
     if (options.localPackages === 'yalc') {
-      const added = await io.runCommand(
-        'yalc',
-        ['add', '@megamono/plugin', '--dev', '--no-pure'],
-        { cwd: directory },
+      const store = await yalcRoot(io, root);
+      const artifact = await readYalcPackage(store, '@megamono/plugin');
+      const source = join(
+        yalcPackagePath(store, artifact.name),
+        artifact.version,
       );
-      if (added.exitCode !== 0) {
+      const destination = join(directory, 'plugin');
+      try {
+        // A survey is not a Yalc consumer. Copy bytes privately rather than
+        // registering a temporary installation in the user's shared store.
+        await cp(source, destination, { recursive: true, dereference: true });
+        await writeFile(
+          join(directory, 'package.json'),
+          JSON.stringify({
+            private: true,
+            devDependencies: { '@megamono/plugin': 'file:./plugin' },
+          }),
+        );
+      } catch (error) {
         throw new CliError(
-          'Unable to stage @megamono/plugin from Yalc for the read-only survey. Publish it locally and retry.',
+          `Unable to copy the Yalc survey artifact from ${source} into private staging: ${error instanceof Error ? error.message : String(error)}. Check read access to the artifact and write access to the temporary directory; no Yalc installation is registered.`,
           3,
         );
       }
@@ -1499,7 +1513,13 @@ async function readYalcPackage(
     versions = (await readdir(yalcPackagePath(store, packageName))).sort(
       compareVersions,
     );
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new CliError(
+        `Unable to read the yalc store for ${packageName}: ${error instanceof Error ? error.message : String(error)}. Check store read permissions; republishing is not required for a permission failure.`,
+        3,
+      );
+    }
     versions = [];
   }
   const version = [...versions]
@@ -1519,8 +1539,11 @@ async function readYalcPackage(
   let manifest: YalcPackageManifest;
   try {
     manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-  } catch {
-    throw new CliError(`Invalid yalc manifest at ${manifestPath}.`, 3);
+  } catch (error) {
+    throw new CliError(
+      `Unable to read or parse yalc manifest at ${manifestPath}: ${error instanceof Error ? error.message : String(error)}.`,
+      3,
+    );
   }
   if (manifest.name !== packageName || manifest.version !== version) {
     throw new CliError(
