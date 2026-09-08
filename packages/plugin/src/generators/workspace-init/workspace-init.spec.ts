@@ -99,6 +99,19 @@ describe('workspace-init generator', () => {
       output: '.megamono/content-collections',
       loaderMode: 'create',
     });
+    const loader = tree.read('.megamono/content-collections.ts', 'utf8');
+    const contract = readJson(tree, 'megamono.json').docs;
+    await workspaceInitGenerator(tree, {
+      only: 'docs',
+      yes: true,
+      bootstrap: true,
+    });
+    expect(readJson(tree, 'megamono.json').docs).toEqual(contract);
+    expect(tree.read('.megamono/content-collections.ts', 'utf8')).toBe(loader);
+    expect(tree.read('apps/site/content-collections.ts', 'utf8')).toBe(
+      'export default {};\n',
+    );
+    expect(tree.exists('content-collections.ts')).toBe(false);
   });
 
   it('retains an adopted compatible docs loader as repository-owned', async () => {

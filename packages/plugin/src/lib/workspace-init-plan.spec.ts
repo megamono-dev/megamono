@@ -783,6 +783,7 @@ describe('workspace init survey and plan', () => {
 
   it('does not recommend configuring around the recorded Megamono docs loader', () => {
     const tree = createTreeWithEmptyWorkspace();
+    tree.write('apps/site/content-collections.ts', 'export default {};\n');
     tree.write(
       'megamono.json',
       JSON.stringify({
@@ -798,11 +799,25 @@ describe('workspace init survey and plan', () => {
       'export default { collections: [] };\n',
     );
 
-    expect(surveyWorkspaceInit(tree).recommendations).toEqual([]);
+    const survey = surveyWorkspaceInit(tree);
+    expect(survey.recommendations).toEqual([]);
+    expect(survey.existing.contentCollections).toEqual(
+      expect.arrayContaining([
+        '.megamono/content-collections.ts',
+        'apps/site/content-collections.ts',
+      ]),
+    );
+    tree.delete('.megamono/content-collections.ts');
+    expect(surveyWorkspaceInit(tree).recommendations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ module: 'docs', action: 'configure' }),
+      ]),
+    );
   });
 
   it('recognizes the managed docs loader in an older artifact-only workspace', () => {
     const tree = createTreeWithEmptyWorkspace();
+    tree.write('apps/site/content-collections.ts', 'export default {};\n');
     tree.write('megamono.json', JSON.stringify({ docs: { root: 'docs' } }));
     tree.write(
       '.megamono/artifacts.json',

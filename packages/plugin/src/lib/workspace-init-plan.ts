@@ -1124,7 +1124,8 @@ export function surveyWorkspaceInit(
           },
         ]
       : []),
-    ...(coexistingContentCollections.length > 0
+    ...(coexistingContentCollections.length > 0 &&
+    !(managedDocsLoader && tree.exists(managedDocsLoader))
       ? [
           {
             module: 'docs' as const,
