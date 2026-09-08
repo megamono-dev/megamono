@@ -16,12 +16,16 @@ const { prompt } = enquirer;
 async function runCommand(
   command: string,
   args: readonly string[],
-  options: { readonly cwd: string; readonly capture?: boolean },
+  options: {
+    readonly cwd: string;
+    readonly capture?: boolean;
+    readonly env?: Readonly<Record<string, string>>;
+  },
 ): Promise<CommandResult> {
   return await new Promise((resolve, reject) => {
     const child = spawn(command, [...args], {
       cwd: options.cwd,
-      env: process.env,
+      env: { ...process.env, ...options.env },
       shell: false,
       stdio: options.capture
         ? ['ignore', 'pipe', 'pipe']

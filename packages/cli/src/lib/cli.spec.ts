@@ -17,6 +17,7 @@ interface Invocation {
   readonly args: readonly string[];
   readonly cwd: string;
   readonly capture: boolean;
+  readonly env?: Readonly<Record<string, string>>;
 }
 
 const fixtures: string[] = [];
@@ -183,6 +184,7 @@ function io(
         : {}),
       runCommand: async (command, args, options) => {
         const invocation = {
+          ...(options.env ? { env: options.env } : {}),
           command,
           args: [...args],
           cwd: options.cwd,
@@ -949,6 +951,11 @@ describe('@megamono/cli', () => {
     expect(harness.invocations[1]?.args).toEqual(
       expect.arrayContaining(['--dry-run', '--survey=true']),
     );
+    expect(harness.invocations[1]?.env).toEqual({
+      NX_DAEMON: 'false',
+      NX_CACHE_DIRECTORY: join(harness.invocations[0].cwd, 'nx-cache'),
+      NX_WORKSPACE_DATA_DIRECTORY: join(harness.invocations[0].cwd, 'nx-data'),
+    });
   });
 
   it('copies survey artifacts without registering or changing the Yalc store or repository', async () => {

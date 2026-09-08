@@ -27,6 +27,25 @@
   ],
   "nx": {
     "targets": {
+      "e2e-isolated-yalc-survey": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build",
+          {
+            "projects": [
+              "@megamono/plugin"
+            ],
+            "target": "build"
+          }
+        ],
+        "outputs": [
+          "{workspaceRoot}/tmp/survey-isolation"
+        ],
+        "options": {
+          "command": "node packages/cli/e2e/isolated-yalc-survey.e2e.mjs"
+        }
+      },
       "e2e-ephemeral-survey": {
         "executor": "nx:run-commands",
         "cache": false,

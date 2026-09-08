@@ -2,7 +2,9 @@ import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import {
   access,
+  chmod,
   cp,
+  stat,
   mkdtemp,
   readFile,
   readdir,
@@ -68,7 +70,11 @@ export interface MegamonoCliIo {
   runCommand(
     command: string,
     args: readonly string[],
-    options: { readonly cwd: string; readonly capture?: boolean },
+    options: {
+      readonly cwd: string;
+      readonly capture?: boolean;
+      readonly env?: Readonly<Record<string, string>>;
+    },
   ): Promise<CommandResult>;
 }
 
@@ -1004,6 +1010,7 @@ async function runEphemeralPluginSurvey(
         // A survey is not a Yalc consumer. Copy bytes privately rather than
         // registering a temporary installation in the user's shared store.
         await cp(source, destination, { recursive: true, dereference: true });
+        await writableSurveyCopy(destination);
         await writeFile(
           join(directory, 'package.json'),
           JSON.stringify({
@@ -1058,10 +1065,28 @@ async function runEphemeralPluginSurvey(
       '--dry-run',
       '--interactive=false',
     ]);
-    const surveyed = await io.runCommand(command, args, { cwd: root });
+    const surveyed = await io.runCommand(command, args, {
+      cwd: root,
+      env: {
+        NX_DAEMON: 'false',
+        NX_CACHE_DIRECTORY: join(directory, 'nx-cache'),
+        NX_WORKSPACE_DATA_DIRECTORY: join(directory, 'nx-data'),
+      },
+    });
     return { exitCode: surveyed.exitCode };
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function writableSurveyCopy(directory: string): Promise<void> {
+  // fs.cp preserves source modes. Immutable/read-only stores are valid inputs,
+  // but npm needs to create dependencies inside this private file: package.
+  await chmod(directory, (await stat(directory)).mode | 0o700);
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const file = join(directory, entry.name);
+    if (entry.isDirectory()) await writableSurveyCopy(file);
+    else await chmod(file, (await stat(file)).mode | 0o600);
   }
 }
 

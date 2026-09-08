@@ -14,6 +14,20 @@ temporary runtime can still require registry access and package-manager cache
 writes; read-only refers to the consumer and Yalc installation state, not a
 network-free operation. Missing artifacts and unreadable store paths have
 distinct diagnostics.
+
+The private copy is made owner-writable even when the source store is immutable;
+the source permissions and contents are never changed. Ephemeral surveys also
+redirect Nx cache/workspace-data writes to their disposable staging directory
+and disable its daemon.
+
+Maintainers: `npm exec nx -- run @megamono/cli:e2e-isolated-yalc-survey` runs the
+packed CLI with real npm, Yalc and Nx 22.7.8/23.1.1 in two disposable consumers.
+It enforces a read-only private store, checks complete consumer/store snapshots
+(including node_modules and symlink identities), checks the real global Yalc
+installation registry hash, audits that only `yalc dir` ran, and checks staging
+cleanup. Logs and artifact hashes are saved under `tmp/survey-isolation/`.
+The fixture requires network access for public dependencies and POSIX permission
+semantics; it does not mutate real adopters or qualify their application runtime.
 Ordinary write/install commands retain the selected package manager.
 
 ```sh
