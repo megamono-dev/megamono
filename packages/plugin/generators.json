@@ -70,6 +70,11 @@
       "schema": "./dist/generators/content-type/schema.json",
       "description": "Add a document type to a content collection library"
     },
+    "emails-adopt": {
+      "factory": "./dist/generators/emails-adopt/emails-adopt",
+      "schema": "./dist/generators/emails-adopt/schema.json",
+      "description": "Adopt an existing application-owned email preview and verification target"
+    },
     "playstack-lint": {
       "factory": "./dist/generators/playstack-lint/playstack-lint",
       "schema": "./dist/generators/playstack-lint/schema.json",

@@ -144,6 +144,25 @@ checks real locally packed Playstack manifests, internal closures, and template
 materialization in a virtual Nx tree. Its external-peer metadata is synthetic;
 it is not a runtime, provider, or external-peer installation test.
 
+## Existing email-preview adoption
+
+Run `npm exec nx -- run @megamono/plugin:e2e-email-preview-consumer` with local
+`chakra-email`, `@chakra-email/core`, `@playstack/mail` and `@playstack/core`
+artifacts. The fixture packs the current Megamono generator and those artifacts,
+performs real dependency and clean lockfile installs, then adopts a synthetic
+application-owned email library through the installed generator. No shared Yalc
+registration or publication is performed. Network access for installation and
+permission to bind loopback are required.
+
+It checks read-only planning, no-op reruns, template/theme/script preservation,
+real Chakra Email deterministic subject/HTML/plaintext with custom tokens,
+invalid-input and 100 KiB limit failures before Playstack capture delivery,
+loopback HTML serving, and propagation of a deliberately failing application
+verification target. These are synthetic adoption fixtures, not Newsbetters
+tests, email-client certification or live provider tests. Results and pinned
+artifact/lockfile evidence are written to `tmp/email-preview-consumer/`.
+This qualifies `emails-adopt`, **not** the still-gated `emails` seed generator.
+
 ## Actual emitted billing template set
 
 Run `npm exec nx -- run @megamono/plugin:e2e-billing-template-consumer`.

@@ -38,6 +38,19 @@
   ],
   "nx": {
     "targets": {
+      "e2e-email-preview-consumer": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "outputs": [
+          "{workspaceRoot}/tmp/email-preview-consumer"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/email-preview-consumer.e2e.mjs"
+        }
+      },
       "test-emitted-typescript": {
         "executor": "nx:run-commands",
         "options": {

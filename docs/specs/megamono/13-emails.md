@@ -34,6 +34,23 @@ external_references:
 
 ## What it does
 
+### Existing-workspace adoption (available separately)
+
+`@megamono/plugin:emails-adopt` is the bounded mature-workspace path. It maps
+existing template/fixture directories, an application-owned theme file, and
+reviewed preview/verification targets. It writes only an adoption record and a
+non-cacheable verification aggregator; it never installs packages, replaces
+templates, imports application rendering code, or runs delivery during adoption.
+Preview loopback/synthetic-data flags are explicit user reviews, not security
+certificates. Verification results remain separate from generator success.
+
+The packed fixture qualifies deterministic Chakra Email HTML/plaintext, custom
+tokens, input/size rejection, Playstack capture delivery, a synthetic loopback
+preview and Nx failure propagation. It does **not** close the following full
+scaffolding contract's seed, locale-fan-out or production-provider gates.
+
+### New-library scaffolding (still gated)
+
 `npm exec nx g @megamono/plugin:emails --project=emails` scaffolds `libs/emails` — a Chakra-based email library, its Nx targets, a preview surface, and a seed set of the transactional templates every product needs.
 
 ## Why the reversal

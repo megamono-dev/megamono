@@ -14,6 +14,43 @@ repository structural checks, and deterministic repository health reporting.
 
 ## Initialize an existing workspace
 
+### Adopt an existing email preview
+
+`emails-adopt` maps an existing email library, shared token file, synthetic
+fixtures, and reviewed Nx targets. It installs nothing and does not modify
+templates, themes, preview scripts, CI, or delivery providers.
+
+```sh
+npm exec nx -- generate @megamono/plugin:emails-adopt \
+  --project=emails --previewTarget=email-preview --verificationTarget=email-contract \
+  --templatesRoot=libs/emails/src/templates --fixturesRoot=libs/emails/src/previews \
+  --themeFile=libs/theme/email-tokens.ts \
+  --reviewedLocalOnly --reviewedFixtureOnly --planOnly
+```
+
+After reviewing the plan, replace `--planOnly` with `--yes`. The preview target
+must explicitly set `cache: false`; verification must also be non-cacheable and
+run to completion. The review flags attest that **your existing command** binds
+to loopback and reads synthetic fixtures, not production secrets or recipients.
+The generator cannot certify arbitrary application commands from those flags.
+
+Adoption records `.megamono/email-previews/<encoded-project-name>.json` and adds
+`<project>:megamono-emails-verify`, which depends on the selected verification
+target and propagates failure. Run it explicitly or add it to your existing CI
+after review. That target should check non-empty subject/HTML/plaintext, props
+validation, encoded size limits, loopback preview and capture delivery. The
+record stays `qualification: not-run`; creating a target is not evidence of a
+passing contract. Matching reruns are no-ops, and conflicting mappings/targets
+are rejected without overwriting application code.
+
+The full `emails` **scaffolding** generator remains gated on seed-template and
+recipient-locale fan-out qualification. Existing-preview adoption does not
+enable production sending, invent email templates, or claim provider/client
+deliverability. Maintainers can run `@megamono/plugin:e2e-email-preview-consumer`
+to qualify the packed adoption path with real Chakra Email and Playstack capture.
+
+### Workspace conventions
+
 ```sh
 npm exec nx g @megamono/plugin:workspace-init --defaultPlatform=node
 ```

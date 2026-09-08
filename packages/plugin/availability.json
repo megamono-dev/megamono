@@ -119,7 +119,13 @@
     },
     "emails": {
       "status": "gated",
-      "gate": "The external mail package and local-preview fixture contract is unavailable."
+      "gate": "The full seed-template and recipient-locale fan-out fixture contract has not passed. Use emails-adopt to map an existing application-owned preview and verification target."
+    },
+    "emails-adopt": {
+      "status": "available",
+      "factory": "./dist/generators/emails-adopt/emails-adopt",
+      "schema": "./dist/generators/emails-adopt/schema.json",
+      "description": "Adopt an existing application-owned email preview and verification target"
     },
     "playstack-lint": {
       "status": "available",

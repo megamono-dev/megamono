@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "EmailsAdopt",
+  "title": "Adopt an existing application-owned email preview",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "description": "Existing Nx email library project name."
+    },
+    "previewTarget": {
+      "type": "string",
+      "description": "Existing local-only, non-cacheable preview target."
+    },
+    "verificationTarget": {
+      "type": "string",
+      "description": "Existing target testing rendered outputs, validation, size limits and capture delivery."
+    },
+    "templatesRoot": {
+      "type": "string",
+      "description": "Workspace-relative existing template directory."
+    },
+    "fixturesRoot": {
+      "type": "string",
+      "description": "Workspace-relative directory of synthetic preview fixtures."
+    },
+    "themeFile": {
+      "type": "string",
+      "description": "Existing application-owned email/shared token file; never overwritten."
+    },
+    "reviewedLocalOnly": {
+      "type": "boolean",
+      "description": "Explicit review that preview binds to loopback only."
+    },
+    "reviewedFixtureOnly": {
+      "type": "boolean",
+      "description": "Explicit review that preview uses synthetic fixtures and no production secrets or recipients."
+    },
+    "planOnly": {
+      "type": "boolean",
+      "default": false,
+      "description": "Print the plan without buffering changes, including when invoked directly."
+    },
+    "yes": {
+      "type": "boolean",
+      "default": false,
+      "description": "Apply reviewed mapping and verification target only."
+    }
+  },
+  "required": [
+    "project",
+    "previewTarget",
+    "verificationTarget",
+    "templatesRoot",
+    "fixturesRoot",
+    "themeFile"
+  ],
+  "additionalProperties": false
+}
