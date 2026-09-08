@@ -150,3 +150,82 @@ for (const file of plan.files) {
 process.stdout.write(
   `Verified ${plan.files.length} templates from ${packageNames.length} packed Playstack integrations in a virtual tree (external-peer metadata is synthetic; no runtime qualification).\n`,
 );
+
+// Requirements-only packages are valid, but must never look like qualified
+// generated wiring. Use real published manifests, not invented templates.
+const requirementsOnlyPackages = [
+  '@playstack/nest-storage',
+  '@playstack/cache-next',
+];
+for (const name of requirementsOnlyPackages) await stagePackage(name);
+addProjectConfiguration(tree, 'site', {
+  root: 'apps/site',
+  projectType: 'application',
+});
+for (const cacheComponents of [false, true]) {
+  await generatorModule.playstackIntegrateGenerator(tree, {
+    packages: requirementsOnlyPackages.join(','),
+    api: 'apps/api',
+    web: 'apps/site',
+    conditions: JSON.stringify({
+      'on-demand revalidation is exposed': true,
+      'more than one Next.js process serves the deployment': true,
+      'Next.js 16 cache components are enabled': cacheComponents,
+    }),
+    yes: true,
+  });
+  const coverage = JSON.parse(
+    tree.read('.megamono/playstack-integration-plan.json', 'utf8'),
+  );
+  assert(
+    coverage.files.length === 0,
+    'Storage/cache now publish templates: replace this pending gate with emitted consumer compilation/runtime fixtures.',
+  );
+  assert(
+    coverage.readiness.verification === 'not-run',
+    'Planning must not qualify application behavior.',
+  );
+  for (const pkg of coverage.readiness.packages) {
+    assert(pkg.manifest === 'available', `Missing manifest for ${pkg.package}`);
+    for (const integration of pkg.integrations) {
+      assert(
+        integration.templates === 'none-selected',
+        'Requirements-only integration must disclose missing templates.',
+      );
+      assert(
+        integration.wiring === 'application-owned',
+        'Missing templates must retain application-owned wiring.',
+      );
+    }
+  }
+  const storage = coverage.requirements.find(
+    (record) => record.package === '@playstack/nest-storage',
+  );
+  assert(
+    storage.requirements.healthChecks.some(
+      (check) => check.id === 'storage.provider',
+    ),
+    'Named storage readiness requirement was lost.',
+  );
+  const caches = coverage.requirements.filter(
+    (record) => record.package === '@playstack/cache-next',
+  );
+  assert(
+    caches.some((record) => record.id === 'next-incremental-cache'),
+    'Incremental cache contract missing.',
+  );
+  assert(
+    caches.some((record) => record.id === 'next-cache-components') ===
+      cacheComponents,
+    'Cache Components requirements must respect explicit selection.',
+  );
+  assert(
+    coverage.readiness.limitations.some((message) =>
+      message.includes('no active templates'),
+    ),
+    'Missing-wiring limitation must be explicit.',
+  );
+}
+process.stdout.write(
+  'Real storage/cache manifest planning passed for both cache selections. Generated composition qualification remains BLOCKED: these artifacts publish no templates. No storage/cache runtime tests ran.\n',
+);

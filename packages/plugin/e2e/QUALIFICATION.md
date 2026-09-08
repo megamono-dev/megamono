@@ -144,6 +144,23 @@ checks real locally packed Playstack manifests, internal closures, and template
 materialization in a virtual Nx tree. Its external-peer metadata is synthetic;
 it is not a runtime, provider, or external-peer installation test.
 
+The same planning fixture now covers the actual `nest-storage` and `cache-next`
+Yalc manifests. It checks named-provider readiness preservation, both explicit
+Cache Components selections, and that requirements-only integrations report
+`none-selected`, `application-owned`, and verification `not-run`.
+As of September 8, both packages still publish **zero templates**. Generated
+storage/cache composition qualification is blocked on Playstack, not passed by
+this planning test. The fixture deliberately fails when templates appear so a
+maintainer must add emitted compilation/runtime qualification instead of silently
+promoting a metadata check into compatibility evidence.
+
+Upstream inputs needed: named-storage module/provider/test templates and separate
+templates for Next incremental cache versus Cache Components. Once published,
+pack the real closure, generate through Megamono, clean-install and compile all
+emitted files together, then run storage readiness/behavior and the selected
+Next cache API tests. Do not substitute locally invented templates or claim
+database, Redis, HTTP authorization or provider qualification from this gate.
+
 ## Existing email-preview adoption
 
 Run `npm exec nx -- run @megamono/plugin:e2e-email-preview-consumer` with local
