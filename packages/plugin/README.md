@@ -586,3 +586,17 @@ is advisory, not exhaustive. Configuring `clientOutput` does not implement expor
 rewrite application imports, generate the client, or qualify runtime assets.
 Relocation preserves model timestamp annotations and project identity; incoming
 artifacts and non-UTC timestamp behavior require separate review.
+
+# Upgrading cached workspace checks
+
+Rerun the reviewed `workspace-init`/`adopt --write` plan to add all supported root
+lockfiles, package-policy configuration, and the `CI` environment input to
+`megamono:check`. Only an unchanged managed `core.project` is upgraded; existing
+inputs, options, and unrelated targets are retained. Modified, ejected, or
+repository-owned project configurations are left alone and require manual review.
+Inspect the dry run first; this is not permission to replace custom CI workflows.
+
+These inputs track declared package policy, not every change in ignored installed
+trees or host tools. After a same-version Yalc refresh or host-toolchain change,
+run an uncached check and the separate uncached health/package diagnostics. Cache
+hits are not installation or runtime qualification.

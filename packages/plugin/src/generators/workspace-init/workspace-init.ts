@@ -94,6 +94,18 @@ function importTarget(tree: Tree) {
   };
 }
 
+const packagePolicyInputs = [
+  ...(['npm', 'pnpm', 'yarn', 'bun'] as const).flatMap((manager) =>
+    packageManagerAdapter(manager).lockfiles.map(
+      (file) => `{workspaceRoot}/${file}`,
+    ),
+  ),
+  '{workspaceRoot}/pnpm-workspace.yaml',
+  '{workspaceRoot}/.npmrc',
+  '{workspaceRoot}/.yarnrc.yml',
+  '{workspaceRoot}/yalc.lock',
+];
+
 const healthTarget = {
   executor: '@megamono/plugin:health',
   cache: false,
@@ -125,6 +137,28 @@ const verifyRuntimeTarget = {
   executor: '@megamono/plugin:verify-runtime',
   cache: false,
 };
+
+function ensureCheckInputs(tree: Tree): void {
+  const project = getProjects(tree).get('megamono');
+  const current = project?.targets?.check;
+  if (!project || current?.executor !== '@megamono/plugin:check') return;
+  const inputs = [
+    ...new Set([...(current.inputs ?? ['default']), ...packagePolicyInputs]),
+  ];
+  // Keep custom targets, executor options, and existing input definitions intact.
+  // CI selects a stricter package-source profile even without an explicit flag.
+  if (
+    !inputs.some(
+      (input) =>
+        typeof input === 'object' && 'env' in input && input.env === 'CI',
+    )
+  )
+    inputs.push({ env: 'CI' });
+  updateProjectConfiguration(tree, 'megamono', {
+    ...project,
+    targets: { ...project.targets, check: { ...current, inputs } },
+  });
+}
 
 const verifyDependenciesTarget = {
   executor: '@megamono/plugin:verify-workspace-dependencies',
@@ -1749,7 +1783,8 @@ export async function workspaceInitGenerator(
             '{workspaceRoot}/megamono.json',
             '{workspaceRoot}/.megamono/artifacts.json',
             '{workspaceRoot}/package.json',
-            '{workspaceRoot}/package-lock.json',
+            ...packagePolicyInputs,
+            { env: 'CI' },
             '{workspaceRoot}/nx.json',
             '{workspaceRoot}/docs/**/*.md',
             '{workspaceRoot}/**/package.json',
@@ -1766,6 +1801,7 @@ export async function workspaceInitGenerator(
       },
     });
   } else if (coreProjectCanUpdate) {
+    ensureCheckInputs(tree);
     ensureImportTarget(tree);
     ensureVerifyRuntimeTarget(tree);
     ensureVerifyDependenciesTarget(tree);
@@ -1773,7 +1809,7 @@ export async function workspaceInitGenerator(
     if (modules.has('health') && !modules.has('docs')) ensureHealthTarget(tree);
   } else {
     logger.warn(
-      'Megamono artifact core.project is modified; left .megamono/project.json unchanged. Restore the managed project configuration before retrying.',
+      'Megamono artifact core.project is modified or repository-owned; left .megamono/project.json unchanged. Review megamono:check inputs for all package-manager lockfiles, package-policy configuration, and CI before using cached checks. Restore managed ownership explicitly before retrying automatic updates.',
     );
   }
   if (!tree.exists('.megamono/artifacts.json')) {

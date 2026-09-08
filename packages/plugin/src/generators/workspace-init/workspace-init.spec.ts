@@ -201,6 +201,23 @@ describe('workspace-init generator', () => {
     const config = readProjectConfiguration(tree, 'megamono');
     const docs = readProjectConfiguration(tree, 'megamono-docs');
     expect(config.targets?.check?.executor).toBe('@megamono/plugin:check');
+    expect(config.targets?.check?.inputs).toEqual(
+      expect.arrayContaining([
+        ...[
+          'package-lock.json',
+          'npm-shrinkwrap.json',
+          'pnpm-lock.yaml',
+          'yarn.lock',
+          'bun.lock',
+          'bun.lockb',
+          'pnpm-workspace.yaml',
+          '.npmrc',
+          '.yarnrc.yml',
+          'yalc.lock',
+        ].map((path) => `{workspaceRoot}/${path}`),
+        { env: 'CI' },
+      ]),
+    );
     expect(config.targets?.import).toMatchObject({
       executor: '@megamono/plugin:import',
       cache: false,
@@ -744,6 +761,69 @@ describe('workspace-init generator', () => {
     expect(updated.installedHash).not.toBe(oldHash);
     expect(updated.installedHash).toBe(updated.templateHash);
   });
+
+  it.each(['managed', 'modified', 'ejected'] as const)(
+    'upgrades old check inputs only with intact ownership (%s)',
+    async (ownership) => {
+      await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+      const project = readProjectConfiguration(tree, 'megamono');
+      updateProjectConfiguration(tree, 'megamono', {
+        ...project,
+        targets: {
+          ...project.targets,
+          check: {
+            ...project.targets?.check,
+            inputs: ['{workspaceRoot}/package-lock.json', 'customInput'],
+            options: { skipDocs: true },
+          },
+          'custom-release': {
+            executor: 'nx:run-commands',
+            options: { command: 'echo reviewed' },
+            cache: false,
+          },
+        },
+      });
+      await formatFiles(tree);
+      const before = tree.read('.megamono/project.json', 'utf8');
+      const registry = readJson(tree, '.megamono/artifacts.json');
+      registry.artifacts = registry.artifacts.map((artifact: { id: string }) =>
+        artifact.id === 'core.project'
+          ? {
+              ...artifact,
+              ...(ownership !== 'modified'
+                ? {
+                    installedHash: hashArtifactBytes(before ?? ''),
+                    templateHash: hashArtifactBytes(before ?? ''),
+                  }
+                : {}),
+              ...(ownership === 'ejected' ? { state: 'ejected' } : {}),
+            }
+          : artifact,
+      );
+      tree.write('.megamono/artifacts.json', JSON.stringify(registry));
+      await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+      const after = readProjectConfiguration(tree, 'megamono');
+      expect(after.targets?.['custom-release']).toEqual({
+        executor: 'nx:run-commands',
+        options: { command: 'echo reviewed' },
+        cache: false,
+      });
+      expect(after.targets?.check?.options).toEqual({ skipDocs: true });
+      if (ownership === 'managed') {
+        expect(after.targets?.check?.inputs).toEqual(
+          expect.arrayContaining([
+            'customInput',
+            '{workspaceRoot}/pnpm-lock.yaml',
+            '{workspaceRoot}/npm-shrinkwrap.json',
+            { env: 'CI' },
+          ]),
+        );
+        const updated = tree.read('.megamono/project.json', 'utf8');
+        await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+        expect(tree.read('.megamono/project.json', 'utf8')).toBe(updated);
+      } else expect(tree.read('.megamono/project.json', 'utf8')).toBe(before);
+    },
+  );
 
   it('does not reclaim ejected ESLint wiring', async () => {
     await workspaceInitGenerator(tree, { only: 'lint', yes: true });
