@@ -626,7 +626,17 @@ function rewriteRelocationReferences(
   tree: Tree,
   options: NormalizedDatabaseOptions,
 ): void {
-  if (!options.sourceSchema || !options.target) return;
+  for (const { path, next } of relocationReferenceEdits(tree, options)) {
+    tree.write(path, next);
+  }
+}
+
+function relocationReferenceEdits(
+  tree: Tree,
+  options: NormalizedDatabaseOptions,
+): { path: string; next: string }[] {
+  if (!options.sourceSchema || !options.target) return [];
+  const edits: { path: string; next: string }[] = [];
   const sourceRoot = dirname(options.sourceSchema);
   const escapedRoot = sourceRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const path of relocationReferencePaths(tree)) {
@@ -640,8 +650,9 @@ function rewriteRelocationReferences(
         new RegExp(`(--schema(?:=|\\s+))${escapedRoot}(?=[\\s'"]|$)`, 'g'),
         `$1${options.target}`,
       );
-    if (next !== current) tree.write(path, next);
+    if (next !== current) edits.push({ path, next });
   }
+  return edits;
 }
 
 function rewriteRootPrismaConfig(
@@ -749,7 +760,62 @@ function relocatePrismaLayout(
   rewriteRootPrismaConfig(tree, options);
 }
 
-function renderPlan(options: NormalizedDatabaseOptions): string {
+function relocationHandoff(
+  tree: Tree,
+  options: NormalizedDatabaseOptions,
+): string {
+  if (!options.relocate) return '';
+  const files = [
+    'Dockerfile',
+    'prisma.config.ts',
+    ...['apps', 'libs', 'packages', 'scripts', 'tools', '.github'].flatMap(
+      (root) => filesUnder(tree, root),
+    ),
+  ];
+  const imports = files.filter(
+    (path) =>
+      /\.[cm]?[jt]sx?$/.test(path) &&
+      (tree.read(path, 'utf8') ?? '').includes('@prisma/client'),
+  );
+  const deployment = files.filter(
+    (path) =>
+      /(?:Dockerfile|entrypoint|docker-compose|compose\.ya?ml$)/i.test(path) &&
+      tree.exists(path),
+  );
+  const list = (paths: string[]) =>
+    paths.length
+      ? [...new Set(paths)]
+          .sort()
+          .map((path) => `\`${path}\``)
+          .join(', ')
+      : 'none detected (manual review still required)';
+  return `
+## Relocation handoff — application verification: not-run
+
+### Automatic relocation scope (${options.sourceSchema ? 'proposed; not yet applied' : 'layout already recorded'})
+
+- Schema directory and migration history: move intact; do not run migrations or rewrite model fields/native timestamp types.
+- Known command references: ${list(relocationReferenceEdits(tree, options).map(({ path }) => path))}.
+- Prisma configuration: preserve root discovery in \`prisma.config.ts\`; configure the named database project.
+- Client output: ${options.clientOutput ? `configure \`${options.directory}/${options.clientOutput}\`` : 'preserve existing output'}; this does not generate or export a client.
+
+### Pending application-owned work (not automatically completed)
+
+- Client boundary: implement/review \`${options.directory}/src/index.ts\`, generated-client exports and singleton/lifecycle ownership. A new index is only a comment placeholder.
+- Imports: review ${list(imports)}. Update runtime and type imports to the chosen library boundary; also find custom aliases, dynamic imports and old generated paths. These textual candidates are not an exhaustive import analysis.
+- Deployment: review ${list(deployment)}. Update Docker COPY paths, entrypoint migration commands, build/prune configuration and generated runtime assets. A rewritten --schema command does not qualify container packaging.
+- Timestamp policy: preserve existing native types (including @db.Timestamptz precision); explicitly review incoming artifacts and test non-UTC round trips before schema adoption.
+- Project identity: retain \`${options.project}\`; project renaming is not part of relocation.
+
+### Required acceptance gates
+
+- Validate the complete schema and generate the client; typecheck/build all consumers after import migration.
+- Run an isolated container/migration smoke test against an explicitly approved disposable database; verify migration history and packaged runtime assets.
+- Review timestamp round trips and application regressions. No database connection, reset, migration, client generation or runtime qualification is performed by this plan.
+`;
+}
+
+function renderPlan(tree: Tree, options: NormalizedDatabaseOptions): string {
   return `# Megamono database plan
 
 - Name: ${options.name}
@@ -767,6 +833,7 @@ function renderPlan(options: NormalizedDatabaseOptions): string {
 2. Record the database in megamono.json${options.target ? ' and its explicit artifact target in playstack.json' : '; leave Playstack artifact composition deferred'}.
 3. ${options.relocate ? 'Retarget known repository commands and preserve root Prisma CLI discovery.' : 'Install compatibility-pinned adapter packages.'}
 4. Expose static validation and generation without connecting to a database.
+${relocationHandoff(tree, options)}
 `;
 }
 
@@ -1087,7 +1154,7 @@ export async function databaseGenerator(
     );
   }
   const state = preflight(tree, options);
-  logger.info(renderPlan(options));
+  logger.info(renderPlan(tree, options));
   if (state === 'noop' || options.dryRun) return () => undefined;
   if (!(await confirm(rawOptions))) return () => undefined;
 

@@ -1,6 +1,6 @@
-import { readJson, writeJson } from '@nx/devkit';
+import { logger, readJson, writeJson } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MEGAMONO_CONFIG } from '../../lib/config';
 import { databaseGenerator } from './database';
 
@@ -29,6 +29,58 @@ function workspace(manager: 'npm' | 'pnpm' = 'pnpm') {
 }
 
 describe('database generator', () => {
+  it('reports automatic relocation edits separately from unqualified client and deployment work', async () => {
+    const tree = workspace();
+    tree.write(
+      'prisma/schema.prisma',
+      'generator client {\n provider = "prisma-client-js"\n}\nmodel Event {\n id String @id\n at DateTime @db.Timestamptz(3)\n}\n',
+    );
+    tree.write(
+      'apps/api/src/db.ts',
+      "import { PrismaClient } from '@prisma/client';\n",
+    );
+    tree.write('Dockerfile', 'COPY prisma ./prisma\n');
+    tree.write(
+      'scripts/entrypoint.sh',
+      'prisma migrate deploy --schema prisma/schema.prisma\n',
+    );
+    const before = tree
+      .listChanges()
+      .map(({ path, content }) => [path, content?.toString()]);
+    const log = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    try {
+      await databaseGenerator(tree, {
+        name: 'primary',
+        adapter: 'prisma',
+        schema: 'prisma/schema.prisma',
+        relocate: true,
+        clientOutput: 'src/generated',
+        dryRun: true,
+        interactive: false,
+      });
+      const plan = log.mock.calls.flat().join('\n');
+      expect(plan).toContain('application verification: not-run');
+      expect(plan).toContain(
+        'Known command references: `scripts/entrypoint.sh`',
+      );
+      expect(plan).toContain('Imports: review `apps/api/src/db.ts`');
+      expect(plan).toContain(
+        'Deployment: review `Dockerfile`, `scripts/entrypoint.sh`',
+      );
+      expect(plan).toContain('libs/prisma/primary/src/index.ts');
+      expect(plan).toContain('non-UTC round trips');
+      expect(plan).toContain('comment placeholder');
+      expect(plan).toContain('isolated container/migration smoke test');
+      expect(
+        tree
+          .listChanges()
+          .map(({ path, content }) => [path, content?.toString()]),
+      ).toEqual(before);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it('creates a user-named Prisma target and reruns without a diff', async () => {
     const tree = workspace();
     await databaseGenerator(tree, {

@@ -575,3 +575,14 @@ npm exec nx run @megamono/plugin:test
 npm exec nx run @megamono/plugin:lint
 npm exec nx run @megamono/plugin:build
 ```
+
+# Prisma relocation handoff
+
+Database relocation plans distinguish automatic schema/command edits from pending
+application work. They list detected `@prisma/client` source references and
+deployment files for review, identify the generated-client export boundary, and
+require consumer builds plus isolated container/migration qualification. Detection
+is advisory, not exhaustive. Configuring `clientOutput` does not implement exports,
+rewrite application imports, generate the client, or qualify runtime assets.
+Relocation preserves model timestamp annotations and project identity; incoming
+artifacts and non-UTC timestamp behavior require separate review.
