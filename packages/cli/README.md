@@ -248,3 +248,11 @@ contract fixture with:
 ```sh
 npm exec nx -- run @megamono/cli:e2e-playstack-yalc
 ```
+
+# Machine-readable adoption surveys
+
+`megamono adopt --survey --format=json` writes one survey JSON object to stdout.
+Nx banners, staging output, and warnings go to stderr, including when the plugin
+is staged temporarily. Failure returns a nonzero exit code with diagnostics on
+stderr and no survey on stdout. This contract covers read-only Megamono surveys,
+not combined Playstack workflows or mutating generator plans.

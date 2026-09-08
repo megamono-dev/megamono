@@ -239,8 +239,11 @@ try {
         lane.root,
         { PATH: `${join(root, 'bin')}:${env.PATH}`, TMPDIR: scratch },
       );
+      const survey = JSON.parse(output);
       assert(
-        output.includes(`@fixture-${lane.name}/api`),
+        survey.projects.some(
+          ({ name }) => name === `@fixture-${lane.name}/api`,
+        ),
         'Real Nx inventory did not contain the nested project',
       );
       return output;

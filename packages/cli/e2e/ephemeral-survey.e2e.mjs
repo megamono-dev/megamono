@@ -38,6 +38,7 @@ try {
   );
   const before = await readFile(join(root, 'package.json'), 'utf8');
   let output = '';
+  let diagnostics = '';
   const result = await runMegamonoCli(['adopt', '--format=json'], {
     cwd: root,
     version: '0.0.1',
@@ -45,7 +46,7 @@ try {
       output += message;
     },
     stderr(message) {
-      output += message;
+      diagnostics += message;
     },
     async runCommand(command, args, options) {
       if (args[0]?.endsWith('/npm/bin/npm-cli.js')) {
@@ -63,7 +64,7 @@ try {
         return { exitCode: 0 };
       }
       try {
-        output += execFileSync(command, args, {
+        const stdout = execFileSync(command, args, {
           cwd: options.cwd,
           encoding: 'utf8',
           timeout: 30_000,
@@ -85,15 +86,15 @@ try {
             NX_ISOLATE_PLUGINS: 'false',
           },
         });
+        return { exitCode: 0, stdout };
       } catch (error) {
         output += `${error.stdout ?? ''}\n${error.stderr ?? ''}`;
         throw error;
       }
-      return { exitCode: 0 };
     },
   });
-  assert.equal(result.exitCode, 0, output);
-  assert.match(output, /nested-api/);
+  assert.equal(result.exitCode, 0, diagnostics);
+  assert(JSON.parse(output).projects.some(({ name }) => name === 'nested-api'));
   assert.equal(await readFile(join(root, 'package.json'), 'utf8'), before);
   for (const path of [
     'megamono.json',

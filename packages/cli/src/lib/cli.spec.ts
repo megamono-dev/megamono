@@ -902,6 +902,63 @@ describe('@megamono/cli', () => {
     ]);
   });
 
+  it.each([true, false])(
+    'keeps survey stdout pure JSON (installed plugin: %s)',
+    async (installed) => {
+      const root = await workspace(
+        'npm',
+        installed ? ['nx', '@megamono/plugin'] : ['nx'],
+      );
+      const survey = {
+        schemaVersion: 1,
+        baseline: {},
+        inventory: {},
+        projects: [],
+        recommendations: [],
+        note: 'braces { and escaped "quotes" }',
+      };
+      const harness = io(root, ({ args }) =>
+        args.includes('generate')
+          ? {
+              exitCode: 0,
+              stdout: `NX Generating\n${JSON.stringify(survey, null, 2)}\nNOTE: dry run`,
+              stderr: 'Nx warning',
+            }
+          : { exitCode: 0, stdout: 'npm installed packages' },
+      );
+      const result = await runMegamonoCli(
+        ['adopt', '--format=json'],
+        harness.value,
+      );
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(harness.stdout.join('\n'))).toEqual(survey);
+      expect(harness.stderr.join('\n')).toContain('NX Generating');
+      expect(harness.stderr.join('\n')).toContain('Nx warning');
+      if (!installed)
+        expect(harness.stderr.join('\n')).toContain('npm installed packages');
+      expect(harness.invocations.every(({ capture }) => capture)).toBe(true);
+    },
+  );
+
+  it.each([
+    { exitCode: 7, stdout: 'NX graph failed' },
+    { exitCode: 0, stdout: '{"unrelated":true}' },
+    { exitCode: 0, stdout: '{"schemaVersion":1' },
+  ])(
+    'fails closed without JSON stdout for an unsuccessful survey: %j',
+    async (response) => {
+      const root = await workspace('npm');
+      const harness = io(root, () => response);
+      const result = await runMegamonoCli(
+        ['adopt', '--format', 'json'],
+        harness.value,
+      );
+      expect(result.exitCode).toBe(response.exitCode || 3);
+      expect(harness.stdout).toEqual([]);
+      expect(harness.stderr.join('\n')).toContain(response.stdout);
+    },
+  );
+
   it('stages a missing survey plugin outside the repository', async () => {
     const root = await workspace('pnpm', ['nx']);
     await json(join(root, 'node_modules/nx/package.json'), {

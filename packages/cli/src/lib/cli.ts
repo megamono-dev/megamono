@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, parse, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { subset, validRange } from 'semver';
+import { surveyOutput } from './survey-output.js';
 import {
   ARTIFACT_HELP,
   artifactDiagnosticOptions,
@@ -1043,8 +1044,12 @@ async function runEphemeralPluginSurvey(
         '--save-dev',
         ...packages,
       ],
-      { cwd: directory },
+      { cwd: directory, ...(jsonSurvey(options) ? { capture: true } : {}) },
     );
+    if (jsonSurvey(options)) {
+      if (installed.stdout) io.stderr(installed.stdout);
+      if (installed.stderr) io.stderr(installed.stderr);
+    }
     if (installed.exitCode !== 0) {
       throw new CliError(
         `Unable to stage the ephemeral survey runtime from ${options.localPackages}. The repository was not modified.`,
@@ -1065,7 +1070,7 @@ async function runEphemeralPluginSurvey(
       '--dry-run',
       '--interactive=false',
     ]);
-    const surveyed = await io.runCommand(command, args, {
+    const surveyed = await runSurveyCommand(io, options, command, args, {
       cwd: root,
       env: {
         NX_DAEMON: 'false',
@@ -2511,6 +2516,46 @@ function renderPlaystackDryRunPlan(
   )}`;
 }
 
+function jsonSurvey(options: InitOptions): boolean {
+  return options.generatorArgs.some(
+    (argument, index, all) =>
+      argument === '--format=json' ||
+      (argument === '--format' && all[index + 1] === 'json'),
+  );
+}
+
+async function runSurveyCommand(
+  io: MegamonoCliIo,
+  options: InitOptions,
+  command: string,
+  args: readonly string[],
+  execution: { cwd: string; env?: Readonly<Record<string, string>> },
+): Promise<CommandResult> {
+  const json = jsonSurvey(options);
+  const result = await io.runCommand(command, args, {
+    ...execution,
+    ...(json ? { capture: true } : {}),
+  });
+  if (!json) return result;
+  if (result.stderr) io.stderr(result.stderr);
+  if (result.exitCode !== 0) {
+    if (result.stdout) io.stderr(result.stdout);
+    return result;
+  }
+  try {
+    const output = surveyOutput(result.stdout ?? '');
+    if (output.diagnostics) io.stderr(output.diagnostics);
+    io.stdout(output.json);
+    return result;
+  } catch (error) {
+    if (result.stdout) io.stderr(result.stdout);
+    throw new CliError(
+      error instanceof Error ? error.message : String(error),
+      3,
+    );
+  }
+}
+
 async function runInit(
   args: readonly string[],
   io: MegamonoCliIo,
@@ -2528,7 +2573,13 @@ async function runInit(
       '@megamono/plugin:workspace-init',
       ...parsedOptions.generatorArgs,
     ]);
-    const surveyed = await io.runCommand(command, commandArgs, { cwd: root });
+    const surveyed = await runSurveyCommand(
+      io,
+      parsedOptions,
+      command,
+      commandArgs,
+      { cwd: root },
+    );
     return { exitCode: surveyed.exitCode };
   }
   const workspace: Workspace = {
