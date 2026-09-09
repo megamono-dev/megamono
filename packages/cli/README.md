@@ -211,7 +211,18 @@ are found, even a conventional `apps/web` root must be chosen explicitly or
 through the interactive prompt: it may be a marketing site rather than the
 authenticated application. API selection retains its `apps/api` preference;
 otherwise a sole tagged API is selected. Ambiguous selections require an
-explicit path in automation:
+explicit path in automation.
+
+Web discovery uses the Nx project inventory, explicit `platform:web` tags,
+conventional web roots, and project-local framework evidence: `next.config.js`,
+`next.config.mjs`, `next.config.ts`, known Nx Next build/server executors, or a
+Vite config paired with `index.html`. It does not execute configuration files,
+infer every project from workspace-root dependencies, or scan arbitrary command
+text. Libraries, e2e projects, and explicitly non-web platform classifications
+are excluded; extension/desktop markers prevent Vite-only web inference.
+Custom layouts without these signals still need reviewed tags or an explicit
+`--playstack-web` path. For example, use `--playstack-web=apps/app` when
+`apps/web` is marketing and `apps/app` is the authenticated dashboard.
 
 ```sh
 megamono init \

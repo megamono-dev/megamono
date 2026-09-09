@@ -9,6 +9,8 @@ import {
   type MegamonoCliIo,
   type PackageManager,
   type WorkspaceMutationState,
+  type PlaystackSurfaceKind,
+  type PlaystackSurfaceChoice,
 } from './cli.js';
 import type { HostedAuthOperations, HostedProfile } from './hosted-auth.js';
 
@@ -206,6 +208,7 @@ function surfaceGraphResult(
         readonly root: string;
         readonly projectType?: string;
         readonly tags?: readonly string[];
+        readonly targets?: Readonly<Record<string, unknown>>;
       }
     >
   >,
@@ -1836,6 +1839,115 @@ describe('@megamono/cli', () => {
       ).toContain('--web=apps/admin');
     },
   );
+
+  it.each(['automation', 'explicit', 'interactive', 'disabled'])(
+    'routes an untagged Timespans-style dashboard safely: %s',
+    async (mode) => {
+      const root = await workspace('npm');
+      await mkdir(join(root, 'apps/app'), { recursive: true });
+      const config =
+        'throw new Error("Do not evaluate Next config during discovery");';
+      await writeFile(join(root, 'apps/app/next.config.ts'), config);
+      const projects = {
+        marketing: { root: 'apps/web', projectType: 'application' },
+        dashboard: { root: 'apps/app', projectType: 'application' },
+        ui: {
+          root: 'apps/shared-ui',
+          projectType: 'library',
+          tags: ['platform:web'],
+          targets: { build: { executor: '@nx/next:build' } },
+        },
+        native: {
+          root: 'apps/mobile',
+          projectType: 'application',
+          tags: ['platform:mobile'],
+          targets: { web: { executor: '@nx/next:build' } },
+        },
+        tooling: {
+          root: '.',
+          targets: { build: { executor: '@nx/next:build' } },
+        },
+        tests: {
+          root: 'apps/app-e2e',
+          projectType: 'application',
+          tags: ['type:e2e'],
+          targets: { fixture: { executor: '@nx/next:build' } },
+        },
+      };
+      const harness = io(
+        root,
+        (invocation) =>
+          surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
+      );
+      const select = vi.fn(
+        async (
+          _kind: PlaystackSurfaceKind,
+          choices: readonly PlaystackSurfaceChoice[],
+        ) => {
+          expect(choices.map(({ root }: { root: string }) => root)).toEqual([
+            'apps/app',
+            'apps/web',
+          ]);
+          expect(choices[0].message).toContain('next.config.ts');
+          return 'apps/app';
+        },
+      );
+      const result = await runMegamonoCli(
+        [
+          'init',
+          '--playstack-packages=content',
+          '--yes',
+          ...(mode === 'interactive' ? [] : ['--interactive=false']),
+          ...(mode === 'explicit' ? ['--playstack-web=apps/app'] : []),
+          ...(mode === 'disabled' ? ['--playstack-web=false'] : []),
+        ],
+        { ...harness.value, selectPlaystackSurface: select },
+      );
+      expect(result.exitCode).toBe(mode === 'automation' ? 4 : 0);
+      const delegated = harness.invocations.find(({ args }) =>
+        args.includes('playstack'),
+      );
+      if (mode === 'automation') {
+        expect(delegated).toBeUndefined();
+        expect(harness.stderr.join('\n')).toContain('apps/app, apps/web');
+      } else if (mode === 'disabled')
+        expect(delegated?.args.some((arg) => arg.startsWith('--web='))).toBe(
+          false,
+        );
+      else expect(delegated?.args).toContain('--web=apps/app');
+      expect(select).toHaveBeenCalledTimes(mode === 'interactive' ? 1 : 0);
+      expect(
+        await readFile(join(root, 'apps/app/next.config.ts'), 'utf8'),
+      ).toBe(config);
+    },
+  );
+
+  it('selects a sole framework-backed application outside conventional roots', async () => {
+    const root = await workspace('npm');
+    const projects = {
+      dashboard: {
+        root: 'products/dashboard',
+        projectType: 'application',
+        targets: { build: { executor: '@nx/next:build' } },
+      },
+    };
+    const harness = io(
+      root,
+      (invocation) =>
+        surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
+    );
+    expect(
+      (
+        await runMegamonoCli(
+          ['init', '--playstack-packages=content', '--interactive=false'],
+          harness.value,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      harness.invocations.find(({ args }) => args.includes('playstack'))?.args,
+    ).toContain('--web=products/dashboard');
+  });
 
   it('refuses a valueless package selector without an interactive prompt', async () => {
     const root = await workspace('pnpm');

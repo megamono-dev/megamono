@@ -17,6 +17,7 @@ import { dirname, join, parse, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { subset, validRange } from 'semver';
 import { surveyOutput } from './survey-output.js';
+import { webSurfaceEvidence } from './web-surface.js';
 import {
   ARTIFACT_HELP,
   artifactDiagnosticOptions,
@@ -1103,6 +1104,7 @@ interface NxSurfaceProject {
   readonly root: string;
   readonly projectType?: string;
   readonly tags: readonly string[];
+  readonly webEvidence: readonly string[];
 }
 
 function normalizedSurfacePath(value: string, option: string): string {
@@ -1200,16 +1202,29 @@ async function inspectNxSurfaceProjects(
       root: string;
       projectType?: unknown;
       tags?: unknown;
+      targets?: unknown;
     };
+    const projectRoot = normalizedSurfacePath(value.root, `Nx project ${name}`);
+    const tags = Array.isArray(value.tags)
+      ? value.tags.filter((tag): tag is string => typeof tag === 'string')
+      : [];
+    const application =
+      value.projectType !== 'library' &&
+      !tags.includes('type:e2e') &&
+      (value.projectType === 'application' ||
+        tags.includes('type:app') ||
+        projectRoot.startsWith('apps/'));
     projects.push({
       name,
-      root: normalizedSurfacePath(value.root, `Nx project ${name}`),
+      root: projectRoot,
       ...(typeof value.projectType === 'string'
         ? { projectType: value.projectType }
         : {}),
-      tags: Array.isArray(value.tags)
-        ? value.tags.filter((tag): tag is string => typeof tag === 'string')
-        : [],
+      tags,
+      webEvidence:
+        application && projectRoot !== '.megamono'
+          ? await webSurfaceEvidence(workspace.root, projectRoot, value.targets)
+          : [],
     });
   }
   return projects;
@@ -1227,10 +1242,19 @@ function surfaceCandidates(
       project.root.startsWith('apps/');
     if (!application || project.root === '.megamono') return false;
     if (kind === 'web') {
+      if (project.projectType === 'library' || tags.has('type:e2e'))
+        return false;
+      // Explicit platform classifications outrank discovery heuristics.
+      if (
+        [...tags].some((tag) => tag.startsWith('platform:')) &&
+        !tags.has('platform:web')
+      )
+        return false;
       return (
         tags.has('platform:web') ||
         project.root === 'apps/web' ||
-        project.root === 'apps/site'
+        project.root === 'apps/site' ||
+        project.webEvidence.length > 0
       );
     }
     return tags.has('platform:node') || project.root === 'apps/api';
@@ -1269,7 +1293,7 @@ async function resolvePlaystackSurface(
   const choices = candidates.map((project) => ({
     name: project.name,
     root: project.root,
-    message: `${project.name} — ${project.root}`,
+    message: `${project.name} — ${project.root}${kind === 'web' && project.webEvidence.length ? ` (${project.webEvidence.join('; ')})` : ''}`,
   }));
   if (!interactive || !io.selectPlaystackSurface) {
     throw new CliError(
