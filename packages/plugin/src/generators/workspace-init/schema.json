@@ -5,6 +5,12 @@
   "description": "Add Megamono configuration, documentation projects, and baseline project tags.",
   "type": "object",
   "properties": {
+    "localPackages": {
+      "type": "string",
+      "enum": ["registry", "yalc"],
+      "default": "registry",
+      "description": "Resolve inferred Megamono plugins and their required internal closure from the registry or the local Yalc store."
+    },
     "survey": {
       "type": "boolean",
       "default": false,

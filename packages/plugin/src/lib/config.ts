@@ -189,6 +189,13 @@ const adoptionSchema = z
       .default([]),
     inference: z
       .object({
+        extension: z
+          .object({
+            plugin: z.literal('@megamono/nx-extension'),
+            manifests: z.array(z.string().refine(isSafeWorkspaceRelativePath)),
+          })
+          .strict()
+          .optional(),
         apple: z
           .object({
             plugin: z.literal('@megamono/nx-apple'),

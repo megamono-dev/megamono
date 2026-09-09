@@ -1,4 +1,6 @@
 import { getProjects, type Tree } from '@nx/devkit';
+import { dirname } from 'node:path';
+import { extensionEvidence } from './extension-evidence';
 import ignore = require('ignore');
 import { readArtifactRegistry } from './managed-artifacts';
 import { MANAGED_SKILL_NAMES } from './managed-skills';
@@ -121,6 +123,7 @@ export interface WorkspaceInitSurvey {
   readonly projects: readonly WorkspaceInitSurveyProject[];
   readonly inventory: WorkspaceInventory;
   readonly manifests: {
+    readonly extension: readonly string[];
     readonly apple: readonly string[];
     readonly cargo: readonly string[];
     readonly cloudflare: readonly string[];
@@ -273,6 +276,7 @@ function capabilityAssessments(
       ...manifests.cargo,
       ...manifests.cloudflare,
       ...manifests.render,
+      ...manifests.extension,
       ...manifests.unsupported,
     ],
   };
@@ -1075,6 +1079,24 @@ export function surveyWorkspaceInit(
     (deployment.renderServices ?? []).filter(({ rootDir }) => rootDir === null),
   );
   const manifests = {
+    extension: [
+      ...new Set(
+        [
+          ...[...workspaceProjects.values()].map(({ root }) => root),
+          ...files
+            .filter((path) =>
+              /(?:^|\/)(?:package\.json|wxt\.config\.[cm]?[jt]s|manifest(?:\.(?:chrome|firefox))?\.json)$/.test(
+                path,
+              ),
+            )
+            .map(dirname),
+        ].flatMap((root) =>
+          extensionEvidence(tree, root)
+            .filter(({ framework }) => framework !== 'figma')
+            .map(({ path }) => path),
+        ),
+      ),
+    ].sort(compare),
     apple: files.filter((path) => path.endsWith('Package.swift')),
     cargo: files.filter((path) => path.endsWith('Cargo.toml')),
     cloudflare: files.filter((path) =>
@@ -1851,6 +1873,7 @@ export function createWorkspaceInitPlan(
       ['cargo', survey.manifests.cargo],
       ['cloudflare', survey.manifests.cloudflare],
       ['render', survey.manifests.render],
+      ['extension', survey.manifests.extension],
     ] as const) {
       operation(
         operations,
@@ -1878,7 +1901,9 @@ export function createWorkspaceInitPlan(
               ? '@megamono/nx-cargo'
               : platform === 'cloudflare'
                 ? '@megamono/nx-cloudflare'
-                : '@megamono/nx-render';
+                : platform === 'extension'
+                  ? '@megamono/nx-extension'
+                  : '@megamono/nx-render';
         operation(
           operations,
           'inference',
@@ -2058,6 +2083,10 @@ ${values(survey.manifests.cloudflare)}
 ### Render
 
 ${values(survey.manifests.render)}
+
+### Extensions
+
+${values(survey.manifests.extension)}
 
 ### Unsupported
 

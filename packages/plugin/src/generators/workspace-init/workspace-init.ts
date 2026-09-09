@@ -23,6 +23,7 @@ import {
   megamonoConfigSchema,
 } from '../../lib/config';
 import { detectWebStyling } from '../../lib/web-styling';
+import { planInferenceYalc } from '../../lib/inference-yalc';
 import { checkWorkspaceStructure } from '../../lib/structural-check';
 import {
   applyManagedSkillTemplates,
@@ -1506,6 +1507,34 @@ export async function workspaceInitGenerator(
   if (requestedModules.includes('lint') && lintCanWire)
     preflightEslintConfig(tree);
   logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
+  const inferenceNames =
+    requestedModules.includes('inference') &&
+    nxWorkspaceCapabilities(tree).major >= 18
+      ? Object.entries(workspaceSurvey.manifests)
+          .filter(
+            ([platform, paths]) =>
+              platform !== 'unsupported' && paths.length > 0,
+          )
+          .map(([platform]) => `@megamono/nx-${platform}`)
+      : [];
+  const localInference =
+    options.localPackages === 'yalc' && inferenceNames.length
+      ? planInferenceYalc(inferenceNames, readPluginVersion(), tree.root)
+      : undefined;
+  if (localInference)
+    logger.info(
+      JSON.stringify(
+        {
+          kind: 'yalc-inference-plan',
+          packages: localInference.packages,
+          dependencies: localInference.dependencies,
+          install:
+            'Yalc add and package-manager install run only after approved generator writes.',
+        },
+        null,
+        2,
+      ),
+    );
   if (options.dryRun || process.env.NX_DRY_RUN === 'true') {
     return () => undefined;
   }
@@ -1856,6 +1885,14 @@ export async function workspaceInitGenerator(
   const inferenceSupported = nxWorkspaceCapabilities(tree).major >= 18;
   const inference = inferenceSupported
     ? {
+        ...(workspaceSurvey.manifests.extension.length > 0
+          ? {
+              extension: {
+                plugin: '@megamono/nx-extension' as const,
+                manifests: workspaceSurvey.manifests.extension,
+              },
+            }
+          : {}),
         ...(workspaceSurvey.manifests.apple.length > 0
           ? {
               apple: {
@@ -1940,6 +1977,7 @@ export async function workspaceInitGenerator(
     if ('apple' in inference) configuredPlatforms.add('apple');
     if ('cargo' in inference) configuredPlatforms.add('rust');
     if ('cloudflare' in inference) configuredPlatforms.add('worker');
+    if ('extension' in inference) configuredPlatforms.add('extension');
   }
   if (configuredPlatforms.size === 0) {
     configuredPlatforms.add(defaultPlatform ?? 'node');
@@ -2328,6 +2366,15 @@ export async function workspaceInitGenerator(
     modules,
   );
   const developmentDependencies = {
+    ...(modules.has('inference') && 'extension' in inference
+      ? {
+          '@megamono/nx-extension': inferenceDependencyVersion(
+            tree,
+            '@megamono/nx-extension',
+            pluginVersion,
+          ),
+        }
+      : {}),
     ...Object.fromEntries(
       dependencyAssessments
         .filter(({ action }) => action === 'add')
@@ -2370,6 +2417,7 @@ export async function workspaceInitGenerator(
         }
       : {}),
   };
+  Object.assign(developmentDependencies, localInference?.dependencies);
   const hasDependencies = Object.keys(developmentDependencies).length > 0;
   const installTask = hasDependencies
     ? addDependenciesToPackageJson(tree, {}, developmentDependencies)
@@ -2683,6 +2731,15 @@ export async function workspaceInitGenerator(
   if (options.report) tree.write(options.report, completion);
 
   const postFlushTasks = [
+    ...(localInference
+      ? [
+          {
+            id: 'install-inferred-yalc-closure',
+            retry: `yalc add ${localInference.packages.join(' ')} --dev --no-pure`,
+            run: localInference.install,
+          },
+        ]
+      : []),
     ...(hasDependencies
       ? [
           {

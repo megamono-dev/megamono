@@ -10,6 +10,7 @@ import {
   type Tree,
 } from '@nx/devkit';
 import { hashArtifactBytes } from '../../lib/managed-artifacts';
+import * as inferenceYalc from '../../lib/inference-yalc';
 
 import { workspaceInitGenerator } from './workspace-init';
 import { WorkspaceInitGeneratorSchema } from './schema';
@@ -1523,6 +1524,59 @@ export default [
     expect(readJson(tree, 'package.json').devDependencies).toMatchObject({
       '@megamono/nx-cloudflare': 'file:.yalc/@megamono/nx-cloudflare',
     });
+  });
+
+  it('selects extension inference and carries Yalc selection through dry-run and approved writes', async () => {
+    tree.write(
+      'apps/extension/manifest.chrome.json',
+      '{"manifest_version":3,"name":"extension","version":"1"}',
+    );
+    tree.write('apps/worker/wrangler.jsonc', '{"name":"worker"}');
+    const install = vi.fn(async () => undefined);
+    const plan = vi.spyOn(inferenceYalc, 'planInferenceYalc').mockReturnValue({
+      packages: [
+        '@megamono/nx-cloudflare@0.0.1',
+        '@megamono/nx-extension@0.0.1',
+      ],
+      dependencies: {
+        '@megamono/nx-cloudflare': 'file:.yalc/@megamono/nx-cloudflare',
+        '@megamono/nx-extension': 'file:.yalc/@megamono/nx-extension',
+      },
+      install,
+    });
+    try {
+      const options = {
+        only: 'inference',
+        localPackages: 'yalc' as const,
+        yes: true,
+      };
+      const before = tree.listChanges();
+      await workspaceInitGenerator(tree, { ...options, dryRun: true });
+      expect(tree.listChanges()).toEqual(before);
+      expect(install).not.toHaveBeenCalled();
+      await workspaceInitGenerator(tree, options);
+      expect(plan).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '@megamono/nx-extension',
+          '@megamono/nx-cloudflare',
+        ]),
+        '0.0.1',
+        '/virtual',
+      );
+      expect(readJson(tree, 'nx.json').plugins).toContain(
+        '@megamono/nx-extension',
+      );
+      expect(
+        readJson(tree, 'megamono.json').adoption.inference.extension.manifests,
+      ).toEqual(['apps/extension/manifest.chrome.json']);
+      expect(readJson(tree, 'package.json').devDependencies).toMatchObject({
+        '@megamono/nx-extension': 'file:.yalc/@megamono/nx-extension',
+        '@megamono/nx-cloudflare': 'file:.yalc/@megamono/nx-cloudflare',
+      });
+      expect(install).not.toHaveBeenCalled();
+    } finally {
+      plan.mockRestore();
+    }
   });
 
   it('records calling-scaffolder platform and service decisions', async () => {

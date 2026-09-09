@@ -624,3 +624,14 @@ Dependency, infrastructure, managed-artifact, ratchet, and orphan checks remain
 available. Decision-backed suppressions require docs adoption and fail closed
 without it. Workspaces with older, empty adoption metadata retain full-health
 behavior; adopting docs still requires a valid corpus.
+
+# Local inference adoption
+
+`megamono adopt --write --profile=pilot --local-packages=yalc` forwards local
+distribution selection to workspace initialization. Before changes, the generator
+checks the store for selected Apple, Cargo, Cloudflare, Render, and extension
+plugins and their required internal Megamono dependencies/peers. Dry runs only
+print that closure. Approved runs add it through Yalc after files are flushed,
+then install dependencies; internal runtime edges use the local closure rather
+than silently falling back to registry packages. Optional provider peers are not
+automatically selected. Surveys do not install or register these packages.

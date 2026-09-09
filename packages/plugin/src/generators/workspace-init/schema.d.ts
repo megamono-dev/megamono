@@ -2,6 +2,7 @@ export interface WorkspaceInitGeneratorSchema {
   readonly survey?: boolean;
   readonly dryRun?: boolean;
   readonly format?: 'markdown' | 'json';
+  readonly localPackages?: 'registry' | 'yalc';
   readonly only?: string;
   readonly profile?: 'minimal' | 'pilot' | 'platform' | 'full';
   readonly interactive?: boolean;

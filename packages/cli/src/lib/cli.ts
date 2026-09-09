@@ -2642,7 +2642,10 @@ async function runInit(
 
   const [nxCommand, nxArgs] = nxInvocation(
     workspace.packageManager,
-    options.generatorArgs,
+    [
+      ...options.generatorArgs,
+      ...(options.localPackages === 'yalc' ? ['--localPackages=yalc'] : []),
+    ],
     'workspace-init',
     root,
   );

@@ -1297,6 +1297,7 @@ describe('@megamono/cli', () => {
           'generate',
           '@megamono/plugin:workspace-init',
           '--only=docs',
+          '--localPackages=yalc',
         ],
         cwd: root,
         capture: false,
@@ -1882,7 +1883,16 @@ describe('@megamono/cli', () => {
       harness.invocations.map(({ command, args }) => [command, args]),
     ).toEqual([
       ['yalc', ['dir']],
-      ['pnpm', ['exec', 'nx', 'generate', '@megamono/plugin:workspace-init']],
+      [
+        'pnpm',
+        [
+          'exec',
+          'nx',
+          'generate',
+          '@megamono/plugin:workspace-init',
+          '--localPackages=yalc',
+        ],
+      ],
       ['yalc', ['add', '@playstack/cli', '--dev', '--no-pure']],
       ['pnpm', ['add', 'zod@^4.0.0']],
       [

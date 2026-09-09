@@ -1224,6 +1224,11 @@ async function graphConfidence(
     return 'reduced';
   if (config.adoption.inference.render && !plugins.has('@megamono/nx-render'))
     return 'reduced';
+  if (
+    config.adoption.inference.extension &&
+    !plugins.has('@megamono/nx-extension')
+  )
+    return 'reduced';
   return 'complete';
 }
 
