@@ -301,6 +301,7 @@ describe('app generator', () => {
       const tree = workspace();
       const options = {
         type,
+        ...(type === 'extension' ? { manifestVersion: 3 as const } : {}),
         scope: 'fixture',
         workspaceName: 'Fixture',
         interactive: false,
@@ -308,6 +309,8 @@ describe('app generator', () => {
       } as const;
       await appGenerator(tree, options);
       expect(tree.exists(expectedPath)).toBe(true);
+      if (type === 'extension')
+        expect(tree.read(expectedPath, 'utf8')).toContain('manifestVersion: 3');
       if (type === 'mobile') {
         expect(tree.read('apps/mobile/package.json', 'utf8')).toContain(
           'platform:mobile',

@@ -5,5 +5,6 @@ export interface ExtensionApplicationSchema {
   readonly scope?: string;
   readonly tags?: string;
   readonly displayName?: string;
+  readonly manifestVersion?: 2 | 3;
   readonly skipFormat?: boolean;
 }

@@ -21,6 +21,40 @@ function record(overrides: Partial<WxtConfigRecord> = {}): WxtConfigRecord {
 }
 
 describe('WXT project inference', () => {
+  it.each([2, 3] as const)(
+    'binds all inferred commands to the project and respects Firefox MV%s',
+    (version) => {
+      const project = projectsFromWxtConfigs([
+        record({ browserManifestVersions: { firefox: version } }),
+      ])['apps/extension'];
+      for (const target of Object.values(project.targets ?? {}))
+        if (target.executor === 'nx:run-commands')
+          expect(target.options?.cwd).toBe('{projectRoot}');
+      expect(project.targets?.['build-firefox'].options?.command).toBe(
+        `wxt build --browser firefox --mv${version}`,
+      );
+      expect(project.targets?.['build-firefox'].outputs).toEqual([
+        `{projectRoot}/.output/firefox-mv${version}`,
+      ]);
+      expect(project.targets?.['dev-firefox'].options?.command).toContain(
+        `--mv${version}`,
+      );
+      expect(
+        project.targets?.['package-firefox-source'].options?.command,
+      ).toContain(`--mv${version} --sources`);
+    },
+  );
+
+  it('does not assume a version when WXT config owns the decision', () => {
+    const project = projectsFromWxtConfigs([record()])['apps/extension'];
+    expect(project.targets?.['build-firefox'].outputs).toEqual([
+      '{projectRoot}/.output/firefox-mv*',
+    ]);
+    expect(project.targets?.['build-firefox'].options?.command).toBe(
+      'wxt build --browser firefox',
+    );
+  });
+
   it('groups browser-specific source manifests and preserves Vite scripts', async () => {
     const root = await mkdtemp(join(tmpdir(), 'nx-extension-browsers-'));
     const files = [

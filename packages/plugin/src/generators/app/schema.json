@@ -5,6 +5,11 @@
   "description": "Create an application through the same maintained preset used by create-megamono.",
   "type": "object",
   "properties": {
+    "manifestVersion": {
+      "type": "number",
+      "enum": [2, 3],
+      "description": "Extension-only explicit Chrome/Firefox manifest version."
+    },
     "type": {
       "type": "string",
       "enum": [

@@ -3,6 +3,44 @@ import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { extensionApplicationGenerator } from './application';
 
 describe('extension application generator', () => {
+  it.each([2, 3] as const)(
+    'generates and preserves explicit MV%s with matching commands and outputs',
+    async (manifestVersion) => {
+      const tree = createTreeWithEmptyWorkspace();
+      const options = {
+        name: 'browser',
+        scope: 'fixture',
+        manifestVersion,
+        skipFormat: true,
+      };
+      await extensionApplicationGenerator(tree, options);
+      const project = readJson(tree, 'apps/browser/project.json');
+      expect(project.targets['build-firefox'].outputs).toEqual([
+        `{projectRoot}/.output/firefox-mv${manifestVersion}`,
+      ]);
+      expect(project.targets['build-firefox'].options).toEqual({
+        command: `wxt build --browser firefox --mv${manifestVersion}`,
+        cwd: '{projectRoot}',
+      });
+      expect(tree.read('apps/browser/wxt.config.ts', 'utf8')).toContain(
+        `manifestVersion: ${manifestVersion}`,
+      );
+      expect(
+        readJson(tree, 'apps/browser/package.json').megamono.extension
+          .manifestVersions.firefox,
+      ).toBe(manifestVersion);
+      const before = tree.listChanges();
+      await extensionApplicationGenerator(tree, options);
+      expect(tree.listChanges()).toEqual(before);
+      await expect(
+        extensionApplicationGenerator(tree, {
+          ...options,
+          manifestVersion: manifestVersion === 2 ? 3 : 2,
+        }),
+      ).rejects.toThrow('application-owned');
+    },
+  );
+
   it('creates a WXT project with Chrome and Firefox targets', async () => {
     const tree = createTreeWithEmptyWorkspace();
     writeJson(tree, 'package.json', {

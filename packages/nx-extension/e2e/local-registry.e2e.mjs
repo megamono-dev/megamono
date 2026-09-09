@@ -217,6 +217,7 @@ try {
       '--scope=fixture',
       '--directory=apps/browser',
       '--displayName=Fixture Browser',
+      '--manifestVersion=3',
       '--skipFormat',
       '--interactive=false',
     ],
@@ -259,9 +260,36 @@ try {
     installedPlugin.version === '0.0.1',
     'Fixture did not install the published extension plugin.',
   );
+  // Remove generated browser targets so this build exercises inference rather
+  // than project.json overrides. WXT must find the app-local configuration.
+  const projectPath = resolve(fixtureRoot, 'apps/browser/project.json');
+  const authored = JSON.parse(await readFile(projectPath, 'utf8'));
+  delete authored.targets['build-firefox'];
+  delete authored.targets['build-chrome'];
+  await writeFile(projectPath, JSON.stringify(authored));
+  for (const browser of ['chrome', 'firefox']) {
+    await run(
+      'npm',
+      ['exec', 'nx', '--', 'run', `fixture-browser:build-${browser}`],
+      { cwd: fixtureRoot, env: environment },
+    );
+    const manifest = JSON.parse(
+      await readFile(
+        resolve(
+          fixtureRoot,
+          `apps/browser/.output/${browser}-mv3/manifest.json`,
+        ),
+        'utf8',
+      ),
+    );
+    assert(
+      manifest.manifest_version === 3,
+      `${browser} did not build MV3 through the inferred target`,
+    );
+  }
   succeeded = true;
   process.stdout.write(
-    'nx-extension local-registry e2e passed: published generator, browser targets, package targets, and Safari boundary verified.\n',
+    'nx-extension local-registry e2e passed: published generator, inferred Chrome/Firefox MV3 builds, package targets, and Safari boundary verified.\n',
   );
 } finally {
   verdaccio.kill('SIGTERM');

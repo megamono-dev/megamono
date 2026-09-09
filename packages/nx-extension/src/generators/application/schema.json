@@ -15,6 +15,11 @@
     "scope": { "type": "string" },
     "tags": { "type": "string" },
     "displayName": { "type": "string" },
+    "manifestVersion": {
+      "type": "number",
+      "enum": [2, 3],
+      "description": "Explicit manifest version for Chrome and Firefox. Omit to retain WXT configuration/defaults."
+    },
     "skipFormat": { "type": "boolean", "default": false }
   },
   "additionalProperties": false

@@ -5,8 +5,15 @@ import {
 } from '@nx/devkit';
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
+import {
+  manifestVersions,
+  wxtCommand,
+  wxtOutput,
+  type BrowserManifestVersions,
+} from './wxt-targets';
 
 export interface ExtensionPluginOptions {
+  readonly manifestVersions?: BrowserManifestVersions;
   readonly scope?: string;
   readonly devChromeTargetName?: string;
   readonly devFirefoxTargetName?: string;
@@ -20,6 +27,7 @@ export interface ExtensionDiagnostic {
 }
 
 export interface WxtConfigRecord {
+  readonly browserManifestVersions?: BrowserManifestVersions;
   readonly configPath: string;
   readonly root: string;
   readonly projectName: string;
@@ -59,6 +67,9 @@ function recordForConfig(
   const manifest = existsSync(manifestPath)
     ? (JSON.parse(readFileSync(manifestPath, 'utf8')) as {
         readonly name?: unknown;
+        readonly megamono?: {
+          readonly extension?: { readonly manifestVersions?: unknown };
+        };
         readonly nx?: {
           readonly name?: unknown;
           readonly tags?: unknown;
@@ -106,6 +117,9 @@ function recordForConfig(
     ].sort(),
     storeCommands,
     framework: 'wxt',
+    browserManifestVersions: manifestVersions(
+      manifest.megamono?.extension?.manifestVersions,
+    ),
     scripts: {},
   };
 }
@@ -253,7 +267,7 @@ function runTarget(
   return {
     executor: 'nx:run-commands',
     cache,
-    options: { command },
+    options: { command, cwd: '{projectRoot}' },
   };
 }
 
@@ -261,22 +275,26 @@ function extensionTargets(
   record: WxtConfigRecord,
   options: ExtensionPluginOptions,
 ): NonNullable<ProjectConfiguration['targets']> {
+  const versions = {
+    ...manifestVersions(options.manifestVersions),
+    ...manifestVersions(record.browserManifestVersions),
+  };
   const targets: NonNullable<ProjectConfiguration['targets']> = {
     [options.devChromeTargetName ?? 'dev-chrome']: {
-      ...runTarget('wxt --browser chrome', false),
+      ...runTarget(wxtCommand('', 'chrome', versions.chrome), false),
       continuous: true,
     },
     [options.devFirefoxTargetName ?? 'dev-firefox']: {
-      ...runTarget('wxt --browser firefox', false),
+      ...runTarget(wxtCommand('', 'firefox', versions.firefox), false),
       continuous: true,
     },
     'build-chrome': {
-      ...runTarget('wxt build --browser chrome'),
-      outputs: ['{projectRoot}/.output/chrome-mv3'],
+      ...runTarget(wxtCommand('build', 'chrome', versions.chrome)),
+      outputs: [wxtOutput('chrome', versions.chrome)],
     },
     'build-firefox': {
-      ...runTarget('wxt build --browser firefox'),
-      outputs: ['{projectRoot}/.output/firefox-mv2'],
+      ...runTarget(wxtCommand('build', 'firefox', versions.firefox)),
+      outputs: [wxtOutput('firefox', versions.firefox)],
     },
     [options.buildTargetName ?? 'build']: {
       executor: 'nx:noop',
@@ -285,17 +303,19 @@ function extensionTargets(
       outputs: ['{projectRoot}/.output'],
     },
     'package-chrome': {
-      ...runTarget('wxt zip --browser chrome'),
+      ...runTarget(wxtCommand('zip', 'chrome', versions.chrome)),
       dependsOn: ['build-chrome'],
       outputs: ['{projectRoot}/.output/*-chrome.zip'],
     },
     'package-firefox': {
-      ...runTarget('wxt zip --browser firefox'),
+      ...runTarget(wxtCommand('zip', 'firefox', versions.firefox)),
       dependsOn: ['build-firefox'],
       outputs: ['{projectRoot}/.output/*-firefox.zip'],
     },
     'package-firefox-source': {
-      ...runTarget('wxt zip --browser firefox --sources'),
+      ...runTarget(
+        `${wxtCommand('zip', 'firefox', versions.firefox)} --sources`,
+      ),
       outputs: ['{projectRoot}/.output/*-sources.zip'],
     },
     [options.packageTargetName ?? 'package']: {

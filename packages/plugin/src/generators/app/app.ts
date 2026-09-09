@@ -106,6 +106,7 @@ interface NormalizedAppOptions {
   readonly port?: number;
   readonly styling?: ResolvedWebStyling;
   readonly router?: 'pages' | 'app';
+  readonly manifestVersion?: 2 | 3;
   readonly packageManager: PackageManager;
   readonly workspaceName: string;
   readonly requestedApps: readonly AppType[];
@@ -350,6 +351,15 @@ async function normalizeOptions(
       'options',
     );
   const router = styling ? (raw.router ?? 'pages') : undefined;
+  if (
+    raw.manifestVersion !== undefined &&
+    (type !== 'extension' || ![2, 3].includes(raw.manifestVersion))
+  )
+    throw new AppGeneratorError(
+      'manifestVersion is available only for extensions and must be 2 or 3.',
+      2,
+      'options',
+    );
   return {
     type,
     name,
@@ -367,6 +377,7 @@ async function normalizeOptions(
     port: selectedPort,
     ...(styling ? { styling } : {}),
     ...(router ? { router } : {}),
+    ...(raw.manifestVersion ? { manifestVersion: raw.manifestVersion } : {}),
     packageManager: packageManager(tree),
     workspaceName: raw.workspaceName?.trim() || identity.name,
     requestedApps: csv<AppType>(raw.requestedApps, APP_TYPE_SET),
@@ -1169,6 +1180,9 @@ async function createDelegatedApp(
         name: options.name,
         projectName: options.projectName,
         displayName: options.workspaceName,
+        ...(options.manifestVersion
+          ? { manifestVersion: options.manifestVersion }
+          : {}),
       }),
     ];
   }

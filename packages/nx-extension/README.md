@@ -30,6 +30,31 @@ and deployment wrappers remain application-owned; adopting WXT is optional.
 
 Nx 18–23 inference and generation for WXT browser extensions.
 
+All inferred commands run with `cwd: "{projectRoot}"`. Choose an explicit
+manifest version when generating a new app with
+`megamono add app extension --manifestVersion=3`. For existing apps, configure
+per-browser overrides in the application's package manifest:
+
+```json
+{
+  "megamono": {
+    "extension": { "manifestVersions": { "chrome": 3, "firefox": 3 } }
+  }
+}
+```
+
+The same `manifestVersions` map can be supplied as plugin options; application
+values take precedence. Explicit versions add WXT's `--mv2`/`--mv3` flag to
+dev/build/package commands and select matching build outputs. Without overrides,
+WXT retains control and output globs cover either manifest version—discovery does
+not execute configuration or assume Firefox MV2. Custom `outDir`,
+`outDirTemplate`, or ZIP templates require application-owned Nx output overrides.
+See [WXT manifest-version configuration](https://wxt.dev/api/reference/wxt/interfaces/inlineconfig#manifestversion).
+
+Existing directories remain protected: scaffolding is not an existing-app WXT
+migration. Changing a generated app's version on rerun requires explicit review
+of its application-owned configuration.
+
 The plugin discovers `wxt.config.*`, exposes explicit Chrome and Firefox development, build, and archive targets, and treats Safari as a separate Apple wrapper project. Store deployment targets appear only when a repository-owned `extension.store.json` supplies commands; credentials remain CI-owned.
 
 ```json
