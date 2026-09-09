@@ -315,6 +315,56 @@ bundler/runtime evidence and a clean deployment install. Keep it advisory while
 qualifying a repository's actual emitted output; do not suppress all missing
 dependency findings to work around an unsupported loader.
 
+### Opt-in Webpack Node chunk evidence
+
+For a completed, immutable Webpack 5 Node build, record the chunk graph and
+SHA-256 hashes of **all** emitted JavaScript. In your existing build callback,
+after checking `stats.hasErrors()` and completing writes:
+
+```js
+const { createWebpackRuntimeEvidence } = require('@megamono/plugin/webpack');
+const { writeFile } = require('node:fs/promises');
+const evidence = await createWebpackRuntimeEvidence({
+  outputPath: absoluteBuildOutput,
+  stats: stats.toJson({
+    all: false, version: true, hash: true, errors: true,
+    assets: true, chunks: true, ids: true,
+  }),
+});
+await writeFile(evidencePath, JSON.stringify(evidence, null, 2));
+```
+
+Then pass the workspace-relative evidence file:
+
+```sh
+megamono verify runtime api --outputPath=dist/apps/api \
+  --webpackEvidence=.megamono/api-webpack-evidence.json
+```
+
+Keep the file with its build output, not as a reusable exception/allowlist. This
+uses [Webpack compilation stats](https://webpack.js.org/api/stats/), not a copied
+list of guessed chunk names. Failed/incomplete/multi-compilation stats are
+rejected. Grouped stats must be configured to expose individual assets.
+
+The supported shape is the unminified Webpack 5 synchronous Node `require`
+chunk loader, with literal ensure IDs and a simple literal/concatenation/finite
+map filename getter in the same runtime file. ID and content-hash filenames are
+qualified by a real Webpack 5.105.2 packed-consumer fixture. Minified/custom
+loaders, dynamic context IDs, HMR, cross-file runtime composition and unknown
+dynamic imports remain unresolved; this is not blanket Webpack support.
+
+Stale hashes, extra/missing JavaScript, symlink assets and invalid chunk paths
+fail with `runtime-evidence-invalid`. Lazy chunks are still scanned for missing
+production dependencies. The report records the compilation hash and number of
+qualified loader sites. No app code is executed by verification. Evidence must
+come from your trusted build pipeline; hashes identify bytes, not authorship or
+a proof of arbitrary program behavior. Do not mutate/rebuild output concurrently.
+Retain clean production installs and explicitly authorized container smoke tests.
+
+Run `npm exec nx -- run @megamono/plugin:e2e-webpack-evidence` to exercise the
+packed helper with real Node lazy loading. Its child-process smoke is not a
+production-container or Fontstack deployment qualification.
+
 The companion workspace audit checks pnpm/Corepack pins, active Node and pnpm,
 workspace package membership, and known executables or preload modules used by
 scripts:

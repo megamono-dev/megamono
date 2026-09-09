@@ -3,4 +3,5 @@ export interface VerifyRuntimeExecutorSchema {
   readonly outputPath?: string;
   readonly buildTarget?: string;
   readonly report?: string;
+  readonly webpackEvidence?: string;
 }

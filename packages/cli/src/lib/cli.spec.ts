@@ -1211,7 +1211,13 @@ describe('@megamono/cli', () => {
     expect(
       (
         await runMegamonoCli(
-          ['verify', 'runtime', 'api', '--outputPath=dist/apps/api'],
+          [
+            'verify',
+            'runtime',
+            'api',
+            '--outputPath=dist/apps/api',
+            '--webpackEvidence=.megamono/api-webpack-evidence.json',
+          ],
           harness.value,
         )
       ).exitCode,
@@ -1242,6 +1248,7 @@ describe('@megamono/cli', () => {
         'megamono:verify-runtime',
         '--project=api',
         '--outputPath=dist/apps/api',
+        '--webpackEvidence=.megamono/api-webpack-evidence.json',
       ],
       [
         expect.stringMatching(/node_modules\/nx\/bin\/cli\.js$/),

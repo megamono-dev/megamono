@@ -54,11 +54,19 @@ const runExecutor: PromiseExecutor<VerifyRuntimeExecutorSchema> = async (
     logger.error('Runtime verification report must be workspace-relative.');
     return { success: false };
   }
+  if (
+    options.webpackEvidence &&
+    !isSafeWorkspaceRelativePath(options.webpackEvidence)
+  ) {
+    logger.error('Webpack evidence must be workspace-relative.');
+    return { success: false };
+  }
   const report = await verifyRuntimeDependencies({
     workspaceRoot: context.root,
     project,
     projectRoot: node.data.root,
     outputPath,
+    webpackEvidence: options.webpackEvidence,
   });
   const serialized = serializeRuntimeDependencyReport(report);
   if (options.report) {

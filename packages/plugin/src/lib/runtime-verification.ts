@@ -1,7 +1,13 @@
 import { builtinModules } from 'node:module';
+import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { extname, join, relative, resolve } from 'node:path';
 import ts = require('typescript');
+import {
+  validateWebpackRuntimeEvidence,
+  webpackChunkLoadOffsets,
+  type WebpackRuntimeEvidence,
+} from './webpack-evidence';
 
 const BUILT_INS = new Set(
   builtinModules.flatMap((name) => [name, name.replace(/^node:/, '')]),
@@ -12,6 +18,7 @@ export type RuntimeDependencyFindingCode =
   | 'runtime-dependency-dev-only'
   | 'runtime-dependency-missing'
   | 'runtime-analysis-incomplete'
+  | 'runtime-evidence-invalid'
   | 'runtime-output-missing';
 
 export interface RuntimeDependencyFinding {
@@ -29,6 +36,10 @@ export interface RuntimeDependencyReport {
   readonly manifests: readonly string[];
   readonly externalPackages: readonly string[];
   readonly findings: readonly RuntimeDependencyFinding[];
+  readonly webpackEvidence?: {
+    readonly compilationHash: string;
+    readonly qualifiedLoads: number;
+  };
 }
 
 interface PackageManifest {
@@ -78,7 +89,11 @@ function packageName(specifier: string): string | null {
   return normalized.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
 }
 
-export function analyzeRuntimeImports(source: string, filename = 'bundle.js') {
+function analyzeImports(
+  source: string,
+  filename = 'bundle.js',
+  qualifiedLoads: ReadonlySet<number> = new Set(),
+) {
   const found = new Set<string>();
   const issues: string[] = [];
   const file = ts.createSourceFile(
@@ -181,6 +196,7 @@ export function analyzeRuntimeImports(source: string, filename = 'bundle.js') {
       const name = packageName(node.text);
       if (name) found.add(name);
     } else {
+      if (qualifiedLoads.has(owner.getStart(file))) return;
       issues.push(
         `${location(owner.getStart(file))}: Non-literal module load requires runtime/bundler verification.`,
       );
@@ -205,6 +221,10 @@ export function analyzeRuntimeImports(source: string, filename = 'bundle.js') {
   return { packages: [...found].sort(compare), issues };
 }
 
+export function analyzeRuntimeImports(source: string, filename = 'bundle.js') {
+  return analyzeImports(source, filename);
+}
+
 export function externalSpecifiers(source: string): readonly string[] {
   const analysis = analyzeRuntimeImports(source);
   if (analysis.issues.length)
@@ -224,6 +244,7 @@ export async function verifyRuntimeDependencies(options: {
   readonly project: string;
   readonly projectRoot: string;
   readonly outputPath: string;
+  readonly webpackEvidence?: string;
 }): Promise<RuntimeDependencyReport> {
   const output = resolve(options.workspaceRoot, options.outputPath);
   const rootManifestPath = join(options.workspaceRoot, 'package.json');
@@ -268,6 +289,30 @@ export async function verifyRuntimeDependencies(options: {
   const evidence = new Map<string, Set<string>>();
   const incomplete: RuntimeDependencyFinding[] = [];
   const javascriptFiles = await filesUnder(output);
+  let webpack: WebpackRuntimeEvidence | undefined;
+  let qualifiedLoads = 0;
+  if (options.webpackEvidence) {
+    try {
+      webpack = await validateWebpackRuntimeEvidence(
+        JSON.parse(
+          await readFile(
+            resolve(options.workspaceRoot, options.webpackEvidence),
+            'utf8',
+          ),
+        ),
+        output,
+        javascriptFiles,
+      );
+    } catch (error) {
+      incomplete.push({
+        code: 'runtime-evidence-invalid',
+        package: null,
+        severity: 'error',
+        evidence: [options.webpackEvidence],
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
   if (!javascriptFiles.length)
     incomplete.push({
       code: 'runtime-analysis-incomplete',
@@ -278,8 +323,28 @@ export async function verifyRuntimeDependencies(options: {
         'No JavaScript output files were inspected; check the selected build output path.',
     });
   for (const file of javascriptFiles) {
-    const source = await readFile(file, 'utf8');
-    const analysis = analyzeRuntimeImports(source, file);
+    const bytes = await readFile(file);
+    const source = bytes.toString('utf8');
+    if (
+      webpack &&
+      createHash('sha256').update(bytes).digest('hex') !==
+        webpack.assets[relative(output, file).split('\\').join('/')]
+    ) {
+      incomplete.push({
+        code: 'runtime-evidence-invalid',
+        package: null,
+        severity: 'error',
+        evidence: [relative(options.workspaceRoot, file)],
+        message:
+          'Output changed during verification; use an immutable completed build.',
+      });
+      webpack = undefined;
+    }
+    const offsets = webpack
+      ? webpackChunkLoadOffsets(source, relative(output, file), webpack)
+      : new Set<number>();
+    qualifiedLoads += offsets.size;
+    const analysis = analyzeImports(source, file, offsets);
     if (analysis.issues.length)
       incomplete.push({
         code: 'runtime-analysis-incomplete',
@@ -332,6 +397,14 @@ export async function verifyRuntimeDependencies(options: {
       relative(options.workspaceRoot, path),
     ),
     externalPackages: [...evidence.keys()].sort(compare),
+    ...(webpack
+      ? {
+          webpackEvidence: {
+            compilationHash: webpack.compilationHash,
+            qualifiedLoads,
+          },
+        }
+      : {}),
     findings: [...findings, ...incomplete].sort(
       (left, right) =>
         compare(left.package ?? '', right.package ?? '') ||

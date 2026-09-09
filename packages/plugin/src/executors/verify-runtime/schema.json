@@ -21,6 +21,10 @@
     "report": {
       "type": "string",
       "description": "Optional workspace-relative JSON report path."
+    },
+    "webpackEvidence": {
+      "type": "string",
+      "description": "Workspace-relative build-generated Webpack Node chunk evidence. Unknown loads still fail closed."
     }
   },
   "additionalProperties": false

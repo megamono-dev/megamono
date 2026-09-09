@@ -7,6 +7,11 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./webpack": {
+      "types": "./dist/lib/webpack-evidence.d.ts",
+      "require": "./dist/lib/webpack-evidence.js",
+      "default": "./dist/lib/webpack-evidence.js"
+    },
     "./package.json": "./package.json",
     "./build-info.json": "./dist/build-info.json",
     "./availability.json": "./availability.json",
@@ -38,6 +43,16 @@
   ],
   "nx": {
     "targets": {
+      "e2e-webpack-evidence": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/webpack-evidence.e2e.mjs"
+        }
+      },
       "e2e-email-preview-consumer": {
         "executor": "nx:run-commands",
         "cache": false,

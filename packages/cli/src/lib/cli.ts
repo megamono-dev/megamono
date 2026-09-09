@@ -371,6 +371,7 @@ const VERIFY_HELP = `Usage: megamono verify runtime <project> [options]
 
 Examples:
   megamono verify runtime api --outputPath=dist/apps/api
+  megamono verify runtime api --webpackEvidence=.megamono/api-webpack-evidence.json
   megamono verify dependencies --checkActive=false
   megamono verify container --dockerfile=apps/api/Dockerfile
   megamono verify container --dockerfile=apps/api/Dockerfile --smoke
