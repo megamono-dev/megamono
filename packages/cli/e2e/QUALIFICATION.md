@@ -1,5 +1,22 @@
 # Survey isolation and FlightPaths follow-up
 
+## Large JSON output qualification — September 8 follow-up
+
+The expanded real packed fixture reproduced truncated Nx logger output on the
+Nx 22 lane. CLI/plugin private-file handoff fixed that boundary. Both real lanes
+then passed with 220 additional library projects each: 143,379-byte Nx 22 report
+and 142,936-byte Nx 23 report, parsed directly from complete stdout. Consumer
+snapshots, the read-only store and shared installation registry stayed unchanged.
+
+`npm exec nx -- run @megamono/cli:e2e-survey-output` separately passed with a
+559,997-byte Unicode report over real OS pipes and a deliberately slow reader.
+It exercises the packed CLI with a synthetic Nx producer (not a real graph),
+including nonzero graph failure and malformed JSON; failure stdout is empty and
+the final stderr record carries a stable error code. Unit tests cover staging
+failure, preflight failure, and private-file cleanup on both success and failure.
+The real isolation fixture still covers actual npm staging and Nx generation.
+This is not a rerun of Fontstack's application graph/build or container tests.
+
 ## Repeatable packed isolation fixture
 
 Run `npm exec nx -- run @megamono/cli:e2e-isolated-yalc-survey` on a POSIX

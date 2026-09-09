@@ -27,6 +27,16 @@
   ],
   "nx": {
     "targets": {
+      "e2e-survey-output": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/cli/e2e/survey-output.e2e.mjs"
+        }
+      },
       "e2e-isolated-yalc-survey": {
         "executor": "nx:run-commands",
         "cache": false,

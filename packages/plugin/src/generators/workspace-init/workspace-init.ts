@@ -13,7 +13,7 @@ import {
   type Tree,
 } from '@nx/devkit';
 import { prompt } from 'enquirer';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   ADOPTION_STRUCTURAL_RULES,
@@ -1394,7 +1394,13 @@ export async function workspaceInitGenerator(
     (declaredPackageManager as PackageManager | undefined);
   const packageManager = options.packageManager ?? inferredManager ?? 'npm';
   if (options.survey) {
-    logger.info(renderWorkspaceInitSurvey(initialSurvey, outputFormat));
+    const report = renderWorkspaceInitSurvey(initialSurvey, outputFormat);
+    const outputFile = process.env.MEGAMONO_SURVEY_OUTPUT_FILE;
+    if (outputFormat === 'json' && outputFile) {
+      // CLI-owned private handoff: Nx may exit before its stdout pipe drains.
+      // Exclusive creation prevents overwriting a pre-existing user file.
+      writeFileSync(outputFile, report, { encoding: 'utf8', flag: 'wx' });
+    } else logger.info(report);
     return () => undefined;
   }
   if (

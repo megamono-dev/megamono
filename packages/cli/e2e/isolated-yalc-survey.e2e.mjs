@@ -188,6 +188,15 @@ try {
       },
     });
     await put(join(lane.root, 'nx.json'), { analytics: false });
+    // Real graph/generator output, not padding appended after serialization.
+    for (let index = 0; index < 220; index++) {
+      await put(join(lane.root, `libs/feature-${index}/project.json`), {
+        name: `@fixture-${lane.name}/feature-${index}`,
+        projectType: 'library',
+        tags: ['scope:shared', 'type:util', 'platform:node'],
+        targets: {},
+      });
+    }
     await put(join(lane.root, 'apps/api/project.json'), {
       name: `@fixture-${lane.name}/api`,
       projectType: 'application',
@@ -240,6 +249,17 @@ try {
         { PATH: `${join(root, 'bin')}:${env.PATH}`, TMPDIR: scratch },
       );
       const survey = JSON.parse(output);
+      assert(
+        Buffer.byteLength(output) > 65_536,
+        'Survey must exercise the former 64 KiB boundary',
+      );
+      assert.equal(
+        survey.projects.filter(({ name }) =>
+          name.startsWith(`@fixture-${lane.name}/feature-`),
+        ).length,
+        220,
+      );
+      lane.surveyBytes = Buffer.byteLength(output);
       assert(
         survey.projects.some(
           ({ name }) => name === `@fixture-${lane.name}/api`,

@@ -1,5 +1,5 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -956,8 +956,75 @@ describe('@megamono/cli', () => {
       expect(result.exitCode).toBe(response.exitCode || 3);
       expect(harness.stdout).toEqual([]);
       expect(harness.stderr.join('\n')).toContain(response.stdout);
+      expect(JSON.parse(harness.stderr.at(-1) ?? '{}')).toMatchObject({
+        schemaVersion: 1,
+        type: 'megamono.survey.error',
+        code: response.exitCode
+          ? 'survey-command-failed'
+          : 'survey-output-invalid',
+        exitCode: response.exitCode || 3,
+      });
     },
   );
+
+  it.each([0, 7])(
+    'uses a completed private handoff and removes it even on exit %s',
+    async (exitCode) => {
+      const root = await workspace('npm');
+      const survey = {
+        schemaVersion: 1,
+        baseline: {},
+        inventory: {},
+        projects: [],
+        recommendations: [],
+        large: 'é'.repeat(100_000),
+      };
+      let file = '';
+      const harness = io(root, ({ env }) => {
+        file = env?.MEGAMONO_SURVEY_OUTPUT_FILE ?? '';
+        writeFileSync(file, JSON.stringify(survey), { flag: 'wx' });
+        return { exitCode, stdout: 'NX banner and truncated logger output' };
+      });
+      const result = await runMegamonoCli(
+        ['adopt', '--format=json'],
+        harness.value,
+      );
+      expect(result.exitCode).toBe(exitCode);
+      if (!exitCode)
+        expect(JSON.parse(harness.stdout.join('\n'))).toEqual(survey);
+      else expect(harness.stdout).toEqual([]);
+      expect(existsSync(file)).toBe(false);
+    },
+  );
+
+  it('reports staging and preflight failures without a success-shaped stdout payload', async () => {
+    for (const packages of [['nx'], []]) {
+      const root = await workspace('npm', packages);
+      const harness = io(root, () => ({
+        exitCode: 1,
+        stdout: 'npm install failed',
+      }));
+      expect(
+        (
+          await runMegamonoCli(
+            [
+              'adopt',
+              '--format=json',
+              ...(packages.length ? [] : ['--local-packages=invalid']),
+            ],
+            harness.value,
+          )
+        ).exitCode,
+      ).toBe(packages.length ? 3 : 2);
+      expect(harness.stdout).toEqual([]);
+      expect(JSON.parse(harness.stderr.at(-1) ?? '{}')).toMatchObject({
+        type: 'megamono.survey.error',
+        code: packages.length
+          ? 'survey-staging-failed'
+          : 'survey-preflight-failed',
+      });
+    }
+  });
 
   it('stages a missing survey plugin outside the repository', async () => {
     const root = await workspace('pnpm', ['nx']);

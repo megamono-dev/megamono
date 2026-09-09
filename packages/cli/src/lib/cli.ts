@@ -207,7 +207,8 @@ interface Workspace {
 class CliError extends Error {
   constructor(
     message: string,
-    readonly exitCode: 2 | 3 | 4,
+    readonly exitCode: number,
+    readonly code?: string,
   ) {
     super(message);
   }
@@ -1054,6 +1055,7 @@ async function runEphemeralPluginSurvey(
       throw new CliError(
         `Unable to stage the ephemeral survey runtime from ${options.localPackages}. The repository was not modified.`,
         3,
+        'survey-staging-failed',
       );
     }
     // Run the workspace's declared Nx executable. A staged launcher would
@@ -2532,27 +2534,47 @@ async function runSurveyCommand(
   execution: { cwd: string; env?: Readonly<Record<string, string>> },
 ): Promise<CommandResult> {
   const json = jsonSurvey(options);
-  const result = await io.runCommand(command, args, {
-    ...execution,
-    ...(json ? { capture: true } : {}),
-  });
-  if (!json) return result;
-  if (result.stderr) io.stderr(result.stderr);
-  if (result.exitCode !== 0) {
-    if (result.stdout) io.stderr(result.stdout);
-    return result;
-  }
+  const directory = json
+    ? await mkdtemp(join(tmpdir(), 'megamono-survey-output-'))
+    : undefined;
+  const outputFile = directory ? join(directory, 'survey.json') : undefined;
   try {
-    const output = surveyOutput(result.stdout ?? '');
-    if (output.diagnostics) io.stderr(output.diagnostics);
-    io.stdout(output.json);
-    return result;
-  } catch (error) {
-    if (result.stdout) io.stderr(result.stdout);
-    throw new CliError(
-      error instanceof Error ? error.message : String(error),
-      3,
-    );
+    const result = await io.runCommand(command, args, {
+      ...execution,
+      ...(outputFile
+        ? { env: { ...execution.env, MEGAMONO_SURVEY_OUTPUT_FILE: outputFile } }
+        : {}),
+      ...(json ? { capture: true } : {}),
+    });
+    if (!json) return result;
+    if (result.stderr) io.stderr(result.stderr);
+    if (result.exitCode !== 0) {
+      if (result.stdout) io.stderr(result.stdout);
+      throw new CliError(
+        'The survey command failed; inspect the preceding diagnostics. No survey was produced.',
+        result.exitCode,
+        'survey-command-failed',
+      );
+    }
+    try {
+      const hasFile = outputFile && (await exists(outputFile));
+      const output = surveyOutput(
+        hasFile ? await readFile(outputFile, 'utf8') : (result.stdout ?? ''),
+      );
+      if (hasFile && result.stdout) io.stderr(result.stdout);
+      if (output.diagnostics) io.stderr(output.diagnostics);
+      io.stdout(output.json);
+      return result;
+    } catch (error) {
+      if (result.stdout) io.stderr(result.stdout);
+      throw new CliError(
+        error instanceof Error ? error.message : String(error),
+        3,
+        'survey-output-invalid',
+      );
+    }
+  } finally {
+    if (directory) await rm(directory, { recursive: true, force: true });
   }
 }
 
@@ -3089,9 +3111,35 @@ export async function runMegamonoCli(
     }
     throw new CliError(`Unknown command ${args[0]}.\n\n${HELP}`, 2);
   } catch (error) {
-    io.stderr(error instanceof Error ? error.message : String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    const exitCode = error instanceof CliError ? error.exitCode : 1;
+    const surveyJson =
+      ['adopt', 'init'].includes(args[0]) &&
+      !args.some((arg) => /^--playstack(?:=|$)/.test(arg)) &&
+      (args[0] === 'adopt' ||
+        args.includes('--survey') ||
+        args.includes('--survey=true')) &&
+      args.some(
+        (arg, index) =>
+          arg === '--format=json' ||
+          (arg === '--format' && args[index + 1] === 'json'),
+      );
+    io.stderr(
+      surveyJson
+        ? JSON.stringify({
+            schemaVersion: 1,
+            type: 'megamono.survey.error',
+            code:
+              error instanceof CliError && error.code
+                ? error.code
+                : 'survey-preflight-failed',
+            exitCode,
+            message,
+          })
+        : message,
+    );
     return {
-      exitCode: error instanceof CliError ? error.exitCode : 1,
+      exitCode,
     };
   }
 }

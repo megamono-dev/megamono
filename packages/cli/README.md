@@ -256,3 +256,16 @@ Nx banners, staging output, and warnings go to stderr, including when the plugin
 is staged temporarily. Failure returns a nonzero exit code with diagnostics on
 stderr and no survey on stdout. This contract covers read-only Megamono surveys,
 not combined Playstack workflows or mutating generator plans.
+
+On failure, the final stderr line is a JSON record with `schemaVersion: 1`,
+`type: "megamono.survey.error"`, `code`, `exitCode`, and `message`. Earlier stderr
+lines remain human-readable diagnostics; stderr as a whole is not one JSON value.
+Codes are `survey-preflight-failed`, `survey-staging-failed`,
+`survey-command-failed`, and `survey-output-invalid`. Consumers must check the
+process exit code before parsing stdout. Graph failures do not authorize Megamono
+to install missing application build dependencies.
+
+Current CLI/plugin pairs transfer the completed report through a private
+temporary file before stdout serialization, avoiding Nx logger/exit truncation.
+The handoff is removed on success and failure; it is not a repository artifact.
+Older plugins fall back to validated stdout and fail closed if it is truncated.
