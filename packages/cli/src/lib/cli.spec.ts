@@ -1720,115 +1720,122 @@ describe('@megamono/cli', () => {
     ]);
   });
 
-  it('requires an explicit Playstack path for ambiguous automated surfaces', async () => {
-    const root = await workspace('pnpm');
-    const projects = {
-      shop: {
-        root: 'apps/shop',
-        projectType: 'application',
-        tags: ['platform:web', 'type:app'],
-      },
-      admin: {
-        root: 'apps/admin',
-        projectType: 'application',
-        tags: ['platform:web', 'type:app'],
-      },
-    } as const;
-    const ambiguous = io(
-      root,
-      (invocation) =>
-        surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
-    );
+  it.each(['apps/shop', 'apps/web'])(
+    'requires an explicit Playstack path for ambiguous automated surfaces including %s',
+    async (marketingRoot) => {
+      const root = await workspace('pnpm');
+      const projects = {
+        shop: {
+          root: marketingRoot,
+          projectType: 'application',
+          tags: ['platform:web', 'type:app'],
+        },
+        admin: {
+          root: 'apps/admin',
+          projectType: 'application',
+          tags: ['platform:web', 'type:app'],
+        },
+      } as const;
+      const ambiguous = io(
+        root,
+        (invocation) =>
+          surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
+      );
 
-    expect(
-      (
-        await runMegamonoCli(
-          [
-            'init',
-            '--playstack-packages=content',
-            '--interactive=false',
-            '--yes',
-          ],
-          ambiguous.value,
-        )
-      ).exitCode,
-    ).toBe(4);
-    expect(ambiguous.stderr.at(-1)).toContain(
-      'Pass --playstack-web=<path> in automation',
-    );
-    expect(
-      ambiguous.invocations.some(({ args }) => args.includes('playstack')),
-    ).toBe(false);
+      expect(
+        (
+          await runMegamonoCli(
+            [
+              'init',
+              '--playstack-packages=content',
+              '--interactive=false',
+              '--yes',
+            ],
+            ambiguous.value,
+          )
+        ).exitCode,
+      ).toBe(4);
+      expect(ambiguous.stderr.at(-1)).toContain(
+        'Pass --playstack-web=<path> in automation',
+      );
+      expect(
+        ambiguous.invocations.some(({ args }) => args.includes('playstack')),
+      ).toBe(false);
 
-    const explicit = io(
-      root,
-      (invocation) =>
-        surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
-    );
-    expect(
-      (
-        await runMegamonoCli(
-          [
-            'init',
-            '--playstack-packages=content',
-            '--playstack-web=apps/shop',
-            '--playstack-api=false',
-            '--interactive=false',
-            '--yes',
-          ],
-          explicit.value,
-        )
-      ).exitCode,
-    ).toBe(0);
-    const delegated = explicit.invocations.find(({ args }) =>
-      args.includes('playstack'),
-    );
-    expect(delegated?.args).toContain('--web=apps/shop');
-    expect(delegated?.args).not.toContain('--api=false');
-    expect(explicit.invocations[0]?.args).not.toContain(
-      '--playstack-web=apps/shop',
-    );
-  });
+      const explicit = io(
+        root,
+        (invocation) =>
+          surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
+      );
+      expect(
+        (
+          await runMegamonoCli(
+            [
+              'init',
+              '--playstack-packages=content',
+              `--playstack-web=${marketingRoot}`,
+              '--playstack-api=false',
+              '--interactive=false',
+              '--yes',
+            ],
+            explicit.value,
+          )
+        ).exitCode,
+      ).toBe(0);
+      const delegated = explicit.invocations.find(({ args }) =>
+        args.includes('playstack'),
+      );
+      expect(delegated?.args).toContain(`--web=${marketingRoot}`);
+      expect(delegated?.args).not.toContain('--api=false');
+      expect(explicit.invocations[0]?.args).not.toContain(
+        `--playstack-web=${marketingRoot}`,
+      );
+    },
+  );
 
-  it('asks which tagged application should receive an ambiguous surface', async () => {
-    const root = await workspace('npm');
-    const projects = {
-      shop: {
-        root: 'apps/shop',
-        projectType: 'application',
-        tags: ['platform:web', 'type:app'],
-      },
-      admin: {
-        root: 'apps/admin',
-        projectType: 'application',
-        tags: ['platform:web', 'type:app'],
-      },
-    } as const;
-    const harness = io(
-      root,
-      (invocation) =>
-        surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
-    );
-    const selections: string[] = [];
+  it.each(['apps/shop', 'apps/web'])(
+    'asks which tagged application should receive an ambiguous surface including %s',
+    async (marketingRoot) => {
+      const root = await workspace('npm');
+      const projects = {
+        shop: {
+          root: marketingRoot,
+          projectType: 'application',
+          tags: ['platform:web', 'type:app'],
+        },
+        admin: {
+          root: 'apps/admin',
+          projectType: 'application',
+          tags: ['platform:web', 'type:app'],
+        },
+      } as const;
+      const harness = io(
+        root,
+        (invocation) =>
+          surfaceGraphResult(invocation, projects) ?? { exitCode: 0 },
+      );
+      const selections: string[] = [];
 
-    expect(
-      (
-        await runMegamonoCli(['init', '--playstack-packages=content'], {
-          ...harness.value,
-          selectPlaystackSurface: async (kind, choices) => {
-            selections.push(
-              `${kind}:${choices.map(({ root }) => root).join(',')}`,
-            );
-            return 'apps/admin';
-          },
-        })
-      ).exitCode,
-    ).toBe(0);
-    expect(selections).toEqual(['web:apps/admin,apps/shop']);
-    expect(
-      harness.invocations.find(({ args }) => args.includes('playstack'))?.args,
-    ).toContain('--web=apps/admin');
-  });
+      expect(
+        (
+          await runMegamonoCli(['init', '--playstack-packages=content'], {
+            ...harness.value,
+            selectPlaystackSurface: async (kind, choices) => {
+              selections.push(
+                `${kind}:${choices.map(({ root }) => root).join(',')}`,
+              );
+              return 'apps/admin';
+            },
+          })
+        ).exitCode,
+      ).toBe(0);
+      expect(selections).toEqual([`web:apps/admin,${marketingRoot}`]);
+      expect(
+        harness.invocations.find(({ args }) => args.includes('playstack'))
+          ?.args,
+      ).toContain('--web=apps/admin');
+    },
+  );
 
   it('refuses a valueless package selector without an interactive prompt', async () => {
     const root = await workspace('pnpm');

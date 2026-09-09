@@ -206,9 +206,12 @@ capability dry runs and a final `playstack init --survey`.
 
 For capability handoff, Megamono inspects the local Nx project graph and passes
 explicit `--web=<project-root>` and `--api=<project-root>` paths to Playstack.
-The conventional `apps/web` and `apps/api` roots win automatically; otherwise a
-sole tagged application is selected. Multiple candidates prompt in an
-interactive terminal and require an explicit path in automation:
+A sole web candidate is selected automatically. When multiple web applications
+are found, even a conventional `apps/web` root must be chosen explicitly or
+through the interactive prompt: it may be a marketing site rather than the
+authenticated application. API selection retains its `apps/api` preference;
+otherwise a sole tagged API is selected. Ambiguous selections require an
+explicit path in automation:
 
 ```sh
 megamono init \

@@ -1261,7 +1261,9 @@ async function resolvePlaystackSurface(
   const conventional = candidates.find(
     (project) => project.root === `apps/${kind}`,
   );
-  if (conventional) return conventional.root;
+  // A conventional web directory may be a marketing site, not the intended
+  // authenticated app. Preserve API routing, but never let apps/web hide peers.
+  if (kind === 'api' && conventional) return conventional.root;
   if (candidates.length === 1) return candidates[0].root;
 
   const choices = candidates.map((project) => ({
