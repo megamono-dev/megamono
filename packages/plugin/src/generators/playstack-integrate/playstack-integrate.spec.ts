@@ -88,6 +88,51 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it('preserves independent plans and migration stages for two application roots', async () => {
+    const tree = fixture();
+    tree.write(
+      'apps/dashboard/project.json',
+      JSON.stringify({
+        name: 'dashboard',
+        root: 'apps/dashboard',
+        projectType: 'application',
+        targets: {},
+      }),
+    );
+    const key = '@playstack/rate-limit:nest-rate-limit';
+    const options = { packages: '@playstack/rate-limit', yes: true };
+    await playstackIntegrateGenerator(tree, {
+      ...options,
+      api: 'apps/api',
+      migrationStages: JSON.stringify({ [key]: { stage: 'compare' } }),
+    });
+    const indexPath = '.megamono/playstack-integration-plans.json';
+    const index = JSON.parse(tree.read(indexPath, 'utf8') ?? '{}');
+    const firstPlan = index.plans[`${key}@apps%2Fapi`];
+    const bytes = tree.read(firstPlan, 'utf8');
+    await playstackIntegrateGenerator(tree, {
+      ...options,
+      api: 'apps/dashboard',
+    });
+    const ledger = JSON.parse(
+      tree.read('.megamono/playstack-integrations.json', 'utf8') ?? '{}',
+    );
+    expect(ledger.integrations[`${key}@apps%2Fapi`].stage).toBe('compare');
+    expect(ledger.integrations[`${key}@apps%2Fdashboard`].stage).toBe(
+      'planned',
+    );
+    expect(tree.read(firstPlan, 'utf8')).toBe(bytes);
+    expect(
+      Object.keys(JSON.parse(tree.read(indexPath, 'utf8') ?? '{}').plans),
+    ).toHaveLength(2);
+    await playstackIntegrateGenerator(tree, { ...options, api: 'apps/api' });
+    expect(
+      JSON.parse(
+        tree.read('.megamono/playstack-integrations.json', 'utf8') ?? '{}',
+      ).integrations,
+    ).toEqual(ledger.integrations);
+  });
+
   it('supports a non-reserved Nx planning flag without requiring yes or writing files', async () => {
     const tree = fixture();
     const before = tree.listChanges();
@@ -292,7 +337,8 @@ describe('Playstack integration generator', () => {
     await playstackIntegrateGenerator(tree, options);
     const path = '.megamono/playstack-integrations.json';
     const ledger = JSON.parse(tree.read(path, 'utf8') ?? '{}');
-    const record = ledger.integrations['@playstack/rate-limit:nest-rate-limit'];
+    const record =
+      ledger.integrations['@playstack/rate-limit:nest-rate-limit@apps%2Fapi'];
     record.stage = 'shadow';
     record.history.push({ stage: 'shadow', fingerprint: record.fingerprint });
     tree.write(path, JSON.stringify(ledger));
@@ -404,7 +450,8 @@ describe('Playstack integration generator', () => {
     const ledgerPath = '.megamono/playstack-integrations.json';
     const ledgerBefore = tree.read(ledgerPath, 'utf8') ?? '{}';
     const ledger = JSON.parse(ledgerBefore);
-    const record = ledger.integrations['@playstack/rate-limit:nest-rate-limit'];
+    const record =
+      ledger.integrations['@playstack/rate-limit:nest-rate-limit@apps%2Fapi'];
     const previousFingerprint = record.fingerprint;
     record.stage = 'shadow';
     record.history.push({ stage: 'shadow', fingerprint: previousFingerprint });
@@ -431,7 +478,7 @@ describe('Playstack integration generator', () => {
     });
     expect(
       JSON.parse(tree.read(ledgerPath, 'utf8') ?? '{}').integrations[
-        '@playstack/rate-limit:nest-rate-limit'
+        '@playstack/rate-limit:nest-rate-limit@apps%2Fapi'
       ].fingerprint,
     ).not.toBe(previousFingerprint);
     tree.write(
@@ -510,7 +557,8 @@ describe('Playstack integration generator', () => {
     await playstackIntegrateGenerator(tree, options);
     const qualifiedFingerprint = JSON.parse(
       tree.read('.megamono/playstack-integrations.json', 'utf8') ?? '{}',
-    ).integrations['@playstack/rate-limit:nest-rate-limit'].fingerprint;
+    ).integrations['@playstack/rate-limit:nest-rate-limit@apps%2Fapi']
+      .fingerprint;
     await playstackIntegrateGenerator(tree, {
       ...options,
       qualification: '{}',
@@ -518,7 +566,8 @@ describe('Playstack integration generator', () => {
     expect(
       JSON.parse(
         tree.read('.megamono/playstack-integrations.json', 'utf8') ?? '{}',
-      ).integrations['@playstack/rate-limit:nest-rate-limit'].fingerprint,
+      ).integrations['@playstack/rate-limit:nest-rate-limit@apps%2Fapi']
+        .fingerprint,
     ).not.toBe(qualifiedFingerprint);
     await expect(
       playstackIntegrateGenerator(tree, {
@@ -568,7 +617,7 @@ describe('Playstack integration generator', () => {
     expect(tree.listChanges()).toEqual(unchanged);
     const fingerprint = JSON.parse(
       tree.read('.megamono/playstack-integrations.json', 'utf8') ?? '{}',
-    ).integrations[key].fingerprint;
+    ).integrations[`${key}@apps%2Fapi`].fingerprint;
     await playstackIntegrateGenerator(tree, {
       ...options,
       migrationContracts: undefined,
@@ -577,7 +626,7 @@ describe('Playstack integration generator', () => {
     expect(
       JSON.parse(
         tree.read('.megamono/playstack-integrations.json', 'utf8') ?? '{}',
-      ).integrations[key].fingerprint,
+      ).integrations[`${key}@apps%2Fapi`].fingerprint,
     ).not.toBe(fingerprint);
   });
   it.each(['option', 'decision'])(

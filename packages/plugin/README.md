@@ -600,3 +600,18 @@ These inputs track declared package policy, not every change in ignored installe
 trees or host tools. After a same-version Yalc refresh or host-toolchain change,
 run an uncached check and the separate uncached health/package diagnostics. Cache
 hits are not installation or runtime qualification.
+
+# Application-scoped integration records
+
+Integration ledgers now use `package:integration@<URL-encoded-application-root>`
+keys. `.megamono/playstack-integration-plans.json` indexes independent plan
+snapshots by those keys; `.megamono/playstack-integration-plan.json` remains a
+latest-invocation compatibility view, not the inventory of every application.
+Rerunning one application's integration preserves the other applications' plans,
+stages, and evidence. Transition arguments and receipt integration names retain
+their package-authored IDs; receipt fingerprints already bind the application root.
+
+An older unscoped ledger record moves to a scoped key only when its fingerprint
+matches the selected application exactly. Ambiguous or changed legacy records
+fail before writes: reconcile the original application/evidence first rather than
+assigning another application's qualification to the new root.

@@ -106,12 +106,22 @@ const receiptSchema = z.discriminatedUnion('schemaVersion', [
 
 export interface IntegrationMigrationInput {
   readonly key: string;
+  readonly applicationRoot?: string;
   readonly version: string;
   readonly fingerprint: string;
   readonly requiredTests: readonly string[];
   readonly requiredEnvironments?: Readonly<Record<string, readonly string[]>>;
   readonly requiredTestKinds?: Readonly<Record<string, string>>;
   readonly requireEvidence?: boolean;
+}
+
+export function integrationMigrationKey(
+  key: string,
+  applicationRoot?: string,
+): string {
+  return applicationRoot === undefined
+    ? key
+    : `${key}@${encodeURIComponent(applicationRoot)}`;
 }
 
 export function integrationFingerprint(value: unknown): string {
@@ -167,7 +177,26 @@ export function planIntegrationMigrations(
     if (!records.some((record) => record.key === key))
       throw new Error(`Migration ${key} is not a selected active integration.`);
   for (const record of records) {
-    const previous = state.integrations[record.key];
+    const storageKey = integrationMigrationKey(
+      record.key,
+      record.applicationRoot,
+    );
+    const legacy =
+      record.applicationRoot === undefined
+        ? undefined
+        : state.integrations[record.key];
+    if (legacy) {
+      if (
+        state.integrations[storageKey] ||
+        legacy.fingerprint !== record.fingerprint
+      )
+        throw new Error(
+          `Legacy migration ${record.key} cannot be assigned to ${record.applicationRoot}. Reconcile its original application and fingerprint before retrying; no evidence was reassigned.`,
+        );
+      state.integrations[storageKey] = legacy;
+      delete state.integrations[record.key];
+    }
+    const previous = state.integrations[storageKey];
     if (
       previous &&
       (previous.history.at(-1)?.stage !== previous.stage ||
@@ -197,7 +226,7 @@ export function planIntegrationMigrations(
               { stage: 'planned' as const, fingerprint: record.fingerprint },
             ],
           };
-    state.integrations[record.key] = current;
+    state.integrations[storageKey] = current;
     if (!request || request.stage === current.stage) continue;
     const allowed: Record<z.infer<typeof stage>, readonly string[]> = {
       planned: ['compare'],

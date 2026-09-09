@@ -16,6 +16,7 @@ import { collectIntegrationProvenance } from '../../lib/integration-provenance';
 import { selectMigrationContracts } from '../../lib/integration-migration-contracts';
 import {
   INTEGRATION_MIGRATIONS_PATH,
+  integrationMigrationKey,
   integrationFingerprint,
   planIntegrationMigrations,
   qualificationRequirementsSchema,
@@ -1015,6 +1016,7 @@ export async function playstackIntegrateGenerator(
       ]);
       return {
         key: `${record.package}:${record.id}`,
+        applicationRoot: roots[record.surface],
         version: source.packageVersion,
         requireEvidence: Boolean(
           migrationContracts[`${record.package}:${record.id}`],
@@ -1091,14 +1093,23 @@ export async function playstackIntegrateGenerator(
     for (const mode of new Set(requestedModes))
       if (
         (mode === 'shadow' || mode === 'cutover') &&
-        migrations.integrations[key].stage !== mode
+        migrations.integrations[
+          integrationMigrationKey(key, roots[record.surface])
+        ].stage !== mode
       )
         conflicts.push(
-          `${key} requests ${mode} generation but its qualified migration stage is ${migrations.integrations[key].stage}; supply the matching reviewed migration transition and evidence first.`,
+          `${key} requests ${mode} generation but its qualified migration stage is ${migrations.integrations[integrationMigrationKey(key, roots[record.surface])].stage}; supply the matching reviewed migration transition and evidence first.`,
         );
   }
   const plan = {
     schemaVersion: 1,
+    applicationRoots: roots,
+    ledgerKeys: requirements.map((record) =>
+      integrationMigrationKey(
+        `${record.package}:${record.id}`,
+        roots[record.surface],
+      ),
+    ),
     readiness: {
       scope: 'application-wiring',
       installation: 'installed-artifacts-inspected',
@@ -1136,7 +1147,12 @@ export async function playstackIntegrateGenerator(
                   status: 'not-run',
                 }),
               ),
-              recordedMigrationStage: migrations.integrations[key].stage,
+              applicationRoot: roots[record.surface],
+              ledgerKey: integrationMigrationKey(key, roots[record.surface]),
+              recordedMigrationStage:
+                migrations.integrations[
+                  integrationMigrationKey(key, roots[record.surface])
+                ].stage,
             };
           }),
       })),
@@ -1243,6 +1259,23 @@ export async function playstackIntegrateGenerator(
     throw new Error(
       `Integration generation found incompatible manifest requirements: ${conflicts.join(' ')}`,
     );
+  const indexPath = '.megamono/playstack-integration-plans.json';
+  const existingIndex = tree.read(indexPath, 'utf8');
+  const index = existingIndex
+    ? JSON.parse(existingIndex)
+    : { schemaVersion: 1, plans: {} };
+  if (
+    index.schemaVersion !== 1 ||
+    !index.plans ||
+    typeof index.plans !== 'object' ||
+    Array.isArray(index.plans) ||
+    Object.values(index.plans).some(
+      (path) =>
+        typeof path !== 'string' ||
+        !/^\.megamono\/playstack-plans\/[a-f0-9]{64}\.json$/.test(path),
+    )
+  )
+    throw new Error('Invalid application-scoped integration plan index.');
   for (const file of files)
     if (!tree.exists(file.target)) tree.write(file.target, file.content);
   if (composition)
@@ -1268,6 +1301,12 @@ export async function playstackIntegrateGenerator(
     '.megamono/playstack-integration-plan.json',
     `${JSON.stringify(plan, null, 2)}\n`,
   );
+  for (const key of plan.ledgerKeys) {
+    const path = `.megamono/playstack-plans/${integrationFingerprint(key)}.json`;
+    index.plans[key] = path;
+    tree.write(path, `${JSON.stringify(plan, null, 2)}\n`);
+  }
+  tree.write(indexPath, `${JSON.stringify(index, null, 2)}\n`);
   tree.write(
     INTEGRATION_MIGRATIONS_PATH,
     `${JSON.stringify(migrations, null, 2)}\n`,

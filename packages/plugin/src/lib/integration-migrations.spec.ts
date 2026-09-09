@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   INTEGRATION_MIGRATIONS_PATH,
   integrationFingerprint,
+  integrationMigrationKey,
   planIntegrationMigrations,
 } from './integration-migrations';
 
@@ -14,6 +15,35 @@ const record = {
 };
 
 describe('integration migration ledger', () => {
+  it('migrates legacy evidence only when the root-bound fingerprint matches', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const legacy = planIntegrationMigrations(
+      tree,
+      [record],
+      JSON.stringify({ [record.key]: { stage: 'compare' } }),
+    );
+    tree.write(INTEGRATION_MIGRATIONS_PATH, JSON.stringify(legacy));
+    const scoped = planIntegrationMigrations(tree, [
+      { ...record, applicationRoot: 'apps/site' },
+    ]);
+    expect(
+      scoped.integrations[integrationMigrationKey(record.key, 'apps/site')],
+    ).toEqual(legacy.integrations[record.key]);
+    expect(scoped.integrations[record.key]).toBeUndefined();
+    expect(() =>
+      planIntegrationMigrations(tree, [
+        {
+          ...record,
+          applicationRoot: 'apps/dashboard',
+          fingerprint: integrationFingerprint('other-root'),
+        },
+      ]),
+    ).toThrow('cannot be assigned');
+    expect(
+      JSON.parse(tree.read(INTEGRATION_MIGRATIONS_PATH, 'utf8') ?? '{}'),
+    ).toEqual(legacy);
+  });
+
   it.each([
     'passed',
     'failed',
