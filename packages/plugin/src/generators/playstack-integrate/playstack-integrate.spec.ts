@@ -88,6 +88,31 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it('archives a previous unscoped plan instead of losing it on first scoped adoption', async () => {
+    const tree = fixture();
+    const legacy = {
+      schemaVersion: 1,
+      packages: [{ name: '@playstack/other' }],
+      qualification: { manual: 'retained' },
+    };
+    tree.write(
+      '.megamono/playstack-integration-plan.json',
+      JSON.stringify(legacy),
+    );
+    await playstackIntegrateGenerator(tree, {
+      packages: '@playstack/rate-limit',
+      api: 'apps/api',
+      yes: true,
+    });
+    const index = JSON.parse(
+      tree.read('.megamono/playstack-integration-plans.json', 'utf8') ?? '{}',
+    );
+    expect(index.legacyPlans).toHaveLength(1);
+    expect(JSON.parse(tree.read(index.legacyPlans[0], 'utf8') ?? '{}')).toEqual(
+      legacy,
+    );
+  });
+
   it('preserves independent plans and migration stages for two application roots', async () => {
     const tree = fixture();
     tree.write(

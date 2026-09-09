@@ -1276,6 +1276,15 @@ export async function playstackIntegrateGenerator(
     )
   )
     throw new Error('Invalid application-scoped integration plan index.');
+  // The first scoped adoption must not discard the previous single-plan view,
+  // even when it describes a different package with no selected ledger entry.
+  const legacyPlan = !existingIndex
+    ? tree.read('.megamono/playstack-integration-plan.json', 'utf8')
+    : null;
+  const archivedPlan = legacyPlan ? JSON.parse(legacyPlan) : undefined;
+  const archivePath = archivedPlan
+    ? `.megamono/playstack-plans/${integrationFingerprint(archivedPlan)}.json`
+    : undefined;
   for (const file of files)
     if (!tree.exists(file.target)) tree.write(file.target, file.content);
   if (composition)
@@ -1301,6 +1310,10 @@ export async function playstackIntegrateGenerator(
     '.megamono/playstack-integration-plan.json',
     `${JSON.stringify(plan, null, 2)}\n`,
   );
+  if (archivePath) {
+    tree.write(archivePath, `${JSON.stringify(archivedPlan, null, 2)}\n`);
+    index.legacyPlans = [archivePath];
+  }
   for (const key of plan.ledgerKeys) {
     const path = `.megamono/playstack-plans/${integrationFingerprint(key)}.json`;
     index.plans[key] = path;
