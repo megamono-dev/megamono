@@ -42,6 +42,7 @@ export interface HealthSuppressionResult {
 
 export interface RepositoryHealthReport {
   readonly schemaVersion: 1;
+  readonly reductions?: readonly string[];
   readonly findings: readonly HealthFinding[];
   readonly intentional: readonly HealthSuppressionResult[];
   readonly summary: {
@@ -334,6 +335,14 @@ function satisfies(version: string, range: string): boolean {
 
 function enabled(config: MegamonoConfig, check: HealthCheck): boolean {
   return config.health.checks[check] !== false;
+}
+
+export function healthUsesDocs(config: MegamonoConfig): boolean {
+  // Empty adoption metadata predates profiles: preserve its full-health behavior.
+  return (
+    config.adoption.modules.length === 0 ||
+    config.adoption.modules.includes('docs')
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -849,7 +858,12 @@ function specDriftFindings(
     });
   }
   for (const project of [...projectNames].sort()) {
-    if (documented.has(project) || project === 'megamono-docs') continue;
+    if (
+      !healthUsesDocs(config) ||
+      documented.has(project) ||
+      project === 'megamono-docs'
+    )
+      continue;
     findings.push({
       check: 'spec-drift',
       fingerprint: `undocumented-project:${project}`,
@@ -1379,8 +1393,15 @@ export async function runRepositoryHealth(options: {
   readonly gitState?: HealthGitState;
 }): Promise<RepositoryHealthReport> {
   const selected = new Set(options.checks ?? HEALTH_CHECKS);
+  const docsEnabled = healthUsesDocs(options.config);
+  if (!docsEnabled && options.config.health.suppressions.length)
+    throw new HealthConfigurationError(
+      'Decision-backed health suppressions require docs adoption; no suppression was applied.',
+    );
   const shouldRun = (check: HealthCheck) =>
-    selected.has(check) && enabled(options.config, check);
+    selected.has(check) &&
+    enabled(options.config, check) &&
+    (docsEnabled || check !== 'stale-plans');
   const now = options.now ?? new Date();
   const gitState = shouldRun('stale-plans')
     ? (options.gitState ??
@@ -1413,7 +1434,7 @@ export async function runRepositoryHealth(options: {
             ...specDriftFindings(
               options.workspaceRoot,
               options.graph,
-              options.documents,
+              docsEnabled ? options.documents : [],
               options.config,
             ),
             ...cloudflare.specDrift,
@@ -1451,6 +1472,13 @@ export async function runRepositoryHealth(options: {
   ) as Record<HealthCheck, number>;
   return {
     schemaVersion: 1,
+    ...(!docsEnabled
+      ? {
+          reductions: [
+            'Docs corpus validation, specification coverage, and stale-plan checks are not run because docs governance is not adopted.',
+          ],
+        }
+      : {}),
     findings: suppressed.findings,
     intentional: suppressed.intentional,
     summary: {

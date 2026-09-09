@@ -10,6 +10,7 @@ import { validateRepositoryDocs } from '../../lib/docs';
 import {
   HealthConfigurationError,
   HealthGraphError,
+  healthUsesDocs,
   runRepositoryHealth,
   serializeHealthReport,
 } from '../../lib/health';
@@ -40,11 +41,9 @@ const runExecutor: PromiseExecutor<HealthExecutorSchema> = async (
     if (!isSafeWorkspaceRelativePath(output)) {
       throw new Error('Health output must be a safe workspace-relative path.');
     }
-    const docs = await validateRepositoryDocs(
-      context.root,
-      config,
-      options.docsRoot,
-    );
+    const docs = healthUsesDocs(config)
+      ? await validateRepositoryDocs(context.root, config, options.docsRoot)
+      : { documents: [], diagnostics: [] };
     if (hasErrors(docs.diagnostics)) {
       throw new Error(
         'Repository health requires a valid docs corpus. Run megamono-docs:validate first.',

@@ -615,3 +615,12 @@ An older unscoped ledger record moves to a scoped key only when its fingerprint
 matches the selected application exactly. Ambiguous or changed legacy records
 fail before writes: reconcile the original application/evidence first rather than
 assigning another application's qualification to the new root.
+
+# Pilot health scope
+
+When adoption explicitly excludes docs, health skips corpus validation,
+specification coverage, and stale-plan checks and reports that reduced scope.
+Dependency, infrastructure, managed-artifact, ratchet, and orphan checks remain
+available. Decision-backed suppressions require docs adoption and fail closed
+without it. Workspaces with older, empty adoption metadata retain full-health
+behavior; adopting docs still requires a valid corpus.
