@@ -45,6 +45,7 @@ Options:
   --database-adapter=<id>  ${DATABASE_ADAPTERS.join(', ')}
   --services=<ids>         ${SERVICE_IDS.join(', ')}
   --service-runner=<id>    ${SERVICE_RUNNERS.join(', ')}
+  --springbar              Shortcut for --service-runner=springbar; never starts services
   --dry-run               Print the plan without creating a workspace
   --version [--json]      Print installed build identity
   --help, -h              Show help without prompts, installs, or writes
@@ -205,6 +206,7 @@ export async function main(
         styling: { type: 'string' },
         router: { type: 'string' },
         'service-runner': { type: 'string' },
+        springbar: { type: 'boolean' },
         integrations: { type: 'string' },
         interactive: { type: 'string' },
         install: { type: 'string' },
@@ -239,6 +241,16 @@ export async function main(
       parsed.values.interactive,
       stdin.isTTY,
     );
+    if (
+      parsed.values.springbar &&
+      parsed.values['service-runner'] &&
+      parsed.values['service-runner'] !== 'springbar'
+    ) {
+      throw new CreateMegamonoError(
+        '--springbar conflicts with --service-runner=none.',
+        2,
+      );
+    }
     const input = await resolveInteractive({
       name: parsed.positionals[0],
       directory: parsed.values.directory,
@@ -251,7 +263,9 @@ export async function main(
       databaseName: parsed.values['database-name'],
       styling: parsed.values.styling,
       router: parsed.values.router,
-      serviceRunner: parsed.values['service-runner'],
+      serviceRunner: parsed.values.springbar
+        ? 'springbar'
+        : parsed.values['service-runner'],
       integrations: commaList(parsed.values.integrations),
       interactive,
       install: booleanValue('--install', parsed.values.install, true),

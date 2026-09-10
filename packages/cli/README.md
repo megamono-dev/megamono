@@ -152,6 +152,46 @@ megamono add database events --adapter=drizzle
 megamono add database primary --adapter=prisma --interactive=false --yes
 ```
 
+### Optional Springbar configuration
+
+```sh
+megamono init --springbar --springbar-candidates=api,site --dry-run
+megamono init --springbar --springbar-candidates=api,site --yes
+# Or opt in later:
+megamono add springbar --dry-run
+megamono add springbar --springbar-candidates=api,site --yes
+```
+
+Candidate names come from Springbar's read-only `inspect_candidates` response,
+not guessed Nx names. A sole candidate can be selected automatically; zero,
+multiple, or unmatched candidates exit `4` with the candidates to review.
+Use the exact reported names in `--springbar-candidates`.
+
+`add springbar` previews unless `--yes` is supplied. `init --springbar`
+preflights the selection before core initialization, then calls Springbar's
+transactional `setup_workspace` only after core init succeeds. `--survey` and
+`--dry-run` never call setup. Springbar diagnostics from init go to stderr,
+keeping survey JSON stdout parseable. Add emits a JSON plan/result.
+
+Existing `springbar.toml` files (including symlinks) are left untouched. Commands,
+working directories, fixed-port requirements, and dependencies remain owned by
+Springbar's discovery/configuration contract; no services, deployment commands,
+provisioning, or health-repair actions are started. Existing-workspace setup does
+not invent database services, environment values, or service dependencies.
+
+Springbar and its MCP server must already be available. The connector uses the
+bundled macOS `springbar-mcp`, a PATH executable, or `SPRINGBAR_MCP_PATH`. A missing
+server/daemon or setup error exits `3` with retry guidance. If core init already
+succeeded it stays applied; commit/review those changes before retrying
+`megamono add springbar`. After a lost setup response, inspect `springbar.toml`
+first; it may already have been committed by Springbar. No fallback TOML is
+written and no existing configuration is merged or replaced by Megamono.
+
+New workspaces use `create-megamono <name> --apps=web --springbar`, a shortcut
+for the existing `--service-runner=springbar` flow. Its setup still runs only
+after the atomic workspace commit, preserves any existing config, and reports
+a retryable optional handoff if Springbar is unavailable.
+
 Existing Prisma layouts can be adopted in place without moving migrations or
 changing the installed major:
 

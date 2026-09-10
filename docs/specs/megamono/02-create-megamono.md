@@ -179,6 +179,13 @@ Nest features live in feature-scoped libraries named `@[repo]/nest-[feature]`, c
 
 ## Services & Springbar
 
+`--springbar` is an opt-in shortcut for `--service-runner=springbar`. Supplying
+it together with `--service-runner=none` is a usage error before staging.
+Dry-run only prints the post-commit handoff; it does not contact Springbar.
+An existing `springbar.toml`, including a symlink, is preserved without setup.
+The create and existing-workspace CLIs share the MCP connector published at
+`@megamono/cli/springbar`; neither implements a separate TOML emitter.
+
 Springbar is a **first-party option**, and this is defensible rather than promotional: the scaffolder just created a set of services, and Springbar solves the "now run them" problem it created. That's completing a workflow.
 
 If selected, the final post-commit step asks Springbar's MCP to inspect the generated workspace and then calls `setup_workspace` with the exact generated app candidates, requested services, tested versions, and named dependents. Megamono does not construct `springbar.toml`; Springbar owns and validates that format and materializes its configuration atomically.

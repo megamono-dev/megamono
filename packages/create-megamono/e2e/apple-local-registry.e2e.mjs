@@ -158,6 +158,7 @@ try {
   for (const packagePath of [
     './packages/plugin',
     './packages/nx-apple',
+    './packages/cli',
     './packages/create-megamono',
   ]) {
     await run(

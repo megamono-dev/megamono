@@ -73,7 +73,8 @@ try {
   const cliManifest = JSON.parse(
     await readFile(join(root, 'packages/cli/package.json'), 'utf8'),
   );
-  const hostedPeerRange = cliManifest.peerDependencies?.['@playstack/client-auth'];
+  const hostedPeerRange =
+    cliManifest.peerDependencies?.['@playstack/client-auth'];
   const hostedPeerVersion = hostedPeerRange?.match(
     /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/,
   )?.[0];
@@ -114,6 +115,7 @@ try {
       );
     }
   }
+  const packedClis = [];
   for (const entry of globalPackages) {
     const packageJson = JSON.parse(
       await readFile(join(root, entry.directory, 'package.json'), 'utf8'),
@@ -139,7 +141,16 @@ try {
       ),
     );
     const tarball = join(packDirectory, packResult[0].filename);
-    await run(npm, ['install', '--global', tarball]);
+    packedClis.push({ entry, packageJson, tarball });
+  }
+  // Install both explicit artifacts together: create-megamono shares the CLI's
+  // Springbar connector and must not resolve a stale same-version registry copy.
+  await run(npm, [
+    'install',
+    '--global',
+    ...packedClis.map(({ tarball }) => tarball),
+  ]);
+  for (const { entry, packageJson } of packedClis) {
     const executablePath = join(
       globalPrefix,
       process.platform === 'win32' ? '' : 'bin',

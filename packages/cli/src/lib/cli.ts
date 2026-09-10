@@ -19,6 +19,11 @@ import { subset, validRange } from 'semver';
 import { surveyOutput } from './survey-output.js';
 import { webSurfaceEvidence } from './web-surface.js';
 import {
+  configureSpringbarWorkspace,
+  type SpringbarWorkspaceOptions,
+  type SpringbarWorkspaceResult,
+} from './springbar.js';
+import {
   ARTIFACT_HELP,
   artifactDiagnosticOptions,
   diagnoseArtifacts,
@@ -67,6 +72,9 @@ export interface MegamonoCliIo {
   selectHostedAccount?(accounts: readonly HostedAccount[]): Promise<string>;
   readonly hostedAuth?: HostedAuthOperations;
   readonly hostedServiceUrl?: string;
+  configureSpringbar?(
+    options: SpringbarWorkspaceOptions,
+  ): Promise<SpringbarWorkspaceResult>;
   workspaceMutationState?(): Promise<WorkspaceMutationState>;
   activeToolchainState?(): Promise<ActiveToolchainState>;
   runCommand(
@@ -109,6 +117,8 @@ export interface MegamonoCliResult {
 }
 
 interface InitOptions {
+  readonly springbar: boolean;
+  readonly springbarCandidates?: readonly string[];
   readonly generatorArgs: readonly string[];
   readonly localPackages: LocalPackageSource;
   readonly playstack: boolean;
@@ -225,6 +235,7 @@ Commands:
   add app [type]       Add a convention-aligned application
   add database [name]  Add a named Prisma or Drizzle database project
   add integration      Materialize package-authored Playstack wiring
+  add springbar        Preview optional local development configuration
   add <module>         Add one repository-governance module
   auth login|status|logout
                        Manage optional hosted-service authentication
@@ -241,6 +252,9 @@ Global options:
   --help               Show this help
 
 Init-only options:
+  --springbar          Configure Springbar after successful initialization
+  --springbar-candidates=<names>
+                       Select exact inspected Springbar candidate names
   --playstack          Run package-owned Playstack setup after Megamono
   --playstack-packages[=<names>]
                        Select capabilities, or pass capabilities/package names
@@ -272,6 +286,7 @@ organization account.`;
 const ADD_HELP = `Usage: megamono add app [type] [options]
        megamono add database [name] [options]
        megamono add integration --packages=<names> [options]
+       megamono add springbar [--springbar-candidates=<names>] [--dry-run|--yes]
        megamono add <module> [options]
 
 Examples:
@@ -283,6 +298,7 @@ Examples:
   megamono add integration --packages=@playstack/rate-limit --api=apps/api --dry-run
   megamono add docs
   megamono add ci --dry-run
+  megamono add springbar --dry-run
 
 Application types: ${APP_TYPE_CHOICES.map(({ name }) => name).join(', ')}
 Web styling: ${WEB_STYLING_CHOICES.map(({ name }) => name).join(', ')}
@@ -344,10 +360,15 @@ Examples:
   megamono init --playstack --playstack-packages=auth
   megamono init --playstack-packages=auth --playstack-web=apps/storefront --playstack-api=apps/gateway
   megamono init --playstack --local-packages=yalc
+  megamono init --springbar --springbar-candidates=api,site --dry-run
 
 The workspace must contain local Nx. A read-only survey uses the local plugin
 when present, or stages a matching plugin in a disposable directory from the
-selected registry/Yalc source. Mutation still requires a local plugin.`;
+selected registry/Yalc source. Mutation still requires a local plugin.
+--springbar opts into Springbar-owned configuration after successful init.
+--springbar-candidates selects exact names from Springbar inspection. Surveys
+and dry runs inspect only; existing springbar.toml is never overwritten.
+Springbar diagnostics go to stderr so survey JSON stdout remains pure.`;
 
 const ADOPT_HELP = `Usage: megamono adopt [generator options]
 
@@ -743,6 +764,8 @@ function parseInitOptions(args: readonly string[]): InitOptions {
   const forwarded: string[] = [];
   let localPackages: LocalPackageSource = 'registry';
   let playstack = false;
+  let springbar = false;
+  let springbarCandidates: readonly string[] | undefined;
   let playstackCapabilities: readonly string[] = [];
   let playstackPackages: readonly string[] = [];
   const playstackSurfaces: Record<
@@ -767,6 +790,31 @@ function parseInitOptions(args: readonly string[]): InitOptions {
     if (argument === '--playstack') {
       playstack = true;
       index += 1;
+      continue;
+    }
+    if (argument === '--springbar' || argument.startsWith('--springbar=')) {
+      const value =
+        argument === '--springbar'
+          ? 'true'
+          : argument.slice('--springbar='.length);
+      if (value !== 'true' && value !== 'false')
+        throw new CliError('--springbar must be true or false.', 2);
+      springbar = value === 'true';
+      index += 1;
+      continue;
+    }
+    const candidates = optionValue(args, index, '--springbar-candidates');
+    if (candidates) {
+      springbarCandidates = candidates.value
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean);
+      if (!springbarCandidates.length)
+        throw new CliError(
+          '--springbar-candidates requires one or more names.',
+          2,
+        );
+      index += candidates.consumed;
       continue;
     }
     if (argument?.startsWith('--playstack=')) {
@@ -822,6 +870,8 @@ function parseInitOptions(args: readonly string[]): InitOptions {
     index += 1;
   }
   return {
+    springbar,
+    springbarCandidates,
     generatorArgs: forwarded,
     localPackages,
     playstack,
@@ -832,8 +882,10 @@ function parseInitOptions(args: readonly string[]): InitOptions {
     survey: forwarded.some(
       (argument) => argument === '--survey' || argument === '--survey=true',
     ),
-    dryRun: forwarded.some(
-      (argument) => argument === '--dry-run' || argument === '--dry-run=true',
+    dryRun: forwarded.some((argument) =>
+      ['--dry-run', '--dry-run=true', '--dryRun', '--dryRun=true'].includes(
+        argument,
+      ),
     ),
   };
 }
@@ -2353,6 +2405,39 @@ async function runAdd(
     throw new CliError(ADD_HELP, 2);
   }
   const workspace = await addWorkspace(io);
+  if (subject === 'springbar') {
+    const parsed = parseInitOptions(['--springbar', ...args.slice(1)]);
+    if (
+      !parsed.springbar ||
+      parsed.generatorArgs.some(
+        (arg) =>
+          ![
+            '--dry-run',
+            '--dry-run=true',
+            '--yes',
+            '--interactive=false',
+          ].includes(arg),
+      ) ||
+      parsed.playstack
+    ) {
+      throw new CliError(
+        'Usage: megamono add springbar [--springbar-candidates=<names>] [--dry-run|--yes]',
+        2,
+      );
+    }
+    const dryRun = parsed.dryRun || !args.includes('--yes');
+    if (!dryRun)
+      await assertWorkspaceMutationPreflight(io, workspace, 'Springbar setup');
+    const result = await (io.configureSpringbar ?? configureSpringbarWorkspace)(
+      {
+        workspaceRoot: workspace.root,
+        candidateNames: parsed.springbarCandidates,
+        dryRun,
+      },
+    );
+    io.stdout(JSON.stringify(result, null, 2));
+    return { exitCode: result.exitCode };
+  }
   if (ADD_MODULE_SET.has(subject)) {
     const options = parseAddOptions(args.slice(1));
     const [command, commandArgs] = nxInvocation(
@@ -2611,6 +2696,20 @@ async function runInit(
 ): Promise<MegamonoCliResult> {
   const parsedOptions = parseInitOptions(args);
   const root = await findWorkspaceRoot(io.cwd);
+  let springbarPlan: SpringbarWorkspaceResult | undefined;
+  if (parsedOptions.springbar) {
+    springbarPlan = await (
+      io.configureSpringbar ?? configureSpringbarWorkspace
+    )({
+      workspaceRoot: root,
+      candidateNames: parsedOptions.springbarCandidates,
+      dryRun: true,
+    });
+    // Keep the generator's JSON stdout pure, including on read-only surveys.
+    io.stderr(JSON.stringify(springbarPlan, null, 2));
+    if (springbarPlan.exitCode !== 0)
+      return { exitCode: springbarPlan.exitCode };
+  }
   if (parsedOptions.survey && !parsedOptions.playstack) {
     if (!localPackageAvailable(root, 'nx')) {
       throw new CliError('The workspace-local nx package is not installed.', 3);
@@ -2701,9 +2800,31 @@ async function runInit(
   const initialized = await io.runCommand(nxCommand, nxArgs, {
     cwd: workspace.root,
   });
-  if (initialized.exitCode !== 0 || !options.playstack) {
+  if (initialized.exitCode !== 0) {
     return { exitCode: initialized.exitCode };
   }
+  if (
+    options.springbar &&
+    !options.dryRun &&
+    !options.survey &&
+    springbarPlan?.plan
+  ) {
+    const result = await (io.configureSpringbar ?? configureSpringbarWorkspace)(
+      {
+        workspaceRoot: root,
+        candidateNames: springbarPlan.plan.candidate_names,
+        dryRun: false,
+      },
+    );
+    io.stderr(JSON.stringify(result, null, 2));
+    if (result.exitCode !== 0) {
+      io.stderr(
+        'Megamono initialization completed; only the optional Springbar handoff needs review. Retry megamono add springbar after committing the adoption changes.',
+      );
+      return { exitCode: result.exitCode };
+    }
+  }
+  if (!options.playstack) return { exitCode: initialized.exitCode };
 
   const playstackAvailable = localPackageAvailable(root, '@playstack/cli');
   const surfaces = await resolvePlaystackSurfaces(io, workspace, options);
@@ -3055,7 +3176,7 @@ export async function runMegamonoCli(
       return { exitCode: 0 };
     }
     if (args[0] === 'init') {
-      if (args[1] === '--help' || args[1] === '-h') {
+      if (args.includes('--help') || args.includes('-h')) {
         io.stdout(INIT_HELP);
         return { exitCode: 0 };
       }
@@ -3093,13 +3214,22 @@ export async function runMegamonoCli(
       };
     }
     if (args[0] === 'adopt') {
-      if (args[1] === '--help' || args[1] === '-h') {
+      if (args.includes('--help') || args.includes('-h')) {
         io.stdout(ADOPT_HELP);
         return { exitCode: 0 };
       }
       return await runAdopt(args.slice(1), io);
     }
     if (args[0] === 'add') {
+      if (
+        args[1] === 'springbar' &&
+        (args.includes('--help') || args.includes('-h'))
+      ) {
+        io.stdout(
+          'Usage: megamono add springbar [--springbar-candidates=<names>] [--dry-run|--yes]\nDefaults to inspection only. --yes applies Springbar-owned configuration without starting services. Existing springbar.toml is preserved.',
+        );
+        return { exitCode: 0 };
+      }
       if (args[1] === '--help' || args[1] === '-h') {
         io.stdout(ADD_HELP);
         return { exitCode: 0 };

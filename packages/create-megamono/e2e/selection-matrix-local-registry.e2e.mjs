@@ -610,6 +610,7 @@ try {
     './packages/nx-cargo',
     './packages/nx-cloudflare',
     './packages/nx-extension',
+    './packages/cli',
     './packages/create-megamono',
   ]) {
     await run(

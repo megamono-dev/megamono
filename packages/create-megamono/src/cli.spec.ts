@@ -5,6 +5,46 @@ import { pathToFileURL } from 'node:url';
 import { isMainModule, main, resolveInteractive } from './cli.js';
 
 describe('CLI entrypoint', () => {
+  it('accepts --springbar as the service-runner shortcut in a read-only plan', async () => {
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    try {
+      expect(
+        await main([
+          'springbar-example',
+          '--apps=web',
+          '--springbar',
+          '--interactive=false',
+          '--dry-run',
+        ]),
+      ).toBe(0);
+      expect(output).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Springbar MCP inspect_candidates -> setup_workspace',
+        ),
+      );
+    } finally {
+      output.mockRestore();
+    }
+  });
+
+  it('rejects conflicting Springbar runner flags before creation', async () => {
+    const error = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    try {
+      expect(
+        await main([
+          'springbar-example',
+          '--apps=web',
+          '--springbar',
+          '--service-runner=none',
+          '--interactive=false',
+          '--dry-run',
+        ]),
+      ).toBe(2);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('conflicts'));
+    } finally {
+      error.mockRestore();
+    }
+  });
   it.each([
     ['--help'],
     ['-h'],

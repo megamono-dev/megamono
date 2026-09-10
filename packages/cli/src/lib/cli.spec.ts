@@ -14,6 +14,170 @@ import {
 } from './cli.js';
 import type { HostedAuthOperations, HostedProfile } from './hosted-auth.js';
 
+describe('optional Springbar handoff', () => {
+  function setupResult(root: string) {
+    return {
+      exitCode: 0 as const,
+      configured: false,
+      message: 'Springbar plan',
+      plan: {
+        workspace_root: root,
+        candidate_names: ['api'],
+        services: [] as [],
+      },
+    };
+  }
+
+  it.each([['--dry-run'], ['--dryRun=true'], ['--survey', '--format=json']])(
+    'does not apply during init inspection: %j',
+    async (...flags) => {
+      const root = await workspace('npm');
+      const harness = io(root, () => ({
+        exitCode: 0,
+        stdout: JSON.stringify({
+          schemaVersion: 1,
+          projects: [],
+          baseline: {},
+          inventory: {},
+          recommendations: [],
+        }),
+      }));
+      const configureSpringbar = vi.fn(async () => setupResult(root));
+      expect(
+        await runMegamonoCli(
+          ['init', '--springbar', '--springbar-candidates=api', ...flags],
+          { ...harness.value, configureSpringbar },
+        ),
+      ).toEqual({ exitCode: 0 });
+      expect(configureSpringbar).toHaveBeenCalledExactlyOnceWith({
+        workspaceRoot: root,
+        candidateNames: ['api'],
+        dryRun: true,
+      });
+      expect(
+        harness.invocations
+          .flatMap((call) => call.args)
+          .some((arg) => arg.startsWith('--springbar')),
+      ).toBe(false);
+      expect(
+        harness.stdout.some((line) => line.includes('Springbar plan')),
+      ).toBe(false);
+    },
+  );
+
+  it('applies only after core init succeeds and reuses reviewed candidate names', async () => {
+    const root = await workspace('npm');
+    const harness = io(root);
+    const configureSpringbar = vi.fn(async ({ dryRun }) => {
+      if (!dryRun) expect(harness.invocations.length).toBeGreaterThan(0);
+      return setupResult(root);
+    });
+    expect(
+      await runMegamonoCli(['init', '--springbar'], {
+        ...harness.value,
+        configureSpringbar,
+      }),
+    ).toEqual({ exitCode: 0 });
+    expect(configureSpringbar).toHaveBeenNthCalledWith(2, {
+      workspaceRoot: root,
+      candidateNames: ['api'],
+      dryRun: false,
+    });
+  });
+
+  it('does not apply Springbar after a failed core initialization', async () => {
+    const root = await workspace('npm');
+    const harness = io(root, () => ({ exitCode: 9 }));
+    const configureSpringbar = vi.fn(async () => setupResult(root));
+    expect(
+      await runMegamonoCli(['init', '--springbar'], {
+        ...harness.value,
+        configureSpringbar,
+      }),
+    ).toEqual({ exitCode: 9 });
+    expect(configureSpringbar).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports Springbar failure after successful init without claiming rollback', async () => {
+    const root = await workspace('npm');
+    const harness = io(root);
+    const configureSpringbar = vi
+      .fn()
+      .mockResolvedValueOnce(setupResult(root))
+      .mockResolvedValueOnce({
+        exitCode: 3,
+        configured: false,
+        message: 'unavailable',
+      });
+    expect(
+      await runMegamonoCli(['init', '--springbar'], {
+        ...harness.value,
+        configureSpringbar,
+      }),
+    ).toEqual({ exitCode: 3 });
+    expect(harness.stderr.join('\n')).toContain(
+      'Megamono initialization completed',
+    );
+  });
+
+  it('refuses ambiguous selection before mutating the workspace', async () => {
+    const root = await workspace('npm');
+    const harness = io(root);
+    const configureSpringbar = vi.fn(async () => ({
+      exitCode: 4 as const,
+      configured: false,
+      message: 'select candidates',
+    }));
+    expect(
+      await runMegamonoCli(['init', '--springbar'], {
+        ...harness.value,
+        configureSpringbar,
+      }),
+    ).toEqual({ exitCode: 4 });
+    expect(harness.invocations).toEqual([]);
+  });
+
+  it.each([
+    { flags: [], dryRun: true },
+    { flags: ['--yes'], dryRun: false },
+    { flags: ['--yes', '--dry-run'], dryRun: true },
+  ])(
+    'add springbar respects explicit write intent: $flags',
+    async ({ flags, dryRun }) => {
+      const root = await workspace('npm');
+      const harness = io(root);
+      const configureSpringbar = vi.fn(async () => setupResult(root));
+      expect(
+        await runMegamonoCli(
+          ['add', 'springbar', '--springbar-candidates=api', ...flags],
+          { ...harness.value, configureSpringbar },
+        ),
+      ).toEqual({ exitCode: 0 });
+      expect(configureSpringbar).toHaveBeenCalledExactlyOnceWith({
+        workspaceRoot: root,
+        candidateNames: ['api'],
+        dryRun,
+      });
+      expect(harness.invocations).toEqual([]);
+    },
+  );
+
+  it('help never contacts Springbar or requires a workspace', async () => {
+    const harness = io('/missing');
+    const configureSpringbar = vi.fn();
+    for (const args of [
+      ['add', 'springbar', '--help'],
+      ['init', '--springbar', '--help'],
+      ['adopt', '--springbar', '--write', '--help'],
+    ]) {
+      expect(
+        await runMegamonoCli(args, { ...harness.value, configureSpringbar }),
+      ).toEqual({ exitCode: 0 });
+    }
+    expect(configureSpringbar).not.toHaveBeenCalled();
+  });
+});
+
 interface Invocation {
   readonly command: string;
   readonly args: readonly string[];

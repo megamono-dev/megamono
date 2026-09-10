@@ -77,6 +77,26 @@ megamono add skills
 
 Module add commands delegate to `workspace-init --only=<module>`. Application add delegates to the canonical `@megamono/plugin:app` generator from `spec-megamono-0003`; database add delegates to `@megamono/plugin:database` with a user-defined logical name and explicit or prompted adapter. Add commands require the initialized baseline rather than silently running init, inherit the same clean-worktree and branch safety rules, preview by default, and support `--dry-run` plus fully explicit `--interactive=false --yes` automation.
 
+### Optional Springbar handoff
+
+`megamono init --springbar` preflights Springbar's read-only candidates, then
+delegates to its atomic `setup_workspace` after core initialization succeeds.
+`megamono add springbar` is the later opt-in path: preview by default,
+`--yes` to apply, and the existing clean-worktree/branch preflight for writes.
+Both accept `--springbar-candidates=<name,...>` with exact inspected names.
+Only a sole candidate is selected automatically; ambiguous or unknown selections
+exit `4` before initialization writes. No commands, fixed ports, dotenv values,
+database services, or dependencies are guessed by the dispatcher.
+
+Surveys and dry runs inspect without configuring or registering a workspace.
+Existing `springbar.toml` files are preserved, never merged or overwritten.
+Setup requires the installed Springbar MCP/daemon, never starts services, and
+never installs tooling. Init sends Springbar diagnostics to stderr to preserve
+JSON survey stdout; add prints a JSON plan/result. An unavailable MCP exits `3`.
+A post-init failure does not roll back core adoption; the diagnostic directs the
+caller to review/commit that work and retry the standalone add command. A lost
+setup response requires inspecting the config before retrying.
+
 ### Optional Playstack handoff
 
 Existing monorepos may adopt repository governance and then run Playstack's package-owned setup in one command:

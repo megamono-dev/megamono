@@ -59,6 +59,16 @@ inline styles are supported without becoming governance requirements. Automation
 can provide the same decisions with positional `type`/`type:name` app descriptors
 or the backward-compatible `--apps` list, plus `--styling`,
 `--database-adapter`, `--database-name`, `--services`, and `--service-runner`.
+`--springbar` is the concise opt-in alias for `--service-runner=springbar`.
+Springbar owns the generated configuration; setup never starts services.
+
+For existing initialized workspaces, use `megamono add springbar --dry-run`
+to inspect candidates, then `megamono add springbar
+--springbar-candidates=<names> --yes` to apply. `megamono init --springbar`
+combines initial governance adoption with the same optional setup. Existing
+`springbar.toml` files are preserved, and ambiguous candidates require explicit
+selection. Springbar's MCP server and daemon must be available; Megamono does
+not install Springbar or write an unvalidated fallback manifest.
 
 ```bash
 create-megamono commune \

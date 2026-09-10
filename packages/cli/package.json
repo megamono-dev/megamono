@@ -10,6 +10,12 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./springbar": {
+      "@megamono/source": "./src/lib/springbar.ts",
+      "types": "./dist/lib/springbar.d.ts",
+      "import": "./dist/lib/springbar.js",
+      "default": "./dist/lib/springbar.js"
+    },
     "./package.json": "./package.json",
     "./build-info.json": "./dist/build-info.json",
     ".": {
