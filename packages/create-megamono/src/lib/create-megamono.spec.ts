@@ -171,40 +171,51 @@ describe('createPlan', () => {
     expect(rendered).toContain('acme-tools-admin-e2e:e2e');
   });
 
-  it('uses the canonical database generator with a user-defined name', () => {
-    const plan = createPlan(
-      options('/workspace', {
-        databaseAdapter: 'drizzle',
-        databaseName: 'events',
-        verify: 'config',
-      }),
-    );
-    const ids = plan.steps.map((step) => step.id);
-    expect(ids.indexOf('generate-database-events')).toBe(
-      ids.indexOf('initialize-megamono') + 1,
-    );
-    expect(plan.steps).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'generate-database-events',
-          command: 'npm',
-          args: expect.arrayContaining([
-            '@megamono/plugin:database',
-            '--name=events',
-            '--adapter=drizzle',
-            '--scope=acme-tools',
-          ]),
+  it.each([
+    ['prisma', 'npm'],
+    ['drizzle', 'npm'],
+    ['prisma', 'pnpm'],
+    ['drizzle', 'pnpm'],
+  ])(
+    'bootstraps the canonical %s database generator with %s in Git-free staging',
+    (databaseAdapter, packageManager) => {
+      const plan = createPlan(
+        options('/workspace', {
+          databaseAdapter,
+          packageManager,
+          databaseName: 'events',
+          verify: 'config',
         }),
-        expect.objectContaining({
-          id: 'validate-database-events',
-          args: expect.arrayContaining([
-            'run',
-            'acme-tools-database-events:validate',
-          ]),
-        }),
-      ]),
-    );
-  });
+      );
+      const ids = plan.steps.map((step) => step.id);
+      expect(ids.indexOf('generate-database-events')).toBe(
+        ids.indexOf('initialize-megamono') + 1,
+      );
+      expect(plan.steps).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'generate-database-events',
+            command: packageManager,
+            cwd: 'staging',
+            args: expect.arrayContaining([
+              '@megamono/plugin:database',
+              '--name=events',
+              `--adapter=${databaseAdapter}`,
+              '--scope=acme-tools',
+              '--bootstrap',
+            ]),
+          }),
+          expect.objectContaining({
+            id: 'validate-database-events',
+            args: expect.arrayContaining([
+              'run',
+              'acme-tools-database-events:validate',
+            ]),
+          }),
+        ]),
+      );
+    },
+  );
 
   it('uses a temporary hydrated bootstrap and dehydrates before commit when install is false', () => {
     const plan = createPlan(

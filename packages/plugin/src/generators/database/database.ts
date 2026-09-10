@@ -245,12 +245,11 @@ async function normalizeOptions(
   const name = await resolveName(raw);
   const adapter = await resolveAdapter(raw);
   const scope = slug(raw.scope ?? workspaceScope(tree), 'Database scope');
-  const configuredDatabase =
-    !raw.bootstrap && tree.exists('megamono.json')
-      ? megamonoConfigSchema.parse(readJson(tree, 'megamono.json')).databases[
-          name
-        ]
-      : undefined;
+  const configuredDatabase = tree.exists('megamono.json')
+    ? megamonoConfigSchema.parse(readJson(tree, 'megamono.json')).databases[
+        name
+      ]
+    : undefined;
   const configuredProject = configuredDatabase
     ? getProjects(tree).get(configuredDatabase.project)
     : undefined;
@@ -445,11 +444,11 @@ function preflight(
   tree: Tree,
   options: NormalizedDatabaseOptions,
 ): 'create' | 'adopt' | 'adopt-layout' | 'relocate' | 'noop' {
-  const configured = options.bootstrap
-    ? undefined
-    : megamonoConfigSchema.parse(readJson(tree, 'megamono.json')).databases[
+  const configured = tree.exists('megamono.json')
+    ? megamonoConfigSchema.parse(readJson(tree, 'megamono.json')).databases[
         options.name
-      ];
+      ]
+    : undefined;
   if (
     configured &&
     (configured.adapter !== options.adapter ||
@@ -1081,7 +1080,7 @@ function writeConfigurations(
   tree: Tree,
   options: NormalizedDatabaseOptions,
 ): void {
-  if (!options.bootstrap) {
+  if (tree.exists('megamono.json')) {
     updateJson(tree, 'megamono.json', (value: Record<string, unknown>) => ({
       ...value,
       databases: {

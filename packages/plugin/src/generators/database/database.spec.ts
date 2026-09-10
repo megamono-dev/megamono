@@ -1,7 +1,12 @@
 import { logger, readJson, writeJson } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FsTree } from 'nx/src/generators/tree';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MEGAMONO_CONFIG } from '../../lib/config';
+import * as hostPreflight from '../../lib/workspace-init-preflight';
 import { databaseGenerator } from './database';
 
 function workspace(manager: 'npm' | 'pnpm' = 'pnpm') {
@@ -29,6 +34,71 @@ function workspace(manager: 'npm' | 'pnpm' = 'pnpm') {
 }
 
 describe('database generator', () => {
+  it.each(['prisma', 'drizzle'] as const)(
+    'allows %s bootstrap without a Git worktree but retains normal mutation safety',
+    async (adapter) => {
+      const root = mkdtempSync(join(tmpdir(), 'megamono-database-bootstrap-'));
+      const tree = new FsTree(join(root, 'staging'), false);
+      for (const change of workspace().listChanges()) {
+        if (change.content) tree.write(change.path, change.content);
+      }
+      const collect = vi
+        .spyOn(hostPreflight, 'collectWorkspaceInitHostState')
+        .mockResolvedValue({
+          platform: 'darwin',
+          node: 'v24.18.0',
+          git: { available: false, clean: false },
+        });
+      const options = {
+        name: 'primary',
+        adapter,
+        yes: true,
+        interactive: false,
+      };
+      try {
+        const before = tree.listChanges();
+        await expect(databaseGenerator(tree, options)).rejects.toThrow(
+          'Database addition requires a Git worktree.',
+        );
+        expect(tree.listChanges()).toEqual(before);
+        collect.mockClear();
+        // Do not invoke the returned dependency-install callback.
+        await databaseGenerator(tree, { ...options, bootstrap: true });
+        expect(collect).not.toHaveBeenCalled();
+        expect(readJson(tree, 'megamono.json').databases.primary.adapter).toBe(
+          adapter,
+        );
+        const generated = tree.listChanges();
+        await databaseGenerator(tree, { ...options, bootstrap: true });
+        expect(tree.listChanges()).toEqual(generated);
+        await expect(
+          databaseGenerator(tree, {
+            ...options,
+            project: 'conflicting-database-project',
+            bootstrap: true,
+          }),
+        ).rejects.toThrow('already configured');
+        expect(tree.listChanges()).toEqual(generated);
+      } finally {
+        collect.mockRestore();
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('still supports bootstrap before workspace initialization', async () => {
+    const tree = workspace();
+    tree.delete('megamono.json');
+    await databaseGenerator(tree, {
+      name: 'primary',
+      adapter: 'prisma',
+      bootstrap: true,
+      interactive: false,
+    });
+    expect(tree.exists('libs/prisma/primary/prisma/schema.prisma')).toBe(true);
+    expect(tree.exists('megamono.json')).toBe(false);
+  });
+
   it('reports automatic relocation edits separately from unqualified client and deployment work', async () => {
     const tree = workspace();
     tree.write(

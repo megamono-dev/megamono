@@ -670,6 +670,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
           `--name=${options.databaseName}`,
           `--adapter=${options.databaseAdapter}`,
           `--scope=${options.scope}`,
+          '--bootstrap',
           '--yes',
           '--interactive=false',
         ]),
