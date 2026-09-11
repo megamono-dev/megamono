@@ -115,6 +115,7 @@
   },
   "dependencies": {
     "@megamono/cli": "0.0.1",
+    "@inquirer/prompts": "8.7.2",
     "tslib": "^2.3.0"
   },
   "engines": {

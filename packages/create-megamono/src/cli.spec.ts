@@ -2,9 +2,151 @@ import { mkdir, mkdtemp, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { isMainModule, main, resolveInteractive } from './cli.js';
+import { input, select, checkbox } from '@inquirer/prompts';
+import {
+  createInteractivePrompt,
+  isMainModule,
+  main,
+  resolveInteractive,
+  type InteractivePrompt,
+} from './cli.js';
+
+vi.mock('@inquirer/prompts', () => ({
+  input: vi.fn(),
+  select: vi.fn(),
+  checkbox: vi.fn(),
+}));
+
+function scriptedPrompt(
+  answers: string[],
+  questions: string[],
+): InteractivePrompt {
+  const next = (message: string, initial = '') => {
+    questions.push(message);
+    return answers.shift() || initial;
+  };
+  return {
+    question: async (message, initial) => next(message, initial),
+    select: async (message, _choices, initial) => next(message, initial),
+    multiselect: async (message) =>
+      next(message)
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    close: vi.fn(),
+  };
+}
 
 describe('CLI entrypoint', () => {
+  it('uses selectable prompts with explicit defaults and a service checklist', async () => {
+    vi.mocked(select).mockResolvedValueOnce('prisma');
+    vi.mocked(checkbox).mockResolvedValueOnce(['postgres', 'redis']);
+    vi.mocked(input).mockResolvedValueOnce('primary');
+    try {
+      const prompt = createInteractivePrompt();
+      expect(
+        await prompt.select(
+          'Database adapter',
+          ['none', 'prisma', 'drizzle'],
+          'prisma',
+        ),
+      ).toBe('prisma');
+      expect(
+        await prompt.multiselect('Services', ['postgres', 'redis']),
+      ).toEqual(['postgres', 'redis']);
+      expect(await prompt.question('Database name', 'primary')).toBe('primary');
+      expect(select).toHaveBeenCalledWith({
+        message: 'Database adapter',
+        default: 'prisma',
+        choices: [{ value: 'none' }, { value: 'prisma' }, { value: 'drizzle' }],
+      });
+      expect(checkbox).toHaveBeenCalledWith({
+        message: 'Services (optional)',
+        choices: [{ value: 'postgres' }, { value: 'redis' }],
+      });
+      expect(input).toHaveBeenCalledWith({
+        message: 'Database name',
+        default: 'primary',
+        validate: undefined,
+      });
+    } finally {
+      vi.clearAllMocks();
+    }
+  });
+
+  it('turns prompt cancellation into a clear exit-130 error', async () => {
+    vi.mocked(input).mockRejectedValueOnce(
+      Object.assign(new Error('User force closed the prompt'), {
+        name: 'ExitPromptError',
+      }),
+    );
+    try {
+      await expect(
+        createInteractivePrompt().question('Workspace name'),
+      ).rejects.toMatchObject({
+        exitCode: 130,
+        message: expect.stringContaining('cancelled'),
+      });
+    } finally {
+      vi.clearAllMocks();
+    }
+  });
+
+  it('preserves repeated named apps, default choices, and empty services', async () => {
+    const questions: string[] = [];
+    const prompt = scriptedPrompt(
+      ['extension:extension-grids, extension:extension-guides'],
+      questions,
+    );
+    const result = await resolveInteractive(
+      { name: 'extensions', interactive: true },
+      prompt,
+    );
+    expect(result).toMatchObject({
+      apps: ['extension:extension-grids', 'extension:extension-guides'],
+      packageManager: 'npm',
+      databaseAdapter: 'prisma',
+      databaseName: 'primary',
+      services: [],
+      serviceRunner: 'none',
+    });
+    expect(questions).not.toContain('Web styling');
+    expect(questions).not.toContain('Next.js router');
+    expect(prompt.close).toHaveBeenCalledOnce();
+  });
+
+  it('validates app descriptors and duplicate roots before leaving the prompt', async () => {
+    const prompt = scriptedPrompt([], []);
+    prompt.question = async (_message, _initial, validate) => {
+      expect(
+        validate?.('extension:extension-grids, extension:extension-guides'),
+      ).toBe(true);
+      expect(validate?.('extension:same, web:same')).toContain('unique name');
+      expect(validate?.('extension:')).toContain('Invalid app descriptor');
+      return 'extension:extension-grids, extension:extension-guides';
+    };
+    await resolveInteractive(
+      { name: 'extensions', interactive: true, databaseAdapter: 'none' },
+      prompt,
+    );
+  });
+
+  it('leaves noninteractive input untouched without opening prompts', async () => {
+    const prompt = scriptedPrompt([], []);
+    const input = { name: 'automated', interactive: false };
+    expect(await resolveInteractive(input, prompt)).toBe(input);
+    expect(prompt.close).not.toHaveBeenCalled();
+  });
+
+  it('closes the guided flow when a prompt rejects', async () => {
+    const prompt = scriptedPrompt([], []);
+    prompt.question = vi.fn().mockRejectedValue(new Error('cancelled'));
+    await expect(
+      resolveInteractive({ interactive: true }, prompt),
+    ).rejects.toThrow('cancelled');
+    expect(prompt.close).toHaveBeenCalledOnce();
+  });
+
   it('accepts --springbar as the service-runner shortcut in a read-only plan', async () => {
     const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
     try {
@@ -85,6 +227,7 @@ describe('CLI entrypoint', () => {
     const questions: string[] = [];
     const answers = [
       'web, api',
+      'pnpm',
       'drizzle',
       'stylex',
       'events',
@@ -94,17 +237,12 @@ describe('CLI entrypoint', () => {
     ];
     const resolved = await resolveInteractive(
       { name: 'guided-workspace', interactive: true },
-      {
-        question: async (message) => {
-          questions.push(message);
-          return answers.shift() ?? '';
-        },
-        close: () => undefined,
-      },
+      scriptedPrompt(answers, questions),
     );
 
     expect(resolved).toMatchObject({
       name: 'guided-workspace',
+      packageManager: 'pnpm',
       apps: ['web', 'api'],
       services: ['postgres', 'redis'],
       databaseAdapter: 'drizzle',
@@ -118,14 +256,15 @@ describe('CLI entrypoint', () => {
     expect(questions[0]).toContain('extension Browser extension');
     expect(questions[0]).toContain('type or type:name');
     expect(questions).toContainEqual(expect.stringContaining('Web styling'));
-    expect(questions.at(-2)).toContain('Services (postgres, redis');
-    expect(questions.at(-1)).toContain('Service runner (none, springbar)');
+    expect(questions.at(-2)).toBe('Services');
+    expect(questions.at(-1)).toBe('Service runner');
   });
 
   it('asks for web styling when a guided app uses a custom name', async () => {
     const questions: string[] = [];
     const answers = [
       'site:marketing',
+      'npm',
       'none',
       'css-modules',
       'pages',
@@ -134,13 +273,7 @@ describe('CLI entrypoint', () => {
     ];
     const resolved = await resolveInteractive(
       { name: 'named-site', interactive: true },
-      {
-        question: async (message) => {
-          questions.push(message);
-          return answers.shift() ?? '';
-        },
-        close: () => undefined,
-      },
+      scriptedPrompt(answers, questions),
     );
 
     expect(resolved.apps).toEqual(['site:marketing']);
@@ -158,14 +291,9 @@ describe('CLI entrypoint', () => {
         databaseAdapter: 'none',
         serviceRunner: 'springbar',
         interactive: true,
+        packageManager: 'pnpm',
       },
-      {
-        question: async (message) => {
-          questions.push(message);
-          return '';
-        },
-        close: () => undefined,
-      },
+      scriptedPrompt([], questions),
     );
 
     expect(resolved.services).toEqual(['typesense']);

@@ -3,7 +3,7 @@
 import { parseArgs } from 'node:util';
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { createInterface } from 'node:readline/promises';
+import { input as textInput, select, checkbox } from '@inquirer/prompts';
 import { stdin, stdout } from 'node:process';
 import {
   APP_IDS,
@@ -14,8 +14,10 @@ import {
   WEB_STYLING_OPTIONS,
   createMegamono,
   renderPlan,
+  normalizeAppInstances,
   type CreateMegamonoInput,
 } from './lib/create-megamono.js';
+import { PACKAGE_MANAGERS } from './lib/package-manager.js';
 
 export const APP_TYPE_OVERVIEWS = {
   web: 'Next.js product, dashboard, or admin web app',
@@ -35,6 +37,8 @@ ${APP_IDS.map((type) => `  ${type.padEnd(9)} ${APP_TYPE_OVERVIEWS[type]}`).join(
 
 Use positional descriptors or --apps=<comma-separated descriptors>, not both.
 Names are optional; repeated types need distinct names.
+Interactive menus: arrows to navigate, Space to toggle services, Enter to continue.
+Apps remain a typed list so custom names and repeated types are supported.
 
 Options:
   --styling=<choice>       ${WEB_STYLING_OPTIONS.join(', ')}
@@ -56,8 +60,66 @@ Examples:
 `;
 
 export interface InteractivePrompt {
-  question(message: string): Promise<string>;
+  question(
+    message: string,
+    initial?: string,
+    validate?: (value: string) => true | string,
+  ): Promise<string>;
+  select(
+    message: string,
+    choices: readonly string[],
+    initial: string,
+  ): Promise<string>;
+  multiselect(message: string, choices: readonly string[]): Promise<string[]>;
   close(): void;
+}
+
+export function createInteractivePrompt(): InteractivePrompt {
+  const prompt = async <T>(ask: () => Promise<T>): Promise<T> => {
+    try {
+      return await ask();
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ExitPromptError')
+        throw new CreateMegamonoError(
+          'Workspace creation cancelled. No workspace was created.',
+          130,
+        );
+      throw error;
+    }
+  };
+  return {
+    question: async (message, initial, validate) => {
+      const sections = message.split('\n\n');
+      const label = sections.pop() ?? message;
+      if (sections.length) stdout.write(`${sections.join('\n\n')}\n\n`);
+      return prompt(() =>
+        textInput({
+          message: label,
+          default: initial,
+          validate,
+        }),
+      );
+    },
+    select: async (message, choices, initial) => {
+      return prompt(() =>
+        select({
+          message,
+          choices: choices.map((value) => ({ value })),
+          default: initial,
+        }),
+      );
+    },
+    multiselect: async (message, choices) => {
+      return prompt(() =>
+        checkbox({
+          message: `${message} (optional)`,
+          choices: choices.map((value) => ({ value })),
+        }),
+      );
+    },
+    // Inquirer closes each prompt and restores the terminal after submission.
+    close: () => undefined,
+  };
 }
 
 interface BuildIdentity {
@@ -111,7 +173,7 @@ function appSelectionQuestion(): string {
   const overview = APP_IDS.map(
     (type) => `  ${type.padEnd(9)} ${APP_TYPE_OVERVIEWS[type]}`,
   ).join('\n');
-  return `Application types:\n${overview}\n\nChoose apps using type or type:name (comma-separated): `;
+  return `Application types:\n${overview}\n\nExamples: web, api, site:marketing\nMultiple of one type: extension:extension-grids, extension:extension-guides\n\nChoose apps using type or type:name (comma-separated)`;
 }
 
 export async function resolveInteractive(
@@ -119,17 +181,36 @@ export async function resolveInteractive(
   interactivePrompt?: InteractivePrompt,
 ): Promise<CreateMegamonoInput> {
   if (!input.interactive) return input;
-  const prompt =
-    interactivePrompt ?? createInterface({ input: stdin, output: stdout });
+  if (!interactivePrompt && (!stdin.isTTY || !stdout.isTTY)) {
+    throw new CreateMegamonoError(
+      'Interactive setup requires a terminal. Pass --interactive=false and supply options through flags.',
+      2,
+    );
+  }
+  const prompt = interactivePrompt ?? createInteractivePrompt();
   try {
     const name = input.name ?? (await prompt.question('Workspace name: '));
     const apps = input.apps?.length
       ? input.apps
-      : commaList(await prompt.question(appSelectionQuestion()));
+      : commaList(
+          await prompt.question(appSelectionQuestion(), undefined, (value) => {
+            try {
+              normalizeAppInstances(commaList(value));
+              return true;
+            } catch (error) {
+              return error instanceof Error ? error.message : String(error);
+            }
+          }),
+        );
+    const packageManager =
+      input.packageManager ??
+      (await prompt.select('Package manager', PACKAGE_MANAGERS, 'npm'));
     const databaseAdapter =
       (input.databaseAdapter ??
-        (await prompt.question(
-          `Database adapter (${DATABASE_ADAPTERS.join(', ')}) [prisma]: `,
+        (await prompt.select(
+          'Database adapter',
+          DATABASE_ADAPTERS,
+          'prisma',
         ))) ||
       'prisma';
     const styling = apps?.some((app) => {
@@ -137,8 +218,10 @@ export async function resolveInteractive(
       return type === 'web' || type === 'site';
     })
       ? (input.styling ??
-          (await prompt.question(
-            `Web styling (${WEB_STYLING_OPTIONS.join(', ')}) [chakra]: `,
+          (await prompt.select(
+            'Web styling',
+            WEB_STYLING_OPTIONS,
+            'chakra',
           ))) ||
         'chakra'
       : input.styling;
@@ -146,33 +229,28 @@ export async function resolveInteractive(
       databaseAdapter === 'none'
         ? undefined
         : (input.databaseName ??
-            (await prompt.question('Database name [primary]: '))) ||
+            (await prompt.question('Database name', 'primary'))) ||
           'primary';
     const router = apps?.some((app) =>
       ['web', 'site'].includes(app.split(':', 1)[0]),
     )
       ? (input.router ??
-        ((await prompt.question('Next.js router (pages, app) [pages]: ')) ||
+        ((await prompt.select('Next.js router', ['pages', 'app'], 'pages')) ||
           'pages'))
       : input.router;
     const services =
       input.services !== undefined
         ? input.services
-        : commaList(
-            await prompt.question(
-              `Services (${SERVICE_IDS.join(', ')}; comma-separated, optional): `,
-            ),
-          );
+        : await prompt.multiselect('Services', SERVICE_IDS);
     const serviceRunner =
       (input.serviceRunner ??
-        (await prompt.question(
-          `Service runner (${SERVICE_RUNNERS.join(', ')}) [none]: `,
-        ))) ||
+        (await prompt.select('Service runner', SERVICE_RUNNERS, 'none'))) ||
       'none';
     return {
       ...input,
       name,
       apps,
+      packageManager,
       services,
       databaseAdapter,
       databaseName,
@@ -239,7 +317,7 @@ export async function main(
     const interactive = booleanValue(
       '--interactive',
       parsed.values.interactive,
-      stdin.isTTY,
+      Boolean(stdin.isTTY && stdout.isTTY),
     );
     if (
       parsed.values.springbar &&

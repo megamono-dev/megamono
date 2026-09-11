@@ -62,6 +62,16 @@ or the backward-compatible `--apps` list, plus `--styling`,
 `--springbar` is the concise opt-in alias for `--service-runner=springbar`.
 Springbar owns the generated configuration; setup never starts services.
 
+In a terminal, use arrow keys and Enter for the package manager, database
+adapter, styling, router, and service runner. Services use a checkbox list:
+Space toggles an option and Enter continues (an empty selection is allowed).
+Application selection stays typed: enter comma-separated `type` or `type:name`
+descriptors, including multiple named instances such as
+`extension:extension-grids, extension:extension-guides`. App names must be unique
+across the workspace; invalid descriptors can be corrected in the prompt.
+Database names remain editable text. Flags skip their corresponding questions;
+use `--interactive=false` for automation. Ctrl+C cancels before creation begins.
+
 For existing initialized workspaces, use `megamono add springbar --dry-run`
 to inspect candidates, then `megamono add springbar
 --springbar-candidates=<names> --yes` to apply. `megamono init --springbar`

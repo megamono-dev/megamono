@@ -147,7 +147,7 @@ export type YalcStoreResolver = () => Promise<string>;
 export class CreateMegamonoError extends Error {
   constructor(
     message: string,
-    readonly exitCode: 1 | 2 | 3 | 4,
+    readonly exitCode: 1 | 2 | 3 | 4 | 130,
   ) {
     super(message);
     this.name = 'CreateMegamonoError';
