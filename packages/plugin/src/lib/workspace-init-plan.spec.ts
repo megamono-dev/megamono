@@ -11,6 +11,58 @@ import {
 } from './workspace-init-plan';
 
 describe('workspace init survey and plan', () => {
+  it('preserves repository metadata in copy-ready documentation proposals', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      'docs/specs/01-existing.md',
+      `---
+id: spec-product-0001
+type: spec
+status: accepted
+visibility: public
+date: '2026-09-01'
+projects: [product]
+topics: [architecture]
+summary: Repository-owned summary
+supersedes: spec-product-0000
+references: [decision-20260901-design]
+external_references: [product:design]
+custom_field: preserve-me
+---
+# Different heading
+`,
+    );
+    const before = tree.listChanges();
+    const result =
+      surveyWorkspaceInit(tree).adoptionTemplates.documentation.documents[
+        'docs/specs/01-existing.md'
+      ];
+    expect(result).toEqual({
+      id: 'spec-product-0001',
+      type: 'spec',
+      status: 'accepted',
+      visibility: 'public',
+      date: '2026-09-01',
+      projects: ['product'],
+      topics: ['architecture'],
+      summary: 'Repository-owned summary',
+      supersedes: 'spec-product-0000',
+      references: ['decision-20260901-design'],
+      external_references: ['product:design'],
+      custom_field: 'preserve-me',
+    });
+    expect(tree.listChanges()).toEqual(before);
+    tree.write(
+      'docs/specs/02-unknown.md',
+      '---\nstatus: pending-legal-review\n---\n# Preserve pending status\n',
+    );
+    expect(
+      surveyWorkspaceInit(tree).adoptionTemplates.documentation.documents[
+        'docs/specs/02-unknown.md'
+      ].status,
+    ).toBe('pending-legal-review');
+  });
+
   it('produces byte-stable JSON without mutating the tree', () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write(

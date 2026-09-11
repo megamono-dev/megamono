@@ -2,6 +2,7 @@ import { getProjects, type Tree } from '@nx/devkit';
 import { dirname } from 'node:path';
 import { extensionEvidence } from './extension-evidence';
 import ignore = require('ignore');
+import matter = require('gray-matter');
 import { readArtifactRegistry } from './managed-artifacts';
 import { MANAGED_SKILL_NAMES } from './managed-skills';
 import { nxWorkspaceCapabilities } from './workspace-compatibility';
@@ -850,6 +851,18 @@ function adoptionTemplates(
     (classification) => {
       const title = documentTitle(tree, classification.path);
       const date = documentDate(tree, classification.path);
+      // Existing lifecycle decisions and extensions remain repository-owned.
+      // Invalid metadata is intentionally preserved for adoption validation.
+      let metadata: Record<string, unknown>;
+      try {
+        metadata = matter(tree.read(classification.path, 'utf8') ?? '').data;
+      } catch (cause) {
+        throw new WorkspaceInitError(
+          'preflight',
+          `Cannot preserve frontmatter in ${classification.path}; repair it before generating an adoption map.`,
+          { cause },
+        );
+      }
       return [
         classification.path,
         {
@@ -864,6 +877,7 @@ function adoptionTemplates(
           supersedes: null,
           references: [],
           external_references: [],
+          ...metadata,
         },
       ] as const;
     },
