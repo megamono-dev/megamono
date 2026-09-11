@@ -38,7 +38,7 @@ ${APP_IDS.map((type) => `  ${type.padEnd(9)} ${APP_TYPE_OVERVIEWS[type]}`).join(
 Use positional descriptors or --apps=<comma-separated descriptors>, not both.
 Names are optional; repeated types need distinct names.
 Interactive menus: arrows to navigate, Space to toggle services, Enter to continue.
-Apps remain a typed list so custom names and repeated types are supported.
+Interactive apps: add, name, edit, or remove instances before continuing.
 
 Options:
   --styling=<choice>       ${WEB_STYLING_OPTIONS.join(', ')}
@@ -69,6 +69,7 @@ export interface InteractivePrompt {
     message: string,
     choices: readonly string[],
     initial: string,
+    labels?: Readonly<Record<string, string>>,
   ): Promise<string>;
   multiselect(message: string, choices: readonly string[]): Promise<string[]>;
   close(): void;
@@ -100,11 +101,15 @@ export function createInteractivePrompt(): InteractivePrompt {
         }),
       );
     },
-    select: async (message, choices, initial) => {
+    select: async (message, choices, initial, labels) => {
       return prompt(() =>
         select({
           message,
-          choices: choices.map((value) => ({ value })),
+          pageSize: 10,
+          choices: choices.map((value) => ({
+            value,
+            ...(labels ? { name: labels[value] ?? value } : {}),
+          })),
           default: initial,
         }),
       );
@@ -169,11 +174,96 @@ function booleanValue(
   throw new CreateMegamonoError(`${label} must be true or false.`, 2);
 }
 
-function appSelectionQuestion(): string {
-  const overview = APP_IDS.map(
-    (type) => `  ${type.padEnd(9)} ${APP_TYPE_OVERVIEWS[type]}`,
-  ).join('\n');
-  return `Application types:\n${overview}\n\nExamples: web, api, site:marketing\nMultiple of one type: extension:extension-grids, extension:extension-guides\n\nChoose apps using type or type:name (comma-separated)`;
+export async function selectApplications(
+  prompt: InteractivePrompt,
+): Promise<string[]> {
+  const apps: { type: (typeof APP_IDS)[number]; name: string }[] = [];
+  const descriptors = () =>
+    apps.map(({ type, name }) => (name === type ? type : `${type}:${name}`));
+  while (true) {
+    const summary = apps.length
+      ? apps.map(({ type, name }) => `  ${type} → apps/${name}`).join('\n')
+      : '  No applications added yet.';
+    const action = await prompt.select(
+      `Applications\n${summary}`,
+      apps.length ? ['add', 'edit', 'remove', 'continue'] : ['add', 'continue'],
+      apps.length ? 'continue' : 'add',
+      {
+        add: 'Add application',
+        edit: 'Edit application',
+        remove: 'Remove application',
+        continue: apps.length ? 'Continue' : 'Continue without applications',
+      },
+    );
+    if (action === 'continue') return descriptors();
+    let index = apps.length;
+    if (action === 'edit' || action === 'remove') {
+      const choices = apps.map((_, i) => String(i));
+      const chosen = await prompt.select(
+        action === 'edit'
+          ? 'Which application should be edited?'
+          : 'Which application should be removed?',
+        [...choices, 'back'],
+        choices[0],
+        {
+          ...Object.fromEntries(
+            apps.map(({ type, name }, i) => [
+              String(i),
+              `${type} → apps/${name}`,
+            ]),
+          ),
+          back: 'Back to applications',
+        },
+      );
+      if (chosen === 'back') continue;
+      index = Number(chosen);
+      if (action === 'remove') {
+        apps.splice(index, 1);
+        continue;
+      }
+    }
+    const existing = apps[index];
+    const type = await prompt.select(
+      'Application type',
+      [...APP_IDS, 'back'],
+      existing?.type ?? 'web',
+      {
+        ...Object.fromEntries(
+          APP_IDS.map((id) => [id, `${id} — ${APP_TYPE_OVERVIEWS[id]}`]),
+        ),
+        back: 'Back to applications',
+      },
+    );
+    if (type === 'back') continue;
+    let suggestedName = existing?.name ?? type;
+    for (
+      let suffix = 2;
+      apps.some((app, i) => i !== index && app.name === suggestedName);
+      suffix++
+    ) {
+      suggestedName = `${type}-${suffix}`;
+    }
+    const validate = (value: string): true | string => {
+      try {
+        normalizeAppInstances([
+          ...descriptors().filter((_, i) => i !== index),
+          `${type}:${value}`,
+        ]);
+        return true;
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    };
+    const name = await prompt.question(
+      'Application name (directory under apps/)',
+      suggestedName,
+      validate,
+    );
+    const result = validate(name);
+    if (result !== true) throw new CreateMegamonoError(result, 2);
+    const [app] = normalizeAppInstances([`${type}:${name}`]);
+    apps[index] = app;
+  }
 }
 
 export async function resolveInteractive(
@@ -190,18 +280,7 @@ export async function resolveInteractive(
   const prompt = interactivePrompt ?? createInteractivePrompt();
   try {
     const name = input.name ?? (await prompt.question('Workspace name: '));
-    const apps = input.apps?.length
-      ? input.apps
-      : commaList(
-          await prompt.question(appSelectionQuestion(), undefined, (value) => {
-            try {
-              normalizeAppInstances(commaList(value));
-              return true;
-            } catch (error) {
-              return error instanceof Error ? error.message : String(error);
-            }
-          }),
-        );
+    const apps = input.apps ?? (await selectApplications(prompt));
     const packageManager =
       input.packageManager ??
       (await prompt.select('Package manager', PACKAGE_MANAGERS, 'npm'));

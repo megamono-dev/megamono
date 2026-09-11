@@ -65,10 +65,13 @@ Springbar owns the generated configuration; setup never starts services.
 In a terminal, use arrow keys and Enter for the package manager, database
 adapter, styling, router, and service runner. Services use a checkbox list:
 Space toggles an option and Enter continues (an empty selection is allowed).
-Application selection stays typed: enter comma-separated `type` or `type:name`
-descriptors, including multiple named instances such as
-`extension:extension-grids, extension:extension-guides`. App names must be unique
-across the workspace; invalid descriptors can be corrected in the prompt.
+Applications use a repeatable list: select **Add application**, choose its type,
+and enter a name (prefilled with the type). Add multiple instances of the same
+type, edit their types/names, or remove them before continuing. The list shows
+each app's directory. Repeated types suggest an unused name such as `extension-2`;
+invalid names and duplicate directories can be corrected in the prompt.
+You can also continue without applications. Positional `type:name` descriptors
+and `--apps` remain available for scripts and skip the interactive app list.
 Database names remain editable text. Flags skip their corresponding questions;
 use `--interactive=false` for automation. Ctrl+C cancels before creation begins.
 

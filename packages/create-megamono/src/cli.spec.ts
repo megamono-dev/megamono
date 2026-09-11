@@ -8,6 +8,7 @@ import {
   isMainModule,
   main,
   resolveInteractive,
+  selectApplications,
   type InteractivePrompt,
 } from './cli.js';
 
@@ -27,7 +28,11 @@ function scriptedPrompt(
   };
   return {
     question: async (message, initial) => next(message, initial),
-    select: async (message, _choices, initial) => next(message, initial),
+    select: async (message, choices, initial) => {
+      const value = next(message, initial);
+      expect(choices).toContain(value);
+      return value;
+    },
     multiselect: async (message) =>
       next(message)
         .split(',')
@@ -57,6 +62,7 @@ describe('CLI entrypoint', () => {
       expect(await prompt.question('Database name', 'primary')).toBe('primary');
       expect(select).toHaveBeenCalledWith({
         message: 'Database adapter',
+        pageSize: 10,
         default: 'prisma',
         choices: [{ value: 'none' }, { value: 'prisma' }, { value: 'drizzle' }],
       });
@@ -95,7 +101,15 @@ describe('CLI entrypoint', () => {
   it('preserves repeated named apps, default choices, and empty services', async () => {
     const questions: string[] = [];
     const prompt = scriptedPrompt(
-      ['extension:extension-grids, extension:extension-guides'],
+      [
+        'add',
+        'extension',
+        'extension-grids',
+        'add',
+        'extension',
+        'extension-guides',
+        'continue',
+      ],
       questions,
     );
     const result = await resolveInteractive(
@@ -115,20 +129,116 @@ describe('CLI entrypoint', () => {
     expect(prompt.close).toHaveBeenCalledOnce();
   });
 
-  it('validates app descriptors and duplicate roots before leaving the prompt', async () => {
-    const prompt = scriptedPrompt([], []);
-    prompt.question = async (_message, _initial, validate) => {
-      expect(
-        validate?.('extension:extension-grids, extension:extension-guides'),
-      ).toBe(true);
-      expect(validate?.('extension:same, web:same')).toContain('unique name');
-      expect(validate?.('extension:')).toContain('Invalid app descriptor');
-      return 'extension:extension-grids, extension:extension-guides';
-    };
-    await resolveInteractive(
-      { name: 'extensions', interactive: true, databaseAdapter: 'none' },
-      prompt,
+  it('validates names and duplicate roots before adding an app', async () => {
+    const prompt = scriptedPrompt(
+      ['add', 'extension', 'add', 'web', 'continue'],
+      [],
     );
+    let calls = 0;
+    prompt.question = async (_message, _initial, validate) => {
+      calls++;
+      expect(validate?.('custom-name')).toBe(true);
+      expect(validate?.('../outside')).toContain('Invalid app name');
+      expect(validate?.('web:admin')).toContain('Invalid app descriptor');
+      if (calls === 2)
+        expect(validate?.('shared-name')).toContain('unique name');
+      return calls === 1 ? 'shared-name' : 'other-name';
+    };
+    expect(await selectApplications(prompt)).toEqual([
+      'extension:shared-name',
+      'web:other-name',
+    ]);
+  });
+
+  it('suggests unique defaults for repeated app types and lets edits retain their own name', async () => {
+    const prompt = scriptedPrompt(
+      [
+        'add',
+        'extension',
+        '',
+        'add',
+        'extension',
+        '',
+        'edit',
+        '0',
+        'extension',
+        '',
+        'continue',
+      ],
+      [],
+    );
+    const question = vi.spyOn(prompt, 'question');
+    expect(await selectApplications(prompt)).toEqual([
+      'extension',
+      'extension:extension-2',
+    ]);
+    expect(question.mock.calls.map((call) => call[1])).toEqual([
+      'extension',
+      'extension-2',
+      'extension',
+    ]);
+    expect(question.mock.calls[2][2]?.('extension')).toBe(true);
+    expect(question.mock.calls[2][2]?.('extension-2')).toContain('unique name');
+  });
+
+  it('edits types and names, removes items, and renders the remaining app list', async () => {
+    const questions: string[] = [];
+    const prompt = scriptedPrompt(
+      [
+        'add',
+        'web',
+        '',
+        'add',
+        'api',
+        '',
+        'edit',
+        '0',
+        'site',
+        'marketing',
+        'remove',
+        '1',
+        'continue',
+      ],
+      questions,
+    );
+    expect(await selectApplications(prompt)).toEqual(['site:marketing']);
+    expect(questions.at(-1)).toContain('site → apps/marketing');
+    expect(questions.at(-1)).not.toContain('api →');
+  });
+
+  it('supports backing out of add/edit/remove and continuing without apps', async () => {
+    const prompt = scriptedPrompt(
+      [
+        'add',
+        'back',
+        'add',
+        'web',
+        '',
+        'edit',
+        'back',
+        'remove',
+        'back',
+        'edit',
+        '0',
+        'back',
+        'remove',
+        '0',
+        'continue',
+      ],
+      [],
+    );
+    expect(await selectApplications(prompt)).toEqual([]);
+  });
+
+  it('preserves an explicit empty app list without opening the cart', async () => {
+    const questions: string[] = [];
+    await resolveInteractive(
+      { name: 'no-apps', interactive: true, apps: [] },
+      scriptedPrompt([], questions),
+    );
+    expect(
+      questions.some((message) => message.startsWith('Applications')),
+    ).toBe(false);
   });
 
   it('leaves noninteractive input untouched without opening prompts', async () => {
@@ -226,7 +336,13 @@ describe('CLI entrypoint', () => {
   it('ends the guided flow with services and optional Springbar setup', async () => {
     const questions: string[] = [];
     const answers = [
-      'web, api',
+      'add',
+      'web',
+      '',
+      'add',
+      'api',
+      '',
+      'continue',
       'pnpm',
       'drizzle',
       'stylex',
@@ -251,10 +367,8 @@ describe('CLI entrypoint', () => {
       router: 'app',
       serviceRunner: 'springbar',
     });
-    expect(questions[0]).toContain('Application types:');
-    expect(questions[0]).toContain('web       Next.js product');
-    expect(questions[0]).toContain('extension Browser extension');
-    expect(questions[0]).toContain('type or type:name');
+    expect(questions[0]).toContain('No applications added yet');
+    expect(questions).toContain('Application type');
     expect(questions).toContainEqual(expect.stringContaining('Web styling'));
     expect(questions.at(-2)).toBe('Services');
     expect(questions.at(-1)).toBe('Service runner');
@@ -263,7 +377,10 @@ describe('CLI entrypoint', () => {
   it('asks for web styling when a guided app uses a custom name', async () => {
     const questions: string[] = [];
     const answers = [
-      'site:marketing',
+      'add',
+      'site',
+      'marketing',
+      'continue',
       'npm',
       'none',
       'css-modules',
