@@ -647,10 +647,32 @@ function relocationOwnershipEdits(
   return edits;
 }
 
-function filesUnder(tree: Tree, root: string): string[] {
+// Apply only to reference discovery, never to the schema/migration move itself.
+const REFERENCE_SCAN_EXCLUSIONS = new Set([
+  'node_modules',
+  '.yalc',
+  '.git',
+  '.nx',
+  '.next',
+  '.nuxt',
+  '.output',
+  '.build',
+  'dist',
+  'build',
+  'coverage',
+  'generated',
+  '__generated__',
+]);
+
+function filesUnder(
+  tree: Tree,
+  root: string,
+  referencesOnly = false,
+): string[] {
   const files: string[] = [];
   const visit = (directory: string) => {
     for (const child of tree.children(directory)) {
+      if (referencesOnly && REFERENCE_SCAN_EXCLUSIONS.has(child)) continue;
       const path = directory ? `${directory}/${child}` : child;
       if (tree.read(path) !== null) files.push(path);
       else visit(path);
@@ -672,7 +694,7 @@ function relocationReferencePaths(tree: Tree): string[] {
     'packages',
   ]) {
     if (tree.children(root).length === 0) continue;
-    for (const path of filesUnder(tree, root)) {
+    for (const path of filesUnder(tree, root, true)) {
       const filename = basename(path);
       if (
         root === '.github' ||
@@ -845,7 +867,7 @@ function relocationHandoff(
     'Dockerfile',
     'prisma.config.ts',
     ...['apps', 'libs', 'packages', 'scripts', 'tools', '.github'].flatMap(
-      (root) => filesUnder(tree, root),
+      (root) => filesUnder(tree, root, true),
     ),
   ];
   const imports = files.filter(

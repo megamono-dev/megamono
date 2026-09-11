@@ -386,6 +386,24 @@ describe('database generator', () => {
       "import { PrismaClient } from '@prisma/client';\n",
     );
     tree.write('Dockerfile', 'COPY prisma ./prisma\n');
+    const excludedPaths = [
+      'node_modules/vendor',
+      '.yalc/vendor',
+      'dist',
+      'src/generated',
+      'src/__generated__',
+      'nested/node_modules/vendor',
+    ];
+    for (const path of excludedPaths) {
+      tree.write(
+        `apps/api/${path}/db.ts`,
+        "import { PrismaClient } from '@prisma/client';\n",
+      );
+      tree.write(
+        `apps/api/${path}/Dockerfile`,
+        'RUN prisma validate --schema prisma/schema.prisma\n',
+      );
+    }
     tree.write(
       'scripts/entrypoint.sh',
       'prisma migrate deploy --schema prisma/schema.prisma\n',
@@ -410,6 +428,8 @@ describe('database generator', () => {
         'Known command references: `scripts/entrypoint.sh`',
       );
       expect(plan).toContain('Imports: review `apps/api/src/db.ts`');
+      for (const path of excludedPaths)
+        expect(plan).not.toContain(`apps/api/${path}/`);
       expect(plan).toContain(
         'Deployment: review `Dockerfile`, `scripts/entrypoint.sh`',
       );
@@ -422,6 +442,20 @@ describe('database generator', () => {
           .listChanges()
           .map(({ path, content }) => [path, content?.toString()]),
       ).toEqual(before);
+      await databaseGenerator(tree, {
+        name: 'primary',
+        adapter: 'prisma',
+        schema: 'prisma/schema.prisma',
+        relocate: true,
+        clientOutput: 'src/generated',
+        yes: true,
+        interactive: false,
+      });
+      for (const path of excludedPaths) {
+        expect(tree.read(`apps/api/${path}/Dockerfile`, 'utf8')).toBe(
+          'RUN prisma validate --schema prisma/schema.prisma\n',
+        );
+      }
     } finally {
       log.mockRestore();
     }
