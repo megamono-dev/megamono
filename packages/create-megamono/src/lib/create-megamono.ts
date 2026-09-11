@@ -515,6 +515,7 @@ function requestedServiceRequirements(
 }
 
 export function createPlan(options: NormalizedCreateOptions): CreationPlan {
+  const databaseProject = `${options.scope}-${options.databaseAdapter}-${options.databaseName}`;
   const steps: PlanStep[] = [
     commandStep(
       'create-nx-workspace',
@@ -670,6 +671,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
           '@megamono/plugin:database',
           `--name=${options.databaseName}`,
           `--adapter=${options.databaseAdapter}`,
+          `--project=${databaseProject}`,
           `--scope=${options.scope}`,
           '--bootstrap',
           '--yes',
@@ -723,7 +725,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
           options.packageManager,
           nxArgs(options.packageManager, [
             'run',
-            `${options.scope}-database-${options.databaseName}:validate`,
+            `${databaseProject}:validate`,
           ]),
           'staging',
         ),

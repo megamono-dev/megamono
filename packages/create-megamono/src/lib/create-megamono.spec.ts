@@ -201,6 +201,7 @@ describe('createPlan', () => {
               '@megamono/plugin:database',
               '--name=events',
               `--adapter=${databaseAdapter}`,
+              `--project=acme-tools-${databaseAdapter}-events`,
               '--scope=acme-tools',
               '--bootstrap',
             ]),
@@ -209,7 +210,7 @@ describe('createPlan', () => {
             id: 'validate-database-events',
             args: expect.arrayContaining([
               'run',
-              'acme-tools-database-events:validate',
+              `acme-tools-${databaseAdapter}-events:validate`,
             ]),
           }),
         ]),
