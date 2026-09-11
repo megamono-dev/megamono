@@ -129,7 +129,7 @@ describe('database generator', () => {
     writeJson(tree, '.playstack/managed.json', [record, unrelated]);
     const options = {
       name: 'primary',
-      adapter: 'prisma',
+      adapter: 'prisma' as const,
       schema: 'prisma/schema.prisma',
       relocate: true,
       interactive: false,
