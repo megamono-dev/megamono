@@ -795,6 +795,50 @@ describe('executePlan', () => {
     ).toEqual({ packageManager: 'npm@11.17.0' });
   });
 
+  it.each(['prisma', 'drizzle', 'none'])(
+    'configures adapter-scoped build approvals before installing %s',
+    async (databaseAdapter) => {
+      const cwd = await fixture();
+      const plan = createPlan(
+        options(cwd, {
+          packageManager: 'pnpm',
+          databaseAdapter,
+          verify: 'none',
+        }),
+      );
+      let first = true;
+      const runner: CommandRunner = async () => {
+        if (first) {
+          first = false;
+          await mkdir(plan.options.stagingDirectory);
+          await writeFile(
+            resolve(plan.options.stagingDirectory, 'package.json'),
+            '{}',
+          );
+          await writeFile(
+            resolve(plan.options.stagingDirectory, 'pnpm-workspace.yaml'),
+            "packages:\n  - 'packages/*'\nallowBuilds:\n  '@swc/core': false\n  custom: false\n",
+          );
+          return;
+        }
+        const policy = await readFile(
+          resolve(plan.options.stagingDirectory, 'pnpm-workspace.yaml'),
+          'utf8',
+        );
+        expect(policy).toContain('"@swc/core": false');
+        expect(policy).toContain('custom: false');
+        expect(policy.match(/@swc\/core/g)).toHaveLength(1);
+        if (databaseAdapter === 'prisma') {
+          expect(policy).toContain('"@prisma/engines": true');
+          expect(policy).toContain('prisma: true');
+        } else {
+          expect(policy).not.toContain('prisma');
+        }
+      };
+      await executePlan(plan, runner);
+    },
+  );
+
   it('commits a staged workspace over an empty destination', async () => {
     const cwd = await fixture();
     const plan = createPlan(

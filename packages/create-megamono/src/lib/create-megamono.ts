@@ -157,6 +157,7 @@ export class CreateMegamonoError extends Error {
 interface CompatibilityRegistry {
   packageManagers: Record<PackageManager, string>;
   pnpmAllowBuilds: string[];
+  databaseAdapters: Record<string, { pnpmAllowBuilds?: string[] }>;
   scaffoldPackages: Record<string, string>;
   services: Record<string, string>;
   rustCrates: Record<string, string>;
@@ -979,9 +980,23 @@ async function configurePackageManager(plan: CreationPlan): Promise<void> {
   const entries = new Map<string, string>();
   for (const line of lines.slice(allowBuildsIndex + 1, end)) {
     const match = line.match(/^\s{2}([^:#]+):\s*(.+)$/);
-    if (match) entries.set(match[1].trim(), match[2].trim());
+    if (match) {
+      const rawKey = match[1].trim();
+      const key = rawKey.startsWith('"')
+        ? JSON.parse(rawKey)
+        : rawKey.replace(/^'(.*)'$/, '$1');
+      entries.set(key, match[2].trim());
+    }
   }
-  for (const name of compatibility.pnpmAllowBuilds) entries.set(name, 'true');
+  const builds = [
+    ...compatibility.pnpmAllowBuilds,
+    ...(compatibility.databaseAdapters[plan.options.databaseAdapter]
+      ?.pnpmAllowBuilds ?? []),
+  ];
+  for (const name of builds) {
+    // Existing decisions belong to the scaffold/policy, including explicit denial.
+    if (!entries.has(name)) entries.set(name, 'true');
+  }
   lines.splice(
     allowBuildsIndex + 1,
     end - allowBuildsIndex - 1,

@@ -105,6 +105,11 @@ megamono init --local-packages=yalc
 
 The local-package mode requires the exact compatible versions of `@megamono/plugin` and any selected platform plugins to exist in the yalc store before workspace creation begins.
 
+New pnpm workspaces receive a bounded `allowBuilds` policy before plugin or
+application installation. Selecting Prisma also approves `@prisma/engines` and
+`prisma`; other database selections do not receive those approvals. Existing
+explicit decisions are retained, and build-script protection is not disabled.
+
 ## Public validation releases
 
 All eight packages publish publicly from `megamono-dev/megamono`. The manual release workflow derives publication behavior from a protected channel rather than accepting independent access, prerelease, or dist-tag values:
