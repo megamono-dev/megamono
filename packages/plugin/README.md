@@ -626,6 +626,25 @@ npm exec nx run @megamono/plugin:lint
 npm exec nx run @megamono/plugin:build
 ```
 
+# Prisma installation policy
+
+When adding or relocating a Prisma project, pnpm 11 workspaces (and earlier
+workspaces using `allowBuilds`) must have explicit build-script decisions for `prisma` and
+`@prisma/engines` in `pnpm-workspace.yaml` before the generator writes files.
+Review each package and set its decision to `true` to permit its scripts or
+`false` to deny them. Unresolved pnpm placeholder values are not approvals.
+Package-wide decisions and exact-version lists matching the selected Prisma
+specifier are supported. A dependency range does not establish a resolved
+version in this read-only plan. The generator preserves the policy, including
+denials; denied scripts require separately provisioned artifacts and Prisma generation checks.
+Neither `--yes` nor `--bootstrap` silently approves dependency scripts.
+
+`create-megamono` configures these bounded approvals in its new staging workspace
+when Prisma is selected. Existing-schema adoption without installation leaves
+policy qualification to the repository. Relocation reuses existing dependency
+specifiers and checks decisions without changing them. Legacy pnpm 8–10 policies
+without `allowBuilds` remain repository-owned.
+
 # Prisma relocation handoff
 
 Database relocation plans distinguish automatic schema/command edits from pending

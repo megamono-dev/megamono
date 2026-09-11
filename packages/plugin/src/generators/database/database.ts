@@ -16,6 +16,7 @@ import {
 import { prompt } from 'enquirer';
 import { readFileSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import {
   DATABASE_ADAPTERS,
   isSafeWorkspaceRelativePath,
@@ -35,6 +36,7 @@ import {
 
 interface AdapterCompatibility {
   readonly provider: 'postgresql';
+  readonly pnpmAllowBuilds?: readonly string[];
   readonly runtimePackages: Readonly<Record<string, string>>;
   readonly developmentPackages: Readonly<Record<string, string>>;
 }
@@ -1141,6 +1143,66 @@ async function confirm(options: DatabaseGeneratorSchema): Promise<boolean> {
   return answer.confirmed;
 }
 
+/** A dependency install must not discover unresolved build policy after tree writes. */
+function preflightBuildApprovals(
+  tree: Tree,
+  options: NormalizedDatabaseOptions,
+): void {
+  const adapter = compatibility.databaseAdapters[options.adapter];
+  if (options.packageManager !== 'pnpm' || !adapter.pnpmAllowBuilds?.length)
+    return;
+  const source = tree.read('pnpm-workspace.yaml', 'utf8');
+  const policy = source ? parseYaml(source) : {};
+  const manager = readJson<{ packageManager?: string }>(
+    tree,
+    'package.json',
+  ).packageManager;
+  const major = Number(manager?.match(/^pnpm@(\d+)/)?.[1]);
+  // Existing pnpm 8–10 workspaces may use a different approval mechanism.
+  if (major < 11 || Number.isNaN(major)) {
+    if (!policy || !Object.hasOwn(policy, 'allowBuilds')) return;
+  }
+  if (policy?.dangerouslyAllowAllBuilds === true) return;
+  const approvals = policy?.allowBuilds;
+  const rules: Record<string, unknown> =
+    approvals && typeof approvals === 'object' && !Array.isArray(approvals)
+      ? approvals
+      : {};
+  const missing: string[] = [];
+  const denied: string[] = [];
+  for (const name of adapter.pnpmAllowBuilds) {
+    // Match the specifier writePackage will install, not an unrelated scaffold pin.
+    // Ranges cannot establish an exact resolved version in this read-only plan.
+    const version =
+      dependencySpecifier(tree, 'prisma') ?? adapter.developmentPackages.prisma;
+    const decisions = Object.entries(rules)
+      .filter(
+        ([key]) =>
+          key === name ||
+          (key.startsWith(`${name}@`) &&
+            key
+              .slice(name.length + 1)
+              .split('||')
+              .some((item) => item.trim() === version)),
+      )
+      .map(([, value]) => value);
+    if (decisions.includes(false)) denied.push(name);
+    else if (!decisions.includes(true)) missing.push(name);
+  }
+  if (missing.length) {
+    throw new DatabaseGeneratorError(
+      `Prisma build-script decisions are required before installation. Review pnpm-workspace.yaml#allowBuilds for ${missing.join(', ')} and explicitly set each to true (allow) or false (deny). Unresolved placeholder values are not decisions. Existing policy was not changed; --yes and --bootstrap do not approve scripts.`,
+      4,
+      'decision-required',
+    );
+  }
+  if (denied.length) {
+    logger.warn(
+      `Preserving denied Prisma builds: ${denied.join(', ')}. Provision required engine/runtime artifacts separately and verify Prisma generation before use.`,
+    );
+  }
+}
+
 export async function databaseGenerator(
   tree: Tree,
   rawOptions: DatabaseGeneratorSchema,
@@ -1154,6 +1216,9 @@ export async function databaseGenerator(
   }
   const state = preflight(tree, options);
   logger.info(renderPlan(tree, options));
+  // Adoption without an install retains the repository-owned dependency policy.
+  if (state === 'create' || state === 'relocate')
+    preflightBuildApprovals(tree, options);
   if (state === 'noop' || options.dryRun) return () => undefined;
   if (!(await confirm(rawOptions))) return () => undefined;
 

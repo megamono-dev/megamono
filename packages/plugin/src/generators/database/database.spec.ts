@@ -34,6 +34,135 @@ function workspace(manager: 'npm' | 'pnpm' = 'pnpm') {
 }
 
 describe('database generator', () => {
+  it.each([undefined, {}, { prisma: 'set this to true or false' }])(
+    'rejects unresolved pnpm 11 build decisions before writes: %j',
+    async (allowBuilds) => {
+      const tree = workspace();
+      writeJson(tree, 'package.json', {
+        ...readJson(tree, 'package.json'),
+        packageManager: 'pnpm@11.24.0',
+      });
+      tree.write(
+        'pnpm-workspace.yaml',
+        JSON.stringify({
+          packages: ['packages/*'],
+          ...(allowBuilds ? { allowBuilds } : {}),
+        }),
+      );
+      const before = tree.listChanges();
+      for (const extra of [{}, { bootstrap: true }, { dryRun: true }]) {
+        await expect(
+          databaseGenerator(tree, {
+            name: 'primary',
+            adapter: 'prisma',
+            yes: true,
+            interactive: false,
+            ...extra,
+          }),
+        ).rejects.toThrow(
+          'Prisma build-script decisions are required before installation',
+        );
+        expect(tree.listChanges()).toEqual(before);
+      }
+    },
+  );
+
+  it.each([true, false])(
+    'preserves explicit pnpm build decisions: %s',
+    async (decision) => {
+      const tree = workspace();
+      const policy = `packages:\n  - 'packages/*'\nallowBuilds:\n  '@prisma/engines': ${decision}\n  prisma: ${decision}\n  unrelated: false\n`;
+      tree.write('pnpm-workspace.yaml', policy);
+      await databaseGenerator(tree, {
+        name: 'primary',
+        adapter: 'prisma',
+        yes: true,
+        interactive: false,
+      });
+      expect(tree.read('pnpm-workspace.yaml', 'utf8')).toBe(
+        policy.replace(
+          "  - 'packages/*'",
+          "  - 'packages/*'\n  - 'libs/prisma/primary'",
+        ),
+      );
+    },
+  );
+
+  it('accepts exact-version approval lists without broadening them', async () => {
+    const tree = workspace();
+    tree.write(
+      'pnpm-workspace.yaml',
+      "packages:\n  - 'packages/*'\nallowBuilds:\n  '@prisma/engines@7.9.0 || 7.10.0': true\n  'prisma@7.10.0': true\n",
+    );
+    await databaseGenerator(tree, {
+      name: 'primary',
+      adapter: 'prisma',
+      yes: true,
+      interactive: false,
+    });
+    expect(tree.read('pnpm-workspace.yaml', 'utf8')).toContain(
+      "'prisma@7.10.0': true",
+    );
+    expect(tree.read('pnpm-workspace.yaml', 'utf8')).not.toContain(
+      '  prisma: true',
+    );
+  });
+
+  it('does not accept a scaffold-version approval for a different existing Prisma version', async () => {
+    const tree = workspace();
+    writeJson(tree, 'package.json', {
+      ...readJson(tree, 'package.json'),
+      devDependencies: { prisma: '6.19.3' },
+    });
+    tree.write(
+      'pnpm-workspace.yaml',
+      "packages:\n  - 'packages/*'\nallowBuilds:\n  '@prisma/engines@7.10.0': true\n  'prisma@7.10.0': true\n",
+    );
+    const before = tree.listChanges();
+    await expect(
+      databaseGenerator(tree, {
+        name: 'primary',
+        adapter: 'prisma',
+        yes: true,
+        interactive: false,
+      }),
+    ).rejects.toThrow('Prisma build-script decisions are required');
+    expect(tree.listChanges()).toEqual(before);
+    tree.write(
+      'pnpm-workspace.yaml',
+      (tree.read('pnpm-workspace.yaml', 'utf8') ?? '').replaceAll(
+        '7.10.0',
+        '6.19.3',
+      ),
+    );
+    await databaseGenerator(tree, {
+      name: 'primary',
+      adapter: 'prisma',
+      yes: true,
+      interactive: false,
+    });
+    expect(
+      readJson(tree, 'libs/prisma/primary/package.json').devDependencies.prisma,
+    ).toBe('6.19.3');
+  });
+
+  it('does not require Prisma approvals for Drizzle on pnpm 11', async () => {
+    const tree = workspace();
+    writeJson(tree, 'package.json', {
+      ...readJson(tree, 'package.json'),
+      packageManager: 'pnpm@11.24.0',
+    });
+    await databaseGenerator(tree, {
+      name: 'primary',
+      adapter: 'drizzle',
+      yes: true,
+      interactive: false,
+    });
+    expect(tree.read('pnpm-workspace.yaml', 'utf8')).not.toContain(
+      'allowBuilds',
+    );
+  });
+
   it.each(['prisma', 'drizzle'] as const)(
     'allows %s bootstrap without a Git worktree but retains normal mutation safety',
     async (adapter) => {
@@ -212,6 +341,8 @@ describe('database generator', () => {
         'allowBuilds:',
         "  '@swc/core': true",
         '  nx: true',
+        "  '@prisma/engines': true",
+        '  prisma: true',
         '',
       ].join('\n'),
     );
@@ -233,6 +364,8 @@ describe('database generator', () => {
         'allowBuilds:',
         "  '@swc/core': true",
         '  nx: true',
+        "  '@prisma/engines': true",
+        '  prisma: true',
         '',
       ].join('\n'),
     );
