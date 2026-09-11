@@ -110,6 +110,12 @@ application installation. Selecting Prisma also approves `@prisma/engines` and
 `prisma`; other database selections do not receive those approvals. Existing
 explicit decisions are retained, and build-script protection is not disabled.
 
+Bootstrap verification uses the same explicit database project ID as generation
+(`<scope>-<adapter>-<name>`). Formatting uses `nx format:write --all` because the
+staging workspace has no Git history. Managed Prettier exclusions preserve Yalc
+package bytes and package-manager lockfiles, independently of whether the
+repository chooses to commit those files.
+
 ## Public validation releases
 
 All eight packages publish publicly from `megamono-dev/megamono`. The manual release workflow derives publication behavior from a protected channel rather than accepting independent access, prerelease, or dist-tag values:

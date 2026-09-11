@@ -1,6 +1,17 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { prompt } from 'enquirer';
 import { vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import {
   addProjectConfiguration,
   formatFiles,
@@ -1393,6 +1404,87 @@ export default [
     expect(source).toContain('repository-cache/');
     expect(source).toContain('.megamono/health.json');
     expect(source.match(/# megamono ignore entries start/g)).toHaveLength(1);
+  });
+
+  it('formats Git-free bootstrap sources without modifying Yalc bytes or lockfiles', async () => {
+    tree.write('.prettierignore', 'repository-cache/\n');
+    await workspaceInitGenerator(tree, { only: 'ci', yes: true });
+    const ignore = tree.read('.prettierignore', 'utf8') ?? '';
+    expect(ignore).toContain('repository-cache/');
+    expect(ignore).toContain('.yalc/');
+    // Formatting policy must not decide whether a repository commits Yalc bytes.
+    expect(tree.read('.gitignore', 'utf8')).not.toContain('.yalc/');
+    await workspaceInitGenerator(tree, { only: 'ci', yes: true });
+    expect(tree.read('.prettierignore', 'utf8')).toBe(ignore);
+
+    const root = mkdtempSync(join(tmpdir(), 'megamono-bootstrap-format-'));
+    const nxRoot = dirname(require.resolve('nx/package.json'));
+    const nxBin = (
+      JSON.parse(readFileSync(join(nxRoot, 'package.json'), 'utf8')) as {
+        bin: { nx: string };
+      }
+    ).bin.nx;
+    const untouched = [
+      '.yalc/@megamono/plugin/package.json',
+      '.yalc/@megamono/plugin/dist/index.js',
+      '.yalc/@megamono/plugin/README.md',
+      'yalc.lock',
+      'pnpm-lock.yaml',
+      'package-lock.json',
+      'npm-shrinkwrap.json',
+      'yarn.lock',
+      'bun.lock',
+      'bun.lockb',
+      'repository-cache/fixture.json',
+    ];
+    try {
+      writeFileSync(join(root, 'nx.json'), '{}');
+      writeFileSync(
+        join(root, 'package.json'),
+        '{"name":"format-fixture","private":true}',
+      );
+      writeFileSync(join(root, '.prettierignore'), ignore);
+      writeFileSync(join(root, 'source.ts'), 'export const value={a:1,b:2}');
+      // Resolve the existing tools without installing or copying dependencies.
+      mkdirSync(join(root, 'node_modules'));
+      symlinkSync(nxRoot, join(root, 'node_modules/nx'), 'dir');
+      symlinkSync(
+        dirname(require.resolve('prettier/package.json')),
+        join(root, 'node_modules/prettier'),
+        'dir',
+      );
+      for (const file of untouched) {
+        mkdirSync(dirname(join(root, file)), { recursive: true });
+        writeFileSync(join(root, file), '{"keep":"exact bytes"}');
+      }
+      const output = execFileSync(
+        process.execPath,
+        [join(nxRoot, nxBin), 'format:write', '--all'],
+        {
+          cwd: root,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            NX_DAEMON: 'false',
+            NX_ISOLATE_PLUGINS: 'false',
+            NX_WORKSPACE_DATA_DIRECTORY: join(root, '.nx/workspace-data'),
+          },
+          timeout: 30_000,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+      expect(output).not.toContain('git diff');
+      expect(output).not.toContain('Defaulting to all files');
+      expect(readFileSync(join(root, 'source.ts'), 'utf8')).toContain(
+        'export const value = {',
+      );
+      for (const file of untouched)
+        expect(readFileSync(join(root, file), 'utf8')).toBe(
+          '{"keep":"exact bytes"}',
+        );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('registers only detected supported inference plugins and manifests', async () => {

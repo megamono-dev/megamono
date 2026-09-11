@@ -423,7 +423,7 @@ describe('createPlan', () => {
     expect(rendered).toContain('--serviceRunner=none');
     expect(rendered).toContain('--serviceRequirements={}');
     expect(rendered).toContain('"nx" "--" "sync"');
-    expect(rendered).toContain('format:write');
+    expect(rendered).toContain('"format:write" "--all"');
     expect(rendered).not.toContain('@latest');
   });
 

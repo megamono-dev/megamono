@@ -2169,7 +2169,19 @@ export async function workspaceInitGenerator(
     tree,
     'core.prettierignore',
     '.prettierignore',
-    ignoreTemplate,
+    `\n${[
+      ...new Set([
+        ...ignored,
+        '.yalc/',
+        'yalc.lock',
+        'pnpm-lock.yaml',
+        'package-lock.json',
+        'npm-shrinkwrap.json',
+        'yarn.lock',
+        'bun.lock',
+        'bun.lockb',
+      ]),
+    ].join('\n')}\n`,
     IGNORE_SECTION_START,
     IGNORE_SECTION_END,
   );

@@ -693,7 +693,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       commandStep(
         'format',
         options.packageManager,
-        nxArgs(options.packageManager, ['format:write']),
+        nxArgs(options.packageManager, ['format:write', '--all']),
         'staging',
       ),
       commandStep(
