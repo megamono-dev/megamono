@@ -11,6 +11,29 @@ import {
 } from './workspace-init-plan';
 
 describe('workspace init survey and plan', () => {
+  it('discovers Xcode-only portfolios without counting embedded workspaces or build products', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      'package.json',
+      JSON.stringify({ devDependencies: { nx: '22.7.6' } }),
+    );
+    for (const path of [
+      'apps/native/App.xcodeproj/project.pbxproj',
+      'apps/native/Portfolio.xcworkspace/contents.xcworkspacedata',
+      'apps/native/App.xcodeproj/project.xcworkspace/contents.xcworkspacedata',
+      'apps/native/DerivedData/Vendor.xcodeproj/project.pbxproj',
+    ])
+      tree.write(path, 'fixture');
+    tree.write('.github/workflows/native.yml', 'jobs: {}');
+    const before = tree.listChanges();
+    const survey = surveyWorkspaceInit(tree);
+    expect(survey.manifests.apple).toEqual([
+      'apps/native/App.xcodeproj/project.pbxproj',
+      'apps/native/Portfolio.xcworkspace/contents.xcworkspacedata',
+    ]);
+    expect(survey.existing.ci).toContain('.github/workflows/native.yml');
+    expect(tree.listChanges()).toEqual(before);
+  });
   it('preserves repository metadata in copy-ready documentation proposals', () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write(

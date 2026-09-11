@@ -163,6 +163,7 @@ describe('mixed-platform portfolio adoption fixture', () => {
       'basemarks-swift/.build/checkouts/dependency/README.md',
     );
     expect(survey.manifests.apple).toEqual([
+      'apps/apple/Quickzones.xcodeproj/project.pbxproj',
       'apps/apple/QuickzonesKit/Package.swift',
     ]);
     expect(survey.existing.contentCollections).toEqual([

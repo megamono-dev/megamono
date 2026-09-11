@@ -1111,7 +1111,12 @@ export function surveyWorkspaceInit(
         ),
       ),
     ].sort(compare),
-    apple: files.filter((path) => path.endsWith('Package.swift')),
+    apple: files.filter(
+      (path) =>
+        /(?:^|\/)(?:Package\.swift|[^/]+\.xcodeproj\/project\.pbxproj|[^/]+\.xcworkspace\/contents\.xcworkspacedata)$/.test(
+          path,
+        ) && !/\.xcodeproj\/project\.xcworkspace\//.test(path),
+    ),
     cargo: files.filter((path) => path.endsWith('Cargo.toml')),
     cloudflare: files.filter((path) =>
       /(?:^|\/)wrangler\.(?:jsonc?|toml)$/.test(path),

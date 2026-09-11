@@ -20,6 +20,12 @@ Nx 18–23 project inference and dependency edges for Swift packages, Xcode proj
 
 Discovery precedence is workspace, project, then Swift package within one directory. SwiftPM metadata supplies local package edges, Xcode project files supply `XCLocalSwiftPackageReference` edges, and workspace XML supplies project edges.
 
+The workspace adoption survey also lists Xcode projects and top-level Xcode
+workspaces, including portfolios without a `Package.swift`. Embedded
+`project.xcworkspace` files are not separate projects. This is static discovery,
+not qualification of schemes, signing, archive/export settings, or CI behavior;
+retain existing native CI until each selected target is verified on macOS.
+
 Swift package inspection uses isolated temporary SwiftPM cache, configuration, security, and scratch paths. Read-only Nx graph and health commands therefore do not write into a developer's global SwiftPM directories, and inference failures are emitted as bounded diagnostics rather than unbounded subprocess output.
 
 Swift packages receive `build` and `test` targets. A `lint` target appears only when `.swiftlint.yml` or `.swiftlint.yaml` opts the project into SwiftLint. Xcode build, test, and archive targets use the sole shared scheme automatically; zero or multiple shared schemes require an explicit `scheme` option and produce an actionable diagnostic otherwise. Setting `fastlaneLane` adds a non-cacheable deploy target.
