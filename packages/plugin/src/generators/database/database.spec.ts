@@ -4,6 +4,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FsTree } from 'nx/src/generators/tree';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MEGAMONO_CONFIG } from '../../lib/config';
 import * as hostPreflight from '../../lib/workspace-init-preflight';
@@ -34,6 +37,76 @@ function workspace(manager: 'npm' | 'pnpm' = 'pnpm') {
 }
 
 describe('database generator', () => {
+  it('loads root dotenv from generated configs independently of cwd without overriding process values', async () => {
+    const tree = workspace('npm');
+    await databaseGenerator(tree, {
+      name: 'primary',
+      adapter: 'prisma',
+      yes: true,
+      interactive: false,
+    });
+    const source =
+      tree.read('libs/prisma/primary/prisma.config.ts', 'utf8') ?? '';
+    expect(
+      readJson(tree, 'libs/prisma/primary/package.json').devDependencies.dotenv,
+    ).toBe('16.4.7');
+    const root = mkdtempSync(join(tmpdir(), 'prisma-env-fixture-'));
+    try {
+      mkdirSync(join(root, 'libs/prisma/primary'), { recursive: true });
+      mkdirSync(join(root, 'node_modules'));
+      symlinkSync(
+        dirname(require.resolve('dotenv/package.json')),
+        join(root, 'node_modules/dotenv'),
+        'dir',
+      );
+      writeFileSync(
+        join(root, '.env'),
+        'MEGAMONO_ENV_FIXTURE=root\nMEGAMONO_ENV_PRESERVE=file\n',
+      );
+      writeFileSync(
+        join(root, 'libs/prisma/primary/.env'),
+        'MEGAMONO_ENV_FIXTURE=wrong-cwd\n',
+      );
+      const executable =
+        source.replace(
+          /import \{ defineConfig \} from ['"]prisma\/config['"];?/,
+          'const defineConfig = (value) => value;',
+        ) +
+        '\nconsole.log(JSON.stringify([process.env.MEGAMONO_ENV_FIXTURE, process.env.MEGAMONO_ENV_PRESERVE]));';
+      const config = join(root, 'libs/prisma/primary/config.mjs');
+      writeFileSync(config, executable);
+      for (const cwd of [root, join(root, 'libs/prisma/primary')]) {
+        const output = execFileSync(process.execPath, [config], {
+          cwd,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            MEGAMONO_ENV_PRESERVE: 'process',
+            MEGAMONO_ENV_FIXTURE: '',
+          },
+        });
+        // Empty variables also remain process-owned; rerun with the key absent.
+        expect(JSON.parse(output)).toEqual(['', 'process']);
+        const env: NodeJS.ProcessEnv = {
+          ...process.env,
+          MEGAMONO_ENV_PRESERVE: 'process',
+        };
+        delete env.MEGAMONO_ENV_FIXTURE;
+        expect(
+          JSON.parse(
+            execFileSync(process.execPath, [config], {
+              cwd,
+              encoding: 'utf8',
+              env,
+            }),
+          ),
+        ).toEqual(['root', 'process']);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('relocates Playstack ownership with unchanged hashes and preserves unrelated records', async () => {
     const tree = workspace('npm');
     tree.write(
@@ -777,6 +850,15 @@ datasource db {
     });
     expect(tree.read('prisma.config.ts', 'utf8')).toContain(
       `schema: '${root}/prisma'`,
+    );
+    expect(tree.read('prisma.config.ts', 'utf8')).toContain(
+      "new URL('.env', import.meta.url)",
+    );
+    expect(tree.read(`${root}/prisma.config.ts`, 'utf8')).toContain(
+      "import rootConfig from '../../../prisma.config.ts'",
+    );
+    expect(tree.read(`${root}/prisma.config.ts`, 'utf8')).toContain(
+      '...rootConfig',
     );
     expect(readJson(tree, 'package.json').scripts['prisma:generate']).toBe(
       `prisma generate --schema ${root}/prisma`,

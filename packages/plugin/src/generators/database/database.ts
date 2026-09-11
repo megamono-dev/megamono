@@ -730,10 +730,16 @@ function rewriteRootPrismaConfig(
   if (!options.sourceSchema || !options.target) return;
   const sourceRoot = dirname(options.sourceSchema);
   if (!tree.exists('prisma.config.ts')) {
-    tree.write(
-      'prisma.config.ts',
-      `import { defineConfig } from 'prisma/config';\n\nexport default defineConfig({\n  schema: '${options.target}',\n  migrations: { path: '${options.target}/migrations' },\n});\n`,
-    );
+    updateJson(tree, 'package.json', (manifest) => ({
+      ...manifest,
+      devDependencies: {
+        ...manifest.devDependencies,
+        dotenv:
+          dependencySpecifier(tree, 'dotenv') ??
+          compatibility.databaseAdapters.prisma.developmentPackages.dotenv,
+      },
+    }));
+    tree.write('prisma.config.ts', renderPrismaConfig('.', options.target));
     return;
   }
   const current = tree.read('prisma.config.ts', 'utf8') ?? '';
@@ -816,7 +822,7 @@ function relocatePrismaLayout(
   if (!tree.exists(`${options.directory}/prisma.config.ts`)) {
     tree.write(
       `${options.directory}/prisma.config.ts`,
-      `import { defineConfig } from 'prisma/config';\n\nexport default defineConfig({\n  schema: 'prisma',\n  migrations: { path: 'prisma/migrations' },\n});\n`,
+      `import { defineConfig } from 'prisma/config';\nimport rootConfig from '${relative(options.directory, 'prisma.config.ts').replaceAll('\\', '/')}';\n\nexport default defineConfig({\n  ...rootConfig,\n  schema: 'prisma',\n  migrations: { ...rootConfig.migrations, path: 'prisma/migrations' },\n});\n`,
     );
   }
   if (!tree.exists(`${options.directory}/src/index.ts`)) {
@@ -1109,6 +1115,11 @@ function writePackage(tree: Tree, options: NormalizedDatabaseOptions): void {
   });
 }
 
+function renderPrismaConfig(directory: string, schema: string): string {
+  const envPath = relative(directory, '.env').replaceAll('\\', '/');
+  return `import { defineConfig } from 'prisma/config';\nimport { config as loadEnv } from 'dotenv';\nimport { fileURLToPath } from 'node:url';\n\n// Resolve from the config file, never the invoking shell or Nx cwd.\nloadEnv({ path: fileURLToPath(new URL('${envPath}', import.meta.url)), override: false });\n\nexport default defineConfig({\n  schema: '${schema}',\n  migrations: { path: '${schema}/migrations' },\n});\n`;
+}
+
 function writePrisma(tree: Tree, options: NormalizedDatabaseOptions): void {
   tree.write(
     `${options.directory}/prisma/schema.prisma`,
@@ -1117,7 +1128,7 @@ function writePrisma(tree: Tree, options: NormalizedDatabaseOptions): void {
   tree.write(`${options.directory}/prisma/models/.gitkeep`, '');
   tree.write(
     `${options.directory}/prisma.config.ts`,
-    `import { defineConfig } from 'prisma/config';\n\nexport default defineConfig({\n  schema: 'prisma',\n  migrations: { path: 'prisma/migrations' },\n});\n`,
+    renderPrismaConfig(options.directory, 'prisma'),
   );
   tree.write(
     `${options.directory}/src/index.ts`,
