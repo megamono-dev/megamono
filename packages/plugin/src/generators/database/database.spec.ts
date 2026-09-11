@@ -436,6 +436,11 @@ describe('database generator', () => {
       expect(plan).toContain('libs/prisma/primary/src/index.ts');
       expect(plan).toContain('non-UTC round trips');
       expect(plan).toContain('comment placeholder');
+      expect(plan).toContain('Package exports:');
+      expect(plan).toContain('fixture-workspace-prisma-primary:generate');
+      expect(plan).toContain('empty generated directory');
+      expect(plan).toContain('Native engines:');
+      expect(plan).toContain('binaryTargets');
       expect(plan).toContain('isolated container/migration smoke test');
       expect(
         tree

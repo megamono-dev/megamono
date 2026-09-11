@@ -901,8 +901,11 @@ function relocationHandoff(
 ### Pending application-owned work (not automatically completed)
 
 - Client boundary: implement/review \`${options.directory}/src/index.ts\`, generated-client exports and singleton/lifecycle ownership. A new index is only a comment placeholder.
+- Package exports: expose runtime and type entry points appropriate to the selected Prisma generator and ESM/CommonJS consumers; do not point published exports at uncompiled TypeScript unless the consumer explicitly supports it.
 - Imports: review ${list(imports)}. Update runtime and type imports to the chosen library boundary; also find custom aliases, dynamic imports and old generated paths. These textual candidates are not an exhaustive import analysis.
+- Build ordering: make each consuming build depend on \`${options.project}:generate\`; include the complete schema directory and generator configuration in cache inputs and the configured client output in cache outputs. Verify from an empty generated directory, not only a warm cache.
 - Deployment: review ${list(deployment)}. Update Docker COPY paths, entrypoint migration commands, build/prune configuration and generated runtime assets. A rewritten --schema command does not qualify container packaging.
+- Native engines: for engine-based clients, package the generated engine files for the deployment OS/architecture/OpenSSL target (including custom output paths and binaryTargets). For engine-free clients, explicitly install and wire the required driver adapter. Run the packed consumer in the actual deployment image; host generation alone is insufficient.
 - Timestamp policy: preserve existing native types (including @db.Timestamptz precision); explicitly review incoming artifacts and test non-UTC round trips before schema adoption.
 - Project identity: retain \`${options.project}\`; project renaming is not part of relocation.
 
