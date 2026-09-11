@@ -325,9 +325,11 @@ async function normalizeOptions(
       : existingPlaystackTarget;
   const normalizedSchema =
     adapter === 'prisma'
-      ? relocate && !completedRelocation
-        ? `${directory}/prisma/${basename(requestedSchema as string)}`
-        : (requestedSchema ?? `${directory}/prisma/schema.prisma`)
+      ? completedRelocation
+        ? (configuredSchema as string)
+        : relocate
+          ? `${directory}/prisma/${basename(requestedSchema as string)}`
+          : (requestedSchema ?? `${directory}/prisma/schema.prisma`)
       : `${directory}/drizzle.config.ts`;
   const existingLayout = tree.exists(
     relocate && !completedRelocation
@@ -501,6 +503,7 @@ function preflight(
       );
     }
     assertRootPrismaConfigCanRelocate(tree, options);
+    relocationOwnershipEdits(tree, options);
     return 'relocate';
   }
   if (
@@ -578,6 +581,70 @@ function assertRootPrismaConfigCanRelocate(
       'relocation-prisma-config',
     );
   }
+}
+
+function relocationOwnershipEdits(
+  tree: Tree,
+  options: NormalizedDatabaseOptions,
+): { path: string; records: Record<string, unknown>[] }[] {
+  if (!options.sourceSchema || !options.target) return [];
+  const sourceRoot = dirname(options.sourceSchema);
+  const destinations = new Set<string>();
+  const edits: { path: string; records: Record<string, unknown>[] }[] = [];
+  for (const path of ['.playstack/managed.json', '.playstack/ejected.json']) {
+    if (!tree.exists(path)) continue;
+    const records: unknown = readJson(tree, path);
+    if (!Array.isArray(records))
+      throw new DatabaseGeneratorError(
+        `Invalid ownership manifest ${path}: expected records.`,
+        3,
+        'relocation-ownership',
+      );
+    let changed = false;
+    const next = records.map((record: unknown) => {
+      if (
+        !record ||
+        typeof record !== 'object' ||
+        !('target' in record) ||
+        typeof record.target !== 'string' ||
+        !isSafeWorkspaceRelativePath(record.target)
+      ) {
+        throw new DatabaseGeneratorError(
+          `Invalid ownership target in ${path}.`,
+          3,
+          'relocation-ownership',
+        );
+      }
+      const moving = record.target.startsWith(`${sourceRoot}/`);
+      if (
+        moving &&
+        (!tree.exists(record.target) ||
+          (options.clientOutput && record.target === options.sourceSchema))
+      ) {
+        throw new DatabaseGeneratorError(
+          `Cannot relocate owned artifact ${record.target}: resolve missing bytes or managed client-output changes before relocation.`,
+          3,
+          'relocation-ownership',
+        );
+      }
+      const target = moving
+        ? `${options.target}/${record.target.slice(sourceRoot.length + 1)}`
+        : record.target;
+      if (destinations.has(target))
+        throw new DatabaseGeneratorError(
+          `Ownership destination collision at ${target}.`,
+          3,
+          'relocation-ownership',
+        );
+      destinations.add(target);
+      changed ||= moving;
+      return moving
+        ? { ...record, target }
+        : (record as Record<string, unknown>);
+    });
+    if (changed) edits.push({ path, records: next });
+  }
+  return edits;
 }
 
 function filesUnder(tree: Tree, root: string): string[] {
@@ -730,6 +797,7 @@ function relocatePrismaLayout(
     );
   }
   const sourceRoot = dirname(options.sourceSchema);
+  const ownershipEdits = relocationOwnershipEdits(tree, options);
   const sourceProject = [...getProjects(tree).entries()].find(
     ([, project]) => project.root === sourceRoot,
   );
@@ -741,6 +809,7 @@ function relocatePrismaLayout(
     const destination = `${options.target}/${relative(sourceRoot, source)}`;
     tree.rename(source, destination);
   }
+  for (const edit of ownershipEdits) writeJson(tree, edit.path, edit.records);
   ensureWorkspacePackagePath(tree, options);
   addProjectConfiguration(tree, options.project, projectConfiguration(options));
   writePackage(tree, options);
@@ -797,6 +866,7 @@ function relocationHandoff(
 
 - Schema directory and migration history: move intact; do not run migrations or rewrite model fields/native timestamp types.
 - Known command references: ${list(relocationReferenceEdits(tree, options).map(({ path }) => path))}.
+- Playstack ownership: relocate matching managed/ejected target paths in the same buffered change; retain hashes only for unchanged artifact bytes and reject destination collisions.
 - Prisma configuration: preserve root discovery in \`prisma.config.ts\`; configure the named database project.
 - Client output: ${options.clientOutput ? `configure \`${options.directory}/${options.clientOutput}\`` : 'preserve existing output'}; this does not generate or export a client.
 

@@ -34,6 +34,80 @@ function workspace(manager: 'npm' | 'pnpm' = 'pnpm') {
 }
 
 describe('database generator', () => {
+  it('relocates Playstack ownership with unchanged hashes and preserves unrelated records', async () => {
+    const tree = workspace('npm');
+    tree.write(
+      'prisma/schema.prisma',
+      'generator client {\n provider = "prisma-client"\n}\n',
+    );
+    tree.write(
+      'prisma/models/auth.prisma',
+      'model User {\n id String @id\n}\n',
+    );
+    const record = {
+      artifact: 'auth',
+      package: '@playstack/auth',
+      packageVersion: '1',
+      target: 'prisma/models/auth.prisma',
+      sourceHash: 'source',
+      outputHash: 'output',
+    };
+    const unrelated = { ...record, target: 'prisma-other/models/auth.prisma' };
+    writeJson(tree, '.playstack/managed.json', [record, unrelated]);
+    const options = {
+      name: 'primary',
+      adapter: 'prisma',
+      schema: 'prisma/schema.prisma',
+      relocate: true,
+      interactive: false,
+      yes: true,
+    };
+    const before = tree.listChanges();
+    await databaseGenerator(tree, { ...options, dryRun: true });
+    expect(tree.listChanges()).toEqual(before);
+    await databaseGenerator(tree, options);
+    expect(readJson(tree, '.playstack/managed.json')).toEqual([
+      { ...record, target: 'libs/prisma/primary/prisma/models/auth.prisma' },
+      unrelated,
+    ]);
+    expect(
+      tree.read('libs/prisma/primary/prisma/models/auth.prisma', 'utf8'),
+    ).toBe('model User {\n id String @id\n}\n');
+    const after = tree.listChanges();
+    await databaseGenerator(tree, options);
+    expect(tree.listChanges()).toEqual(after);
+  });
+
+  it('rejects ownership destination collisions before any writes', async () => {
+    const tree = workspace('npm');
+    tree.write(
+      'prisma/schema.prisma',
+      'datasource db { provider = "postgresql" }',
+    );
+    tree.write('prisma/models/auth.prisma', 'model User { id String @id }');
+    writeJson(tree, '.playstack/managed.json', [
+      { target: 'prisma/models/auth.prisma' },
+    ]);
+    writeJson(tree, '.playstack/ejected.json', [
+      {
+        target: 'libs/prisma/primary/prisma/models/auth.prisma',
+        base: '.playstack/bases/auth.prisma',
+      },
+    ]);
+    const before = tree.listChanges();
+    await expect(
+      databaseGenerator(tree, {
+        name: 'primary',
+        adapter: 'prisma',
+        schema: 'prisma/schema.prisma',
+        relocate: true,
+        interactive: false,
+        yes: true,
+      }),
+    ).rejects.toThrow('Ownership destination collision');
+    expect(tree.listChanges()).toEqual(before);
+  });
+
   it.each([undefined, {}, { prisma: 'set this to true or false' }])(
     'rejects unresolved pnpm 11 build decisions before writes: %j',
     async (allowBuilds) => {
