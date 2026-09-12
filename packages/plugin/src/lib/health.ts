@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { ProjectGraph } from '@nx/devkit';
+import { repositoryOwnedGraph } from './repository-graph';
 import type { MegamonoConfig } from './config';
 import type { RepositoryDocument } from './docs';
 import { inspectManagedSkills } from './managed-skills';
@@ -1397,6 +1398,7 @@ export async function runRepositoryHealth(options: {
   readonly now?: Date;
   readonly gitState?: HealthGitState;
 }): Promise<RepositoryHealthReport> {
+  options = { ...options, graph: repositoryOwnedGraph(options.graph) };
   const selected = new Set(options.checks ?? HEALTH_CHECKS);
   const docsEnabled = healthUsesDocs(options.config);
   if (!docsEnabled && options.config.health.suppressions.length)

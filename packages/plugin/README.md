@@ -569,6 +569,10 @@ npm exec nx run megamono-docs:health
 Health checks cover npm, Expo SDK, SwiftPM, and Cargo dependency alignment,
 spec drift, stale plans, orphaned libraries, and integration-template drift.
 Findings are written deterministically to `.megamono/health.json`.
+Structural and health checks exclude inferred projects inside `.yalc` or
+`node_modules`, including nested copies. Those are installed dependencies, not
+repository-owned projects. Root/consumer manifests still receive dependency and
+package-source policy checks; real untagged or unused libraries remain visible.
 Package-source profiles keep local evaluation separate from publication policy.
 `development` permits local references, `migration` reports them as warnings,
 `ci` rejects them except for exact fixture locators approved in

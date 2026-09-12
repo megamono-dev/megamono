@@ -5,6 +5,7 @@ import type { ProjectGraph } from '@nx/devkit';
 import type { MegamonoConfig } from './config';
 import type { Diagnostic } from './diagnostics';
 import { isTauriProject } from './tauri-platform';
+import { repositoryOwnedGraph } from './repository-graph';
 
 const typeTags = [
   'type:app',
@@ -395,6 +396,7 @@ export async function checkWorkspaceStructure(
   acceptedDecisionIds: ReadonlySet<string> = new Set(),
   enabledRules?: ReadonlySet<string>,
 ): Promise<readonly Diagnostic[]> {
+  graph = repositoryOwnedGraph(graph);
   const diagnostics: Diagnostic[] = [];
   validateTagCardinality(graph, diagnostics);
   validateDependencies(workspaceRoot, graph, diagnostics);
