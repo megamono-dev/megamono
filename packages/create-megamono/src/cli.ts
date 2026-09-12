@@ -289,9 +289,9 @@ export async function resolveInteractive(
         (await prompt.select(
           'Database adapter',
           DATABASE_ADAPTERS,
-          'prisma',
+          apps.length ? 'prisma' : 'none',
         ))) ||
-      'prisma';
+      (apps.length ? 'prisma' : 'none');
     const styling = apps?.some((app) => {
       const type = app.split(':', 1)[0];
       return type === 'web' || type === 'site';

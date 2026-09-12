@@ -232,13 +232,15 @@ describe('CLI entrypoint', () => {
 
   it('preserves an explicit empty app list without opening the cart', async () => {
     const questions: string[] = [];
-    await resolveInteractive(
+    const result = await resolveInteractive(
       { name: 'no-apps', interactive: true, apps: [] },
       scriptedPrompt([], questions),
     );
     expect(
       questions.some((message) => message.startsWith('Applications')),
     ).toBe(false);
+    expect(result.databaseAdapter).toBe('none');
+    expect(questions).not.toContain('Database name');
   });
 
   it('leaves noninteractive input untouched without opening prompts', async () => {

@@ -112,7 +112,7 @@ describe('normalizeCreateOptions', () => {
   });
 
   it.each([
-    [{ apps: [] }, 4, 'At least one app'],
+    [{ apps: undefined }, 4, 'Select applications'],
     [{ name: undefined }, 4, 'workspace name'],
     [{ apps: ['unknown'] }, 2, 'Unknown app'],
     [{ apps: ['extensions:guides'] }, 2, 'extension:guides'],
@@ -140,6 +140,23 @@ describe('normalizeCreateOptions', () => {
 });
 
 describe('createPlan', () => {
+  it('creates an explicitly app-free workspace without app dependencies or empty build selectors', () => {
+    const plan = createPlan(
+      options('/workspace', { apps: [], verify: 'build' }),
+    );
+    expect(plan.options.appInstances).toEqual([]);
+    expect(plan.options.databaseAdapter).toBe('none');
+    expect(plan.steps.some((step) => step.id === 'initialize-megamono')).toBe(
+      true,
+    );
+    expect(plan.steps.some((step) => step.id === 'check-structure')).toBe(true);
+    expect(
+      plan.steps.some((step) => step.id === 'verify-generated-projects'),
+    ).toBe(false);
+    expect(renderPlan(plan)).not.toContain('@megamono/plugin:app');
+    expect(renderPlan(plan)).not.toContain('@nx/next');
+    expect(renderPlan(plan)).not.toContain('@nx/nest');
+  });
   it('generates and verifies every named app instance independently', () => {
     const rendered = renderPlan(
       createPlan(

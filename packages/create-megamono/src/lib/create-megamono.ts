@@ -284,9 +284,9 @@ export function normalizeCreateOptions(
   }
 
   const appInstances = normalizeAppInstances(input.apps);
-  if (appInstances.length === 0) {
+  if (input.apps === undefined) {
     throw new CreateMegamonoError(
-      'At least one app is required when interactive mode cannot resolve --apps.',
+      'Select applications or pass --apps= to explicitly create a workspace without applications.',
       4,
     );
   }
@@ -732,7 +732,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       );
     }
   }
-  if (options.verify === 'build') {
+  if (options.verify === 'build' && options.appInstances.length > 0) {
     steps.push(
       commandStep(
         'verify-generated-projects',
