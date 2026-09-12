@@ -38,6 +38,39 @@ function projectFrom(
 }
 
 describe('projectsFromWranglerConfigs', () => {
+  it('recognizes version metadata at the top level and in environments', async () => {
+    const workspaceRoot = await mkdtemp(
+      resolve(tmpdir(), 'nx-version-metadata-'),
+    );
+    const project = projectFrom(
+      [
+        record('apps/worker', {
+          name: 'worker',
+          main: 'src/index.ts',
+          version_metadata: { binding: 'VERSION' },
+          env: {
+            production: { version_metadata: { binding: 'PRODUCTION_VERSION' } },
+          },
+          future_binding: { binding: 'UNKNOWN' },
+        }),
+      ],
+      workspaceRoot,
+      'apps/worker',
+    );
+    expect(project.metadata?.['megamono:cloudflare']).toMatchObject({
+      resources: { version_metadata: [{ binding: 'VERSION' }] },
+      topLevelBindingFamilies: ['version_metadata'],
+      unknownBindingFamilies: ['future_binding'],
+      environments: [
+        {
+          name: 'production',
+          bindingFamilies: ['version_metadata'],
+          bindingDifferences: ['version_metadata'],
+        },
+      ],
+    });
+  });
+
   it('adapts the Nx 18/19 single-file createNodes contract', async () => {
     const workspaceRoot = await mkdtemp(
       resolve(tmpdir(), 'nx-cloudflare-v1-node-'),

@@ -35,6 +35,7 @@ const RESOURCE_FAMILIES = {
   mtls_certificates: ['certificate_id'],
   dispatch_namespaces: ['namespace'],
   assets: ['directory'],
+  version_metadata: [],
 } as const;
 
 const BINDING_FAMILIES = [

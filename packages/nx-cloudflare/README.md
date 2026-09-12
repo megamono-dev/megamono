@@ -14,6 +14,8 @@ Register the inference plugin in `nx.json`:
 
 The plugin discovers `wrangler.jsonc`, `wrangler.json`, and `wrangler.toml`, then infers `dev`, `deploy`, `typegen`, and `tail`. Local Worker bindings become static Nx dependency edges.
 
+Version metadata bindings (`version_metadata`) are recognized in the top-level and named-environment inventories. They do not create project dependency edges. Unknown binding families still require review, and compatibility dates remain repository-owned.
+
 Each inferred target name can be customized or set to `false`. Mature repositories with guarded runtime wrappers can suppress the raw commands while retaining type generation, metadata, and graph edges:
 
 ```json
