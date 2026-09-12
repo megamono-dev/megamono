@@ -73,6 +73,9 @@ export interface CreateMegamonoInput {
   name?: string;
   directory?: string;
   apps?: readonly string[];
+  packages?: readonly string[];
+  packageScope?: string;
+  packageAccess?: string;
   services?: readonly string[];
   databaseAdapter?: string;
   databaseName?: string;
@@ -98,6 +101,9 @@ export interface NormalizedCreateOptions {
   stagingDirectory: string;
   apps: AppId[];
   appInstances: AppInstance[];
+  packages: string[];
+  packageScope: string;
+  packageAccess: 'public' | 'restricted';
   services: ServiceId[];
   databaseAdapter: DatabaseAdapter;
   databaseName?: string;
@@ -124,7 +130,10 @@ export type PlanStep =
     }
   | {
       kind: 'configure';
-      id: 'configure-package-manager' | 'dehydrate-workspace';
+      id:
+        | 'configure-package-manager'
+        | 'configure-publishable-packages'
+        | 'dehydrate-workspace';
     }
   | { kind: 'commit'; id: 'commit-workspace' }
   | { kind: 'springbar'; id: 'configure-springbar' };
@@ -262,6 +271,20 @@ function requireEnum<T extends string>(
   return value as T;
 }
 
+export function validatePackageNames(names: readonly string[]): void {
+  const seen = new Set<string>();
+  for (const name of names) {
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name))
+      throw new CreateMegamonoError(
+        'Package names must be lowercase slugs, such as core or client-sdk.',
+        2,
+      );
+    if (seen.has(name))
+      throw new CreateMegamonoError(`Duplicate package name: ${name}.`, 2);
+    seen.add(name);
+  }
+}
+
 export function normalizeCreateOptions(
   input: CreateMegamonoInput,
 ): NormalizedCreateOptions {
@@ -284,7 +307,7 @@ export function normalizeCreateOptions(
   }
 
   const appInstances = normalizeAppInstances(input.apps);
-  if (input.apps === undefined) {
+  if (input.apps === undefined && input.packages === undefined) {
     throw new CreateMegamonoError(
       'Select applications or pass --apps= to explicitly create a workspace without applications.',
       4,
@@ -293,6 +316,24 @@ export function normalizeCreateOptions(
   const apps = [
     ...new Set(appInstances.map((app) => app.type)),
   ].sort() as AppId[];
+  const packages = [...(input.packages ?? [])];
+  validatePackageNames(packages);
+  const packageScope = (input.packageScope ?? scope).replace(/^@/, '');
+  validatePackageNames([packageScope]);
+  for (const name of packages) {
+    if (
+      appInstances.some(
+        (app) => app.name === name || `${app.name}-e2e` === name,
+      ) ||
+      (name === 'nest-home' && apps.includes('api')) ||
+      (name === 'theme' && apps.some((app) => app === 'web' || app === 'site'))
+    ) {
+      throw new CreateMegamonoError(
+        `Package ${name} conflicts with an application or its generated support library. Choose another package name.`,
+        2,
+      );
+    }
+  }
 
   const services = normalizedList(input.services);
   const unknownServices = services.filter(
@@ -355,6 +396,13 @@ export function normalizeCreateOptions(
     stagingDirectory,
     apps,
     appInstances,
+    packages,
+    packageScope,
+    packageAccess: requireEnum<'public' | 'restricted'>(
+      'package access',
+      input.packageAccess ?? 'restricted',
+      new Set(['public', 'restricted']),
+    ),
     services: services as ServiceId[],
     databaseAdapter,
     ...(databaseName ? { databaseName } : {}),
@@ -441,8 +489,9 @@ function scaffoldArgs(
 
 function requestedPlatforms(options: NormalizedCreateOptions): string[] {
   return [
-    ...new Set(
-      options.apps.map((app) => {
+    ...new Set([
+      ...(options.packages.length ? ['node'] : []),
+      ...options.apps.map((app) => {
         if (app === 'api') return 'node';
         if (app === 'worker') return 'worker';
         if (app === 'mobile') return 'mobile';
@@ -451,7 +500,7 @@ function requestedPlatforms(options: NormalizedCreateOptions): string[] {
         if (app === 'extension') return 'extension';
         return 'web';
       }),
-    ),
+    ]),
   ].sort();
 }
 
@@ -536,6 +585,10 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
   ];
 
   const plugins = new Set<string>(['@megamono/plugin', 'typescript']);
+  if (options.packages.length) {
+    plugins.add('@nx/js');
+    plugins.add('@nx/eslint');
+  }
   for (const app of options.apps) {
     const plugin = appPlugin[app];
     if (plugin) plugins.add(plugin);
@@ -638,6 +691,32 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     );
   }
 
+  for (const name of options.packages) {
+    steps.push(
+      commandStep(
+        `generate-package-${name}`,
+        options.packageManager,
+        nxArgs(options.packageManager, [
+          'generate',
+          '@nx/js:library',
+          `--directory=packages/${name}`,
+          `--name=${options.scope}-${name}`,
+          `--importPath=@${options.packageScope}/${name}`,
+          '--publishable=true',
+          '--bundler=tsc',
+          '--linter=eslint',
+          '--unitTestRunner=none',
+          '--useProjectJson=true',
+          `--tags=platform:node,scope:${options.scope},type:util`,
+          '--interactive=false',
+        ]),
+        'staging',
+      ),
+    );
+  }
+  if (options.packages.length)
+    steps.push({ kind: 'configure', id: 'configure-publishable-packages' });
+
   steps.push(
     commandStep(
       'initialize-megamono',
@@ -732,7 +811,10 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       );
     }
   }
-  if (options.verify === 'build' && options.appInstances.length > 0) {
+  if (
+    options.verify === 'build' &&
+    (options.appInstances.length > 0 || options.packages.length > 0)
+  ) {
     steps.push(
       commandStep(
         'verify-generated-projects',
@@ -740,7 +822,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         nxArgs(options.packageManager, [
           'run-many',
           '--targets=build,test,lint',
-          `--projects=${options.appInstances.map((app) => `${options.scope}-${app.name}`).join(',')}`,
+          `--projects=${[...options.appInstances.map((app) => app.name), ...options.packages].map((name) => `${options.scope}-${name}`).join(',')}`,
         ]),
         'staging',
       ),
@@ -926,6 +1008,8 @@ export function renderPlan(plan: CreationPlan): string {
         return `${index + 1}. commit ${plan.options.stagingDirectory} -> ${plan.options.destination}`;
       }
       if (step.kind === 'configure') {
+        if (step.id === 'configure-publishable-packages')
+          return `${index + 1}. [staging] configure ${plan.options.packageAccess} npm package access (no publication)`;
         if (step.id === 'configure-package-manager')
           return `${index + 1}. [staging] record ${plan.options.packageManager} and configure package-manager policy`;
         return `${index + 1}. [staging] remove bootstrap node_modules for an install-free destination`;
@@ -1067,6 +1151,61 @@ async function removeInstalledDependencies(directory: string): Promise<void> {
   }
 }
 
+export async function configurePublishablePackages(
+  plan: CreationPlan,
+): Promise<void> {
+  for (const name of plan.options.packages) {
+    const path = resolve(
+      plan.options.stagingDirectory,
+      'packages',
+      name,
+      'package.json',
+    );
+    const manifest = JSON.parse(await readFile(path, 'utf8'));
+    if (
+      manifest.name !== `@${plan.options.packageScope}/${name}` ||
+      manifest.private === true
+    )
+      throw new CreateMegamonoError(
+        `Generated package ${name} does not match the requested publishable package.`,
+        3,
+      );
+    manifest.publishConfig = {
+      ...manifest.publishConfig,
+      access: plan.options.packageAccess,
+    };
+    await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
+  // Nx's publishable-library generator adds a workspace-root registry target.
+  // Identify that tooling project explicitly; it is not an application.
+  const rootPath = resolve(plan.options.stagingDirectory, 'package.json');
+  const root = JSON.parse(await readFile(rootPath, 'utf8'));
+  root.nx = { ...root.nx, projectType: 'library' };
+  await writeFile(rootPath, `${JSON.stringify(root, null, 2)}\n`);
+  const nxPath = resolve(plan.options.stagingDirectory, 'nx.json');
+  const nx = JSON.parse(await readFile(nxPath, 'utf8'));
+  const projects = plan.options.packages.map(
+    (name) => `${plan.options.scope}-${name}`,
+  );
+  nx.release = {
+    ...nx.release,
+    projects,
+    version: {
+      ...nx.release?.version,
+      preVersionCommand: [
+        plan.options.packageManager,
+        ...nxArgs(plan.options.packageManager, [
+          'run-many',
+          '-t',
+          'build',
+          `--projects=${projects.join(',')}`,
+        ]),
+      ].join(' '),
+    },
+  };
+  await writeFile(nxPath, `${JSON.stringify(nx, null, 2)}\n`);
+}
+
 export async function executePlan(
   plan: CreationPlan,
   runner: CommandRunner = runCommand,
@@ -1082,6 +1221,8 @@ export async function executePlan(
       else if (step.kind === 'configure') {
         if (step.id === 'configure-package-manager')
           await configurePackageManager(plan);
+        else if (step.id === 'configure-publishable-packages')
+          await configurePublishablePackages(plan);
         else await removeInstalledDependencies(plan.options.stagingDirectory);
       } else if (step.kind === 'springbar') {
         const intent = createSpringbarIntent(

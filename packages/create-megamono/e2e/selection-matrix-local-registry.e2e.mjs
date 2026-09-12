@@ -35,6 +35,19 @@ const appPlatforms = {
 };
 const allApps = Object.keys(appRoots).sort();
 const matrixCases = [
+  {
+    id: 'packages-pnpm',
+    apps: [],
+    packages: ['core', 'client'],
+    packageManager: 'pnpm',
+  },
+  { id: 'packages-npm', apps: [], packages: ['core'], packageManager: 'npm' },
+  {
+    id: 'apps-and-packages',
+    apps: ['api'],
+    packages: ['client'],
+    packageManager: 'pnpm',
+  },
   ...allApps.map((app) => ({
     id: app,
     apps: [app],
@@ -227,6 +240,12 @@ async function verifyCase(root, testCase, environment, createCliPath) {
         ? testCase.apps
         : [`--apps=${testCase.apps.join(',')}`]),
       ...(testCase.styling ? [`--styling=${testCase.styling}`] : []),
+      ...(testCase.packages
+        ? [
+            `--packages=${testCase.packages.join(',')}`,
+            '--package-access=restricted',
+          ]
+        : []),
       `--package-manager=${packageManager}`,
       ...(testCase.database
         ? [
@@ -271,7 +290,10 @@ async function verifyCase(root, testCase, environment, createCliPath) {
     await readFile(resolve(destination, 'megamono.json'), 'utf8'),
   );
   const expectedPlatforms = [
-    ...new Set(testCase.apps.map((app) => appPlatforms[appInstance(app).type])),
+    ...new Set([
+      ...(testCase.packages?.length ? ['node'] : []),
+      ...testCase.apps.map((app) => appPlatforms[appInstance(app).type]),
+    ]),
   ].sort();
   assert(
     JSON.stringify(megamono.platforms) === JSON.stringify(expectedPlatforms),
@@ -422,6 +444,52 @@ async function verifyCase(root, testCase, environment, createCliPath) {
       eslintConfig.includes('megamonoPlugin.createConfig(megamonoConfig)'),
     `${testCase.id}: generated ESLint config is not wired to Megamono rules.`,
   );
+
+  for (const name of testCase.packages ?? []) {
+    const manifest = JSON.parse(
+      await readFile(
+        resolve(destination, 'packages', name, 'package.json'),
+        'utf8',
+      ),
+    );
+    assert(
+      manifest.name === `@${scope}/${name}` && manifest.private !== true,
+      `${testCase.id}: package identity is incorrect.`,
+    );
+    assert(
+      manifest.publishConfig.access === 'restricted' && manifest.exports['.'],
+      `${testCase.id}: package access or exports are missing.`,
+    );
+    const nx = JSON.parse(
+      await readFile(resolve(destination, 'nx.json'), 'utf8'),
+    );
+    assert(
+      nx.release.projects.includes(`${scope}-${name}`),
+      `${testCase.id}: package is missing from release selection.`,
+    );
+    assert(
+      await exists(
+        resolve(destination, '.github/workflows/megamono-release.yml'),
+      ),
+      `${testCase.id}: release workflow is missing.`,
+    );
+    const build = nxInvocation(packageManager, [
+      'run',
+      `${scope}-${name}:build`,
+    ]);
+    await run(build.command, build.args, {
+      cwd: destination,
+      env: caseEnvironment,
+    });
+    assert(
+      await exists(resolve(destination, 'packages', name, 'dist/index.js')),
+      `${testCase.id}: built package entry is missing.`,
+    );
+    assert(
+      await exists(resolve(destination, 'packages', name, 'dist/index.d.ts')),
+      `${testCase.id}: built declarations are missing.`,
+    );
+  }
 
   for (const descriptor of testCase.apps) {
     const { type: app, name } = appInstance(descriptor);

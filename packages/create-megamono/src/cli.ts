@@ -15,6 +15,7 @@ import {
   createMegamono,
   renderPlan,
   normalizeAppInstances,
+  validatePackageNames,
   type CreateMegamonoInput,
 } from './lib/create-megamono.js';
 import { PACKAGE_MANAGERS } from './lib/package-manager.js';
@@ -39,8 +40,13 @@ Use positional descriptors or --apps=<comma-separated descriptors>, not both.
 Names are optional; repeated types need distinct names.
 Interactive menus: arrows to navigate, Space to toggle services, Enter to continue.
 Interactive apps: add, name, edit, or remove instances before continuing.
+Next, optionally add publishable TypeScript packages (suggested when no apps are selected).
 
 Options:
+  --apps=                 Explicitly create without applications
+  --packages=<names>      Named TypeScript libraries under packages/; empty skips setup
+  --package-scope=<name>  npm scope (default: workspace name)
+  --package-access=<mode> restricted (default) or public; does not publish
   --styling=<choice>       ${WEB_STYLING_OPTIONS.join(', ')}
   --router=pages|app       Next.js router for web/site apps (default: pages)
   --local-packages=yalc    Use locally published packages and their dependency closure
@@ -55,6 +61,7 @@ Options:
   --help, -h              Show help without prompts, installs, or writes
 
 Examples:
+  create-megamono toolkit --packages=core,client --package-access=public --local-packages=yalc --interactive=false
   create-megamono studio site:marketing extension:grids extension:guides api web:admin
   create-megamono studio --apps=site,api --styling=chakra --local-packages=yalc --interactive=false --dry-run
 `;
@@ -266,6 +273,53 @@ export async function selectApplications(
   }
 }
 
+export async function selectPackages(
+  prompt: InteractivePrompt,
+  noApps: boolean,
+): Promise<string[]> {
+  const enabled = await prompt.select(
+    'Set up publishable packages?',
+    ['yes', 'no'],
+    noApps ? 'yes' : 'no',
+  );
+  if (enabled === 'no') return [];
+  const packages: string[] = [];
+  while (true) {
+    const action = await prompt.select(
+      `Publishable packages${packages.length ? `: ${packages.join(', ')}` : ''}`,
+      packages.length ? ['add', 'remove', 'continue'] : ['add', 'continue'],
+      packages.length ? 'continue' : 'add',
+      {
+        add: 'Add TypeScript package',
+        remove: 'Remove package',
+        continue: 'Continue',
+      },
+    );
+    if (action === 'continue') return packages;
+    if (action === 'remove') {
+      const name = await prompt.select('Remove package', packages, packages[0]);
+      packages.splice(packages.indexOf(name), 1);
+      continue;
+    }
+    const validate = (name: string): true | string => {
+      try {
+        validatePackageNames([...packages, name]);
+        return true;
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    };
+    const name = await prompt.question(
+      'Package name',
+      packages.length ? undefined : 'core',
+      validate,
+    );
+    const result = validate(name);
+    if (result !== true) throw new CreateMegamonoError(result, 2);
+    packages.push(name);
+  }
+}
+
 export async function resolveInteractive(
   input: CreateMegamonoInput,
   interactivePrompt?: InteractivePrompt,
@@ -280,7 +334,29 @@ export async function resolveInteractive(
   const prompt = interactivePrompt ?? createInteractivePrompt();
   try {
     const name = input.name ?? (await prompt.question('Workspace name: '));
-    const apps = input.apps ?? (await selectApplications(prompt));
+    const apps =
+      input.apps ??
+      (input.packages !== undefined ? [] : await selectApplications(prompt));
+    const packages =
+      input.packages ?? (await selectPackages(prompt, apps.length === 0));
+    const packageScope = packages.length
+      ? (input.packageScope ??
+        (await prompt.question(
+          'Package scope (without @)',
+          name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, ''),
+        )))
+      : input.packageScope;
+    const packageAccess = packages.length
+      ? (input.packageAccess ??
+        (await prompt.select(
+          'Package access',
+          ['restricted', 'public'],
+          'restricted',
+        )))
+      : input.packageAccess;
     const packageManager =
       input.packageManager ??
       (await prompt.select('Package manager', PACKAGE_MANAGERS, 'npm'));
@@ -329,6 +405,9 @@ export async function resolveInteractive(
       ...input,
       name,
       apps,
+      packages,
+      packageScope,
+      packageAccess,
       packageManager,
       services,
       databaseAdapter,
@@ -357,6 +436,9 @@ export async function main(
       options: {
         directory: { type: 'string' },
         apps: { type: 'string' },
+        packages: { type: 'string' },
+        'package-scope': { type: 'string' },
+        'package-access': { type: 'string' },
         services: { type: 'string' },
         'database-adapter': { type: 'string' },
         'database-name': { type: 'string' },
@@ -416,6 +498,9 @@ export async function main(
           ? positionalApps
           : commaList(parsed.values.apps),
       services: commaList(parsed.values.services),
+      packages: commaList(parsed.values.packages),
+      packageScope: parsed.values['package-scope'],
+      packageAccess: parsed.values['package-access'],
       databaseAdapter: parsed.values['database-adapter'],
       databaseName: parsed.values['database-name'],
       styling: parsed.values.styling,

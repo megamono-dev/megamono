@@ -9,6 +9,7 @@ import {
   main,
   resolveInteractive,
   selectApplications,
+  selectPackages,
   type InteractivePrompt,
 } from './cli.js';
 
@@ -43,6 +44,68 @@ function scriptedPrompt(
 }
 
 describe('CLI entrypoint', () => {
+  it('accepts packages-only automation flags without prompting for apps', async () => {
+    const output = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation(() => true);
+    try {
+      expect(
+        await main([
+          'package-options-test',
+          '--packages=core,client',
+          '--package-scope=acme',
+          '--package-access=public',
+          '--interactive=false',
+          '--dry-run',
+        ]),
+      ).toBe(0);
+      const rendered = output.mock.calls
+        .map(([value]) => String(value))
+        .join('');
+      expect(rendered).toContain('--importPath=@acme/core');
+      expect(rendered).toContain('configure public npm package access');
+      expect(rendered).not.toContain('@megamono/plugin:app');
+    } finally {
+      output.mockRestore();
+    }
+  });
+  it('defaults package setup on without apps and off with apps', async () => {
+    expect(await selectPackages(scriptedPrompt([], []), true)).toEqual([
+      'core',
+    ]);
+    expect(await selectPackages(scriptedPrompt([], []), false)).toEqual([]);
+  });
+
+  it('adds and removes named packages with validated names', async () => {
+    const prompt = scriptedPrompt(
+      ['yes', 'add', 'core', 'add', 'client', 'remove', 'core', 'continue'],
+      [],
+    );
+    const question = vi.spyOn(prompt, 'question');
+    expect(await selectPackages(prompt, false)).toEqual(['client']);
+    expect(question.mock.calls[0][2]?.('../escape')).toContain(
+      'lowercase slugs',
+    );
+    expect(question.mock.calls[1][2]?.('client')).toContain('Duplicate');
+  });
+
+  it('sets up packages before tooling and defaults to no database without apps', async () => {
+    const questions: string[] = [];
+    const result = await resolveInteractive(
+      { name: 'toolkit', apps: [], interactive: true },
+      scriptedPrompt([], questions),
+    );
+    expect(result).toMatchObject({
+      apps: [],
+      packages: ['core'],
+      packageScope: 'toolkit',
+      packageAccess: 'restricted',
+      databaseAdapter: 'none',
+    });
+    expect(questions.indexOf('Package access')).toBeLessThan(
+      questions.indexOf('Package manager'),
+    );
+  });
   it('uses selectable prompts with explicit defaults and a service checklist', async () => {
     vi.mocked(select).mockResolvedValueOnce('prisma');
     vi.mocked(checkbox).mockResolvedValueOnce(['postgres', 'redis']);
@@ -345,6 +408,7 @@ describe('CLI entrypoint', () => {
       'api',
       '',
       'continue',
+      'no',
       'pnpm',
       'drizzle',
       'stylex',
@@ -383,6 +447,7 @@ describe('CLI entrypoint', () => {
       'site',
       'marketing',
       'continue',
+      'no',
       'npm',
       'none',
       'css-modules',
@@ -406,6 +471,7 @@ describe('CLI entrypoint', () => {
       {
         name: 'explicit-services',
         apps: ['api'],
+        packages: [],
         services: ['typesense'],
         databaseAdapter: 'none',
         serviceRunner: 'springbar',

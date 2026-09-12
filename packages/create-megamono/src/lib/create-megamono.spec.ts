@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import {
   compatibility,
+  configurePublishablePackages,
   CreateMegamonoError,
   createPlan,
   executePlan,
@@ -45,6 +46,88 @@ async function writeYalcStore(
 }
 
 describe('normalizeCreateOptions', () => {
+  it('plans packages-only generation before release discovery and verifies explicit project IDs', () => {
+    const plan = createPlan(
+      options('/workspace', {
+        apps: undefined,
+        packages: ['core', 'client'],
+        packageScope: '@acme',
+        packageAccess: 'public',
+        verify: 'build',
+      }),
+    );
+    expect(plan.options.apps).toEqual([]);
+    expect(plan.options.packageScope).toBe('acme');
+    const rendered = renderPlan(plan);
+    expect(rendered).toContain('@nx/js:library');
+    expect(rendered).toContain('--directory=packages/core');
+    expect(rendered).toContain('--importPath=@acme/core');
+    expect(rendered).toContain('--publishable=true');
+    expect(rendered).toContain('--projects=acme-tools-core,acme-tools-client');
+    expect(rendered).not.toContain('@megamono/plugin:app');
+    const ids = plan.steps.map((step) => step.id);
+    expect(ids.indexOf('configure-publishable-packages')).toBeLessThan(
+      ids.indexOf('initialize-megamono'),
+    );
+  });
+
+  it.each([
+    { packages: ['../escape'] },
+    { packages: ['core', 'core'] },
+    { packages: ['theme'] },
+    { packages: ['nest-home'] },
+    { packages: ['api'] },
+    { packages: ['core'], packageScope: '../acme' },
+    { packages: ['core'], packageAccess: 'private' },
+  ])('rejects invalid or conflicting package choices: %j', (input) => {
+    expect(() => options('/workspace', input)).toThrow(CreateMegamonoError);
+  });
+
+  it('sets publication access without replacing generated package exports', async () => {
+    const root = await fixture();
+    const plan = createPlan(options(root, { apps: [], packages: ['core'] }));
+    const packageRoot = resolve(plan.options.stagingDirectory, 'packages/core');
+    await mkdir(packageRoot, { recursive: true });
+    await writeFile(
+      resolve(plan.options.stagingDirectory, 'package.json'),
+      JSON.stringify({
+        private: true,
+        nx: { targets: { 'local-registry': {} } },
+      }),
+    );
+    await writeFile(
+      resolve(plan.options.stagingDirectory, 'nx.json'),
+      JSON.stringify({
+        release: {
+          version: { preVersionCommand: 'pnpm dlx nx run-many -t build' },
+        },
+      }),
+    );
+    const manifest = {
+      name: '@acme-tools/core',
+      exports: { '.': './dist/index.js' },
+      files: ['dist'],
+      publishConfig: { provenance: true },
+    };
+    await writeFile(
+      resolve(packageRoot, 'package.json'),
+      JSON.stringify(manifest),
+    );
+    await configurePublishablePackages(plan);
+    const nx = JSON.parse(
+      await readFile(resolve(plan.options.stagingDirectory, 'nx.json'), 'utf8'),
+    );
+    expect(nx.release.projects).toEqual(['acme-tools-core']);
+    expect(nx.release.version.preVersionCommand).toBe(
+      'npm exec nx -- run-many -t build --projects=acme-tools-core',
+    );
+    expect(
+      JSON.parse(await readFile(resolve(packageRoot, 'package.json'), 'utf8')),
+    ).toEqual({
+      ...manifest,
+      publishConfig: { provenance: true, access: 'restricted' },
+    });
+  });
   it('normalizes the scope and applies stable defaults', () => {
     const normalized = options('/workspace');
     expect(normalized).toMatchObject({

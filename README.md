@@ -70,7 +70,25 @@ and enter a name (prefilled with the type). Add multiple instances of the same
 type, edit their types/names, or remove them before continuing. The list shows
 each app's directory. Repeated types suggest an unused name such as `extension-2`;
 invalid names and duplicate directories can be corrected in the prompt.
-You can also continue without applications. Positional `type:name` descriptors
+You can also continue without applications. The next step offers **Set up
+publishable packages?**, suggested on when there are no apps and off otherwise.
+Add named TypeScript libraries (for example `core` and `client`), choose an npm
+scope, and select restricted or public access. Restricted is the default. Nx
+creates buildable libraries under `packages/<name>` with package exports;
+Megamono discovers them when configuring release governance. These starters
+are tagged for Node; review platform boundaries when targeting other runtimes.
+Nothing is published during creation. Registry access, credentials, and the
+release workflow still require review before publishing. Existing private app
+support libraries are not converted into publishable packages.
+
+For packages only, use `create-megamono toolkit --packages=core,client
+--package-scope=acme --package-access=restricted --local-packages=yalc
+--package-manager=pnpm --interactive=false`. Add `--apps=api` to combine packages
+and apps, or `--apps= --packages=` for an empty governed workspace. The selected
+package manager is independent of package publication access. Custom registries
+can be configured afterward in repository-owned npm/publish configuration.
+
+Positional `type:name` descriptors
 and `--apps` remain available for scripts and skip the interactive app list.
 Database names remain editable text. Flags skip their corresponding questions;
 use `--interactive=false` for automation. Ctrl+C cancels before creation begins.
