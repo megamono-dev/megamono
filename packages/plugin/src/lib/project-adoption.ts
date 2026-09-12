@@ -1,6 +1,7 @@
 import type { ProjectConfiguration, Tree } from '@nx/devkit';
 import { isSafeWorkspaceRelativePath } from './config';
 import { extensionEvidence } from './extension-evidence';
+import { isTauriProject } from './tauri-platform';
 
 export const PROJECT_ADOPTION_TYPES = [
   'app',
@@ -175,6 +176,14 @@ function inferPlatform(
   if (isWorkspaceToolingProject(tree, project))
     return {
       evidence: ['workspace-root dependencies are not project evidence'],
+    };
+
+  if (isTauriProject(root, (path) => tree.exists(path)))
+    return {
+      platform: 'rust',
+      evidence: [
+        'Tauri application: Rust host, web frontend, Node configuration tooling',
+      ],
     };
 
   if (

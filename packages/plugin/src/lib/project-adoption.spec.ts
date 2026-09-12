@@ -4,11 +4,43 @@ import { describe, expect, it } from 'vitest';
 import { classifyProjectForAdoption } from './project-adoption';
 
 describe('project adoption classification', () => {
+  it('recognizes the Rust host of an untagged hybrid Tauri application', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write('apps/desktop/src-tauri/Cargo.toml', '[package]');
+    tree.write('apps/desktop/src-tauri/tauri.conf.json', '{}');
+    expect(
+      classifyProjectForAdoption(tree, 'desktop', {
+        root: 'apps/desktop',
+        projectType: 'application',
+        targets: {
+          dev: {
+            executor: 'nx:run-commands',
+            options: { command: 'node build.js' },
+          },
+        },
+      }),
+    ).toMatchObject({
+      kind: 'application',
+      platform: 'rust',
+      evidence: expect.arrayContaining([
+        'Tauri application: Rust host, web frontend, Node configuration tooling',
+      ]),
+    });
+    tree.delete('apps/desktop/src-tauri/tauri.conf.json');
+    expect(
+      classifyProjectForAdoption(tree, 'desktop', {
+        root: 'apps/desktop',
+        projectType: 'application',
+      }).platform,
+    ).toBeUndefined();
+  });
   it('classifies a non-executable root project as workspace tooling', () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write(
       'package.json',
-      JSON.stringify({ dependencies: { next: '15.0.0', '@nestjs/core': '11.0.0' } }),
+      JSON.stringify({
+        dependencies: { next: '15.0.0', '@nestjs/core': '11.0.0' },
+      }),
     );
     const project = {
       root: '.',

@@ -585,6 +585,14 @@ from `content-collections/public-repo-docs`; unrestricted entry points remain
 available to internal applications.
 `workspace-init` reads their configured severities from `megamono.json`.
 
+Tauri applications with `src-tauri/Cargo.toml` and a Tauri configuration retain
+one Rust host platform tag. Surveys identify the hybrid composition. Aggregate
+Nx edges may reference Rust, web and Node libraries; source-level ESLint keeps
+the frontend web-only and recognizes only root-level Vite, Vitest, Playwright
+and ESLint configuration files as Node tooling. Nested lookalike configuration
+files do not gain Node access. Keep both graph and source checks enabled; this
+does not disable translation/string rules or change a repository's warning budget.
+
 ## Create repository records
 
 ```sh

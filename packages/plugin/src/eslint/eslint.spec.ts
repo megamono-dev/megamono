@@ -16,6 +16,16 @@ const internalDocsRoot = join(root, 'apps/internal-docs');
 const publicDocsRoot = join(root, 'apps/public-docs');
 const nodeRoot = join(root, 'packages/node-data');
 const neutralRoot = join(root, 'packages/neutral');
+const desktopRoot = join(root, 'apps/desktop');
+mkdirSync(join(desktopRoot, 'src-tauri'), { recursive: true });
+writeFileSync(join(desktopRoot, 'src-tauri/Cargo.toml'), '[package]');
+writeFileSync(join(desktopRoot, 'src-tauri/tauri.conf.json'), '{}');
+writeFileSync(
+  join(desktopRoot, 'project.json'),
+  JSON.stringify({
+    tags: ['platform:rust', 'type:app', 'scope:shared', 'visibility:internal'],
+  }),
+);
 for (const directory of [
   webRoot,
   internalDocsRoot,
@@ -29,12 +39,7 @@ writeFileSync(
   join(webRoot, 'package.json'),
   JSON.stringify({
     nx: {
-      tags: [
-        'platform:web',
-        'scope:site',
-        'type:app',
-        'visibility:public',
-      ],
+      tags: ['platform:web', 'scope:site', 'type:app', 'visibility:public'],
     },
   }),
 );
@@ -42,12 +47,7 @@ writeFileSync(
   join(internalDocsRoot, 'package.json'),
   JSON.stringify({
     nx: {
-      tags: [
-        'platform:web',
-        'scope:docs',
-        'type:app',
-        'visibility:internal',
-      ],
+      tags: ['platform:web', 'scope:docs', 'type:app', 'visibility:internal'],
     },
   }),
 );
@@ -55,12 +55,7 @@ writeFileSync(
   join(publicDocsRoot, 'package.json'),
   JSON.stringify({
     nx: {
-      tags: [
-        'platform:web',
-        'scope:docs',
-        'type:app',
-        'visibility:public',
-      ],
+      tags: ['platform:web', 'scope:docs', 'type:app', 'visibility:public'],
     },
   }),
 );
@@ -173,6 +168,21 @@ tester.run('no-deep-relative-imports', noDeepRelativeImports, {
 tester.run('platform-boundary', platformBoundary, {
   valid: [
     {
+      filename: join(desktopRoot, 'src/main.js'),
+      code: "import { view } from '../../web/src/view.js';",
+      options: workspaceOption,
+    },
+    {
+      filename: join(desktopRoot, 'vite.config.js'),
+      code: "import path from 'node:path';",
+      options: workspaceOption,
+    },
+    {
+      filename: join(desktopRoot, 'vitest.config.mjs'),
+      code: "import fs from 'node:fs';",
+      options: workspaceOption,
+    },
+    {
       filename: join(nodeRoot, 'src/index.js'),
       code: "import fs from 'node:fs';",
       options: workspaceOption,
@@ -184,6 +194,30 @@ tester.run('platform-boundary', platformBoundary, {
     },
   ],
   invalid: [
+    {
+      filename: join(desktopRoot, 'src/main.js'),
+      code: "import fs from 'node:fs';",
+      options: workspaceOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
+    },
+    {
+      filename: join(desktopRoot, 'src/vite.config.js'),
+      code: "import fs from 'node:fs';",
+      options: workspaceOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
+    },
+    {
+      filename: join(desktopRoot, 'src/main.js'),
+      code: "import { data } from '../../../packages/node-data/src/index.js';",
+      options: workspaceOption,
+      errors: [{ messageId: 'projectPlatform' }],
+    },
+    {
+      filename: join(desktopRoot, 'src/main.js'),
+      code: "import config from '../vite.config.js';",
+      options: workspaceOption,
+      errors: [{ messageId: 'projectPlatform' }],
+    },
     {
       filename: join(webRoot, 'src/page.js'),
       code: "import fs from 'node:fs';",

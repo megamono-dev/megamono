@@ -1,8 +1,10 @@
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ProjectGraph } from '@nx/devkit';
 import type { MegamonoConfig } from './config';
 import type { Diagnostic } from './diagnostics';
+import { isTauriProject } from './tauri-platform';
 
 const typeTags = [
   'type:app',
@@ -175,6 +177,7 @@ const allowedTypeDependencies: Readonly<Record<string, readonly string[]>> = {
 };
 
 function validateDependencies(
+  workspaceRoot: string,
   graph: ProjectGraph,
   diagnostics: Diagnostic[],
 ): void {
@@ -185,6 +188,11 @@ function validateDependencies(
     const sourceType = tagValue(sourceTags, 'type:');
     const sourceScope = tagValue(sourceTags, 'scope:');
     const sourcePlatform = tagValue(sourceTags, 'platform:');
+    // Aggregate graph edges cannot distinguish a native host from its frontend
+    // or tooling. The source-level rule enforces the individual file boundary.
+    const tauri =
+      source.type === 'app' &&
+      isTauriProject(join(workspaceRoot, source.data.root), existsSync);
 
     for (const dependency of dependencies) {
       const target = graph.nodes[dependency.target];
@@ -223,7 +231,11 @@ function validateDependencies(
           ),
         );
       }
-      if (targetPlatform && sourcePlatform !== targetPlatform) {
+      if (
+        targetPlatform &&
+        sourcePlatform !== targetPlatform &&
+        !(tauri && ['rust', 'web', 'node'].includes(targetPlatform))
+      ) {
         diagnostics.push(
           projectDiagnostic(
             'platform-boundary',
@@ -385,7 +397,7 @@ export async function checkWorkspaceStructure(
 ): Promise<readonly Diagnostic[]> {
   const diagnostics: Diagnostic[] = [];
   validateTagCardinality(graph, diagnostics);
-  validateDependencies(graph, diagnostics);
+  validateDependencies(workspaceRoot, graph, diagnostics);
   await validateManifests(workspaceRoot, graph, config, diagnostics);
 
   const invalidOverrides = new Set<string>();

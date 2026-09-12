@@ -49,6 +49,69 @@ function graph(
 }
 
 describe('workspace structural checks', () => {
+  it('allows aggregate native/frontend/tooling edges only for a manifest-backed Tauri app', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-tauri-check-'));
+    try {
+      const fixture = graph();
+      fixture.nodes.feature.type = 'app';
+      fixture.nodes.feature.data.tags = [
+        'type:app',
+        'scope:product',
+        'platform:rust',
+        'visibility:internal',
+      ];
+      await mkdir(join(root, 'packages/feature/src-tauri'), {
+        recursive: true,
+      });
+      await writeFile(
+        join(root, 'packages/feature/src-tauri/Cargo.toml'),
+        '[package]',
+      );
+      await writeFile(
+        join(root, 'packages/feature/src-tauri/tauri.conf.json'),
+        '{}',
+      );
+      for (const platform of ['node', 'web', 'rust']) {
+        fixture.nodes['shared-util'].data.tags = [
+          'type:util',
+          'scope:shared',
+          `platform:${platform}`,
+        ];
+        expect(
+          (
+            await checkWorkspaceStructure(
+              root,
+              fixture,
+              DEFAULT_MEGAMONO_CONFIG,
+            )
+          ).filter((d) => d.code === 'platform-boundary'),
+        ).toEqual([]);
+      }
+      fixture.nodes['shared-util'].data.tags = [
+        'type:util',
+        'scope:shared',
+        'platform:mobile',
+      ];
+      expect(
+        (
+          await checkWorkspaceStructure(root, fixture, DEFAULT_MEGAMONO_CONFIG)
+        ).some((d) => d.code === 'platform-boundary'),
+      ).toBe(true);
+      await rm(join(root, 'packages/feature/src-tauri/tauri.conf.json'));
+      fixture.nodes['shared-util'].data.tags = [
+        'type:util',
+        'scope:shared',
+        'platform:web',
+      ];
+      expect(
+        (
+          await checkWorkspaceStructure(root, fixture, DEFAULT_MEGAMONO_CONFIG)
+        ).some((d) => d.code === 'platform-boundary'),
+      ).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
   it('accepts the allowed type, scope, and platform direction', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-check-'));
     try {
@@ -187,14 +250,32 @@ describe('workspace structural checks', () => {
     try {
       await writeFile(join(root, 'package.json'), '{}');
       const cases = [
-        ['scope:product', 'scope:product', 'platform:web', 'platform:web', false],
+        [
+          'scope:product',
+          'scope:product',
+          'platform:web',
+          'platform:web',
+          false,
+        ],
         ['scope:product', 'scope:shared', 'platform:web', undefined, false],
         ['scope:product', 'scope:other', 'platform:web', 'platform:web', true],
         ['scope:shared', 'scope:product', 'platform:web', 'platform:web', true],
-        ['scope:product', 'scope:product', 'platform:web', 'platform:node', true],
+        [
+          'scope:product',
+          'scope:product',
+          'platform:web',
+          'platform:node',
+          true,
+        ],
         ['scope:product', 'scope:product', undefined, 'platform:web', true],
       ] as const;
-      for (const [sourceScope, targetScope, sourcePlatform, targetPlatform, invalid] of cases) {
+      for (const [
+        sourceScope,
+        targetScope,
+        sourcePlatform,
+        targetPlatform,
+        invalid,
+      ] of cases) {
         const matrix: ProjectGraph = {
           nodes: {
             source: {
@@ -202,7 +283,11 @@ describe('workspace structural checks', () => {
               type: 'lib',
               data: {
                 root: 'source',
-                tags: ['type:util', sourceScope, ...(sourcePlatform ? [sourcePlatform] : [])],
+                tags: [
+                  'type:util',
+                  sourceScope,
+                  ...(sourcePlatform ? [sourcePlatform] : []),
+                ],
               },
             },
             target: {
@@ -210,7 +295,11 @@ describe('workspace structural checks', () => {
               type: 'lib',
               data: {
                 root: 'target',
-                tags: ['type:util', targetScope, ...(targetPlatform ? [targetPlatform] : [])],
+                tags: [
+                  'type:util',
+                  targetScope,
+                  ...(targetPlatform ? [targetPlatform] : []),
+                ],
               },
             },
           },
@@ -226,7 +315,9 @@ describe('workspace structural checks', () => {
         );
         expect(
           diagnostics.some((diagnostic) =>
-            ['module-boundaries', 'platform-boundary'].includes(diagnostic.code),
+            ['module-boundaries', 'platform-boundary'].includes(
+              diagnostic.code,
+            ),
           ),
           `${sourceScope}/${sourcePlatform ?? 'neutral'} -> ${targetScope}/${targetPlatform ?? 'neutral'}`,
         ).toBe(invalid);
@@ -266,10 +357,18 @@ describe('workspace structural checks', () => {
         diagnostics.filter((diagnostic) => diagnostic.code === 'require-tags'),
       ).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ message: expect.stringContaining('Invalid scope') }),
-          expect.objectContaining({ message: expect.stringContaining('Unknown capability') }),
-          expect.objectContaining({ message: expect.stringContaining('platform-neutral type:util') }),
-          expect.objectContaining({ message: expect.stringContaining('must be unique') }),
+          expect.objectContaining({
+            message: expect.stringContaining('Invalid scope'),
+          }),
+          expect.objectContaining({
+            message: expect.stringContaining('Unknown capability'),
+          }),
+          expect.objectContaining({
+            message: expect.stringContaining('platform-neutral type:util'),
+          }),
+          expect.objectContaining({
+            message: expect.stringContaining('must be unique'),
+          }),
         ]),
       );
     } finally {

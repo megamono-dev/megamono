@@ -1,7 +1,7 @@
 import { builtinModules } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import type { Rule } from 'eslint';
-import { findProjectMetadata, projectPlatform } from '../project-metadata';
+import { findProjectMetadata, filePlatform } from '../project-metadata';
 
 type SourceNode = Rule.Node & {
   readonly source?: { readonly value?: unknown };
@@ -74,7 +74,7 @@ export const platformBoundary: Rule.RuleModule = {
       (context.options[0] as { readonly workspaceRoot?: string } | undefined)
         ?.workspaceRoot ?? context.cwd;
     const sourceProject = findProjectMetadata(filename, workspaceRoot);
-    const sourcePlatform = projectPlatform(sourceProject);
+    const sourcePlatform = filePlatform(sourceProject, filename);
     const inspect = (node: Rule.Node) => {
       const specifier = importedValue(node);
       if (!specifier || !sourceProject) return;
@@ -87,14 +87,11 @@ export const platformBoundary: Rule.RuleModule = {
         return;
       }
       if (!specifier.startsWith('.')) return;
-      const targetProject = findProjectMetadata(
-        resolve(dirname(filename), specifier),
-        workspaceRoot,
-      );
-      const targetPlatform = projectPlatform(targetProject);
+      const targetPath = resolve(dirname(filename), specifier);
+      const targetProject = findProjectMetadata(targetPath, workspaceRoot);
+      const targetPlatform = filePlatform(targetProject, targetPath);
       if (
         !targetProject ||
-        sourceProject.root === targetProject.root ||
         !targetPlatform ||
         sourcePlatform === targetPlatform
       ) {

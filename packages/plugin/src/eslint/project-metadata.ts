@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
+import { isTauriProject, tauriFilePlatform } from '../lib/tauri-platform';
 
 export interface ProjectMetadata {
   readonly root: string;
@@ -61,4 +62,16 @@ export function projectPlatform(
 
 export function clearProjectMetadataCache(): void {
   cache.clear();
+}
+
+export function filePlatform(
+  metadata: ProjectMetadata | undefined,
+  filePath: string,
+): string | undefined {
+  if (metadata && isTauriProject(metadata.root, existsSync)) {
+    return tauriFilePlatform(
+      relative(metadata.root, resolve(filePath)).replaceAll('\\', '/'),
+    );
+  }
+  return projectPlatform(metadata);
 }
