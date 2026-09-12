@@ -59,6 +59,73 @@ function document(
 }
 
 describe('repository health', () => {
+  it('recognizes resolved workspace shorthand without hiding missing or conflicting locators', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-workspace-ranges-'));
+    try {
+      await mkdir(join(root, 'apps/app'), { recursive: true });
+      await mkdir(join(root, 'packages/util'), { recursive: true });
+      await writeFile(
+        join(root, 'package.json'),
+        JSON.stringify({ dependencies: { '@acme/util': 'workspace:*' } }),
+      );
+      await writeFile(
+        join(root, 'packages/util/package.json'),
+        JSON.stringify({ name: '@acme/util', version: '0.5.0' }),
+      );
+      const check = () =>
+        runRepositoryHealth({
+          workspaceRoot: root,
+          graph: projectGraph(),
+          config: DEFAULT_MEGAMONO_CONFIG,
+          documents: [],
+          checks: ['dependency-alignment'],
+        });
+      for (const range of ['workspace:^', 'workspace:~']) {
+        await writeFile(
+          join(root, 'apps/app/package.json'),
+          JSON.stringify({ dependencies: { '@acme/util': range } }),
+        );
+        expect((await check()).findings).toEqual([]);
+      }
+      for (const range of ['workspace:^1.0.0', '^1.0.0', 'workspace:other@*']) {
+        await writeFile(
+          join(root, 'apps/app/package.json'),
+          JSON.stringify({ dependencies: { '@acme/util': range } }),
+        );
+        expect((await check()).findings).toHaveLength(1);
+      }
+      await writeFile(
+        join(root, 'apps/app/package.json'),
+        JSON.stringify({ dependencies: { '@acme/util': 'workspace:^' } }),
+      );
+      for (const manifest of [
+        {},
+        { name: '@acme/util' },
+        { name: '@acme/util', version: 'invalid' },
+      ]) {
+        await writeFile(
+          join(root, 'packages/util/package.json'),
+          JSON.stringify(manifest),
+        );
+        expect((await check()).findings).toHaveLength(1);
+      }
+      await writeFile(
+        join(root, 'packages/util/package.json'),
+        JSON.stringify({ name: '@acme/util', version: '0.5.0' }),
+      );
+      await writeFile(
+        join(root, 'apps/app/package.json'),
+        JSON.stringify({
+          name: '@acme/util',
+          version: '0.5.0',
+          dependencies: { '@acme/util': 'workspace:^' },
+        }),
+      );
+      expect((await check()).findings).toHaveLength(1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
   it('emits stable findings for all five checks', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-health-'));
     try {

@@ -573,6 +573,10 @@ Structural and health checks exclude inferred projects inside `.yalc` or
 `node_modules`, including nested copies. Those are installed dependencies, not
 repository-owned projects. Root/consumer manifests still receive dependency and
 package-source policy checks; real untagged or unused libraries remain visible.
+`workspace:*`, `workspace:^`, and `workspace:~` are treated as one current local
+dependency only when a unique versioned workspace package exists. Their distinct
+packed publication ranges are preserved; aliases and unresolved references are
+not assumed to resolve. See [pnpm's workspace protocol](https://pnpm.io/workspaces#workspace-protocol-workspace).
 Package-source profiles keep local evaluation separate from publication policy.
 `development` permits local references, `migration` reports them as warnings,
 `ci` rejects them except for exact fixture locators approved in

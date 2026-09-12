@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { ProjectGraph } from '@nx/devkit';
+import { valid as validVersion } from 'semver';
 import { repositoryOwnedGraph } from './repository-graph';
 import type { MegamonoConfig } from './config';
 import type { RepositoryDocument } from './docs';
@@ -69,6 +70,7 @@ export interface HealthGitState {
 
 interface PackageManifest {
   readonly name?: string;
+  readonly version?: string;
   readonly private?: boolean;
   readonly bin?: string | Readonly<Record<string, string>>;
   readonly publishConfig?: Readonly<Record<string, unknown>>;
@@ -640,6 +642,7 @@ async function dependencyAlignmentFindings(
   graph: ProjectGraph,
 ): Promise<HealthFinding[]> {
   const declarations = new Map<string, DependencyDeclaration[]>();
+  const workspacePackages = new Map<string, (string | undefined)[]>();
   const roots = new Map<string, string>([['.', 'root']]);
   for (const [name, node] of Object.entries(graph.nodes)) {
     roots.set(node.data.root, name);
@@ -655,6 +658,12 @@ async function dependencyAlignmentFindings(
     const manifest = await readJson<PackageManifest>(
       join(workspaceRoot, root, 'package.json'),
     );
+    if (manifest?.name) {
+      workspacePackages.set(manifest.name, [
+        ...(workspacePackages.get(manifest.name) ?? []),
+        manifest.version,
+      ]);
+    }
     const sections = [
       ['dependency', manifest?.dependencies],
       ['devDependency', manifest?.devDependencies],
@@ -756,6 +765,21 @@ async function dependencyAlignmentFindings(
   )) {
     const ranges = [...new Set(consumers.map(({ range }) => range))].sort();
     if (ranges.length < 2) continue;
+    // These shorthand forms resolve to the same local package today, although
+    // they deliberately produce different ranges when packed. Do not rewrite
+    // publication intent or assume an alias/missing/ambiguous package resolves.
+    const localVersions = workspacePackages.get(key);
+    if (
+      localVersions?.length === 1 &&
+      localVersions[0] &&
+      validVersion(localVersions[0]) &&
+      consumers.every(
+        ({ ecosystem, range }) =>
+          ecosystem === 'npm' &&
+          ['workspace:*', 'workspace:^', 'workspace:~'].includes(range),
+      )
+    )
+      continue;
     const installedRanges = [
       ...new Set(
         consumers
