@@ -34,8 +34,19 @@ describe('runtime evidence executor', () => {
     async ({ findings }) => {
       vi.spyOn(logger, 'info').mockImplementation(() => undefined);
       vi.mocked(verifyRuntimeDependencies).mockResolvedValue({
-        findings,
-      } as Awaited<ReturnType<typeof verifyRuntimeDependencies>>);
+        schemaVersion: 1,
+        project: 'api',
+        outputPath: 'dist/apps/api',
+        manifests: [],
+        externalPackages: [],
+        findings: findings.map(() => ({
+          code: 'runtime-evidence-invalid',
+          package: null,
+          severity: 'error',
+          evidence: [],
+          message: 'Invalid fixture evidence',
+        })),
+      });
       expect(
         await runExecutor(
           { webpackEvidence: '.megamono/evidence.json' },

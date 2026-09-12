@@ -255,6 +255,7 @@ describe('history-preserving monorepo imports', { timeout: 60_000 }, () => {
               .filter((arg) => arg !== '--'),
           ]);
         }
+        return undefined;
       };
       const result = await executeRepositoryImport(
         target,
@@ -351,6 +352,7 @@ describe('history-preserving monorepo imports', { timeout: 60_000 }, () => {
           },
         });
       if (command.phase === 'build') throw new Error('fixture build failure');
+      return undefined;
     };
     await expect(
       executeRepositoryImport(target, analysis, options, runner),
