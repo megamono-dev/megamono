@@ -600,6 +600,10 @@ the frontend web-only and recognizes only root-level Vite, Vitest, Playwright
 and ESLint configuration files as Node tooling. Nested lookalike configuration
 files do not gain Node access. Keep both graph and source checks enabled; this
 does not disable translation/string rules or change a repository's warning budget.
+Tests named `*.spec.*` or `*.test.*` with a leading Jest environment docblock
+explicitly selecting `node` or `jsdom` may import Node built-ins (for example,
+Web Crypto polyfills). Production files and unqualified/browser tests do not
+receive that allowance. Cross-project imports still follow the application platform.
 
 ## Create repository records
 

@@ -168,6 +168,16 @@ tester.run('no-deep-relative-imports', noDeepRelativeImports, {
 tester.run('platform-boundary', platformBoundary, {
   valid: [
     {
+      filename: join(desktopRoot, 'src/oauth.spec.js'),
+      code: "/** @jest-environment jsdom */\nimport { webcrypto } from 'node:crypto';",
+      options: workspaceOption,
+    },
+    {
+      filename: join(webRoot, 'src/data.test.js'),
+      code: "/**\n * @jest-environment node\n */\nimport fs from 'node:fs';",
+      options: workspaceOption,
+    },
+    {
       filename: join(desktopRoot, 'src/main.js'),
       code: "import { view } from '../../web/src/view.js';",
       options: workspaceOption,
@@ -194,6 +204,30 @@ tester.run('platform-boundary', platformBoundary, {
     },
   ],
   invalid: [
+    {
+      filename: join(webRoot, 'src/page.js'),
+      code: "/** @jest-environment node */\nimport fs from 'node:fs';",
+      options: workspaceOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
+    },
+    {
+      filename: join(webRoot, 'src/page.spec.js'),
+      code: "import fs from 'node:fs';\n/** @jest-environment node */",
+      options: workspaceOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
+    },
+    {
+      filename: join(webRoot, 'src/page.spec.js'),
+      code: "/** @jest-environment custom-browser */\nimport fs from 'node:fs';",
+      options: workspaceOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
+    },
+    {
+      filename: join(webRoot, 'src/page.spec.js'),
+      code: "import fs from 'node:fs';",
+      options: workspaceOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
+    },
     {
       filename: join(desktopRoot, 'src/main.js'),
       code: "import fs from 'node:fs';",

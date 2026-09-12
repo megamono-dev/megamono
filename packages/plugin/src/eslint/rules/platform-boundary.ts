@@ -75,10 +75,32 @@ export const platformBoundary: Rule.RuleModule = {
         ?.workspaceRoot ?? context.cwd;
     const sourceProject = findProjectMetadata(filename, workspaceRoot);
     const sourcePlatform = filePlatform(sourceProject, filename);
+    // A Jest Node/jsdom test runs in a Node process even when the application
+    // under test is a browser frontend. Require both a test filename and an
+    // explicit leading environment docblock; never infer this for production.
+    const firstStatement =
+      context.sourceCode.ast.body[0]?.range?.[0] ?? Infinity;
+    const nodeHostedTest =
+      /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(filename) &&
+      context.sourceCode
+        .getAllComments()
+        .some(
+          (comment) =>
+            comment.type === 'Block' &&
+            comment.range !== undefined &&
+            comment.range[0] < firstStatement &&
+            /(?:^|\n)\s*\*?\s*@jest-environment\s+(?:node|jsdom)\s*(?:\n|\*?\s*$)/.test(
+              comment.value,
+            ),
+        );
     const inspect = (node: Rule.Node) => {
       const specifier = importedValue(node);
       if (!specifier || !sourceProject) return;
-      if (isNodeBuiltin(specifier) && sourcePlatform !== 'node') {
+      if (
+        isNodeBuiltin(specifier) &&
+        sourcePlatform !== 'node' &&
+        !nodeHostedTest
+      ) {
         context.report({
           node,
           messageId: 'nodeBuiltin',
