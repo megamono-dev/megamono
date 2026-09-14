@@ -722,6 +722,42 @@ describe('workspace-init generator', () => {
     );
   });
 
+  it.each([false, true])(
+    'adopts semicolon-free ESLint exports idempotently (trailing comma: %s)',
+    async (comma) => {
+      tree.write('.prettierrc', JSON.stringify({ semi: false }));
+      tree.write(
+        'eslint.config.mjs',
+        `export\n default /* keep export */ [\n { files: ['**/*.ts'] }${comma ? ',' : ''} // keep entry\n]\nconst unrelated = ['keep me'];\n`,
+      );
+      await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+      const applied = tree.read('eslint.config.mjs', 'utf8') ?? '';
+      expect(applied).toContain('// keep entry');
+      expect(applied).toContain('/* keep export */');
+      expect(
+        applied.indexOf('megamonoPlugin.createConfig(megamonoConfig)'),
+      ).toBeLessThan(applied.indexOf('const unrelated'));
+      await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+      expect(tree.read('eslint.config.mjs', 'utf8')).toBe(applied);
+    },
+  );
+
+  it.each([
+    'export default defineConfig([])',
+    'const config = []; export default config',
+    'export default [',
+  ])(
+    'rejects unsupported ESLint exports without writes: %s',
+    async (source) => {
+      tree.write('eslint.config.mjs', source);
+      const before = tree.listChanges();
+      await expect(
+        workspaceInitGenerator(tree, { only: 'lint', yes: true }),
+      ).rejects.toThrow('must export a flat config array');
+      expect(tree.listChanges()).toEqual(before);
+    },
+  );
+
   it('preserves modified managed ESLint wiring', async () => {
     await workspaceInitGenerator(tree, { only: 'lint', yes: true });
     const customized = (tree.read('eslint.config.mjs', 'utf8') ?? '').replace(

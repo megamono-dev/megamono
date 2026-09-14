@@ -282,6 +282,14 @@ information architecture, and configures the shared agent-skills directory.
 It also wires `@megamono/plugin/eslint` into the workspace flat config and emits
 the scheduled repository-health issue workflow.
 
+ESLint adoption (`workspace-init` and `playstack-lint`) locates the default-exported
+flat-config array through JavaScript syntax, not formatting conventions. Semicolons
+are optional; comments, multiline exports, nested arrays, and parenthesized arrays
+are supported. Named config references and wrapper calls such as `defineConfig(...)`
+are not automatically edited: the generator reports a conflict before writing.
+Existing managed-section ownership checks still apply. Formatting-only changes to
+Playstack lint sections are accepted; changes to their logic remain conflicts.
+
 The plan preflights selected-module dependencies and peers before writing. It
 retains compatible existing ranges, lists missing dependencies individually,
 and refuses incompatible, duplicate, or non-semver declarations instead of

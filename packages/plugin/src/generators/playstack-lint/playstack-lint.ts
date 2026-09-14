@@ -6,6 +6,7 @@ import {
   type Tree,
 } from '@nx/devkit';
 import { compatiblePlaystackPackageVersion } from '../../lib/emissions';
+import { appendEslintFlatConfig } from '../../lib/eslint-flat-config';
 import {
   PlaystackWorkspaceIntegrationError,
   assertInitializedMegamonoWorkspace,
@@ -15,6 +16,7 @@ import {
   retainedLocalPackageVersion,
 } from '../playstack-workspace';
 import type { PlaystackLintGeneratorSchema } from './schema';
+import { format } from 'prettier';
 
 const importsStart = '// megamono playstack lint imports start';
 const importsEnd = '// megamono playstack lint imports end';
@@ -57,21 +59,42 @@ function section(
   return source.slice(from, source.indexOf(end, from));
 }
 
-function plannedLintConfig(
+async function plannedLintConfig(
   original: string,
   preset: 'recommended' | 'all',
-): string | undefined {
+): Promise<string | undefined> {
   const currentImports = section(original, importsStart, importsEnd);
   const currentConfig = section(original, configStart, configEnd);
-  if (currentImports !== undefined && currentImports !== importsBody) {
+  // Compare formatted syntax, not consumer-owned quote/semicolon/indent choices.
+  // Keep comments and actual expressions in the comparison so edits still fail.
+  const canonical = (source: string) =>
+    format(source, {
+      parser: 'babel',
+      semi: true,
+      singleQuote: true,
+      trailingComma: 'all',
+    });
+  const importsMatch =
+    currentImports !== undefined &&
+    (await canonical(currentImports)) === (await canonical(importsBody));
+  if (currentImports !== undefined && !importsMatch) {
     throw new PlaystackWorkspaceIntegrationError(
       'The managed Playstack lint import section was modified; preserve it and resolve the conflict explicitly.',
     );
   }
-  const validConfigBodies = [configBody('recommended'), configBody('all')];
+  const canonicalConfig = (body: string) =>
+    canonical(`export default [${body}]`);
+  const validConfigBodies = await Promise.all(
+    [configBody('recommended'), configBody('all')].map(canonicalConfig),
+  );
+  const normalizedConfig =
+    currentConfig === undefined
+      ? undefined
+      : await canonicalConfig(currentConfig);
   if (
     currentConfig !== undefined &&
-    !validConfigBodies.includes(currentConfig)
+    (normalizedConfig === undefined ||
+      !validConfigBodies.includes(normalizedConfig))
   ) {
     throw new PlaystackWorkspaceIntegrationError(
       'The managed Playstack lint config section was modified; preserve it and resolve the conflict explicitly.',
@@ -82,7 +105,10 @@ function plannedLintConfig(
       'eslint.config.mjs has partial Playstack lint wiring.',
     );
   }
-  if (currentImports === importsBody && currentConfig === configBody(preset)) {
+  if (
+    importsMatch &&
+    normalizedConfig === (await canonicalConfig(configBody(preset)))
+  ) {
     return undefined;
   }
 
@@ -91,15 +117,16 @@ function plannedLintConfig(
     source = `${importsStart}${importsBody}${importsEnd}\n\n${source}`;
   }
   if (currentConfig === undefined) {
-    const closing = source.lastIndexOf('];');
-    if (!source.includes('export default [') || closing < 0) {
+    const updated = appendEslintFlatConfig(
+      source,
+      `${configStart}${configBody(preset)}${configEnd}`,
+    );
+    if (updated === undefined) {
       throw new PlaystackWorkspaceIntegrationError(
         'eslint.config.mjs must export a flat config array before Playstack lint can be wired.',
       );
     }
-    const before = source.slice(0, closing).trimEnd();
-    const separator = before.endsWith('[') || before.endsWith(',') ? '' : ',';
-    source = `${before}${separator}\n${configStart}${configBody(preset)}${configEnd}\n${source.slice(closing)}`;
+    source = updated;
   } else {
     source = source.replace(
       `${configStart}${currentConfig}${configEnd}`,
@@ -129,7 +156,7 @@ export async function playstackLintGenerator(
     );
   }
   // Resolve the complete file plan before a dependency or config mutation.
-  const plannedConfig = plannedLintConfig(source, preset);
+  const plannedConfig = await plannedLintConfig(source, preset);
 
   logger.info(`# Playstack lint plan
 

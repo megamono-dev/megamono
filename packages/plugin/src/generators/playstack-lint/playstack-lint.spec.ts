@@ -31,6 +31,66 @@ function snapshot(tree: Tree): string[] {
 }
 
 describe('playstack-lint generator', () => {
+  it.each([false, true])(
+    'supports semicolon-free exports and comments idempotently (trailing comma: %s)',
+    async (comma) => {
+      const tree = fixture();
+      tree.write('.prettierrc', JSON.stringify({ semi: false }));
+      tree.write(
+        'eslint.config.mjs',
+        `export\n default /* keep export */ [\n { files: ['**/*.ts'] }${comma ? ',' : ''} // keep entry\n]\nconst unrelated = ['keep me'];\n`,
+      );
+      const before = snapshot(tree);
+      await playstackLintGenerator(tree, { dryRun: true });
+      expect(snapshot(tree)).toEqual(before);
+      await playstackLintGenerator(tree, {});
+      const applied = tree.read('eslint.config.mjs', 'utf8') ?? '';
+      expect(applied).toContain('// keep entry');
+      expect(applied).toContain('/* keep export */');
+      expect(
+        applied.indexOf(
+          'playstackLintWarnings(playstackLintConfigs.recommended)',
+        ),
+      ).toBeLessThan(applied.indexOf('const unrelated'));
+      await playstackLintGenerator(tree, {});
+      expect(tree.read('eslint.config.mjs', 'utf8')).toBe(applied);
+      await playstackLintGenerator(tree, { preset: 'all' });
+      const switched = tree.read('eslint.config.mjs', 'utf8') ?? '';
+      expect(switched).toContain('playstackLintConfigs.all');
+      await playstackLintGenerator(tree, { preset: 'all' });
+      expect(tree.read('eslint.config.mjs', 'utf8')).toBe(switched);
+    },
+  );
+
+  it('does not mistake logic edits for formatting changes in semicolon-free sections', async () => {
+    const tree = fixture();
+    tree.write(
+      '.prettierrc',
+      JSON.stringify({ semi: false, singleQuote: false }),
+    );
+    await playstackLintGenerator(tree, {});
+    const source = tree.read('eslint.config.mjs', 'utf8') ?? '';
+    tree.write('eslint.config.mjs', source.replace(/"warn"/g, '"off"'));
+    const before = snapshot(tree);
+    await expect(playstackLintGenerator(tree, {})).rejects.toThrow(
+      'managed Playstack lint import section was modified',
+    );
+    expect(snapshot(tree)).toEqual(before);
+  });
+
+  it.each([
+    'export default defineConfig([])',
+    'const config = []; export default config',
+    'export default [',
+  ])('rejects unsupported exports before any writes: %s', async (source) => {
+    const tree = fixture();
+    tree.write('eslint.config.mjs', source);
+    const before = snapshot(tree);
+    await expect(playstackLintGenerator(tree, {})).rejects.toThrow(
+      'must export a flat config array',
+    );
+    expect(snapshot(tree)).toEqual(before);
+  });
   it('plans without mutation, then adds the warning-first preset idempotently', async () => {
     const tree = fixture();
     const before = snapshot(tree);

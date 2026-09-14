@@ -1,4 +1,8 @@
 import {
+  appendEslintFlatConfig,
+  locateEslintFlatConfig,
+} from '../../lib/eslint-flat-config';
+import {
   addDependenciesToPackageJson,
   addProjectConfiguration,
   createProjectGraphAsync,
@@ -1110,20 +1114,17 @@ function wireEslintConfig(tree: Tree): EslintWiringResult {
       );
     }
     if (!registered && source.includes(ESLINT_RULES_BODY.trim())) return false;
-    const closing = source.lastIndexOf('];');
-    if (!source.includes('export default [') || closing < 0) {
+    const updated = appendEslintFlatConfig(
+      source,
+      `${ESLINT_RULES_START}${ESLINT_RULES_BODY}${ESLINT_RULES_END}`,
+    );
+    if (updated === undefined) {
       throw new WorkspaceInitError(
         'conflict',
         'eslint.config.mjs must export a flat config array before workspace-init can wire Megamono rules.',
       );
     }
-    const beforeClosing = source.slice(0, closing).trimEnd();
-    const separator =
-      beforeClosing.endsWith('[') || beforeClosing.endsWith(',') ? '' : ',';
-    tree.write(
-      path,
-      `${beforeClosing}${separator}\n${ESLINT_RULES_START}${ESLINT_RULES_BODY}${ESLINT_RULES_END}\n${source.slice(closing)}`,
-    );
+    tree.write(path, updated);
     return true;
   };
   const imports = ensureImports();
@@ -1183,11 +1184,7 @@ function preflightEslintConfig(tree: Tree): void {
       'eslint.config.mjs contains partial repository-owned Megamono ESLint wiring.',
     );
   }
-  if (
-    !legacyImports &&
-    !repositoryRules &&
-    (!current.includes('export default [') || current.lastIndexOf('];') < 0)
-  ) {
+  if (!legacyImports && !repositoryRules && !locateEslintFlatConfig(current)) {
     throw new WorkspaceInitError(
       'conflict',
       'eslint.config.mjs must export a flat config array before workspace-init can wire Megamono rules.',
