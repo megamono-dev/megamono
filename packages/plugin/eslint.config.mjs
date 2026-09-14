@@ -11,6 +11,8 @@ export default [
           ignoredFiles: [
             '{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}',
             '{projectRoot}/vitest.config.{js,ts,mjs,mts}',
+            // This unpublished fixture uses the repository's Jest toolchain.
+            '{projectRoot}/e2e/inferred-targets.e2e.mjs',
           ],
           ignoredDependencies: [
             '@nx/expo',
