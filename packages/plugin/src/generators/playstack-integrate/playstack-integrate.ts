@@ -1,3 +1,4 @@
+import { resolvedProjects } from '../../lib/resolved-projects';
 import {
   formatFiles,
   getProjects,
@@ -955,9 +956,13 @@ export async function playstackIntegrateGenerator(
     throw new Error(
       'Composition output overlaps a package-authored template; choose a separate composition library layout.',
     );
+  const verificationProjects =
+    options.verification || options.verificationProject
+      ? await resolvedProjects(tree)
+      : getProjects(tree);
   const verification = planIntegrationVerification(
     tree,
-    getProjects(tree),
+    verificationProjects,
     requirements.flatMap((record) =>
       (record.requirements.requiredTests ?? []).map(
         ({ id }) => `${record.package}:${record.id}:${id}`,
@@ -1291,7 +1296,17 @@ export async function playstackIntegrateGenerator(
     for (const file of composition.writes)
       tree.write(file.target, file.content);
   if (verification) {
-    const project = getProjects(tree).get(verification.project);
+    const resolved = verificationProjects.get(verification.project);
+    const project =
+      getProjects(tree).get(verification.project) ??
+      (resolved
+        ? {
+            root: resolved.root,
+            name: verification.project,
+            projectType: resolved.projectType,
+            tags: resolved.tags,
+          }
+        : undefined);
     if (!project)
       throw new Error(
         `Verification project disappeared: ${verification.project}.`,

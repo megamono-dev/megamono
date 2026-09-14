@@ -401,6 +401,12 @@ ownership stays visible as a decision rather than becoming a guessed target.
 
 ## Generator availability
 
+Integration and existing-email verification mappings resolve Nx's complete project
+graph, including inferred Jest targets. Explicit workspace target overrides remain
+authoritative. Graph failures stop planning; inferred targets are not copied into
+repository configuration. Email adoption still requires non-cacheable verification
+and preview targets—target discovery does not waive qualification policy.
+
 `@megamono/plugin/availability.json` is the canonical registry for available,
 fixture-gated, and reserved generator names. The published `generators.json`
 and `executors.json` collections are produced with:

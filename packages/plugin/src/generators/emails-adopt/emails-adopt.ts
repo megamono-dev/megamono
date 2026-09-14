@@ -6,6 +6,7 @@ import {
 } from '@nx/devkit';
 import { posix } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { resolvedProjects } from '../../lib/resolved-projects';
 
 export interface EmailsAdoptSchema {
   project: string;
@@ -43,7 +44,7 @@ export async function emailsAdoptGenerator(
   tree: Tree,
   options: EmailsAdoptSchema,
 ): Promise<void> {
-  const project = getProjects(tree).get(options.project);
+  const project = (await resolvedProjects(tree)).get(options.project);
   if (!project) throw new Error(`Unknown Nx email project: ${options.project}`);
   if (
     options.reviewedLocalOnly !== true ||
@@ -154,10 +155,16 @@ export async function emailsAdoptGenerator(
   }
   logger.info(JSON.stringify(plan, null, 2));
   if (!plan.writes) return;
+  const editableProject = getProjects(tree).get(options.project) ?? {
+    root: project.root,
+    name: options.project,
+    projectType: project.projectType,
+    tags: project.tags,
+  };
   if (!existing)
     updateProjectConfiguration(tree, options.project, {
-      ...project,
-      targets: { ...project.targets, 'megamono-emails-verify': target },
+      ...editableProject,
+      targets: { ...editableProject.targets, 'megamono-emails-verify': target },
     });
   if (!tree.exists(recordPath))
     tree.write(recordPath, `${JSON.stringify(record, null, 2)}\n`);
