@@ -1,3 +1,4 @@
+import { preserveWorkspaceYaml } from '../../lib/preserve-workspace-yaml';
 import {
   formatFiles,
   getProjects,
@@ -1370,6 +1371,7 @@ export async function appGenerator(
   if (state === 'noop' || options.dryRun) return () => undefined;
   if (!(await confirm(rawOptions))) return () => undefined;
 
+  const restoreWorkspaceYaml = preserveWorkspaceYaml(tree);
   const callbacks =
     options.type === 'web' || options.type === 'site'
       ? await createWebApp(tree, options)
@@ -1403,6 +1405,8 @@ export async function appGenerator(
   }
 
   await formatFiles(tree);
+  restoreWorkspaceYaml();
+  if (rawOptions.skipInstall) return () => undefined;
   return runTasksInSerial(
     ...callbacks.filter(
       (callback): callback is GeneratorCallback =>

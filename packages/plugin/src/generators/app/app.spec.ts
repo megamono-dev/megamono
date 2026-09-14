@@ -32,6 +32,32 @@ function snapshot(tree: ReturnType<typeof workspace>): string {
 }
 
 describe('app generator', () => {
+  it('preserves pnpm policy comments and skips deferred installation on request', async () => {
+    const tree = workspace();
+    tree.write(
+      'pnpm-workspace.yaml',
+      "# Reviewed workspace\npackages:\n  - 'apps/*' # app roots\nallowBuilds:\n  prisma: true # reviewed engine\n",
+    );
+    tree.write('.npmrc', 'store-dir=/existing/store\n');
+    const callback = await appGenerator(tree, {
+      type: 'site',
+      scope: 'fixture',
+      styling: 'css-modules',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    expect(callback()).toBeUndefined();
+    expect(tree.read('.npmrc', 'utf8')).toBe('store-dir=/existing/store\n');
+    expect(tree.read('pnpm-workspace.yaml', 'utf8')).toContain(
+      '# Reviewed workspace',
+    );
+    expect(tree.read('pnpm-workspace.yaml', 'utf8')).toContain(
+      '# reviewed engine',
+    );
+    expect(tree.exists('apps/site/src/pages/index.tsx')).toBe(true);
+  });
+
   it.each([
     'chakra',
     'emotion',

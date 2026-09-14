@@ -105,6 +105,30 @@ describe('library generator', () => {
     expect(readJson(tree, 'nx.json').release).toBeUndefined();
   });
 
+  it('preserves pnpm policy comments and permits caller-owned installation', async () => {
+    const tree = workspace();
+    tree.write(
+      'pnpm-workspace.yaml',
+      "# Reviewed workspace\npackages:\n  - 'apps/*' # app roots\nallowBuilds:\n  prisma: true # reviewed engine\n",
+    );
+    tree.write('.npmrc', 'store-dir=/existing/store\n');
+    const callback = await libraryGenerator(tree, {
+      name: 'shared',
+      scope: 'fixture',
+      yes: true,
+      skipInstall: true,
+    });
+    expect(callback()).toBeUndefined();
+    expect(tree.read('.npmrc', 'utf8')).toBe('store-dir=/existing/store\n');
+    expect(tree.read('pnpm-workspace.yaml', 'utf8')).toContain(
+      '# Reviewed workspace',
+    );
+    expect(tree.read('pnpm-workspace.yaml', 'utf8')).toContain(
+      '# reviewed engine',
+    );
+    expect(tree.exists('libs/shared/package.json')).toBe(true);
+  });
+
   it('plans without mutation, and rejects unsafe names and occupied paths', async () => {
     const tree = workspace();
     const before = tree.listChanges();

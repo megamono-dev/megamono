@@ -10,6 +10,10 @@ Without `--yes`, or with `--dry-run`, only the plan is displayed. `--skipInstall
 
 ## Application generation
 
+Application and library generation preserve existing `pnpm-workspace.yaml` comments while applying real workspace/dependency-policy changes. Invalid YAML fails before the composed generator runs. Neither wrapper chooses a new pnpm store or changes `.npmrc`.
+
+Use `megamono add app web --skipInstall --yes` (also available for `add library`) when installation must be controlled by the caller. This suppresses deferred generator callbacks, including dependency installation; declarations still change. Afterwards, run the workspace's established install command using its existing environment and store configuration. This does not bypass package-manager checks that happen before the Nx generator starts, and does not change the behavior of directly invoked third-party Nx generators.
+
 Web/site generation supports `--router=pages|app` (Pages Router remains the
 default). For example, `megamono add app site --router=app --styling=chakra`.
 App Router emits a server `layout.tsx` with metadata, a server `page.tsx`, and

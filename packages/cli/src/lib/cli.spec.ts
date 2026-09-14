@@ -774,6 +774,23 @@ describe('@megamono/cli', () => {
     expect(missing.invocations).toEqual([]);
   });
 
+  it('does not install missing application plugins with skipInstall', async () => {
+    const root = await workspace('pnpm', ['nx', '@megamono/plugin']);
+    const harness = io(root);
+    expect(
+      (
+        await runMegamonoCli(
+          ['add', 'app', 'web', '--skipInstall', '--yes'],
+          harness.value,
+        )
+      ).exitCode,
+    ).toBe(3);
+    expect(harness.invocations).toEqual([]);
+    expect(harness.stderr.join('\n')).toContain(
+      'preinstalled generator plugins',
+    );
+  });
+
   it('delegates arbitrary database names and adapters', async () => {
     const root = await workspace('pnpm');
     const explicit = io(root);

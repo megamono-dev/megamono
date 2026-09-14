@@ -20,6 +20,7 @@ export interface AppGeneratorSchema {
   readonly interactive?: boolean;
   readonly yes?: boolean;
   readonly dryRun?: boolean;
+  readonly skipInstall?: boolean;
   readonly bootstrap?: boolean;
   readonly workspaceName?: string;
   readonly requestedApps?: string;

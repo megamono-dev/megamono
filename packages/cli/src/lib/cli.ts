@@ -2027,12 +2027,19 @@ interface AddOptions {
   readonly dryRun: boolean;
   readonly yes: boolean;
   readonly interactive: boolean;
+  readonly skipInstall: boolean;
 }
 
 function parseAddOptions(args: readonly string[]): AddOptions {
   const forwarded: string[] = [];
+  let skipInstall = false;
   let localPackages: LocalPackageSource = 'registry';
   for (let index = 0; index < args.length;) {
+    const skip = args[index].match(/^--skip-?[Ii]nstall(?:=(true|false))?$/);
+    if (skip)
+      skipInstall =
+        (skip[1] ?? (args[index + 1] === 'false' ? 'false' : 'true')) ===
+        'true';
     const source = optionValue(args, index, '--local-packages');
     if (source) {
       if (source.value !== 'registry' && source.value !== 'yalc') {
@@ -2047,6 +2054,7 @@ function parseAddOptions(args: readonly string[]): AddOptions {
   }
   return {
     args: forwarded,
+    skipInstall,
     localPackages,
     dryRun: forwarded.some((argument) =>
       ['--dry-run', '--dry-run=true', '--dryRun', '--dryRun=true'].includes(
@@ -2562,6 +2570,12 @@ async function runAdd(
   const missing = required.filter(
     (packageName) => !localPackageAvailable(workspace.root, packageName),
   );
+  if (parsed.skipInstall && !parsed.dryRun && missing.length) {
+    throw new CliError(
+      `--skipInstall requires preinstalled generator plugins: ${missing.join(', ')}. Install them using the workspace's existing package-manager/store configuration, then rerun.`,
+      3,
+    );
+  }
   if (parsed.dryRun) {
     if (missing.length > 0) {
       io.stdout(
@@ -2581,9 +2595,10 @@ async function runAdd(
     if (!confirmed) return { exitCode: 0 };
   }
 
-  const installed = parsed.dryRun
-    ? []
-    : await installAppPlugins(io, workspace, required, parsed.localPackages);
+  const installed =
+    parsed.dryRun || parsed.skipInstall
+      ? []
+      : await installAppPlugins(io, workspace, required, parsed.localPackages);
   const generatorArgs = [
     `--type=${type}`,
     ...(styling && !explicitOption(parsed.args, '--styling')

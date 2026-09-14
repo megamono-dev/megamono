@@ -18,6 +18,7 @@ import {
   collectWorkspaceInitHostState,
 } from '../../lib/workspace-init-preflight';
 import type { LibraryGeneratorSchema } from './schema';
+import { preserveWorkspaceYaml } from '../../lib/preserve-workspace-yaml';
 
 const slug = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -100,6 +101,7 @@ export async function libraryGenerator(
   }
   // Buildable is not the same as enrolled in Nx release. publishable:false
   // avoids Nx's automatic root release/registry setup; apply intent below.
+  const restoreWorkspaceYaml = preserveWorkspaceYaml(tree);
   const callback = await generate(tree, {
     name,
     directory: root,
@@ -169,6 +171,7 @@ export async function libraryGenerator(
     `# ${importPath}\n\n${options.publishable ? `Publishable TypeScript library (${options.access ?? 'restricted'} access). Build ${name}:build before publishing from \`${publishFromSourceRoot ? root : output}\`. Inspect the packed archive and enroll this project in your reviewed release configuration; no root release workflow was changed.` : 'Internal, private TypeScript library. Consume through workspace imports; do not publish.'}\n\nPlatform: ${platform}. ${platform === 'neutral' ? 'Keep platform-specific APIs out of this library.' : 'This tag governs dependencies; it does not install or configure a runtime.'}\n\nAdd application-specific tests before adoption. Native/mobile device qualification remains a consumer responsibility.\n`,
   );
   await formatFiles(tree);
+  restoreWorkspaceYaml();
   return options.skipInstall ? () => undefined : callback;
 }
 

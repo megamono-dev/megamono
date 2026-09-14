@@ -78,6 +78,11 @@
       "default": false,
       "description": "Print the ordered plan and write nothing."
     },
+    "skipInstall": {
+      "type": "boolean",
+      "default": false,
+      "description": "Write dependency declarations but skip deferred generator callbacks, including installation. Run the usual workspace install afterwards."
+    },
     "bootstrap": {
       "type": "boolean",
       "default": false,
