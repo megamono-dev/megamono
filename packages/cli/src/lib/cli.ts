@@ -284,6 +284,7 @@ session so later hosted operations are isolated to the selected personal or
 organization account.`;
 
 const ADD_HELP = `Usage: megamono add app [type] [options]
+       megamono add library <name> [--platform=neutral|web|node|mobile|worker] [--publishable] [--access=restricted|public] [--skipInstall] [--dry-run|--yes]
        megamono add database [name] [options]
        megamono add integration --packages=<names> [options]
        megamono add springbar [--springbar-candidates=<names>] [--dry-run|--yes]
@@ -293,6 +294,8 @@ Examples:
   megamono add app web
   megamono add app api --name=admin-api --interactive=false --yes
   megamono add app web --dry-run
+  megamono add library browser-auth --platform=web --yes
+  megamono add library client --publishable --access=public --skipInstall --yes
   megamono add database events --adapter=drizzle
   megamono add database primary --adapter=prisma --interactive=false --yes
   megamono add integration --packages=@playstack/rate-limit --api=apps/api --dry-run
@@ -2469,6 +2472,33 @@ async function runAdd(
       cwd: workspace.root,
     });
     return { exitCode: generated.exitCode };
+  }
+  if (subject === 'library') {
+    const positional =
+      args[1] && !args[1].startsWith('-') ? args[1] : undefined;
+    const parsed = parseAddOptions(args.slice(positional ? 2 : 1));
+    const explicitName = explicitOption(parsed.args, '--name');
+    if (!positional && !explicitName)
+      throw new CliError('Usage: megamono add library <name> [options]', 2);
+    if (positional && explicitName)
+      throw new CliError('Specify the library name only once.', 2);
+    if (!parsed.dryRun && parsed.yes)
+      await assertWorkspaceMutationPreflight(io, workspace, 'Library addition');
+    const [command, commandArgs] = nxInvocation(
+      workspace.packageManager,
+      [
+        ...(positional ? [`--name=${positional}`] : []),
+        ...parsed.args,
+        ...(parsed.dryRun ? ['--planOnly=true'] : []),
+      ],
+      'library',
+      workspace.root,
+    );
+    return {
+      exitCode: (
+        await io.runCommand(command, commandArgs, { cwd: workspace.root })
+      ).exitCode,
+    };
   }
   if (subject === 'database') {
     const hasPositionalName = Boolean(args[1] && !args[1]?.startsWith('-'));

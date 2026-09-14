@@ -4,6 +4,8 @@ export {
   appGenerator,
 } from './generators/app/app';
 export type { AppGeneratorSchema, AppType } from './generators/app/schema';
+export { libraryGenerator } from './generators/library/library';
+export type { LibraryGeneratorSchema } from './generators/library/schema';
 export {
   DatabaseGeneratorError,
   databaseGenerator,

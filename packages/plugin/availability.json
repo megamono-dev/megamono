@@ -19,6 +19,12 @@
       "schema": "./dist/generators/app/schema.json",
       "description": "Add a convention-aligned application"
     },
+    "library": {
+      "status": "available",
+      "factory": "./dist/generators/library/library",
+      "schema": "./dist/generators/library/schema.json",
+      "description": "Add an internal or publishable TypeScript library"
+    },
     "database": {
       "status": "available",
       "factory": "./dist/generators/database/database",

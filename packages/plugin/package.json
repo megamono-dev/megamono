@@ -43,6 +43,16 @@
   ],
   "nx": {
     "targets": {
+      "e2e-library": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/library.e2e.mjs"
+        }
+      },
       "e2e-webpack-evidence": {
         "executor": "nx:run-commands",
         "cache": false,

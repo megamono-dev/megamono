@@ -739,6 +739,41 @@ describe('@megamono/cli', () => {
     ]);
   });
 
+  it('delegates library options and dry-run planning', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+    expect(
+      (
+        await runMegamonoCli(
+          [
+            'add',
+            'library',
+            'browser-auth',
+            '--platform=web',
+            '--skipInstall',
+            '--dry-run',
+          ],
+          harness.value,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(harness.invocations[0].args).toEqual([
+      expect.stringContaining('/node_modules/nx/bin/cli.js'),
+      'generate',
+      '@megamono/plugin:library',
+      '--name=browser-auth',
+      '--platform=web',
+      '--skipInstall',
+      '--dry-run',
+      '--planOnly=true',
+    ]);
+    const missing = io(root);
+    expect(
+      (await runMegamonoCli(['add', 'library'], missing.value)).exitCode,
+    ).toBe(2);
+    expect(missing.invocations).toEqual([]);
+  });
+
   it('delegates arbitrary database names and adapters', async () => {
     const root = await workspace('pnpm');
     const explicit = io(root);

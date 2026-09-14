@@ -1,5 +1,15 @@
 # `@megamono/plugin`
 
+## TypeScript libraries
+
+`megamono add library browser-auth --platform=web --yes` composes the locally installed `@nx/js` generator, creates a private `libs/browser-auth` library, and applies scope/type/platform tags. The default platform is `neutral` (no platform tag); `web`, `node`, `mobile`, and `worker` are explicit alternatives. `--type=util|ui|data|feature` selects the dependency-boundary role. Mobile means portable TypeScript for a mobile consumer, not native framework scaffolding.
+
+`megamono add library client --scope=acme --publishable --access=public --yes` creates a buildable `packages/client` package. Publishable packages default to restricted registry access. Existing release groups/workflows remain unchanged: review enrollment and the generated README's build-output location before publishing. Existing paths are never moved or converted by this generator.
+
+Without `--yes`, or with `--dry-run`, only the plan is displayed. `--skipInstall` writes dependency declarations but suppresses the deferred Nx install callback; run your usual workspace installation afterwards, retaining its package-manager/store settings. The equivalent direct invocation is `nx generate @megamono/plugin:library --name=client ...`. A compatible local `@nx/js` is required. Generated libraries intentionally start without a test runner; add relevant tests before adopting them.
+
+## Application generation
+
 Web/site generation supports `--router=pages|app` (Pages Router remains the
 default). For example, `megamono add app site --router=app --styling=chakra`.
 App Router emits a server `layout.tsx` with metadata, a server `page.tsx`, and
