@@ -312,6 +312,9 @@ Examples:
 Application types: ${APP_TYPE_CHOICES.map(({ name }) => name).join(', ')}
 Web styling: ${WEB_STYLING_CHOICES.map(({ name }) => name).join(', ')}
 Next.js router: --router=pages|app (web/site only; default pages)
+Extension options: --displayName=<product-name> --manifestVersion=2|3
+  --contentScriptMatches=<patterns> explicitly opts into page access.
+  Omit for a background-only extension with no permissions.
 Database adapters: ${DATABASE_ADAPTER_CHOICES.map(({ name }) => name).join(', ')}
 Modules: ${ADD_MODULES.join(', ')}
 
@@ -3375,6 +3378,13 @@ export async function runMegamonoCli(
       return await runAdopt(args.slice(1), io);
     }
     if (args[0] === 'add') {
+      if (
+        args[1] === 'app' &&
+        (args.includes('--help') || args.includes('-h'))
+      ) {
+        io.stdout(ADD_HELP);
+        return { exitCode: 0 };
+      }
       if (
         args[1] === 'springbar' &&
         (args.includes('--help') || args.includes('-h'))

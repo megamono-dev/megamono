@@ -400,6 +400,27 @@ afterEach(async () => {
 });
 
 describe('@megamono/cli', () => {
+  it.each([
+    ['add', 'app', 'extension', '--help'],
+    ['add', 'app', 'extension', '-h'],
+    ['add', 'app', '--help'],
+  ])(
+    'shows app help without workspace discovery or preflight: %j',
+    async (...args) => {
+      const root = await mkdtemp(join(tmpdir(), 'megamono-help-'));
+      fixtures.push(root);
+      // Invalid repository metadata would fail discovery if help reached it.
+      await writeFile(join(root, 'package.json'), '{invalid');
+      const harness = io(root);
+      expect((await runMegamonoCli(args, harness.value)).exitCode).toBe(0);
+      expect(harness.invocations).toEqual([]);
+      expect(harness.stdout.join('')).toContain('--displayName');
+      expect(harness.stderr).toEqual([]);
+      expect(await readFile(join(root, 'package.json'), 'utf8')).toBe(
+        '{invalid',
+      );
+    },
+  );
   it('prints redacted feedback without delegating and sanitizes inspection failures', async () => {
     const root = await workspace('pnpm');
     const harness = io(root);
