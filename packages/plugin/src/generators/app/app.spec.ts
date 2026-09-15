@@ -32,6 +32,27 @@ function snapshot(tree: ReturnType<typeof workspace>): string {
 }
 
 describe('app generator', () => {
+  it.each([undefined, 'Quickzones'])(
+    'uses the app basename or explicit extension display name: %s',
+    async (displayName) => {
+      const tree = workspace();
+      await appGenerator(tree, {
+        type: 'extension',
+        name: 'browser',
+        workspaceName: 'quickzones-int-source',
+        displayName,
+        yes: true,
+        interactive: false,
+        skipInstall: true,
+      });
+      expect(tree.read('apps/browser/wxt.config.ts', 'utf8')).toContain(
+        `name: '${displayName ?? 'browser'}'`,
+      );
+      expect(tree.read('apps/browser/wxt.config.ts', 'utf8')).not.toContain(
+        'quickzones-int-source',
+      );
+    },
+  );
   it('preserves pnpm policy comments and skips deferred installation on request', async () => {
     const tree = workspace();
     tree.write(

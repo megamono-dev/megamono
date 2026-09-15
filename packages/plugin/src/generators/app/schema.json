@@ -5,6 +5,11 @@
   "description": "Create an application through the same maintained preset used by create-megamono.",
   "type": "object",
   "properties": {
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Extension product name shown by the browser; defaults to the application basename."
+    },
     "contentScriptMatches": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 },

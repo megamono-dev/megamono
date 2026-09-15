@@ -87,3 +87,7 @@ megamono add app extension --name=browser --contentScriptMatches='https://exampl
 `contentScriptMatches` is an array in the Nx generator API. Broad patterns such as
 `<all_urls>` require an explicit opt-in; review the final Chrome/Firefox manifests
 before distribution. Rerunning generation never removes application-owned scripts.
+
+Use `--displayName="Quickzones"` to set the browser-facing product name through
+the main `add app extension` command. Without it, the selected application
+basename is used, independently of the workspace/package scope.

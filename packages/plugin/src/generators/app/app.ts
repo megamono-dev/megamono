@@ -97,6 +97,7 @@ function rustCrateVersion(name: string): string {
 interface NormalizedAppOptions {
   readonly type: AppType;
   readonly name: string;
+  readonly displayName?: string;
   readonly directory: string;
   readonly scope: string;
   readonly projectName: string;
@@ -353,6 +354,17 @@ async function normalizeOptions(
       'options',
     );
   const router = styling ? (raw.router ?? 'pages') : undefined;
+  if (
+    raw.displayName !== undefined &&
+    (type !== 'extension' ||
+      typeof raw.displayName !== 'string' ||
+      !raw.displayName.trim())
+  )
+    throw new AppGeneratorError(
+      'displayName must be nonempty and applies only to extensions.',
+      2,
+      'options',
+    );
   if (raw.contentScriptMatches !== undefined && type !== 'extension')
     throw new AppGeneratorError(
       'contentScriptMatches applies only to extensions.',
@@ -371,6 +383,7 @@ async function normalizeOptions(
   return {
     type,
     name,
+    ...(raw.displayName ? { displayName: raw.displayName.trim() } : {}),
     directory,
     scope,
     projectName: `${scope}-${name}`,
@@ -1190,7 +1203,7 @@ async function createDelegatedApp(
         ...common,
         name: options.name,
         projectName: options.projectName,
-        displayName: options.workspaceName,
+        displayName: options.displayName ?? options.name,
         ...(options.contentScriptMatches
           ? { contentScriptMatches: options.contentScriptMatches }
           : {}),
