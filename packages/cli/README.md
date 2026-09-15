@@ -113,6 +113,53 @@ does not qualify runtime behavior, peers, source-condition exports, or deploymen
 Reconcile each consumer explicitly after reviewing its package-manager plan;
 do not assume `yalc push` refreshes an existing installed dependency tree.
 
+For a qualification gate, explicitly select reviewed artifacts in
+`.megamono/qualification-artifacts.json`:
+
+```json
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "package": "@megamono/plugin",
+      "consumer": ".",
+      "from": ".yalc/@megamono/plugin"
+    },
+    {
+      "package": "@playstack/mail",
+      "consumer": "apps/api",
+      "from": "vendor/mail.tgz"
+    }
+  ]
+}
+```
+
+```sh
+megamono verify artifacts --json
+megamono verify runtime api --artifact-manifest=reviewed-artifacts.json
+```
+
+Each pair resolves the installed package from that consumer's `package.json`,
+including nested workspace installations. `consumer` defaults to `.`; both paths
+must remain inside the workspace. Select directories or npm `.tgz` archives;
+archives can also declare a lowercase `sha256` checksum. Archive inspection is
+bounded and in-memory, with no extraction or execution. Links and unsupported
+archive extensions fail closed. Only Megamono/Playstack package names are accepted.
+
+All selected files must match, including published metadata; manifest formatting
+and package-manager provenance fields are ignored. Additional installed files are
+not compared. This is installation alignment, not a runtime or dependency-closure
+certificate: list every required consumer/package pair explicitly.
+
+When the conventional manifest exists (or `--artifact-manifest` is supplied),
+`verify runtime`, `verify dependencies`, `verify container`, `adopt --write`, and
+`add integration --yes` stop before delegation if a selection differs or cannot
+be verified. Read-only surveys and dry runs remain available. Direct Nx commands
+do not run this CLI guard. Without a selected manifest, existing workflows are
+unchanged. `verify artifacts` exits 1 on drift or unverifiable selections; guarded
+commands exit 3 on an alignment failure. Reconcile dependencies explicitly and
+rerun; an older reviewed archive can be valid even when the Yalc store is newer.
+
 Hosted authentication is optional and independent of repository discovery:
 
 ```sh

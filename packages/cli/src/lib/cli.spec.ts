@@ -1419,6 +1419,60 @@ describe('@megamono/cli', () => {
     expect(written.invocations[0]?.args).not.toContain('--write');
   });
 
+  it('gates qualification on selected artifacts without running Nx or installing', async () => {
+    const root = await workspace('pnpm');
+    await json(join(root, 'vendor/plugin/package.json'), {
+      name: '@megamono/plugin',
+      version: '0.0.1',
+    });
+    await writeFile(join(root, 'vendor/plugin/receipt.txt'), 'selected');
+    const selection = {
+      version: 1,
+      artifacts: [{ package: '@megamono/plugin', from: 'vendor/plugin' }],
+    };
+    await json(join(root, '.megamono/qualification-artifacts.json'), selection);
+    for (const args of [
+      ['verify', 'runtime', 'api'],
+      ['verify', 'dependencies'],
+      ['verify', 'container'],
+      ['adopt', '--write', '--yes'],
+      ['add', 'integration', 'mail', '--yes'],
+    ]) {
+      const harness = io(root);
+      expect((await runMegamonoCli(args, harness.value)).exitCode).toBe(3);
+      expect(harness.invocations).toEqual([]);
+      expect(harness.stderr.join('')).toContain('Artifact alignment failed');
+    }
+    const report = io(root);
+    expect(
+      (await runMegamonoCli(['verify', 'artifacts', '--json'], report.value))
+        .exitCode,
+    ).toBe(1);
+    expect(JSON.parse(report.stdout.join('')).artifacts[0].status).toBe(
+      'mismatch',
+    );
+    expect(report.invocations).toEqual([]);
+
+    await writeFile(
+      join(root, 'node_modules/@megamono/plugin/receipt.txt'),
+      'selected',
+    );
+    await json(join(root, 'reviewed.json'), selection);
+    const repaired = io(root);
+    expect(
+      (
+        await runMegamonoCli(
+          ['verify', 'dependencies', '--artifact-manifest=reviewed.json'],
+          repaired.value,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(repaired.invocations).toHaveLength(1);
+    expect(repaired.invocations[0].args).not.toContain(
+      '--artifact-manifest=reviewed.json',
+    );
+  });
+
   it('runs composable health and portability targets through local Nx', async () => {
     const root = await workspace('pnpm');
     const harness = io(root);

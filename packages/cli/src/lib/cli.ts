@@ -1,6 +1,10 @@
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import {
+  DEFAULT_ARTIFACT_MANIFEST,
+  verifyArtifactAlignment,
+} from './artifact-alignment.js';
+import {
   access,
   chmod,
   cp,
@@ -394,6 +398,7 @@ Runs the initialized workspace's structural check target. CI=true selects the
 ci package-source profile when an explicit profile is absent.`;
 
 const VERIFY_HELP = `Usage: megamono verify runtime <project> [options]
+       megamono verify artifacts [--artifact-manifest=<file>] [--json]
        megamono verify dependencies [options]
        megamono verify container [options]
 
@@ -403,6 +408,10 @@ Examples:
   megamono verify dependencies --checkActive=false
   megamono verify container --dockerfile=apps/api/Dockerfile
   megamono verify container --dockerfile=apps/api/Dockerfile --smoke
+
+Qualification commands check .megamono/qualification-artifacts.json when present.
+Use --artifact-manifest=<file> to select a different explicit baseline. Drift or
+unverifiable selections stop verification; no dependencies are installed.
 
 Verification is read-only unless container --smoke is explicitly requested.`;
 
@@ -2466,7 +2475,10 @@ async function runAdd(
     return { exitCode: result.exitCode };
   }
   if (subject === 'integration') {
-    const parsed = parseAddOptions(args.slice(1));
+    const alignment = alignmentOptions(args.slice(1));
+    const parsed = parseAddOptions(alignment.args);
+    if (parsed.yes && !parsed.dryRun)
+      requireArtifactAlignment(workspace.root, alignment.manifest);
     if (!parsed.dryRun)
       await assertWorkspaceMutationPreflight(
         io,
@@ -2924,7 +2936,17 @@ async function runAdopt(
   args: readonly string[],
   io: MegamonoCliIo,
 ): Promise<MegamonoCliResult> {
+  const alignment = alignmentOptions(args);
+  args = alignment.args;
   const write = args.includes('--write');
+  if (
+    write &&
+    !args.some((arg) => /^--(?:dry-run|dryRun|survey)(?:=true)?$/.test(arg))
+  )
+    requireArtifactAlignment(
+      await findWorkspaceRoot(io.cwd),
+      alignment.manifest,
+    );
   const generatorArgs = args.filter((argument) => argument !== '--write');
   if (
     !write &&
@@ -2973,11 +2995,70 @@ async function runHealth(
   return runWorkspaceTarget(io, 'megamono:check', args);
 }
 
+function alignmentOptions(args: readonly string[]) {
+  const forwarded: string[] = [];
+  let manifest: string | undefined;
+  for (let index = 0; index < args.length;) {
+    const selected = optionValue(args, index, '--artifact-manifest');
+    if (selected) {
+      if (manifest || !selected.value.trim())
+        throw new CliError('Select exactly one nonempty artifact manifest.', 2);
+      manifest = selected.value;
+      index += selected.consumed;
+    } else {
+      forwarded.push(args[index]);
+      index++;
+    }
+  }
+  return { args: forwarded, manifest };
+}
+
+function requireArtifactAlignment(root: string, manifest?: string) {
+  if (!manifest && !existsSync(join(root, DEFAULT_ARTIFACT_MANIFEST))) return;
+  const report = verifyArtifactAlignment(root, manifest);
+  if (!report.aligned)
+    throw new CliError(
+      `Artifact alignment failed for ${report.artifacts
+        .filter((entry: { status: string }) => entry.status !== 'aligned')
+        .map((entry: { package: string }) => entry.package)
+        .join(
+          ', ',
+        )}. Run megamono verify artifacts with the selected manifest, reconcile dependencies explicitly, then retry qualification.`,
+      3,
+    );
+}
+
 async function runVerify(
   args: readonly string[],
   io: MegamonoCliIo,
 ): Promise<MegamonoCliResult> {
+  const alignment = alignmentOptions(args);
+  args = alignment.args;
   const kind = args[0];
+  if (kind === 'artifacts') {
+    if (args.slice(1).some((arg) => arg !== '--json'))
+      throw new CliError(VERIFY_HELP, 2);
+    const report = verifyArtifactAlignment(
+      await findWorkspaceRoot(io.cwd),
+      alignment.manifest,
+    );
+    io.stdout(
+      args.includes('--json')
+        ? JSON.stringify(report, null, 2)
+        : report.artifacts
+            .map(
+              (entry: { package: string; consumer: string; status: string }) =>
+                `${entry.package} (${entry.consumer}): ${entry.status}`,
+            )
+            .join('\n'),
+    );
+    return { exitCode: report.aligned ? 0 : 1 };
+  }
+  if (['runtime', 'dependencies', 'container'].includes(kind))
+    requireArtifactAlignment(
+      await findWorkspaceRoot(io.cwd),
+      alignment.manifest,
+    );
   if (kind === 'runtime') {
     const project = args[1];
     if (!project || project.startsWith('-')) throw new CliError(VERIFY_HELP, 2);
