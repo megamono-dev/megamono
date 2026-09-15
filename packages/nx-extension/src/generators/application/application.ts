@@ -11,7 +11,7 @@ import {
   type Tree,
 } from '@nx/devkit';
 import type { ExtensionApplicationSchema } from './schema';
-import { wxtCommand, wxtOutput } from '../../lib/wxt-targets';
+import { wxtCommand, wxtTargets } from '../../lib/wxt-targets';
 
 const WXT_VERSION = '0.21.4';
 
@@ -43,64 +43,7 @@ function tags(options: ExtensionApplicationSchema, scope: string): string[] {
 function targets(
   version?: 2 | 3,
 ): NonNullable<ProjectConfiguration['targets']> {
-  const run = (command: string, cache = true) => ({
-    executor: 'nx:run-commands',
-    cache,
-    options: { command, cwd: '{projectRoot}' },
-  });
-  return {
-    prepare: run('wxt prepare'),
-    'dev-chrome': {
-      ...run(wxtCommand('', 'chrome', version), false),
-      continuous: true,
-    },
-    'dev-firefox': {
-      ...run(wxtCommand('', 'firefox', version), false),
-      continuous: true,
-    },
-    'build-chrome': {
-      ...run(wxtCommand('build', 'chrome', version)),
-      outputs: [wxtOutput('chrome', version)],
-    },
-    'build-firefox': {
-      ...run(wxtCommand('build', 'firefox', version)),
-      outputs: [wxtOutput('firefox', version)],
-    },
-    build: {
-      executor: 'nx:noop',
-      cache: true,
-      dependsOn: ['build-chrome', 'build-firefox'],
-      outputs: ['{projectRoot}/.output'],
-    },
-    'package-chrome': {
-      ...run(wxtCommand('zip', 'chrome', version)),
-      dependsOn: ['build-chrome'],
-      outputs: ['{projectRoot}/.output/*-chrome.zip'],
-    },
-    'package-firefox': {
-      ...run(wxtCommand('zip', 'firefox', version)),
-      dependsOn: ['build-firefox'],
-      outputs: ['{projectRoot}/.output/*-firefox.zip'],
-    },
-    'package-firefox-source': {
-      ...run(`${wxtCommand('zip', 'firefox', version)} --sources`),
-      outputs: ['{projectRoot}/.output/*-sources.zip'],
-    },
-    package: {
-      executor: 'nx:noop',
-      cache: true,
-      dependsOn: [
-        'package-chrome',
-        'package-firefox',
-        'package-firefox-source',
-      ],
-      outputs: ['{projectRoot}/.output/*.zip'],
-    },
-    test: run('vitest run'),
-    lint: run(
-      "eslint . --ignore-pattern '.wxt/**' --ignore-pattern '.output/**'",
-    ),
-  };
+  return wxtTargets({ chrome: version, firefox: version });
 }
 
 function ensureWorkspace(tree: Tree, directory: string): void {

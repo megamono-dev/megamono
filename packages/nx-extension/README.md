@@ -91,3 +91,22 @@ before distribution. Rerunning generation never removes application-owned script
 Use `--displayName="Quickzones"` to set the browser-facing product name through
 the main `add app extension` command. Without it, the selected application
 basename is used, independently of the workspace/package scope.
+
+### WXT build scheduling
+
+Generated and inferred finite targets use the same ordered chain:
+`prepare → typecheck → build-chrome → build-firefox → package-chrome → package-firefox → package-firefox-source`.
+Preparation declares `.wxt` as its output and runs on every invocation; builds
+and archives are also non-cacheable because WXT rewrites shared generated state.
+Deleting `.wxt` cannot be masked by a successful preparation cache hit.
+
+The chain serializes a parallel Nx run without requiring newer Nx scheduler
+features. A Firefox-only target also builds Chrome; packaging runs the preceding
+steps. This conservative ordering trades extra work for consistent shared state.
+Custom output paths still require matching application-owned output overrides.
+Existing explicit `project.json` targets override inference: review them when
+adopting this change rather than expecting regeneration to rewrite them.
+
+Use one Nx invocation for finite tasks. Do not run separate builds, packaging,
+or dev servers concurrently against the same app directory; this DAG is not a
+cross-process lock. Use separate worktrees for independent concurrent builds.

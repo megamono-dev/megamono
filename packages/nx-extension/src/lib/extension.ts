@@ -7,8 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import {
   manifestVersions,
-  wxtCommand,
-  wxtOutput,
+  wxtTargets,
   type BrowserManifestVersions,
 } from './wxt-targets';
 
@@ -279,58 +278,7 @@ function extensionTargets(
     ...manifestVersions(options.manifestVersions),
     ...manifestVersions(record.browserManifestVersions),
   };
-  const targets: NonNullable<ProjectConfiguration['targets']> = {
-    [options.devChromeTargetName ?? 'dev-chrome']: {
-      ...runTarget(wxtCommand('', 'chrome', versions.chrome), false),
-      continuous: true,
-    },
-    [options.devFirefoxTargetName ?? 'dev-firefox']: {
-      ...runTarget(wxtCommand('', 'firefox', versions.firefox), false),
-      continuous: true,
-    },
-    'build-chrome': {
-      ...runTarget(wxtCommand('build', 'chrome', versions.chrome)),
-      outputs: [wxtOutput('chrome', versions.chrome)],
-    },
-    'build-firefox': {
-      ...runTarget(wxtCommand('build', 'firefox', versions.firefox)),
-      outputs: [wxtOutput('firefox', versions.firefox)],
-    },
-    [options.buildTargetName ?? 'build']: {
-      executor: 'nx:noop',
-      cache: true,
-      dependsOn: ['build-chrome', 'build-firefox'],
-      outputs: ['{projectRoot}/.output'],
-    },
-    'package-chrome': {
-      ...runTarget(wxtCommand('zip', 'chrome', versions.chrome)),
-      dependsOn: ['build-chrome'],
-      outputs: ['{projectRoot}/.output/*-chrome.zip'],
-    },
-    'package-firefox': {
-      ...runTarget(wxtCommand('zip', 'firefox', versions.firefox)),
-      dependsOn: ['build-firefox'],
-      outputs: ['{projectRoot}/.output/*-firefox.zip'],
-    },
-    'package-firefox-source': {
-      ...runTarget(
-        `${wxtCommand('zip', 'firefox', versions.firefox)} --sources`,
-      ),
-      outputs: ['{projectRoot}/.output/*-sources.zip'],
-    },
-    [options.packageTargetName ?? 'package']: {
-      executor: 'nx:noop',
-      cache: true,
-      dependsOn: [
-        'package-chrome',
-        'package-firefox',
-        'package-firefox-source',
-      ],
-      outputs: ['{projectRoot}/.output/*.zip'],
-    },
-    test: runTarget('vitest run'),
-    lint: runTarget('eslint .'),
-  };
+  const targets = wxtTargets(versions, options);
   for (const [store, command] of Object.entries(record.storeCommands).sort()) {
     targets[`deploy-${store}`] = {
       ...runTarget(command, false),

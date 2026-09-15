@@ -159,7 +159,7 @@ try {
   await waitForRegistry(registry, verdaccio, () => registryLog);
   const environment = {
     NX_DAEMON: 'false',
-    NX_CACHE_PROJECT_GRAPH: 'false',
+    NX_ISOLATE_PLUGINS: 'false',
     npm_config_cache: npmCache,
     npm_config_userconfig: npmConfig,
   };
@@ -264,15 +264,35 @@ try {
   // than project.json overrides. WXT must find the app-local configuration.
   const projectPath = resolve(fixtureRoot, 'apps/browser/project.json');
   const authored = JSON.parse(await readFile(projectPath, 'utf8'));
-  delete authored.targets['build-firefox'];
-  delete authored.targets['build-chrome'];
+  for (const target of [
+    'prepare',
+    'typecheck',
+    'build',
+    'build-chrome',
+    'build-firefox',
+    'package',
+    'package-chrome',
+    'package-firefox',
+    'package-firefox-source',
+  ])
+    delete authored.targets[target];
   await writeFile(projectPath, JSON.stringify(authored));
+  await run(
+    'npm',
+    [
+      'exec',
+      'nx',
+      '--',
+      'run-many',
+      '-p',
+      'fixture-browser',
+      '-t',
+      'build,package,typecheck',
+      '--parallel=8',
+    ],
+    { cwd: fixtureRoot, env: environment },
+  );
   for (const browser of ['chrome', 'firefox']) {
-    await run(
-      'npm',
-      ['exec', 'nx', '--', 'run', `fixture-browser:build-${browser}`],
-      { cwd: fixtureRoot, env: environment },
-    );
     const manifest = JSON.parse(
       await readFile(
         resolve(
@@ -286,10 +306,32 @@ try {
       manifest.manifest_version === 3,
       `${browser} did not build MV3 through the inferred target`,
     );
+    assert(
+      manifest.name === 'Fixture Browser',
+      `${browser} lost its product display name`,
+    );
+    assert(
+      !manifest.content_scripts?.length &&
+        !manifest.host_permissions?.length &&
+        !manifest.permissions?.length,
+      `${browser} default scaffold unexpectedly requests access`,
+    );
   }
+  await rm(resolve(fixtureRoot, 'apps/browser/.wxt'), {
+    recursive: true,
+    force: true,
+  });
+  await run('npm', ['exec', 'nx', '--', 'run', 'fixture-browser:typecheck'], {
+    cwd: fixtureRoot,
+    env: environment,
+  });
+  await readFile(
+    resolve(fixtureRoot, 'apps/browser/.wxt/tsconfig.json'),
+    'utf8',
+  );
   succeeded = true;
   process.stdout.write(
-    'nx-extension local-registry e2e passed: published generator, inferred Chrome/Firefox MV3 builds, package targets, and Safari boundary verified.\n',
+    'nx-extension local-registry e2e passed: published generator, parallel-requested serial builds/packages, typechecking after .wxt deletion, least privilege, display name, and Safari boundary verified.\n',
   );
 } finally {
   verdaccio.kill('SIGTERM');
