@@ -64,6 +64,7 @@ interface NormalizedDatabaseOptions {
   readonly relocate: boolean;
   readonly clientOutput?: string;
   readonly existingLayout: boolean;
+  readonly buildable: boolean;
   readonly dryRun: boolean;
   readonly bootstrap: boolean;
 }
@@ -384,13 +385,13 @@ async function normalizeOptions(
     .replace(/\/$/, '');
   if (
     clientOutput !== undefined &&
-    (!relocate ||
+    ((!relocate && !raw.buildable) ||
       !isSafeWorkspaceRelativePath(clientOutput) ||
       clientOutput.startsWith('../') ||
       clientOutput === '.')
   ) {
     throw new DatabaseGeneratorError(
-      '--client-output is available only during Prisma relocation and must be a database-project-relative path such as src/generated.',
+      '--client-output requires Prisma relocation or a fresh buildable Prisma library and must be a database-project-relative path such as src/generated.',
       2,
       'options',
     );
@@ -408,10 +409,24 @@ async function normalizeOptions(
       'options',
     );
   }
+  if (
+    raw.buildable &&
+    (adapter !== 'prisma' ||
+      relocate ||
+      (clientOutput &&
+        !/^src\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+$/.test(clientOutput)))
+  ) {
+    throw new DatabaseGeneratorError(
+      'Buildable clients require a fresh Prisma project and client output below src/ (for example src/generated). Existing relocation is a separate reviewed migration.',
+      2,
+      'options',
+    );
+  }
   return {
     name,
     adapter,
     directory,
+    buildable: raw.buildable === true,
     project,
     packageName: `@${scope}/${adapter}-${name}`,
     scope,
@@ -474,7 +489,26 @@ function preflight(
     ([, project]) => project.root === options.directory,
   );
   assertPlaystackTarget(tree, options);
-  if (configured && named && projectMatches(named, options)) return 'noop';
+  if (configured && named && projectMatches(named, options)) {
+    if (
+      options.buildable &&
+      named.metadata?.megamonoPrismaClientOutput !==
+        (options.clientOutput ?? 'src/generated')
+    ) {
+      throw new DatabaseGeneratorError(
+        'Existing Prisma client ownership differs from the requested buildable profile. Review the migration explicitly; no files were changed.',
+        3,
+        'conflict',
+      );
+    }
+    return 'noop';
+  }
+  if (options.buildable && options.existingLayout)
+    throw new DatabaseGeneratorError(
+      'The buildable profile only creates fresh Prisma libraries; existing schemas and configuration are preserved.',
+      3,
+      'conflict',
+    );
   if (options.relocate) {
     if (!options.sourceSchema || !tree.exists(options.sourceSchema)) {
       throw new DatabaseGeneratorError(
@@ -1005,7 +1039,34 @@ function projectConfiguration(
       sourceRoot: `${options.directory}/src`,
       projectType: 'library',
       tags,
+      ...(options.buildable
+        ? {
+            metadata: {
+              megamonoPrismaClientOutput:
+                options.clientOutput ?? 'src/generated',
+            },
+          }
+        : {}),
       targets: {
+        ...(options.buildable
+          ? {
+              build: {
+                executor: 'nx:run-commands',
+                cache: true,
+                dependsOn: ['generate', '^build'],
+                inputs: [
+                  'default',
+                  '^default',
+                  '{workspaceRoot}/tsconfig.base.json',
+                ],
+                outputs: ['{projectRoot}/dist'],
+                options: {
+                  cwd: options.directory,
+                  command: 'tsc -p tsconfig.build.json',
+                },
+              },
+            }
+          : {}),
         validate: {
           executor: 'nx:run-commands',
           cache: true,
@@ -1017,6 +1078,16 @@ function projectConfiguration(
         generate: {
           executor: 'nx:run-commands',
           cache: true,
+          ...(options.buildable
+            ? {
+                inputs: [
+                  '{projectRoot}/prisma/**/*',
+                  '{projectRoot}/prisma.config.ts',
+                  '{projectRoot}/package.json',
+                  { externalDependencies: ['prisma', '@prisma/client'] },
+                ],
+              }
+            : {}),
           ...(!options.relocate || options.clientOutput
             ? {
                 outputs: [
@@ -1124,6 +1195,20 @@ function writePackage(tree: Tree, options: NormalizedDatabaseOptions): void {
     version: '0.0.0',
     private: true,
     type: 'module',
+    ...(options.buildable
+      ? {
+          main: './dist/index.js',
+          types: './dist/index.d.ts',
+          files: ['dist'],
+          exports: {
+            '.': {
+              types: './dist/index.d.ts',
+              import: './dist/index.js',
+              default: './dist/index.js',
+            },
+          },
+        }
+      : {}),
     ...(options.adapter === 'drizzle'
       ? {
           main: './dist/src/index.js',
@@ -1133,6 +1218,12 @@ function writePackage(tree: Tree, options: NormalizedDatabaseOptions): void {
     dependencies: runtimePackages,
     devDependencies: {
       ...developmentPackages,
+      ...(options.buildable
+        ? {
+            '@types/node':
+              dependencySpecifier(tree, '@types/node') ?? '^24.0.0',
+          }
+        : {}),
       typescript:
         dependencySpecifier(tree, 'typescript') ??
         compatibility.scaffoldPackages.typescript,
@@ -1146,9 +1237,12 @@ function renderPrismaConfig(directory: string, schema: string): string {
 }
 
 function writePrisma(tree: Tree, options: NormalizedDatabaseOptions): void {
+  const clientOutput = options.buildable
+    ? (options.clientOutput ?? 'src/generated')
+    : 'src/generated';
   tree.write(
     `${options.directory}/prisma/schema.prisma`,
-    `generator client {\n  provider = "prisma-client"\n  output   = "../src/generated"\n}\n\ndatasource db {\n  provider = "postgresql"\n}\n`,
+    `generator client {\n  provider = "prisma-client"\n  output   = "../${clientOutput}"\n${options.buildable ? '  engineType = "client"\n  moduleFormat = "esm"\n  generatedFileExtension = "ts"\n  importFileExtension = "js"\n' : ''}}\n\ndatasource db {\n  provider = "postgresql"\n}\n`,
   );
   tree.write(`${options.directory}/prisma/models/.gitkeep`, '');
   tree.write(
@@ -1157,8 +1251,36 @@ function writePrisma(tree: Tree, options: NormalizedDatabaseOptions): void {
   );
   tree.write(
     `${options.directory}/src/index.ts`,
-    `// Generated Prisma client exports are application-owned after running the generate target.\n`,
+    options.buildable
+      ? `export * from './${clientOutput.slice(4)}/client.js';\n`
+      : `// Generated Prisma client exports are application-owned after running the generate target.\n`,
   );
+  if (options.buildable) {
+    writeJson(tree, `${options.directory}/tsconfig.build.json`, {
+      extends: relative(options.directory, 'tsconfig.base.json'),
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        rootDir: 'src',
+        outDir: 'dist',
+        declaration: true,
+        composite: false,
+        incremental: false,
+        noEmit: false,
+        emitDeclarationOnly: false,
+        noEmitOnError: true,
+        skipLibCheck: true,
+        types: ['node'],
+      },
+      include: ['src/**/*.ts'],
+      exclude: ['dist', 'src/**/*.spec.ts', 'src/**/*.test.ts'],
+    });
+    tree.write(
+      `${options.directory}/README.md`,
+      `# ${options.packageName}\n\nRun ${options.project}:build to generate the Prisma client and compile the ESM library. Add at least one application model before generation. Consume through the package export; make consumer builds depend on this build target (via Nx project dependencies or an explicit dependsOn).\n\nThis profile uses the engine-free Prisma client. The application must install and configure its PostgreSQL driver adapter and own client lifecycle, credentials and migrations. No database is contacted by generation/build. No connection, migration, or deployment qualification is implied.\n\nPackage the dist directory and declared runtime dependencies together. Inspect the archive and smoke-test imports in the deployment image. Engine-based clients and existing custom generators are not converted by this profile.\n`,
+    );
+  }
 }
 
 function writeDrizzle(tree: Tree, options: NormalizedDatabaseOptions): void {
@@ -1321,7 +1443,22 @@ export async function databaseGenerator(
     );
   }
   const state = preflight(tree, options);
+  if (options.buildable && state === 'create') {
+    for (const name of ['prisma', '@prisma/client']) {
+      const selected = dependencySpecifier(tree, name);
+      if (selected && selected !== '7.10.0')
+        throw new DatabaseGeneratorError(
+          `The fresh buildable profile is qualified with ${name}@7.10.0; the workspace selects ${selected}. Align the reviewed versions explicitly or retain the schema-only profile.`,
+          3,
+          'compatibility',
+        );
+    }
+  }
   logger.info(renderPlan(tree, options));
+  if (options.buildable)
+    logger.info(
+      `Buildable Prisma client: ${options.clientOutput ?? 'src/generated'} -> dist; ESM exports; engine-free application adapter required.`,
+    );
   // Adoption without an install retains the repository-owned dependency policy.
   if (state === 'create' || state === 'relocate')
     preflightBuildApprovals(tree, options);

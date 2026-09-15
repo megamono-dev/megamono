@@ -37,6 +37,70 @@ function workspace(manager: 'npm' | 'pnpm' = 'pnpm') {
 }
 
 describe('database generator', () => {
+  it.each(['src/generated', 'src/db/client'])(
+    'creates an opt-in buildable client at %s and preserves reruns',
+    async (clientOutput) => {
+      const tree = workspace('npm');
+      const options = {
+        name: 'primary',
+        adapter: 'prisma' as const,
+        buildable: true,
+        clientOutput,
+        yes: true,
+        interactive: false,
+      };
+      await databaseGenerator(tree, options);
+      const project = readJson(tree, 'libs/prisma/primary/project.json');
+      expect(project.targets.build.dependsOn).toContain('generate');
+      expect(project.targets.build.options.command).toBe(
+        'tsc -p tsconfig.build.json',
+      );
+      expect(project.targets.generate.outputs).toEqual([
+        `{projectRoot}/${clientOutput}`,
+      ]);
+      expect(project.targets.generate.inputs).toContain(
+        '{projectRoot}/prisma/**/*',
+      );
+      expect(tree.read('libs/prisma/primary/src/index.ts', 'utf8')).toContain(
+        `./${clientOutput.slice(4)}/client.js`,
+      );
+      expect(
+        readJson(tree, 'libs/prisma/primary/package.json').exports['.'].import,
+      ).toBe('./dist/index.js');
+      const before = tree.listChanges();
+      await databaseGenerator(tree, options);
+      expect(tree.listChanges()).toEqual(before);
+      await expect(
+        databaseGenerator(tree, { ...options, clientOutput: 'src/different' }),
+      ).rejects.toThrow('ownership differs');
+    },
+  );
+  it('does not convert existing Prisma projects or unsafe output paths', async () => {
+    const tree = workspace('npm');
+    const options = {
+      name: 'primary',
+      adapter: 'prisma' as const,
+      yes: true,
+      interactive: false,
+    };
+    await databaseGenerator(tree, options);
+    const before = tree.listChanges();
+    await expect(
+      databaseGenerator(tree, { ...options, buildable: true }),
+    ).rejects.toThrow('ownership differs');
+    await expect(
+      databaseGenerator(tree, {
+        ...options,
+        name: 'other',
+        buildable: true,
+        clientOutput: 'dist/client',
+      }),
+    ).rejects.toThrow('below src');
+    expect(tree.listChanges()).toEqual(before);
+    expect(
+      readJson(tree, 'libs/prisma/primary/project.json').targets.build,
+    ).toBeUndefined();
+  });
   it('loads root dotenv from generated configs independently of cwd without overriding process values', async () => {
     const tree = workspace('npm');
     await databaseGenerator(tree, {

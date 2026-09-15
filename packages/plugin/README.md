@@ -1,5 +1,11 @@
 # `@megamono/plugin`
 
+## Buildable Prisma clients
+
+`megamono add database primary --adapter=prisma --buildable --yes` opts a **new** database project into Prisma client generation followed by TypeScript compilation. `--client-output=src/db/client` selects a custom source directory. The project exports `dist/index.js` and declarations, records generated/build outputs for Nx, and keeps its package private. Consumer builds must depend on this project's `build` (through the Nx graph or an explicit dependency).
+
+This profile targets Prisma/client 7.10.0 with the engine-free ESM generator. Existing conflicting dependency selections fail for review, rather than being replaced. Add application models before generating; install/configure a PostgreSQL driver adapter in the application. Compilation and package import tests do not establish live database or deployment correctness. Existing schemas, engine-based clients, client lifecycle, release workflows and migrations are never converted. Without `--buildable`, the existing schema-only workflow is unchanged.
+
 ## TypeScript libraries
 
 `megamono add library browser-auth --platform=web --yes` composes the locally installed `@nx/js` generator, creates a private `libs/browser-auth` library, and applies scope/type/platform tags. The default platform is `neutral` (no platform tag); `web`, `node`, `mobile`, and `worker` are explicit alternatives. `--type=util|ui|data|feature` selects the dependency-boundary role. Mobile means portable TypeScript for a mobile consumer, not native framework scaffolding.

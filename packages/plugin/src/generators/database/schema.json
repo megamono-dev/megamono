@@ -38,7 +38,12 @@
     },
     "clientOutput": {
       "type": "string",
-      "description": "Optional database-project-relative generated client output, such as src/generated; existing client ownership is preserved when omitted."
+      "description": "Optional project-relative generated client output, such as src/generated, during relocation or fresh buildable Prisma generation."
+    },
+    "buildable": {
+      "type": "boolean",
+      "default": false,
+      "description": "Create a fresh Prisma 7 client library with ESM exports and a generate-then-compile build. Existing schemas and libraries are never converted."
     },
     "scope": {
       "type": "string",

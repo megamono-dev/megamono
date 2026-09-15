@@ -337,6 +337,9 @@ Add commands require an initialized workspace with local nx and @megamono/plugin
 
 const DATABASE_HELP = `Usage: megamono add database [name] [options]
 
+  --buildable          Fresh Prisma 7 ESM client library: generate then compile
+                       Existing client configurations are never converted
+
 Options:
   --adapter=prisma|drizzle
                        Select the database toolkit
