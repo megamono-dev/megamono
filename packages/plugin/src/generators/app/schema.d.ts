@@ -17,6 +17,7 @@ export interface AppGeneratorSchema {
   readonly styling?: import('../../lib/web-styling').WebStyling;
   readonly router?: 'pages' | 'app';
   readonly manifestVersion?: 2 | 3;
+  readonly contentScriptMatches?: string[];
   readonly interactive?: boolean;
   readonly yes?: boolean;
   readonly dryRun?: boolean;

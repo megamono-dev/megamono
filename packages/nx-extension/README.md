@@ -75,3 +75,15 @@ megamono add app extension
 ```
 
 The generated project does not require Playstack. When a compatible `@playstack/extension` capability becomes available, add it separately through Playstack so product behavior remains package-owned.
+
+New extensions are background-only by default: no content script, host access,
+or API permissions are requested. Add permissions deliberately in `wxt.config.ts`
+as features need them. For page integration, opt in with explicit match patterns:
+
+```sh
+megamono add app extension --name=browser --contentScriptMatches='https://example.com/*' --yes
+```
+
+`contentScriptMatches` is an array in the Nx generator API. Broad patterns such as
+`<all_urls>` require an explicit opt-in; review the final Chrome/Firefox manifests
+before distribution. Rerunning generation never removes application-owned scripts.

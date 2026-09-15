@@ -327,7 +327,12 @@ describe('app generator', () => {
       const tree = workspace();
       const options = {
         type,
-        ...(type === 'extension' ? { manifestVersion: 3 as const } : {}),
+        ...(type === 'extension'
+          ? {
+              manifestVersion: 3 as const,
+              contentScriptMatches: ['https://example.com/*'],
+            }
+          : {}),
         scope: 'fixture',
         workspaceName: 'Fixture',
         interactive: false,
@@ -335,8 +340,12 @@ describe('app generator', () => {
       } as const;
       await appGenerator(tree, options);
       expect(tree.exists(expectedPath)).toBe(true);
-      if (type === 'extension')
+      if (type === 'extension') {
         expect(tree.read(expectedPath, 'utf8')).toContain('manifestVersion: 3');
+        expect(
+          tree.read('apps/extension/entrypoints/content.ts', 'utf8'),
+        ).toContain('https://example.com/*');
+      }
       if (type === 'mobile') {
         expect(tree.read('apps/mobile/package.json', 'utf8')).toContain(
           'platform:mobile',

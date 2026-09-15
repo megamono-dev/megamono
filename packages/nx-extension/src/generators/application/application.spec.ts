@@ -3,6 +3,45 @@ import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { extensionApplicationGenerator } from './application';
 
 describe('extension application generator', () => {
+  it('defaults to background-only without permissions and preserves existing content on rerun', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const options = { name: 'browser', skipFormat: true };
+    await extensionApplicationGenerator(tree, options);
+    expect(tree.exists('apps/browser/entrypoints/background.ts')).toBe(true);
+    expect(tree.exists('apps/browser/entrypoints/content.ts')).toBe(false);
+    expect(tree.read('apps/browser/wxt.config.ts', 'utf8')).not.toMatch(
+      /permissions|all_urls/,
+    );
+    tree.write('apps/browser/entrypoints/content.ts', '// application-owned');
+    await extensionApplicationGenerator(tree, options);
+    expect(tree.read('apps/browser/entrypoints/content.ts', 'utf8')).toBe(
+      '// application-owned',
+    );
+  });
+
+  it('creates page access only for explicit match patterns and rejects empty opt-ins before writes', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const before = tree.listChanges();
+    await expect(
+      extensionApplicationGenerator(tree, {
+        name: 'browser',
+        contentScriptMatches: [],
+        skipFormat: true,
+      }),
+    ).rejects.toThrow('match patterns');
+    expect(tree.listChanges()).toEqual(before);
+    await extensionApplicationGenerator(tree, {
+      name: 'browser',
+      contentScriptMatches: ['https://example.com/*'],
+      skipFormat: true,
+    });
+    expect(tree.read('apps/browser/entrypoints/content.ts', 'utf8')).toContain(
+      'https://example.com/*',
+    );
+    expect(
+      tree.read('apps/browser/entrypoints/content.ts', 'utf8'),
+    ).not.toContain('<all_urls>');
+  });
   it.each([2, 3] as const)(
     'generates and preserves explicit MV%s with matching commands and outputs',
     async (manifestVersion) => {

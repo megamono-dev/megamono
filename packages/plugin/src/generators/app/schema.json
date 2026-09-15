@@ -5,6 +5,13 @@
   "description": "Create an application through the same maintained preset used by create-megamono.",
   "type": "object",
   "properties": {
+    "contentScriptMatches": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "maxItems": 50,
+      "description": "Extension-only opt-in page match patterns; omit for a background-only scaffold."
+    },
     "manifestVersion": {
       "type": "number",
       "enum": [2, 3],
