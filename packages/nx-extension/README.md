@@ -110,3 +110,31 @@ adopting this change rather than expecting regeneration to rewrite them.
 Use one Nx invocation for finite tasks. Do not run separate builds, packaging,
 or dev servers concurrently against the same app directory; this DAG is not a
 cross-process lock. Use separate worktrees for independent concurrent builds.
+
+### Toolchain ownership and peer checks
+
+New apps keep the repository's TypeScript declaration when its complete range is
+within `>=5.4 <7`; absent a declaration, the default is `5.9.3`. Conflicting,
+unbounded or catalog/workspace alias declarations require explicit review rather
+than silently widening the repository toolchain. Existing app toolchains are not
+rewritten on rerun.
+
+The scaffold pins WXT `0.21.4`, Vite `8.2.2`, esbuild `0.28.2`, and Vitest `4.1.11`
+at the extension package. Root bundler dependencies remain untouched. Generation
+requires Node 22.12+ (22.x) or 24.x, matching the combined toolchain requirements.
+After installation the generator checks the selected packages' versions, Node
+engines, required peers and present optional peers in their actual resolution
+contexts. This catches pnpm virtual-store mismatches as well as root hoisting;
+it does not certify every dependency in the workspace.
+
+Both the main CLI and the leaf generator support `--skipInstall`. That also defers
+peer verification. Use the workspace's established install/store settings, then
+run this read-only check from the extension directory:
+
+```sh
+node -e "require('@megamono/nx-extension').verifyExtensionToolchain(process.cwd())"
+```
+
+Finish with the typecheck/build/package targets and your package manager's full
+peer check. A post-install failure leaves generated files for review; it never
+rewrites workspace overrides or changes package-manager/store settings to fix peers.

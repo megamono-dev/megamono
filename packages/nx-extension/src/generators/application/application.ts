@@ -12,8 +12,15 @@ import {
 } from '@nx/devkit';
 import type { ExtensionApplicationSchema } from './schema';
 import { wxtCommand, wxtTargets } from '../../lib/wxt-targets';
+import { join } from 'node:path';
+import { satisfies } from 'semver';
+import {
+  EXTENSION_TOOLCHAIN,
+  extensionTypeScript,
+  verifyExtensionToolchain,
+} from '../../lib/toolchain';
 
-const WXT_VERSION = '0.21.4';
+const WXT_VERSION = EXTENSION_TOOLCHAIN.wxt;
 
 function slug(value: string, label: string): string {
   const normalized = value
@@ -116,10 +123,9 @@ export async function extensionApplicationGenerator(
     ![2, 3].includes(raw.manifestVersion)
   )
     throw new Error('manifestVersion must be 2 or 3.');
-  const nodeMajor = Number(process.versions.node.split('.')[0]);
-  if (nodeMajor < 22) {
+  if (!satisfies(process.versions.node, '>=22.12 <23 || >=24 <25')) {
     throw new Error(
-      `WXT ${WXT_VERSION} application generation requires Node 22 or newer; the active runtime is Node ${process.versions.node}. Existing WXT projects can still be inferred without upgrading the workspace.`,
+      `The WXT ${WXT_VERSION}/Vite/Vitest scaffold requires Node 22.12+ (22.x) or 24.x; the active runtime is Node ${process.versions.node}. Existing WXT projects can still be inferred without upgrading the workspace.`,
     );
   }
   const name = slug(raw.name, 'Extension name');
@@ -162,6 +168,7 @@ export async function extensionApplicationGenerator(
   if (tree.exists(directory))
     throw new Error(`Path ${directory} is already occupied.`);
 
+  const typescript = extensionTypeScript(tree);
   ensureWorkspace(tree, directory);
   addProjectConfiguration(
     tree,
@@ -193,9 +200,8 @@ export async function extensionApplicationGenerator(
       test: 'vitest run',
     },
     devDependencies: {
-      typescript: '^5.4.0 || ^6.0.0',
-      vitest: '^4.1.10',
-      wxt: WXT_VERSION,
+      typescript,
+      ...EXTENSION_TOOLCHAIN,
     },
     nx: { name: projectName, projectType: 'application', tags: projectTags },
   });
@@ -229,7 +235,12 @@ export async function extensionApplicationGenerator(
     `# ${raw.displayName?.trim() || name}\n\nWXT browser extension managed as ${projectName}. Chrome and Firefox are first-class targets. Safari requires a separate Apple wrapper project and signing workflow.\n\nPlaystack product capabilities are optional and should be added through the Playstack CLI when a compatible extension package is available.\n`,
   );
   if (!raw.skipFormat) await formatFiles(tree);
-  return () => installPackagesTask(tree);
+  return raw.skipInstall
+    ? () => undefined
+    : () => {
+        installPackagesTask(tree);
+        verifyExtensionToolchain(join(tree.root, directory));
+      };
 }
 
 export default extensionApplicationGenerator;

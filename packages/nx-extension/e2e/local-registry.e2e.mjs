@@ -11,6 +11,9 @@ const compatibility = JSON.parse(
     'utf8',
   ),
 );
+const fixtureTypeScript =
+  process.env.MEGAMONO_EXTENSION_TEST_TYPESCRIPT ??
+  compatibility.scaffoldPackages.typescript;
 
 function run(command, args, options = {}) {
   return new Promise((resolvePromise, reject) => {
@@ -188,7 +191,7 @@ try {
           '@megamono/nx-extension': '0.0.1',
           '@nx/devkit': compatibility.scaffoldPackages['create-nx-workspace'],
           nx: compatibility.scaffoldPackages['create-nx-workspace'],
-          typescript: compatibility.scaffoldPackages.typescript,
+          typescript: fixtureTypeScript,
         },
       },
       null,
@@ -249,6 +252,15 @@ try {
   assert(
     generatedManifest.devDependencies.wxt === '0.21.4',
     'Generated extension did not pin the supported WXT version.',
+  );
+  assert(
+    generatedManifest.devDependencies.typescript === fixtureTypeScript,
+    'Repository TypeScript selection was not preserved.',
+  );
+  assert(
+    generatedManifest.devDependencies.vite === '8.2.2' &&
+      generatedManifest.devDependencies.esbuild === '0.28.2',
+    'Qualified app-local peers were not declared.',
   );
   const installedPlugin = JSON.parse(
     await readFile(
@@ -331,7 +343,7 @@ try {
   );
   succeeded = true;
   process.stdout.write(
-    'nx-extension local-registry e2e passed: published generator, parallel-requested serial builds/packages, typechecking after .wxt deletion, least privilege, display name, and Safari boundary verified.\n',
+    `nx-extension local-registry e2e passed (TypeScript ${fixtureTypeScript}): published generator, peer verification, parallel-requested serial builds/packages, typechecking after .wxt deletion, least privilege, display name, and Safari boundary verified.\n`,
   );
 } finally {
   verdaccio.kill('SIGTERM');

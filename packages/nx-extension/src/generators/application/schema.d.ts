@@ -8,4 +8,5 @@ export interface ExtensionApplicationSchema {
   readonly contentScriptMatches?: string[];
   readonly manifestVersion?: 2 | 3;
   readonly skipFormat?: boolean;
+  readonly skipInstall?: boolean;
 }

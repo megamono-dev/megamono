@@ -3,6 +3,26 @@ import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { extensionApplicationGenerator } from './application';
 
 describe('extension application generator', () => {
+  it('keeps root TypeScript, pins local build peers, and supports deferred installation', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    writeJson(tree, 'package.json', {
+      name: 'fixture',
+      devDependencies: { typescript: '~5.9.3', esbuild: '0.25.0' },
+    });
+    const callback = await extensionApplicationGenerator(tree, {
+      name: 'browser',
+      skipFormat: true,
+      skipInstall: true,
+    });
+    expect(callback()).toBeUndefined();
+    expect(
+      readJson(tree, 'apps/browser/package.json').devDependencies,
+    ).toMatchObject({ typescript: '~5.9.3', vite: '8.2.2', esbuild: '0.28.2' });
+    expect(readJson(tree, 'package.json').devDependencies).toEqual({
+      typescript: '~5.9.3',
+      esbuild: '0.25.0',
+    });
+  });
   it('defaults to background-only without permissions and preserves existing content on rerun', async () => {
     const tree = createTreeWithEmptyWorkspace();
     const options = { name: 'browser', skipFormat: true };

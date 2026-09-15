@@ -27,7 +27,12 @@
       "enum": [2, 3],
       "description": "Explicit manifest version for Chrome and Firefox. Omit to retain WXT configuration/defaults."
     },
-    "skipFormat": { "type": "boolean", "default": false }
+    "skipFormat": { "type": "boolean", "default": false },
+    "skipInstall": {
+      "type": "boolean",
+      "default": false,
+      "description": "Defer installation and peer verification to the caller; preserve their package-manager/store policy."
+    }
   },
   "additionalProperties": false
 }
