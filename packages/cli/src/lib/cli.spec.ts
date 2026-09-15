@@ -400,6 +400,33 @@ afterEach(async () => {
 });
 
 describe('@megamono/cli', () => {
+  it('prints redacted feedback without delegating and sanitizes inspection failures', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+    const secret = 'credential-that-must-not-leak';
+    const store = join(root, secret);
+    const args = [
+      'feedback',
+      '--json',
+      '--packages=@megamono/plugin',
+      `--yalc-store=${store}`,
+    ];
+    expect((await runMegamonoCli(args, harness.value)).exitCode).toBe(0);
+    expect(harness.invocations).toEqual([]);
+    const output = harness.stdout.join('');
+    expect(output).not.toContain(root);
+    expect(output).not.toContain(secret);
+    expect(JSON.parse(output).kind).toBe('megamono-feedback');
+    expect(JSON.parse(output).packages[0].findingCount).toBeGreaterThan(0);
+    await writeFile(join(root, 'package.json'), `invalid JSON with ${secret}`);
+    const failed = io(root);
+    expect((await runMegamonoCli(args, failed.value)).exitCode).toBe(1);
+    expect(failed.invocations).toEqual([]);
+    expect(failed.stdout).toEqual([]);
+    expect(failed.stderr.join('')).not.toContain(secret);
+    expect(failed.stderr.join('')).not.toContain(root);
+  });
+
   it('runs artifact diagnostics locally without invoking a package manager or another CLI', async () => {
     const root = await workspace('pnpm');
     const store = join(root, 'store');
@@ -440,6 +467,7 @@ describe('@megamono/cli', () => {
   });
 
   it.each([
+    ['feedback', 'Usage: megamono feedback'],
     ['adopt', 'Usage: megamono adopt'],
     ['health', 'Usage: megamono health'],
     ['verify', 'Usage: megamono verify runtime'],

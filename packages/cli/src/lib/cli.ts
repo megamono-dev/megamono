@@ -32,6 +32,7 @@ import {
   artifactDiagnosticOptions,
   diagnoseArtifacts,
 } from './artifact-diagnostics.js';
+import { FEEDBACK_HELP, redactedFeedback } from './feedback.js';
 import {
   isPackageManager,
   packageManagerAdapter,
@@ -247,6 +248,7 @@ Commands:
   health               Run workspace checks with a package-source profile
   verify <kind>        Verify runtime, dependency, or container portability
   diagnostics packages Compare installed, Yalc, source-build and PATH CLI artifacts
+  feedback             Print a local redacted artifact report for manual sharing
   generate <name>      Run an available local Megamono generator
   help                 Show this help
 
@@ -425,6 +427,7 @@ function helpForTopic(topic: string | undefined): string {
     health: HEALTH_HELP,
     verify: VERIFY_HELP,
     diagnostics: ARTIFACT_HELP,
+    feedback: FEEDBACK_HELP,
     auth: AUTH_HELP,
     account: ACCOUNT_HELP,
   };
@@ -3310,6 +3313,28 @@ export async function runMegamonoCli(
         return { exitCode: 0 };
       }
       return await runInit(args.slice(1), io);
+    }
+    if (args[0] === 'feedback') {
+      if (args.includes('--help') || args.includes('-h')) {
+        io.stdout(FEEDBACK_HELP);
+        return { exitCode: 0 };
+      }
+      try {
+        const root = await findWorkspaceRoot(io.cwd).catch(() =>
+          resolve(io.cwd),
+        );
+        const options = artifactDiagnosticOptions(args.slice(1), root);
+        io.stdout(
+          JSON.stringify(redactedFeedback(diagnoseArtifacts(options)), null, 2),
+        );
+        return { exitCode: 0 };
+      } catch {
+        // Raw filesystem/parser errors may contain paths or manifest values.
+        io.stderr(
+          'Feedback report could not be generated. Check options and local artifact access; no report was submitted. Use megamono feedback --help for supported options.',
+        );
+        return { exitCode: 1 };
+      }
     }
     if (args[0] === 'diagnostics') {
       if (args.includes('--help') || args.includes('-h')) {

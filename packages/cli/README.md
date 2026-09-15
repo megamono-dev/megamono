@@ -160,6 +160,29 @@ unchanged. `verify artifacts` exits 1 on drift or unverifiable selections; guard
 commands exit 3 on an alignment failure. Reconcile dependencies explicitly and
 rerun; an older reviewed archive can be valid even when the Yalc store is newer.
 
+### Local feedback report
+
+```sh
+megamono feedback --json --packages=@megamono/cli,@megamono/plugin
+```
+
+This prints a redacted artifact report for manual review and attachment to an
+issue. It uses the diagnostics inventory but includes only package names,
+location categories/status, recognized version/build identities, hashes and
+finding counts. Absolute paths, raw errors, dependency URLs, arbitrary build
+metadata and source contents are not included. It does not collect `.env`,
+`.npmrc`, logs or credentials. `--yalc-store` and `--source-root` support the
+same explicit inventory selections as diagnostics.
+
+No files are written, packages executed/installed, or feedback submitted. Review
+the names and hashes before sharing; add your own sanitized reproduction steps.
+Exit 0 means report generation succeeded, even if it describes artifact drift.
+Detailed local troubleshooting still uses `diagnostics packages`; that report
+contains paths and raw errors and is not the sharing-safe format. Root inventory
+does not prove nested consumer alignment or production readiness.
+
+### Hosted authentication
+
 Hosted authentication is optional and independent of repository discovery:
 
 ```sh
