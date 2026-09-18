@@ -477,12 +477,13 @@ describe('@megamono/cli', () => {
         ...harness.value,
         hostedAuth: auth,
         hostedServiceUrl: 'https://app.megamono.test',
+        hostedApiUrl: 'https://api.megamono.test',
       },
     );
 
     expect(result).toEqual({ exitCode: 0 });
     expect(submitFeedback).toHaveBeenCalledExactlyOnceWith(
-      'https://app.megamono.test',
+      'https://api.megamono.test',
       expect.objectContaining({
         type: 'megamono.cli.feedback',
         context: expect.objectContaining({

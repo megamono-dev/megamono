@@ -44,10 +44,11 @@ import {
   packageManagerAdapter,
   type PackageManager,
 } from './package-manager.js';
-import type {
-  HostedAccount,
-  HostedAuthOperations,
-  HostedProfile,
+import {
+  DEFAULT_HOSTED_API_URL,
+  type HostedAccount,
+  type HostedAuthOperations,
+  type HostedProfile,
 } from './hosted-auth.js';
 
 export type { PackageManager } from './package-manager.js';
@@ -83,6 +84,7 @@ export interface MegamonoCliIo {
   selectHostedAccount?(accounts: readonly HostedAccount[]): Promise<string>;
   readonly hostedAuth?: HostedAuthOperations;
   readonly hostedServiceUrl?: string;
+  readonly hostedApiUrl?: string;
   configureSpringbar?(
     options: SpringbarWorkspaceOptions,
   ): Promise<SpringbarWorkspaceResult>;
@@ -3444,7 +3446,7 @@ export async function runMegamonoCli(
         });
         if (feedback.submit) {
           const auth = hostedAuth(io);
-          const serviceUrl = io.hostedServiceUrl ?? 'https://app.megamono.com';
+          const serviceUrl = io.hostedApiUrl ?? DEFAULT_HOSTED_API_URL;
           const submission = await auth.submitFeedback(serviceUrl, payload);
           io.stdout(
             options.json

@@ -30,6 +30,8 @@ export interface HostedAuthOperations {
   ): Promise<{ readonly id?: string; readonly url?: string }>;
 }
 
+export const DEFAULT_HOSTED_API_URL = 'https://api.megamono.com';
+
 interface ClientTokenSet {
   readonly accessToken: string;
   readonly refreshToken: string;
@@ -398,7 +400,7 @@ export function createHostedAuthOperations(
     },
     async submitFeedback(serviceUrl, payload) {
       const current = await client(serviceUrl);
-      const response = await fetcher(`${current.origin}/api/feedback`, {
+      const response = await fetcher(`${current.origin}/feedback`, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${await current.auth.accessToken()}`,

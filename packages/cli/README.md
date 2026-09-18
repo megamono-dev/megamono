@@ -193,8 +193,9 @@ megamono auth login
 megamono feedback --submit --description='What happened and what was expected'
 ```
 
-`--submit` uses the stored bearer session and the `MEGAMONO_SERVICE_URL` (or
-`https://app.megamono.com` by default). Submission is never automatic. When a
+`--submit` uses the stored bearer session and sends to `MEGAMONO_API_URL` (or
+`https://api.megamono.com/feedback` by default). Hosted login still uses
+`MEGAMONO_SERVICE_URL` (or `https://app.megamono.com`). Submission is never automatic. When a
 Megamono action fails, the CLI prints a sanitized `--from-error` command that
 can be reviewed and run manually. Exit 0 means report generation or submission
 succeeded, even if the report describes artifact drift.

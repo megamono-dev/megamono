@@ -146,7 +146,7 @@ describe('hosted auth operations', () => {
             accounts: [],
           });
         }
-        expect(String(input)).toBe('https://app.megamono.test/api/feedback');
+        expect(String(input)).toBe('https://api.megamono.test/feedback');
         expect(init?.method).toBe('POST');
         expect(init?.headers).toEqual({
           authorization: `Bearer ${'A'.repeat(43)}`,
@@ -162,10 +162,10 @@ describe('hosted auth operations', () => {
       open: vi.fn(),
       loadModules: modules(),
     });
-    await auth.login('https://app.megamono.test');
+    await auth.login('https://api.megamono.test');
 
     await expect(
-      auth.submitFeedback('https://app.megamono.test', { type: 'test' }),
+      auth.submitFeedback('https://api.megamono.test', { type: 'test' }),
     ).resolves.toEqual({ id: 'feedback-1' });
   });
 });

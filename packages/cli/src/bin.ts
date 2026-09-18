@@ -97,6 +97,9 @@ const result = await runMegamonoCli(process.argv.slice(2), {
   ...(process.env.MEGAMONO_SERVICE_URL
     ? { hostedServiceUrl: process.env.MEGAMONO_SERVICE_URL }
     : {}),
+  ...(process.env.MEGAMONO_API_URL
+    ? { hostedApiUrl: process.env.MEGAMONO_API_URL }
+    : {}),
   ...(stdin.isTTY && stdout.isTTY
     ? {
         selectAppType: async (
