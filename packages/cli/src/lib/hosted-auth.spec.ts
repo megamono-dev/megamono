@@ -2,7 +2,10 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHostedAuthOperations, type HostedAuthOptions } from './hosted-auth.js';
+import {
+  createHostedAuthOperations,
+  type HostedAuthOptions,
+} from './hosted-auth.js';
 
 const fixtures: string[] = [];
 
@@ -39,7 +42,9 @@ function modules(): NonNullable<HostedAuthOptions['loadModules']> {
 
 afterEach(async () => {
   await Promise.all(
-    fixtures.splice(0).map((path) => rm(path, { recursive: true, force: true })),
+    fixtures
+      .splice(0)
+      .map((path) => rm(path, { recursive: true, force: true })),
   );
 });
 
@@ -48,31 +53,45 @@ describe('hosted auth operations', () => {
     const configHome = await mkdtemp(join(tmpdir(), 'megamono-hosted-auth-'));
     fixtures.push(configHome);
     let activeAccount: string | null = null;
-    const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input);
-      if (url.endsWith('/api/oauth/profile')) {
-        return Response.json({
-          user: { id: 'user-1', email: 'developer@megamono.test' },
-          account: activeAccount ? { id: activeAccount, role: 'owner' } : null,
-          accounts: [
-            { id: 'personal-1', name: 'Personal', slug: 'personal', role: 'owner' },
-            { id: 'commune-1', name: 'Commune', slug: 'commune', role: 'member' },
-          ],
-        });
-      }
-      if (url.endsWith('/api/oauth/accounts/switch')) {
-        activeAccount = JSON.parse(String(init?.body)).accountId;
-        return Response.json({
-          access_token: 'C'.repeat(43),
-          refresh_token: 'D'.repeat(43),
-          token_type: 'Bearer',
-          expires_in: 60,
-          refresh_expires_in: 120,
-          scope: 'profile accounts:read accounts:write',
-        });
-      }
-      return new Response(null, { status: 404 });
-    });
+    const fetcher = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/api/oauth/profile')) {
+          return Response.json({
+            user: { id: 'user-1', email: 'developer@megamono.test' },
+            account: activeAccount
+              ? { id: activeAccount, role: 'owner' }
+              : null,
+            accounts: [
+              {
+                id: 'personal-1',
+                name: 'Personal',
+                slug: 'personal',
+                role: 'owner',
+              },
+              {
+                id: 'commune-1',
+                name: 'Commune',
+                slug: 'commune',
+                role: 'member',
+              },
+            ],
+          });
+        }
+        if (url.endsWith('/api/oauth/accounts/switch')) {
+          activeAccount = JSON.parse(String(init?.body)).accountId;
+          return Response.json({
+            access_token: 'C'.repeat(43),
+            refresh_token: 'D'.repeat(43),
+            token_type: 'Bearer',
+            expires_in: 60,
+            refresh_expires_in: 120,
+            scope: 'profile accounts:read accounts:write',
+          });
+        }
+        return new Response(null, { status: 404 });
+      },
+    );
     const auth = createHostedAuthOperations({
       configHome,
       fetch: fetcher as typeof fetch,
@@ -92,9 +111,9 @@ describe('hosted auth operations', () => {
     const credentials = JSON.parse(
       await readFile(join(configHome, 'credentials.json'), 'utf8'),
     );
-    expect(
-      credentials.profiles['https://app.megamono.test'].accessToken,
-    ).toBe('C'.repeat(43));
+    expect(credentials.profiles['https://app.megamono.test'].accessToken).toBe(
+      'C'.repeat(43),
+    );
 
     await auth.logout('https://app.megamono.test');
     await expect(auth.profile('https://app.megamono.test')).resolves.toBeNull();
@@ -111,5 +130,42 @@ describe('hosted auth operations', () => {
       'must use HTTPS',
     );
     expect(loadModules).not.toHaveBeenCalled();
+  });
+
+  it('submits feedback with the current bearer session', async () => {
+    const configHome = await mkdtemp(
+      join(tmpdir(), 'megamono-hosted-feedback-'),
+    );
+    fixtures.push(configHome);
+    const fetcher = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input).endsWith('/api/oauth/profile')) {
+          return Response.json({
+            user: { id: 'user-1', email: 'developer@megamono.test' },
+            account: null,
+            accounts: [],
+          });
+        }
+        expect(String(input)).toBe('https://app.megamono.test/api/feedback');
+        expect(init?.method).toBe('POST');
+        expect(init?.headers).toEqual({
+          authorization: `Bearer ${'A'.repeat(43)}`,
+          'content-type': 'application/json',
+        });
+        expect(JSON.parse(String(init?.body))).toEqual({ type: 'test' });
+        return Response.json({ id: 'feedback-1' });
+      },
+    );
+    const auth = createHostedAuthOperations({
+      configHome,
+      fetch: fetcher as typeof fetch,
+      open: vi.fn(),
+      loadModules: modules(),
+    });
+    await auth.login('https://app.megamono.test');
+
+    await expect(
+      auth.submitFeedback('https://app.megamono.test', { type: 'test' }),
+    ).resolves.toEqual({ id: 'feedback-1' });
   });
 });

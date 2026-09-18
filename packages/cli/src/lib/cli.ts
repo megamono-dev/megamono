@@ -32,7 +32,13 @@ import {
   artifactDiagnosticOptions,
   diagnoseArtifacts,
 } from './artifact-diagnostics.js';
-import { FEEDBACK_HELP, redactedFeedback } from './feedback.js';
+import {
+  createFeedbackPayload,
+  FEEDBACK_HELP,
+  feedbackCommand,
+  redactedFeedback,
+  sanitizeFeedbackText,
+} from './feedback.js';
 import {
   isPackageManager,
   packageManagerAdapter,
@@ -248,7 +254,7 @@ Commands:
   health               Run workspace checks with a package-source profile
   verify <kind>        Verify runtime, dependency, or container portability
   diagnostics packages Compare installed, Yalc, source-build and PATH CLI artifacts
-  feedback             Print a local redacted artifact report for manual sharing
+  feedback             Create or submit a redacted artifact report
   generate <name>      Run an available local Megamono generator
   help                 Show this help
 
@@ -729,6 +735,83 @@ function optionValue(
     return { value, consumed: 1 };
   }
   return undefined;
+}
+
+interface FeedbackOptions {
+  readonly diagnosticArgs: readonly string[];
+  readonly description?: string;
+  readonly context?: {
+    readonly command?: string;
+    readonly error?: string;
+    readonly exitCode?: number;
+  };
+  readonly submit: boolean;
+}
+
+function feedbackOptions(args: readonly string[]): FeedbackOptions {
+  const diagnosticArgs: string[] = [];
+  let description: string | undefined;
+  let command: string | undefined;
+  let error: string | undefined;
+  let exitCode: number | undefined;
+  let submit = false;
+  let fromError = false;
+  for (let index = 0; index < args.length;) {
+    const argument = args[index];
+    if (argument === '--submit') {
+      submit = true;
+      index++;
+      continue;
+    }
+    if (argument === '--from-error') {
+      fromError = true;
+      index++;
+      continue;
+    }
+    const descriptionValue = optionValue(args, index, '--description');
+    if (descriptionValue) {
+      description = descriptionValue.value;
+      index += descriptionValue.consumed;
+      continue;
+    }
+    const commandValue = optionValue(args, index, '--command');
+    if (commandValue) {
+      command = commandValue.value;
+      index += commandValue.consumed;
+      continue;
+    }
+    const errorValue = optionValue(args, index, '--error');
+    if (errorValue) {
+      error = errorValue.value;
+      index += errorValue.consumed;
+      continue;
+    }
+    const exitCodeValue = optionValue(args, index, '--exit-code');
+    if (exitCodeValue) {
+      const parsed = Number(exitCodeValue.value);
+      if (!Number.isSafeInteger(parsed) || parsed < 0)
+        throw new CliError('--exit-code must be a non-negative integer.', 2);
+      exitCode = parsed;
+      index += exitCodeValue.consumed;
+      continue;
+    }
+    diagnosticArgs.push(argument);
+    index++;
+  }
+  const context =
+    fromError || command || error || exitCode !== undefined
+      ? {
+          ...(command ? { command } : {}),
+          ...(error ? { error } : {}),
+          ...(exitCode !== undefined ? { exitCode } : {}),
+        }
+      : undefined;
+  return {
+    diagnosticArgs,
+    ...(description ? { description } : {}),
+    ...(context ? { context } : {}),
+    submit,
+  };
 }
 
 interface PlaystackSelection {
@@ -2478,6 +2561,7 @@ async function runAdd(
     const result = await io.runCommand(command, commandArgs, {
       cwd: workspace.root,
     });
+    suggestFeedback(io, command, commandArgs, result);
     return { exitCode: result.exitCode };
   }
   if (subject === 'integration') {
@@ -2500,6 +2584,7 @@ async function runAdd(
     const generated = await io.runCommand(command, commandArgs, {
       cwd: workspace.root,
     });
+    suggestFeedback(io, command, commandArgs, generated);
     return { exitCode: generated.exitCode };
   }
   if (subject === 'library') {
@@ -2561,6 +2646,7 @@ async function runAdd(
     const generated = await io.runCommand(command, commandArgs, {
       cwd: workspace.root,
     });
+    suggestFeedback(io, command, commandArgs, generated);
     if (generated.exitCode !== 0 && !parsed.dryRun) {
       io.stderr(
         `Database generation failed after delegation. Inspect git diff for partial files, resolve the reported error, then retry: megamono add database ${name} --adapter=${adapter}`,
@@ -2637,6 +2723,7 @@ async function runAdd(
   const generated = await io.runCommand(command, commandArgs, {
     cwd: workspace.root,
   });
+  suggestFeedback(io, command, commandArgs, generated);
   if (generated.exitCode !== 0 && !parsed.dryRun) {
     io.stderr(
       `Application generation failed after delegation.${
@@ -2989,7 +3076,24 @@ async function runWorkspaceTarget(
     ...args,
   ]);
   const result = await io.runCommand(command, commandArgs, { cwd: root });
+  suggestFeedback(io, command, commandArgs, result);
   return { exitCode: result.exitCode };
+}
+
+function suggestFeedback(
+  io: MegamonoCliIo,
+  command: string,
+  args: readonly string[],
+  result: CommandResult,
+): void {
+  if (result.exitCode === 0) return;
+  io.stderr(
+    `If this looks like a Megamono issue, run: ${feedbackCommand({
+      command: [command, ...args].join(' '),
+      error: result.stderr ?? `command exited with code ${result.exitCode}`,
+      exitCode: result.exitCode,
+    })}`,
+  );
 }
 
 async function runHealth(
@@ -3326,15 +3430,35 @@ export async function runMegamonoCli(
         const root = await findWorkspaceRoot(io.cwd).catch(() =>
           resolve(io.cwd),
         );
-        const options = artifactDiagnosticOptions(args.slice(1), root);
-        io.stdout(
-          JSON.stringify(redactedFeedback(diagnoseArtifacts(options)), null, 2),
+        const feedback = feedbackOptions(args.slice(1));
+        const options = artifactDiagnosticOptions(
+          feedback.diagnosticArgs,
+          root,
         );
+        const payload = createFeedbackPayload({
+          report: redactedFeedback(diagnoseArtifacts(options)),
+          ...(feedback.description
+            ? { description: feedback.description }
+            : {}),
+          ...(feedback.context ? { context: feedback.context } : {}),
+        });
+        if (feedback.submit) {
+          const auth = hostedAuth(io);
+          const serviceUrl = io.hostedServiceUrl ?? 'https://app.megamono.com';
+          const submission = await auth.submitFeedback(serviceUrl, payload);
+          io.stdout(
+            options.json
+              ? JSON.stringify({ ...payload, submission }, null, 2)
+              : `Feedback submitted${submission.id ? ` as ${submission.id}` : ''}${submission.url ? `: ${submission.url}` : '.'}`,
+          );
+        } else {
+          io.stdout(JSON.stringify(payload, null, 2));
+        }
         return { exitCode: 0 };
-      } catch {
+      } catch (error) {
         // Raw filesystem/parser errors may contain paths or manifest values.
         io.stderr(
-          'Feedback report could not be generated. Check options and local artifact access; no report was submitted. Use megamono feedback --help for supported options.',
+          `Feedback report could not be generated or submitted: ${sanitizeFeedbackText(error instanceof Error ? error.message : String(error))}`,
         );
         return { exitCode: 1 };
       }
@@ -3445,6 +3569,15 @@ export async function runMegamonoCli(
           arg === '--format=json' ||
           (arg === '--format' && args[index + 1] === 'json'),
       );
+    if (!surveyJson && args[0] !== 'feedback') {
+      io.stderr(
+        `If this looks like a Megamono issue, run: ${feedbackCommand({
+          command: ['megamono', ...args].join(' '),
+          error: message,
+          exitCode,
+        })}`,
+      );
+    }
     io.stderr(
       surveyJson
         ? JSON.stringify({

@@ -448,6 +448,72 @@ describe('@megamono/cli', () => {
     expect(failed.stderr.join('')).not.toContain(root);
   });
 
+  it('includes sanitized error context and can explicitly submit feedback', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root);
+    const submitFeedback = vi.fn(async () => ({
+      id: 'feedback-123',
+      url: 'https://app.megamono.com/feedback/feedback-123',
+    }));
+    const auth: HostedAuthOperations = {
+      login: vi.fn(),
+      profile: vi.fn(),
+      logout: vi.fn(),
+      switchAccount: vi.fn(),
+      submitFeedback,
+    };
+    const result = await runMegamonoCli(
+      [
+        'feedback',
+        '--submit',
+        '--json',
+        '--description=The command failed unexpectedly',
+        '--from-error',
+        '--command=megamono verify runtime api',
+        '--error=Bearer secret-token failed',
+        '--exit-code=7',
+      ],
+      {
+        ...harness.value,
+        hostedAuth: auth,
+        hostedServiceUrl: 'https://app.megamono.test',
+      },
+    );
+
+    expect(result).toEqual({ exitCode: 0 });
+    expect(submitFeedback).toHaveBeenCalledExactlyOnceWith(
+      'https://app.megamono.test',
+      expect.objectContaining({
+        type: 'megamono.cli.feedback',
+        context: expect.objectContaining({
+          error: 'Bearer <redacted> failed',
+          exitCode: 7,
+        }),
+      }),
+    );
+    const payload = submitFeedback.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(JSON.stringify(payload)).not.toContain('secret-token');
+    expect(harness.stdout.join('')).toContain('feedback-123');
+  });
+
+  it('suggests a pre-populated feedback command after an action failure', async () => {
+    const root = await workspace('pnpm');
+    const harness = io(root, () => ({
+      exitCode: 9,
+      stderr: 'provider failed with Bearer secret-token',
+    }));
+    const result = await runMegamonoCli(['health'], harness.value);
+
+    expect(result).toEqual({ exitCode: 9 });
+    const output = harness.stderr.join('\n');
+    expect(output).toContain('megamono feedback --from-error');
+    expect(output).toContain('Bearer <redacted>');
+    expect(output).not.toContain('secret-token');
+  });
+
   it('runs artifact diagnostics locally without invoking a package manager or another CLI', async () => {
     const root = await workspace('pnpm');
     const store = join(root, 'store');
@@ -522,6 +588,7 @@ describe('@megamono/cli', () => {
       profile: vi.fn(async () => selected),
       logout: vi.fn(async () => undefined),
       switchAccount: vi.fn(async () => selected),
+      submitFeedback: vi.fn(async () => ({})),
     };
 
     const result = await runMegamonoCli(
@@ -563,6 +630,7 @@ describe('@megamono/cli', () => {
         ...initial,
         account: { id: 'commune-1', role: 'member' },
       })),
+      submitFeedback: vi.fn(async () => ({})),
     };
     const value = { ...harness.value, hostedAuth: auth };
 
@@ -589,6 +657,7 @@ describe('@megamono/cli', () => {
       profile: vi.fn(async () => null),
       logout: vi.fn(async () => undefined),
       switchAccount: vi.fn(),
+      submitFeedback: vi.fn(),
     };
 
     await expect(

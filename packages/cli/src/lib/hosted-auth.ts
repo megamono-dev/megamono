@@ -23,10 +23,11 @@ export interface HostedAuthOperations {
   login(serviceUrl: string): Promise<HostedProfile>;
   profile(serviceUrl: string): Promise<HostedProfile | null>;
   logout(serviceUrl: string): Promise<void>;
-  switchAccount(
+  switchAccount(serviceUrl: string, accountId: string): Promise<HostedProfile>;
+  submitFeedback(
     serviceUrl: string,
-    accountId: string,
-  ): Promise<HostedProfile>;
+    payload: unknown,
+  ): Promise<{ readonly id?: string; readonly url?: string }>;
 }
 
 interface ClientTokenSet {
@@ -118,7 +119,9 @@ function serviceOrigin(value: string): string {
     throw new Error('Megamono service URLs must use HTTPS');
   }
   if (url.username || url.password || url.search || url.hash) {
-    throw new Error('Megamono service URLs cannot include credentials or query data');
+    throw new Error(
+      'Megamono service URLs cannot include credentials or query data',
+    );
   }
   return url.origin;
 }
@@ -231,7 +234,8 @@ async function defaultModules(): Promise<ClientAuthModules> {
       import(loopbackName),
     ]);
     return {
-      createClientAuth: client.createClientAuth as ClientAuthModules['createClientAuth'],
+      createClientAuth:
+        client.createClientAuth as ClientAuthModules['createClientAuth'],
       createFetchTokenTransport:
         client.createFetchTokenTransport as ClientAuthModules['createFetchTokenTransport'],
       createLoopbackLauncher:
@@ -249,13 +253,22 @@ export function createHostedAuthOperations(
   options: HostedAuthOptions,
 ): HostedAuthOperations {
   const fetcher = options.fetch ?? globalThis.fetch;
-  const credentialPath = join(configDirectory(options.configHome), 'credentials.json');
+  const credentialPath = join(
+    configDirectory(options.configHome),
+    'credentials.json',
+  );
   const loadModules = options.loadModules ?? defaultModules;
 
   async function readCredentials(): Promise<CredentialDocument> {
     try {
-      const parsed = JSON.parse(await readFile(credentialPath, 'utf8')) as CredentialDocument;
-      if (parsed.version === 1 && parsed.profiles && typeof parsed.profiles === 'object') {
+      const parsed = JSON.parse(
+        await readFile(credentialPath, 'utf8'),
+      ) as CredentialDocument;
+      if (
+        parsed.version === 1 &&
+        parsed.profiles &&
+        typeof parsed.profiles === 'object'
+      ) {
         return parsed;
       }
     } catch (cause) {
@@ -294,7 +307,10 @@ export function createHostedAuthOperations(
     };
   }
 
-  async function client(serviceUrl: string, interactive = false): Promise<{
+  async function client(
+    serviceUrl: string,
+    interactive = false,
+  ): Promise<{
     readonly origin: string;
     readonly auth: ClientAuth;
     readonly storage: TokenStorage;
@@ -365,17 +381,37 @@ export function createHostedAuthOperations(
     },
     async switchAccount(serviceUrl, accountId) {
       const current = await client(serviceUrl);
-      const response = await fetcher(`${current.origin}/api/oauth/accounts/switch`, {
+      const response = await fetcher(
+        `${current.origin}/api/oauth/accounts/switch`,
+        {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${await current.auth.accessToken()}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ accountId }),
+        },
+      );
+      if (!response.ok) throw await responseError(response);
+      await current.storage.save(tokenSet(await response.json()));
+      return authenticatedProfile(current.origin, current.auth);
+    },
+    async submitFeedback(serviceUrl, payload) {
+      const current = await client(serviceUrl);
+      const response = await fetcher(`${current.origin}/api/feedback`, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${await current.auth.accessToken()}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ accountId }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) throw await responseError(response);
-      await current.storage.save(tokenSet(await response.json()));
-      return authenticatedProfile(current.origin, current.auth);
+      const value = (await response.json()) as Record<string, unknown>;
+      return {
+        ...(typeof value.id === 'string' ? { id: value.id } : {}),
+        ...(typeof value.url === 'string' ? { url: value.url } : {}),
+      };
     },
   };
 }

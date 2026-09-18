@@ -174,9 +174,30 @@ metadata and source contents are not included. It does not collect `.env`,
 `.npmrc`, logs or credentials. `--yalc-store` and `--source-root` support the
 same explicit inventory selections as diagnostics.
 
-No files are written, packages executed/installed, or feedback submitted. Review
-the names and hashes before sharing; add your own sanitized reproduction steps.
-Exit 0 means report generation succeeded, even if it describes artifact drift.
+No files are written, packages executed/installed, or feedback submitted unless
+you explicitly pass `--submit`. Add context without exposing credentials:
+
+```sh
+megamono feedback --description='The generated target failed after adoption' \
+  --from-error --command='megamono verify runtime api' \
+  --error='sanitized failure message' --exit-code=3
+```
+
+The CLI redacts bearer tokens, credential-bearing URLs, common secret query
+parameters and home-directory prefixes before they enter the payload. Review
+the names, hashes and description before sharing. To submit the payload to the
+configured hosted Megamono service, sign in first and opt in explicitly:
+
+```sh
+megamono auth login
+megamono feedback --submit --description='What happened and what was expected'
+```
+
+`--submit` uses the stored bearer session and the `MEGAMONO_SERVICE_URL` (or
+`https://app.megamono.com` by default). Submission is never automatic. When a
+Megamono action fails, the CLI prints a sanitized `--from-error` command that
+can be reviewed and run manually. Exit 0 means report generation or submission
+succeeded, even if the report describes artifact drift.
 Detailed local troubleshooting still uses `diagnostics packages`; that report
 contains paths and raw errors and is not the sharing-safe format. Root inventory
 does not prove nested consumer alignment or production readiness.
