@@ -7,6 +7,7 @@
     "validate": {
       "executor": "@megamono/plugin:docs-validate",
       "cache": true,
+      "dependsOn": ["@megamono/plugin:build"],
       "inputs": [
         "{workspaceRoot}/megamono.json",
         "{workspaceRoot}/content-collections.ts",

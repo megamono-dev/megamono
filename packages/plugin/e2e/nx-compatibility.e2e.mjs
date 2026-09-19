@@ -67,6 +67,15 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function writeFixtureTool(executable, source) {
+  fixtureToolPath ??= join(temporaryRoot, 'fixture-tools');
+  mkdirSync(fixtureToolPath, { recursive: true });
+  const toolPath = join(fixtureToolPath, executable);
+  writeFileSync(toolPath, source);
+  chmodSync(toolPath, 0o755);
+  return toolPath;
+}
+
 function removeTemporaryRoot() {
   const fixturePrefix = join(tmpdir(), 'megamono-nx-compatibility-');
   if (!temporaryRoot.startsWith(fixturePrefix)) {
@@ -220,6 +229,12 @@ try {
       ) === appleApp,
       `Nx ${nxVersion} changed the application during an idempotent rerun.`,
     );
+    writeFixtureTool(
+      'xcodebuild',
+      `#!/usr/bin/env node
+process.stdout.write('xcodebuild stub\\n');
+`,
+    );
   }
 
   const project = JSON.parse(
@@ -280,13 +295,10 @@ try {
       join(fixtureRoot, 'crates/fixture-cargo/src/lib.rs'),
       'pub fn fixture() {}\n',
     );
-    fixtureToolPath = join(temporaryRoot, 'fixture-tools');
-    mkdirSync(fixtureToolPath, { recursive: true });
     const cargoManifest = join(fixtureRoot, 'crates/fixture-cargo/Cargo.toml');
     const cargoRoot = join(fixtureRoot, 'crates/fixture-cargo');
-    const fakeCargoPath = join(fixtureToolPath, 'cargo');
-    writeFileSync(
-      fakeCargoPath,
+    writeFixtureTool(
+      'cargo',
       `#!/usr/bin/env node
 process.stdout.write(JSON.stringify({
   packages: [{
@@ -302,7 +314,6 @@ process.stdout.write(JSON.stringify({
 }));
 `,
     );
-    chmodSync(fakeCargoPath, 0o755);
     mkdirSync(join(fixtureRoot, 'apps/worker/src'), { recursive: true });
     writeJson(join(fixtureRoot, 'apps/worker/wrangler.json'), {
       name: 'fixture-worker',

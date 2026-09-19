@@ -61,6 +61,8 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
+      - name: Install the npm major that resolves package-lock.json
+        run: npm install --global npm@^11
       - run: npm ci
       - run: npm exec nx -- run @megamono/plugin:e2e-nx-compatibility --output-style=static
         env:
@@ -78,6 +80,8 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Install the npm major that resolves package-lock.json
+        run: npm install --global npm@^11
       - run: npm ci
       - run: npm exec nx -- run @megamono/plugin:e2e-nx-compatibility --output-style=static
         env:
