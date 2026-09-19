@@ -2,6 +2,20 @@
   "name": "create-megamono",
   "version": "0.0.1",
   "license": "MIT",
+  "description": "Create a new Megamono workspace: an Nx monorepo with conventions, documentation, and governance wired up.",
+  "keywords": [
+    "megamono",
+    "nx",
+    "monorepo",
+    "create",
+    "scaffolding",
+    "bootstrap"
+  ],
+  "author": "Ryan Hefner",
+  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/create-megamono#readme",
+  "bugs": {
+    "url": "https://github.com/megamono-dev/megamono/issues"
+  },
   "type": "module",
   "bin": {
     "create-megamono": "./dist/cli.js"
@@ -108,5 +122,14 @@
     "node": ">=24 <25",
     "pnpm": ">=11 <12",
     "npm": ">=11 <12"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/megamono-dev/megamono.git",
+    "directory": "packages/create-megamono"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   }
 }

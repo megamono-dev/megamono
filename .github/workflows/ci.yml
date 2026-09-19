@@ -27,7 +27,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run release:check-private
+      - run: npm run release:check
       - uses: nrwl/nx-set-shas@v5
       - run: npm exec nx -- run megamono:check --output-style=static
       - id: affected

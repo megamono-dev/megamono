@@ -74,11 +74,21 @@ megamono init --local-packages=yalc
 
 The local-package mode requires the exact compatible versions of `@megamono/plugin` and any selected platform plugins to exist in the yalc store before workspace creation begins.
 
-## Private validation releases
+## Releases
 
-The `@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, `@megamono/nx-cargo`, and `@megamono/nx-cloudflare` packages initially publish as restricted npm packages from `megamono-dev/megamono` under the `next` dist-tag. Their names remain unchanged when promoted to public npm. The unscoped `create-megamono` entry package is versioned separately and held until public promotion because npm does not support restricted unscoped packages.
+All six packages publish publicly to npm from `megamono-dev/megamono`. The
+`@megamono/cli`, `@megamono/plugin`, `@megamono/nx-apple`, `@megamono/nx-cargo`,
+and `@megamono/nx-cloudflare` packages move as one fixed-version set tagged
+`megamono@{version}`. The unscoped `create-megamono` entry package is versioned
+independently and tagged `create-megamono@{version}`, so the command people run
+first can ship a fix without forcing a version bump across the plugins.
 
-Run `npm run release:check-private` to verify registry, access, repository, and Nx release-group policy before publishing.
+Early releases go out under the `next` dist-tag; `latest` is selected
+deliberately from the release workflow when a version is ready to become the
+default install.
+
+Run `npm run release:check` to verify registry, access, repository, licensing,
+npm listing metadata, and Nx release-group policy before publishing.
 
 ## Specifications
 

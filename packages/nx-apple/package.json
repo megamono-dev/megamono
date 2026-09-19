@@ -2,6 +2,21 @@
   "name": "@megamono/nx-apple",
   "version": "0.0.1",
   "license": "MIT",
+  "description": "Nx plugin inferring Apple and Swift Package Manager projects, targets, and graph edges from Xcode workspaces.",
+  "keywords": [
+    "megamono",
+    "nx",
+    "nx-plugin",
+    "apple",
+    "xcode",
+    "swift",
+    "swiftpm"
+  ],
+  "author": "Ryan Hefner",
+  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/nx-apple#readme",
+  "bugs": {
+    "url": "https://github.com/megamono-dev/megamono/issues"
+  },
   "type": "commonjs",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -92,10 +107,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/megamono-dev/megamono.git"
+    "url": "git+https://github.com/megamono-dev/megamono.git",
+    "directory": "packages/nx-apple"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
-    "access": "restricted"
+    "access": "public"
   }
 }
