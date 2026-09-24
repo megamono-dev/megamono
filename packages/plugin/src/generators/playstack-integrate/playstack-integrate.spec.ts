@@ -88,6 +88,99 @@ function writeIntegrationManifest(
 }
 
 describe('Playstack integration generator', () => {
+  it.each(['1.2.3', '1.2.3-beta.1'])(
+    'accepts signed builds of %s and records the installed identity',
+    async (version) => {
+      const tree = fixture();
+      const manifest = integrationManifest(tree);
+      manifest.packageVersion = version;
+      writeIntegrationManifest(tree, manifest);
+      const installed = `${version}+9e100506`;
+      tree.write(
+        'node_modules/@playstack/rate-limit/package.json',
+        JSON.stringify({ name: '@playstack/rate-limit', version: installed }),
+      );
+
+      await playstackIntegrateGenerator(tree, {
+        packages: '@playstack/rate-limit',
+        api: 'apps/api',
+        yes: true,
+      });
+
+      const plan = JSON.parse(
+        tree.read('.megamono/playstack-integration-plan.json', 'utf8') ?? '{}',
+      );
+      expect(plan.packages).toEqual([
+        { name: '@playstack/rate-limit', version: installed },
+      ]);
+      const ledger = JSON.parse(
+        tree.read('.megamono/playstack-integrations.json', 'utf8') ?? '{}',
+      );
+      expect(
+        ledger.integrations['@playstack/rate-limit:nest-rate-limit@apps%2Fapi']
+          .version,
+      ).toBe(installed);
+      expect(integrationManifest(tree).packageVersion).toBe(version);
+    },
+  );
+
+  it.each([
+    '1.2.4+9e100506',
+    '1.3.0+9e100506',
+    '2.2.3+9e100506',
+    '1.2.3-beta.1+9e100506',
+    '1.2.3+',
+    'not-a-version',
+    null,
+  ])(
+    'rejects a different or invalid installed release %s before writes',
+    async (version) => {
+      const tree = fixture();
+      tree.write(
+        'node_modules/@playstack/rate-limit/package.json',
+        JSON.stringify({ name: '@playstack/rate-limit', version }),
+      );
+      const before = tree.listChanges();
+      await expect(
+        playstackIntegrateGenerator(tree, {
+          packages: '@playstack/rate-limit',
+          api: 'apps/api',
+          yes: true,
+        }),
+      ).rejects.toThrow('declares packageVersion');
+      expect(tree.listChanges()).toEqual(before);
+    },
+  );
+
+  it('invalidates qualified evidence when only the installed build identity changes', async () => {
+    const tree = fixture();
+    const options = {
+      packages: '@playstack/rate-limit',
+      api: 'apps/api',
+      yes: true,
+    };
+    await playstackIntegrateGenerator(tree, options);
+    const path = '.megamono/playstack-integrations.json';
+    const ledger = JSON.parse(tree.read(path, 'utf8') ?? '{}');
+    const record =
+      ledger.integrations['@playstack/rate-limit:nest-rate-limit@apps%2Fapi'];
+    record.stage = 'shadow';
+    record.history.push({ stage: 'shadow', fingerprint: record.fingerprint });
+    tree.write(path, JSON.stringify(ledger));
+    tree.write(
+      'node_modules/@playstack/rate-limit/package.json',
+      JSON.stringify({
+        name: '@playstack/rate-limit',
+        version: '1.2.3+9e100506',
+      }),
+    );
+    const before = tree.listChanges();
+    await expect(playstackIntegrateGenerator(tree, options)).rejects.toThrow(
+      'changed during shadow',
+    );
+    expect(tree.listChanges()).toEqual(before);
+  });
+
   it('archives a previous unscoped plan instead of losing it on first scoped adoption', async () => {
     const tree = fixture();
     const legacy = {

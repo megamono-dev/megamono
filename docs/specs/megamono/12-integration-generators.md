@@ -204,6 +204,14 @@ signatures and build-info claims never substitute for hashing installed bytes.
 Missing required internal packages and incompatible/missing required peers must
 be repaired explicitly. A snapshot is provenance, not runtime certification.
 
+An integration manifest's `packageVersion` must identify the installed SemVer
+release, including its prerelease suffix. Build metadata may differ (for example,
+Yalc adds a content signature to `package.json` without rewriting the embedded
+integration manifest). Plans and ledger entries retain the full installed
+version; provenance continues to bind both manifest bytes and runtime bytes.
+Allowing build metadata does not permit release/prerelease mismatches, invalid
+versions, or reuse of qualified evidence after a build identity changes.
+
 The generator persists `.megamono/playstack-integrations.json`, keyed by
 `package:integration`, preserving unselected integrations. Each entry records its
 package version, contract fingerprint, current stage, and append-only transition

@@ -31,6 +31,7 @@ import { readFileSync } from 'node:fs';
 import { posix, resolve } from 'node:path';
 import Ajv2020 from 'ajv/dist/2020';
 import { format } from 'prettier';
+import { valid as validVersion } from 'semver';
 
 const integrationValidator = new Ajv2020({
   allErrors: true,
@@ -378,11 +379,19 @@ function manifest(tree: Tree, name: string): IntegrationManifest {
   } catch {
     throw new Error(`${packageJsonPath} is not valid JSON.`);
   }
-  if (packageVersion !== candidate.packageVersion)
+  // Build metadata (including Yalc's content signature) identifies an artifact,
+  // not a different SemVer release. Preserve the full installed identity in
+  // plans; provenance still hashes the actual manifests and runtime bytes.
+  if (
+    typeof packageVersion !== 'string' ||
+    !validVersion(packageVersion) ||
+    !validVersion(candidate.packageVersion) ||
+    packageVersion.split('+')[0] !== candidate.packageVersion.split('+')[0]
+  )
     throw new Error(
       `${path} declares packageVersion ${candidate.packageVersion}, but ${packageJsonPath} declares ${String(packageVersion)}.`,
     );
-  return candidate as IntegrationManifest;
+  return { ...(candidate as IntegrationManifest), packageVersion };
 }
 
 function resolvedTarget(

@@ -101,7 +101,15 @@ connection. Conditional requirements are resolved
 with `--adapters`, `--persistence`, and an exact JSON `--conditions` map;
 package-authored decisions use `--decisions`. Migration work records
 `--adoptionMode=fresh|compare|shadow|cutover` and emits one suggested commit
-boundary per package integration:
+boundary per package integration.
+
+Signed Yalc builds may add SemVer build metadata to the installed package version
+without rewriting its integration manifest. This metadata does not change the
+release/prerelease contract. Plans retain the full installed version and hash
+the installed artifact, so changing a build still invalidates qualified evidence.
+Different releases, prereleases, and invalid versions fail before writes.
+
+For example:
 
 ```sh
 npm exec nx g @megamono/plugin:playstack-integrate \
