@@ -2,6 +2,7 @@ import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { planIntegrationVerification } from './integration-verification';
+import type { TargetConfiguration } from '@nx/devkit';
 
 const requirement = '@playstack/auth:nest-auth:refresh-reuse';
 const projects = new Map([
@@ -24,6 +25,55 @@ const options = {
 };
 
 describe('reviewed integration verification', () => {
+  it.each([
+    undefined,
+    { parallelism: false },
+    { cache: true },
+    { options: { command: 'custom-test' } },
+    { configurations: { custom: { command: 'custom-test' } } },
+    { dependsOn: [] },
+    { inputs: ['default'] },
+  ] satisfies Array<Partial<TargetConfiguration> | undefined>)(
+    'accepts only Nx default normalization, not changed behavior: %j',
+    (change) => {
+      const tree = createTreeWithEmptyWorkspace();
+      const plan = planIntegrationVerification(
+        tree,
+        projects,
+        [requirement],
+        options,
+      );
+      if (!plan) throw new Error('Expected a verification proposal.');
+      const project = projects.get('api');
+      if (!project) throw new Error('Expected the API fixture.');
+      const resolved = new Map([
+        [
+          'api',
+          {
+            ...project,
+            targets: {
+              test: project.targets.test,
+              'playstack-verify': {
+                // Deliberately reorder keys as well as adding Nx defaults.
+                parallelism: true,
+                options: {},
+                configurations: {},
+                ...plan.configuration,
+                ...change,
+              },
+            },
+          },
+        ],
+      ]);
+      const before = tree.listChanges();
+      const invoke = () =>
+        planIntegrationVerification(tree, resolved, [requirement], options);
+      if (change) expect(invoke).toThrow('already exists');
+      else expect(invoke()?.configuration).toEqual(plan.configuration);
+      expect(tree.listChanges()).toEqual(before);
+    },
+  );
+
   it('plans a target and appends a bounded CI step, preserving existing jobs and comments', () => {
     const tree = createTreeWithEmptyWorkspace();
     const path = '.github/workflows/ci.yml';

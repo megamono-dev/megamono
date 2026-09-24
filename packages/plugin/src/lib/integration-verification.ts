@@ -4,6 +4,7 @@ import type {
   Tree,
 } from '@nx/devkit';
 import { isMap, isSeq, parseDocument } from 'yaml';
+import { isDeepStrictEqual } from 'node:util';
 
 export interface IntegrationVerificationPlan {
   readonly project: string;
@@ -89,7 +90,19 @@ export function planIntegrationVerification(
     },
   };
   const existing = project.targets?.[target];
-  if (existing && JSON.stringify(existing) !== JSON.stringify(configuration))
+  // The resolved Nx graph adds these defaults to explicit targets. Their
+  // presence and object key order are not consumer edits. Keep all non-default
+  // options and additional fields in the comparison so ownership stays closed.
+  const normalized = (value: TargetConfiguration) => ({
+    options: {},
+    configurations: {},
+    parallelism: true,
+    ...value,
+  });
+  if (
+    existing &&
+    !isDeepStrictEqual(normalized(existing), normalized(configuration))
+  )
     throw new Error(
       `${options.verificationProject}:${target} already exists with different configuration; review it before replacing the target.`,
     );

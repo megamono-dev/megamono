@@ -108,6 +108,9 @@ without rewriting its integration manifest. This metadata does not change the
 release/prerelease contract. Plans retain the full installed version and hash
 the installed artifact, so changing a build still invalidates qualified evidence.
 Different releases, prereleases, and invalid versions fail before writes.
+Re-running verification wiring accepts Nx's empty `options`/`configurations`
+and default `parallelism: true` graph metadata. Non-default settings and other
+target edits remain conflicts; generated source does not copy graph defaults.
 
 For example:
 
