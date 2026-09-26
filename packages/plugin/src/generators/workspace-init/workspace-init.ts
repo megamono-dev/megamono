@@ -161,7 +161,7 @@ function ensureCheckInputs(tree: Tree): void {
     inputs.push({ env: 'CI' });
   updateProjectConfiguration(tree, 'megamono', {
     ...project,
-    targets: { ...project.targets, check: { ...current, inputs } },
+    targets: { ...project.targets, check: { ...current, inputs, cache: false } },
   });
 }
 
@@ -1810,7 +1810,9 @@ export async function workspaceInitGenerator(
       targets: {
         check: {
           executor: '@megamono/plugin:check',
-          cache: true,
+          // The checker consumes the complete graph and installed artifacts.
+          // Explicit file lists alone cannot safely represent that contract.
+          cache: false,
           inputs: [
             '{workspaceRoot}/megamono.json',
             '{workspaceRoot}/.megamono/artifacts.json',
@@ -1841,7 +1843,7 @@ export async function workspaceInitGenerator(
     if (modules.has('health') && !modules.has('docs')) ensureHealthTarget(tree);
   } else {
     logger.warn(
-      'Megamono artifact core.project is modified or repository-owned; left .megamono/project.json unchanged. Review megamono:check inputs for all package-manager lockfiles, package-policy configuration, and CI before using cached checks. Restore managed ownership explicitly before retrying automatic updates.',
+      'Megamono artifact core.project is modified or repository-owned; left .megamono/project.json unchanged. Set megamono:check cache to false: cached governance checks are not qualified for all graph, source, and installed-artifact changes. Restore managed ownership explicitly before retrying automatic updates.',
     );
   }
   if (!tree.exists('.megamono/artifacts.json')) {

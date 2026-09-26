@@ -1,5 +1,15 @@
 # `@megamono/plugin`
 
+## Governance execution safety
+
+Generated `megamono:check` targets are non-cacheable. The checker reads the Nx
+graph, repository sources/configuration, and installed artifact contents; the
+previous explicit input list did not qualify that complete cache contract.
+Re-running workspace initialization upgrades intact managed targets. Modified or
+ejected targets remain consumer-owned: set `cache: false` on those targets before
+relying on a successful check. A cache hit from an older target is not fresh
+governance evidence.
+
 ## Buildable Prisma clients
 
 `megamono add database primary --adapter=prisma --buildable --yes` opts a **new** database project into Prisma client generation followed by TypeScript compilation. `--client-output=src/db/client` selects a custom source directory. The project exports `dist/index.js` and declarations, records generated/build outputs for Nx, and keeps its package private. Consumer builds must depend on this project's `build` (through the Nx graph or an explicit dependency).

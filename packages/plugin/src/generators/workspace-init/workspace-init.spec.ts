@@ -815,6 +815,7 @@ describe('workspace-init generator', () => {
     async (ownership) => {
       await workspaceInitGenerator(tree, { only: 'lint', yes: true });
       const project = readProjectConfiguration(tree, 'megamono');
+      expect(project.targets?.check?.cache).toBe(false);
       updateProjectConfiguration(tree, 'megamono', {
         ...project,
         targets: {
@@ -822,6 +823,7 @@ describe('workspace-init generator', () => {
           check: {
             ...project.targets?.check,
             inputs: ['{workspaceRoot}/package-lock.json', 'customInput'],
+            cache: true,
             options: { skipDocs: true },
           },
           'custom-release': {
@@ -858,6 +860,7 @@ describe('workspace-init generator', () => {
       });
       expect(after.targets?.check?.options).toEqual({ skipDocs: true });
       if (ownership === 'managed') {
+        expect(after.targets?.check?.cache).toBe(false);
         expect(after.targets?.check?.inputs).toEqual(
           expect.arrayContaining([
             'customInput',
