@@ -1,5 +1,9 @@
 import { vi } from 'vitest';
-import type { RepositoryHealthReport } from './health';
+import {
+  HEALTH_CHECKS,
+  type HealthFinding,
+  type RepositoryHealthReport,
+} from './health';
 import {
   HEALTH_ISSUE_LABEL,
   HEALTH_ISSUE_TITLE,
@@ -9,7 +13,7 @@ import {
 
 function report(
   options: {
-    readonly findings?: RepositoryHealthReport['findings'];
+    readonly findings?: readonly HealthFinding[];
     readonly intentional?: RepositoryHealthReport['intentional'];
   } = {},
 ): RepositoryHealthReport {
@@ -17,7 +21,16 @@ function report(
   const intentional = options.intentional ?? [];
   return {
     schemaVersion: 1,
-    findings,
+    purpose: 'advisory',
+    readiness: 'not-assessed',
+    coverage: Object.fromEntries(
+      HEALTH_CHECKS.map((check) => [check, { status: 'completed' }]),
+    ) as RepositoryHealthReport['coverage'],
+    findings: findings.map((finding) => ({
+      ...finding,
+      severity: 'warning',
+      category: finding.check,
+    })),
     intentional,
     summary: {
       findings: findings.length,
