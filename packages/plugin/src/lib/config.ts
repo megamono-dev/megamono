@@ -237,6 +237,13 @@ const adoptionSchema = z
           })
           .strict(),
       )
+      .refine(
+        (entries) =>
+          new Set(entries.map((entry) => entry.rule)).size === entries.length,
+        {
+          message: 'Adoption ratchet rules must be unique.',
+        },
+      )
       .default([]),
   })
   .strict()

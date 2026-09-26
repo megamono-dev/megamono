@@ -1,5 +1,6 @@
 import { logger, type PromiseExecutor } from '@nx/devkit';
 import { readMegamonoConfig } from '../../lib/config';
+import { checkAdoptionRatchets } from '../../lib/adoption-ratchets';
 import {
   formatDiagnostic,
   hasErrors,
@@ -68,6 +69,7 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
           profile: packageSourceProfile,
         })),
       );
+    diagnostics.push(...checkAdoptionRatchets(diagnostics, config));
     for (const diagnostic of diagnostics) {
       const message = formatDiagnostic(diagnostic);
       if (diagnostic.severity === 'error') logger.error(message);

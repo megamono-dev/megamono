@@ -10,6 +10,15 @@ ejected targets remain consumer-owned: set `cache: false` on those targets befor
 relying on a successful check. A cache hit from an older target is not fresh
 governance evidence.
 
+When `adoption.ratchets` is nonempty, `check` enforces each `initialCount` as a
+structural-warning ceiling. Unlisted structural categories have a zero budget;
+errors always fail independently of budgets. After fixing debt, lower the count
+explicitly and commit the reviewed change. Checks never rewrite baselines. Empty
+ratchets retain the existing severity-only behavior for non-ratcheted workspaces.
+These are **count-based**, not identity-aware baselines: replacing one warning
+with another in the same category can pass. Keep review of the actual diagnostics;
+do not interpret a passing budget as proof that no new violation was introduced.
+
 ## Buildable Prisma clients
 
 `megamono add database primary --adapter=prisma --buildable --yes` opts a **new** database project into Prisma client generation followed by TypeScript compilation. `--client-output=src/db/client` selects a custom source directory. The project exports `dist/index.js` and declarations, records generated/build outputs for Nx, and keeps its package private. Consumer builds must depend on this project's `build` (through the Nx graph or an explicit dependency).
