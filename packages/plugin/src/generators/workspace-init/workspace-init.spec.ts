@@ -27,7 +27,10 @@ import { workspaceInitGenerator } from './workspace-init';
 import { WorkspaceInitGeneratorSchema } from './schema';
 import { workspaceEjectGenerator } from '../workspace-eject/workspace-eject';
 import Ajv2020 from 'ajv/dist/2020';
-import { megamonoConfigSchema } from '../../lib/config';
+import {
+  DEFAULT_MEGAMONO_CONFIG,
+  megamonoConfigSchema,
+} from '../../lib/config';
 import { ESLint } from 'eslint';
 import megamonoPlugin from '../../eslint/plugin';
 
@@ -45,6 +48,25 @@ describe('workspace-init generator', () => {
     tree = createTreeWithEmptyWorkspace();
   });
 
+  it('retains explicit Megamono rule severity when adding lint adoption', async () => {
+    tree.write(
+      'megamono.json',
+      JSON.stringify({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        conventions: {
+          ...DEFAULT_MEGAMONO_CONFIG.conventions,
+          rules: { 'module-boundaries': { severity: 'error' } },
+        },
+        adoption: { ...DEFAULT_MEGAMONO_CONFIG.adoption, modules: ['agents'] },
+      }),
+    );
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+    expect(
+      readJson(tree, 'megamono.json').conventions.rules['module-boundaries']
+        .severity,
+    ).toBe('error');
+  });
+
   it.each(['error', 2, ['error', { allow: ['consumer-owned'] }]])(
     'preserves effective consumer boundary severity/options (%j)',
     async (rule) => {
@@ -54,7 +76,7 @@ describe('workspace-init generator', () => {
       );
       for (let run = 0; run < 2; run++) {
         await workspaceInitGenerator(tree, { only: 'lint', yes: true });
-        const source = tree.read('eslint.config.mjs', 'utf8')!;
+        const source = tree.read('eslint.config.mjs', 'utf8') ?? '';
         const config = megamonoConfigSchema.parse(
           readJson(tree, 'megamono.json'),
         );

@@ -2041,9 +2041,9 @@ export async function workspaceInitGenerator(
       ...(existingConfig?.conventions ?? DEFAULT_MEGAMONO_CONFIG.conventions),
       packageManager,
       rules: {
+        ...lintWarningRules,
         ...(existingConfig?.conventions.rules ??
           DEFAULT_MEGAMONO_CONFIG.conventions.rules),
-        ...lintWarningRules,
       },
     },
     scaffolding: existingConfig?.scaffolding ?? {
