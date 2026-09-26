@@ -25,6 +25,30 @@ Inferred Cargo commands always include `--package`. Optional plugin settings add
 
 Missing Cargo installations and invalid manifests are reported through `getCargoDiagnostics()` while valid independent workspaces continue to load.
 
-For a Tauri project that declares `@tauri-apps/cli`, the inferred `tauri` target uses that workspace-local npm CLI and forwards the package plus isolated target directory to Cargo. A Cargo-only Tauri project falls back to the `cargo tauri` subcommand.
+For a Tauri project that declares `@tauri-apps/cli`, the inferred `tauri` target resolves its local Node entrypoint from the owning app and forwards the package plus isolated target directory to Cargo. It never downloads a CLI or uses a global npm shim. A Cargo-only Tauri project falls back to the `cargo tauri` subcommand.
+
+## Execution and release boundaries
+
+Targets use `@megamono/nx-cargo:run` with a tool and argument array, not shell
+quoting. Paths with spaces and shell metacharacters remain single arguments on
+Windows, Linux and macOS. `locked: true` and `allTargets: true` add `--locked` and
+`--all-targets` to Cargo build/test/Clippy; `denyWarnings: true` adds `-- -D warnings`
+to Clippy only. Defaults do not imply strict release lint. Tauri release flags,
+signing, and notarization remain repository-owned tasks.
+
+All inferred native targets now default to `cache: false`. Opt in only after
+qualifying the Rust compiler/Cargo versions, lockfile, features/target/profile,
+SDK/linker/toolchain, environment, build scripts and their external inputs, and
+the exact output paths. Do not cache signed/notarized release artifacts without
+a separate qualified signing/provenance policy. `default`/`^default` alone do not
+capture this contract. Existing explicit Nx targets and cache overrides remain
+consumer-owned; review them when upgrading.
+
+`npm exec nx -- run nx-cargo:e2e-native-execution` packs the plugin and installs
+it into a disposable consumer, runs actual inferred Cargo build/test/Clippy from
+a path with spaces, verifies lint failure, and probes local Tauri argv with a
+synthetic CLI. CI runs this on macOS, Linux and Windows. The fixture does not
+qualify Tauri packaging, SDKs, signing or device execution; a workflow definition
+alone is not evidence of a passing run on a given OS.
 
 When a package also exposes an npm script named `tauri`, configure `tauriTargetName` to a distinct name such as `tauri-build`; otherwise Nx's npm-script inference and this plugin would contribute the same target name. `create-megamono` uses `tauri-build` for generated Desktop apps.

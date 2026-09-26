@@ -396,8 +396,9 @@ process.stdout.write(JSON.stringify({
       ]),
     );
     assert(
-      cargo.targets.build.cache === true &&
-        cargo.targets.build.options.command.includes("'cargo' 'build'"),
+      cargo.targets.build.cache === false &&
+        cargo.targets.build.executor === '@megamono/nx-cargo:run' &&
+        cargo.targets.build.options.args[0] === 'build',
       `Nx ${nxVersion} did not retain Cargo target metadata.`,
     );
     const worker = JSON.parse(

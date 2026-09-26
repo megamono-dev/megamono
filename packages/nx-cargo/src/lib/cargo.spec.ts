@@ -131,23 +131,46 @@ describe('projectsFromCargoMetadata', () => {
       noDefaultFeatures: true,
       profile: 'release',
       targetDir: 'dist/cargo',
+      locked: true,
+      allTargets: true,
+      denyWarnings: true,
     });
     const desktop = result.projects['apps/desktop'];
     expect(desktop.targets?.['build']).toBeUndefined();
     expect(desktop.targets?.['compile']).toMatchObject({
-      cache: true,
+      cache: false,
       inputs: ['default', '^default'],
       outputs: ['{workspaceRoot}/dist/cargo/desktop'],
     });
-    const command = desktop.targets?.['compile'].options?.['command'] as string;
-    expect(command).toContain("'--package' 'desktop'");
-    expect(command).toContain("'--target' 'aarch64-apple-darwin'");
-    expect(command).toContain("'--features' 'desktop,updates'");
-    expect(command).toContain("'--no-default-features'");
-    expect(command).toContain("'--profile' 'release'");
-    expect(desktop.targets?.['tauri'].options?.['command']).toContain(
-      "'--package' 'desktop'",
+    expect(desktop.targets?.['compile'].executor).toBe(
+      '@megamono/nx-cargo:run',
     );
+    expect(desktop.targets?.['compile'].options?.['args']).toEqual([
+      'build',
+      '--manifest-path',
+      'apps/desktop/src-tauri/Cargo.toml',
+      '--package',
+      'desktop',
+      '--target',
+      'aarch64-apple-darwin',
+      '--features',
+      'desktop,updates',
+      '--no-default-features',
+      '--profile',
+      'release',
+      '--locked',
+      '--all-targets',
+      '--target-dir',
+      'dist/cargo/desktop',
+    ]);
+    expect(desktop.targets?.['clippy'].options?.['args'].slice(-3)).toEqual([
+      '--',
+      '-D',
+      'warnings',
+    ]);
+    expect(desktop.targets?.['tauri'].options?.['args']).toContain('--package');
+    for (const target of Object.values(desktop.targets ?? {}))
+      expect(target.cache).toBe(false);
   });
 
   it('applies a configured scope tag to every inferred project', async () => {
@@ -171,15 +194,19 @@ describe('projectsFromCargoMetadata', () => {
     expect(result.projects['apps/desktop'].targets?.['tauri']).toMatchObject({
       outputs: ['{workspaceRoot}/.nx/cargo/desktop'],
       options: {
-        cwd: '{workspaceRoot}/apps/desktop',
-        command: expect.stringContaining(
-          "'npm' 'exec' 'tauri' '--' 'build' '--ci'",
-        ),
+        cwd: 'apps/desktop',
+        tool: 'tauri',
+        args: [
+          'build',
+          '--ci',
+          '--',
+          '--package',
+          'desktop',
+          '--target-dir',
+          '../../.nx/cargo/desktop',
+        ],
       },
     });
-    expect(
-      result.projects['apps/desktop'].targets?.['tauri'].options?.['command'],
-    ).toContain("'--target-dir' '../../.nx/cargo/desktop'");
   });
 });
 

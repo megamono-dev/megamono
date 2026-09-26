@@ -1,0 +1,9 @@
+{
+  "executors": {
+    "run": {
+      "implementation": "./dist/executors/run/run",
+      "schema": "./dist/executors/run/schema.json",
+      "description": "run executor"
+    }
+  }
+}

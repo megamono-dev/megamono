@@ -24,6 +24,9 @@ export interface CargoPluginOptions {
   allFeatures?: boolean;
   noDefaultFeatures?: boolean;
   profile?: string;
+  locked?: boolean;
+  allTargets?: boolean;
+  denyWarnings?: boolean;
   targetDir?: string;
   scope?: string;
 }
@@ -78,10 +81,6 @@ function containsPath(parent: string, child: string): boolean {
   return path === '' || (!path.startsWith('..') && !isAbsolute(path));
 }
 
-function quote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
 function cargoFlags(options: CargoPluginOptions): string[] {
   const flags: string[] = [];
   if (options.target) flags.push('--target', options.target);
@@ -90,11 +89,9 @@ function cargoFlags(options: CargoPluginOptions): string[] {
   if (options.allFeatures) flags.push('--all-features');
   if (options.noDefaultFeatures) flags.push('--no-default-features');
   if (options.profile) flags.push('--profile', options.profile);
+  if (options.locked) flags.push('--locked');
+  if (options.allTargets) flags.push('--all-targets');
   return flags;
-}
-
-function command(parts: readonly string[]): string {
-  return parts.map(quote).join(' ');
 }
 
 function projectRootForPackage(
@@ -166,51 +163,42 @@ function createTargets(
   const inputs = ['default', '^default'];
   const targets: NonNullable<ProjectConfiguration['targets']> = {
     [options.buildTargetName ?? 'build']: {
-      executor: 'nx:run-commands',
-      cache: true,
+      executor: '@megamono/nx-cargo:run',
+      cache: false,
       inputs,
       outputs: [`{workspaceRoot}/${targetDirectory}`],
       options: {
-        command: command([
-          'cargo',
-          'build',
-          ...common,
-          '--target-dir',
-          targetDirectory,
-        ]),
-        cwd: '{workspaceRoot}',
+        tool: 'cargo',
+        args: ['build', ...common, '--target-dir', targetDirectory],
+        cwd: '.',
       },
       metadata: { description: `Build Cargo package ${pkg.name}.` },
     },
     [options.testTargetName ?? 'test']: {
-      executor: 'nx:run-commands',
-      cache: true,
+      executor: '@megamono/nx-cargo:run',
+      cache: false,
       inputs,
       options: {
-        command: command([
-          'cargo',
-          'test',
-          ...common,
-          '--target-dir',
-          targetDirectory,
-        ]),
-        cwd: '{workspaceRoot}',
+        tool: 'cargo',
+        args: ['test', ...common, '--target-dir', targetDirectory],
+        cwd: '.',
       },
       metadata: { description: `Test Cargo package ${pkg.name}.` },
     },
     [options.lintTargetName ?? 'lint']: {
-      executor: 'nx:run-commands',
-      cache: true,
+      executor: '@megamono/nx-cargo:run',
+      cache: false,
       inputs,
       options: {
-        command: command([
-          'cargo',
+        tool: 'cargo',
+        args: [
           'clippy',
           ...common,
           '--target-dir',
           targetDirectory,
-        ]),
-        cwd: '{workspaceRoot}',
+          ...(options.denyWarnings ? ['--', '-D', 'warnings'] : []),
+        ],
+        cwd: '.',
       },
       metadata: { description: `Lint Cargo package ${pkg.name} with Clippy.` },
     },
@@ -220,10 +208,6 @@ function createTargets(
     const npmCli = hasTauriNpmCli(pkg, workspaceRoot);
     const tauriCommand = npmCli
       ? [
-          'npm',
-          'exec',
-          'tauri',
-          '--',
           'build',
           '--ci',
           '--',
@@ -238,7 +222,6 @@ function createTargets(
           ),
         ]
       : [
-          'cargo',
           'tauri',
           'build',
           '--',
@@ -248,13 +231,14 @@ function createTargets(
           targetDirectory,
         ];
     targets[options.tauriTargetName ?? 'tauri'] = {
-      executor: 'nx:run-commands',
-      cache: true,
+      executor: '@megamono/nx-cargo:run',
+      cache: false,
       inputs,
       outputs: [`{workspaceRoot}/${targetDirectory}`],
       options: {
-        command: command(tauriCommand),
-        cwd: npmCli ? `{workspaceRoot}/${projectRoot}` : '{workspaceRoot}',
+        tool: npmCli ? 'tauri' : 'cargo',
+        args: tauriCommand,
+        cwd: npmCli ? projectRoot : '.',
       },
       metadata: { description: `Build Tauri package ${pkg.name}.` },
     };

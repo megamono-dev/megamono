@@ -19,11 +19,22 @@
   "files": [
     "dist",
     "src",
-    "!**/*.tsbuildinfo"
+    "!**/*.tsbuildinfo",
+    "executors.json"
   ],
   "nx": {
     "name": "nx-cargo",
     "targets": {
+      "e2e-native-execution": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/nx-cargo/e2e/native-execution.e2e.mjs"
+        }
+      },
       "build": {
         "executor": "@nx/js:tsc",
         "outputs": [
@@ -87,5 +98,6 @@
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public"
-  }
+  },
+  "executors": "./executors.json"
 }

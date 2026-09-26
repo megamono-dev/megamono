@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "version": 2,
+  "title": "Run executor",
+  "description": "Run Cargo or the workspace-local Tauri CLI without a shell.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "tool": { "enum": ["cargo", "tauri"] },
+    "args": { "type": "array", "items": { "type": "string" } },
+    "cwd": { "type": "string", "default": "." }
+  },
+  "required": ["tool", "args"]
+}
