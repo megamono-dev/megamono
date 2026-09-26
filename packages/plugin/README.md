@@ -2,6 +2,18 @@
 
 ## Governance execution safety
 
+Health JSON reports include `purpose: "advisory"`, `readiness: "not-assessed"`,
+and per-family `coverage` (`completed`, `partial`, or `skipped`, with reasons).
+Zero findings is not evidence that a skipped check passed. Findings carry warning
+severity and a category; adoption ratchets are `adoption-debt`, even though their
+legacy check family remains `spec-drift` for compatibility. Without docs adoption,
+specification coverage is not assessed. Dependency-range and orphan advice requires
+consumer review; it is not an instruction to narrow public peers or delete entrypoints.
+The health executor reports `gate.mode` and `gate.passed`: report-only has no gate
+result (`null`), while `--failOnFindings` evaluates only the selected findings, not
+production readiness or unavailable checks. Report generation success is not
+deployment certification.
+
 Generated `megamono:check` targets are non-cacheable. The checker reads the Nx
 graph, repository sources/configuration, and installed artifact contents; the
 previous explicit input list did not qualify that complete cache contract.

@@ -44,8 +44,26 @@ export interface HealthSuppressionResult {
 
 export interface RepositoryHealthReport {
   readonly schemaVersion: 1;
+  readonly purpose: 'advisory';
+  readonly readiness: 'not-assessed';
+  readonly coverage: Readonly<
+    Record<
+      HealthCheck,
+      {
+        readonly status: 'completed' | 'partial' | 'skipped';
+        readonly reason?: string;
+      }
+    >
+  >;
+  readonly gate?: {
+    readonly mode: 'report-only' | 'fail-on-findings';
+    readonly passed: boolean | null;
+  };
   readonly reductions?: readonly string[];
-  readonly findings: readonly HealthFinding[];
+  readonly findings: readonly (HealthFinding & {
+    readonly severity: 'warning';
+    readonly category: 'adoption-debt' | HealthCheck;
+  })[];
   readonly intentional: readonly HealthSuppressionResult[];
   readonly summary: {
     readonly findings: number;
@@ -1503,6 +1521,28 @@ export async function runRepositoryHealth(options: {
   ) as Record<HealthCheck, number>;
   return {
     schemaVersion: 1,
+    purpose: 'advisory',
+    readiness: 'not-assessed',
+    coverage: Object.fromEntries(
+      HEALTH_CHECKS.map((check) => [
+        check,
+        !selected.has(check)
+          ? { status: 'skipped', reason: 'not-selected' }
+          : !enabled(options.config, check)
+            ? { status: 'skipped', reason: 'disabled' }
+            : !docsEnabled && check === 'stale-plans'
+              ? { status: 'skipped', reason: 'docs-not-adopted' }
+              : !docsEnabled && check === 'spec-drift'
+                ? {
+                    status: 'partial',
+                    reason:
+                      'docs-not-adopted; only configuration and adoption-debt checks ran',
+                  }
+                : check === 'stale-plans' && !gitState.available
+                  ? { status: 'partial', reason: 'git-history-unavailable' }
+                  : { status: 'completed' },
+      ]),
+    ) as RepositoryHealthReport['coverage'],
     ...(!docsEnabled
       ? {
           reductions: [
@@ -1510,7 +1550,12 @@ export async function runRepositoryHealth(options: {
           ],
         }
       : {}),
-    findings: suppressed.findings,
+    findings: suppressed.findings.map((finding) => ({
+      ...finding,
+      severity: 'warning',
+      category:
+        finding.state === 'adoption-ratchet' ? 'adoption-debt' : finding.check,
+    })),
     intentional: suppressed.intentional,
     summary: {
       findings: suppressed.findings.length,

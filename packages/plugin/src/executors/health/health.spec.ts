@@ -55,7 +55,7 @@ describe('profile-aware health executor', () => {
                       {
                         check: 'spec-drift',
                         fingerprint: 'fixture',
-                      decision: 'decision-20260908-test',
+                        decision: 'decision-20260908-test',
                       },
                     ]
                   : [],
@@ -84,6 +84,20 @@ describe('profile-aware health executor', () => {
             await readFile(join(root, '.megamono/health.json'), 'utf8'),
           );
           expect(report.reductions.join(' ')).toContain('not adopted');
+          expect(report.purpose).toBe('advisory');
+          expect(report.readiness).toBe('not-assessed');
+          expect(report.coverage['stale-plans']).toEqual({
+            status: 'skipped',
+            reason: 'docs-not-adopted',
+          });
+          expect(report.coverage['spec-drift'].status).toBe('partial');
+          expect(report.coverage['dependency-alignment'].reason).toBe(
+            'not-selected',
+          );
+          expect(report.gate).toEqual({
+            mode: 'fail-on-findings',
+            passed: mode === 'pilot',
+          });
           expect(
             report.findings.some(
               ({ state }: { state: string }) =>
@@ -93,7 +107,18 @@ describe('profile-aware health executor', () => {
           if (mode === 'pilot-findings')
             expect(
               report.findings.some(
-                ({ state }: { state: string }) => state === 'adoption-ratchet',
+                ({
+                  state,
+                  category,
+                  severity,
+                }: {
+                  state: string;
+                  category: string;
+                  severity: string;
+                }) =>
+                  state === 'adoption-ratchet' &&
+                  category === 'adoption-debt' &&
+                  severity === 'warning',
               ),
             ).toBe(true);
         }

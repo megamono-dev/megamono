@@ -59,6 +59,39 @@ function document(
 }
 
 describe('repository health', () => {
+  it('distinguishes zero findings from disabled and unselected check families', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-health-coverage-'));
+    try {
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph: { nodes: {}, dependencies: {} },
+        config: {
+          ...DEFAULT_MEGAMONO_CONFIG,
+          health: {
+            ...DEFAULT_MEGAMONO_CONFIG.health,
+            checks: { 'dependency-alignment': false },
+          },
+        },
+        documents: [],
+        checks: ['dependency-alignment', 'orphaned-libraries'],
+      });
+      expect(report.findings).toEqual([]);
+      expect(report.coverage['dependency-alignment']).toEqual({
+        status: 'skipped',
+        reason: 'disabled',
+      });
+      expect(report.coverage['spec-drift']).toEqual({
+        status: 'skipped',
+        reason: 'not-selected',
+      });
+      expect(report.coverage['orphaned-libraries']).toEqual({
+        status: 'completed',
+      });
+      expect(report.readiness).toBe('not-assessed');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
   it('recognizes resolved workspace shorthand without hiding missing or conflicting locators', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-workspace-ranges-'));
     try {

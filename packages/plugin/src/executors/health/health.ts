@@ -57,13 +57,20 @@ const runExecutor: PromiseExecutor<HealthExecutorSchema> = async (
       checks: options.checks,
       ...(options.now ? { now: new Date(options.now) } : {}),
     });
-    const serialized = serializeHealthReport(report);
+    const passed = !(options.failOnFindings && report.findings.length > 0);
+    const serialized = serializeHealthReport({
+      ...report,
+      gate: {
+        mode: options.failOnFindings ? 'fail-on-findings' : 'report-only',
+        passed: options.failOnFindings ? passed : null,
+      },
+    });
     const outputPath = resolve(context.root, output);
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, serialized, 'utf8');
     logger.info(serialized.trimEnd());
     return {
-      success: !(options.failOnFindings && report.findings.length > 0),
+      success: passed,
     };
   } catch (error) {
     logger.error((error as Error).message);
