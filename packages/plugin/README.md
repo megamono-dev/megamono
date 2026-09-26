@@ -19,6 +19,12 @@ These are **count-based**, not identity-aware baselines: replacing one warning
 with another in the same category can pass. Keep review of the actual diagnostics;
 do not interpret a passing budget as proof that no new violation was introduced.
 
+Managed ESLint defaults are inserted **before** repository-owned flat-config
+entries. Existing consumer severities and boundary options win, including error
+rules during migration. Intact managed sections are repositioned on regeneration;
+modified/ejected sections are never moved. Explicit consumer rule overrides remain
+the way to change this policy; review them alongside checker warning budgets.
+
 ## Buildable Prisma clients
 
 `megamono add database primary --adapter=prisma --buildable --yes` opts a **new** database project into Prisma client generation followed by TypeScript compilation. `--client-output=src/db/client` selects a custom source directory. The project exports `dist/index.js` and declarations, records generated/build outputs for Nx, and keeps its package private. Consumer builds must depend on this project's `build` (through the Nx graph or an explicit dependency).

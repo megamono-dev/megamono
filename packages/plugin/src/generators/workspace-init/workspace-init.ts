@@ -1,5 +1,5 @@
 import {
-  appendEslintFlatConfig,
+  prependEslintFlatConfig,
   locateEslintFlatConfig,
 } from '../../lib/eslint-flat-config';
 import {
@@ -161,7 +161,10 @@ function ensureCheckInputs(tree: Tree): void {
     inputs.push({ env: 'CI' });
   updateProjectConfiguration(tree, 'megamono', {
     ...project,
-    targets: { ...project.targets, check: { ...current, inputs, cache: false } },
+    targets: {
+      ...project.targets,
+      check: { ...current, inputs, cache: false },
+    },
   });
 }
 
@@ -1103,18 +1106,37 @@ function wireEslintConfig(tree: Tree): EslintWiringResult {
     const registered = artifactEntry(tree, 'lint.eslint-rules');
     const source = tree.read(path, 'utf8') ?? '';
     if (source.includes(ESLINT_RULES_START)) {
-      if (!registered) return migratedRules;
-      return applyManagedSectionTemplate(
-        tree,
-        'lint.eslint-rules',
-        path,
-        ESLINT_RULES_BODY,
-        ESLINT_RULES_START,
-        ESLINT_RULES_END,
+      if (!registered && !migratedRules) return false;
+      const updated = registered
+        ? applyManagedSectionTemplate(
+            tree,
+            'lint.eslint-rules',
+            path,
+            ESLINT_RULES_BODY,
+            ESLINT_RULES_START,
+            ESLINT_RULES_END,
+          )
+        : true;
+      if (!updated) return false;
+      // Move only a verified managed section; consumer entries must win.
+      const current = tree.read(path, 'utf8') ?? '';
+      const start = current.indexOf(ESLINT_RULES_START);
+      const end =
+        current.indexOf(ESLINT_RULES_END, start) + ESLINT_RULES_END.length;
+      const moved = prependEslintFlatConfig(
+        current.slice(0, start) + current.slice(end),
+        current.slice(start, end),
       );
+      if (moved === undefined)
+        throw new WorkspaceInitError(
+          'conflict',
+          'Cannot place managed ESLint defaults before consumer configuration.',
+        );
+      tree.write(path, moved);
+      return true;
     }
     if (!registered && source.includes(ESLINT_RULES_BODY.trim())) return false;
-    const updated = appendEslintFlatConfig(
+    const updated = prependEslintFlatConfig(
       source,
       `${ESLINT_RULES_START}${ESLINT_RULES_BODY}${ESLINT_RULES_END}`,
     );

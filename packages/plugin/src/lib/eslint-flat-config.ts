@@ -1,6 +1,7 @@
 import ts = require('typescript');
 
 interface FlatConfigArray {
+  opening: number;
   closing: number;
   separatorAt?: number;
 }
@@ -28,6 +29,7 @@ export function locateEslintFlatConfig(
   if (!ts.isArrayLiteralExpression(expression)) return undefined;
   const last = expression.elements.at(-1);
   return {
+    opening: expression.getStart(file),
     closing: expression.end - 1,
     // Insert before trailing comments, never after a line comment that could
     // swallow the comma. The parser knows whether an actual comma is present.
@@ -35,6 +37,16 @@ export function locateEslintFlatConfig(
       ? { separatorAt: last.end }
       : {}),
   };
+}
+
+/** Consumer entries follow defaults and therefore retain their rule severities. */
+export function prependEslintFlatConfig(
+  source: string,
+  block: string,
+): string | undefined {
+  const array = locateEslintFlatConfig(source);
+  if (!array) return undefined;
+  return `${source.slice(0, array.opening + 1)}\n${block}\n${source.slice(array.opening + 1)}`;
 }
 
 /** Preserve all existing bytes; insert only a separator and the managed block. */

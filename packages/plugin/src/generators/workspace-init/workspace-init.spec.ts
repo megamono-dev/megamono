@@ -28,6 +28,8 @@ import { WorkspaceInitGeneratorSchema } from './schema';
 import { workspaceEjectGenerator } from '../workspace-eject/workspace-eject';
 import Ajv2020 from 'ajv/dist/2020';
 import { megamonoConfigSchema } from '../../lib/config';
+import { ESLint } from 'eslint';
+import megamonoPlugin from '../../eslint/plugin';
 
 vi.mock('enquirer', () => ({ prompt: vi.fn() }));
 
@@ -42,6 +44,52 @@ describe('workspace-init generator', () => {
   beforeEach(() => {
     tree = createTreeWithEmptyWorkspace();
   });
+
+  it.each(['error', 2, ['error', { allow: ['consumer-owned'] }]])(
+    'preserves effective consumer boundary severity/options (%j)',
+    async (rule) => {
+      tree.write(
+        'eslint.config.mjs',
+        `export default [{ files: ['**/*.ts'], rules: { '@nx/enforce-module-boundaries': ${JSON.stringify(rule)} } }];`,
+      );
+      for (let run = 0; run < 2; run++) {
+        await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+        const source = tree.read('eslint.config.mjs', 'utf8')!;
+        const config = megamonoConfigSchema.parse(
+          readJson(tree, 'megamono.json'),
+        );
+        const entries = new Function(
+          'megamonoPlugin',
+          'megamonoConfig',
+          source
+            .slice(source.indexOf('export default'))
+            .replace('export default', 'return'),
+        )(megamonoPlugin, config);
+        const eslint = new ESLint({
+          overrideConfigFile: true,
+          overrideConfig: [
+            {
+              plugins: {
+                '@nx': {
+                  rules: {
+                    'enforce-module-boundaries': {
+                      meta: { schema: [{ type: 'object' }] },
+                      create: () => ({}),
+                    },
+                  },
+                },
+              },
+            },
+            ...entries,
+          ],
+        });
+        const effective = await eslint.calculateConfigForFile('fixture.ts');
+        expect(effective.rules['@nx/enforce-module-boundaries']).toEqual(
+          Array.isArray(rule) ? [2, rule[1]] : [2],
+        );
+      }
+    },
+  );
 
   it('validates fresh and regenerated configuration against the published schema and runtime', async () => {
     const ajv = new Ajv2020({ strict: false, validateFormats: false });
@@ -750,8 +798,9 @@ describe('workspace-init generator', () => {
 
     await workspaceInitGenerator(tree, options);
 
-    expect(tree.read('eslint.config.mjs', 'utf8')).toContain(
-      '    rules: {},\n  },\n  // megamono eslint rules',
+    const source = tree.read('eslint.config.mjs', 'utf8') ?? '';
+    expect(source.indexOf('megamonoPlugin.createConfig')).toBeLessThan(
+      source.indexOf('rules: {}'),
     );
   });
 
