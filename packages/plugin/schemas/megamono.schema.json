@@ -3,6 +3,19 @@
   "$id": "https://megamono.com/schemas/megamono.schema.json",
   "title": "Megamono workspace configuration",
   "$defs": {
+    "packageSourceProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["localReferences"],
+      "properties": {
+        "localReferences": { "enum": ["allow", "warn", "reject"] },
+        "approved": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": []
+        }
+      }
+    },
     "ruleOverride": {
       "type": "object",
       "additionalProperties": false,
@@ -447,6 +460,16 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "profiles": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "development": { "$ref": "#/$defs/packageSourceProfile" },
+            "migration": { "$ref": "#/$defs/packageSourceProfile" },
+            "ci": { "$ref": "#/$defs/packageSourceProfile" },
+            "release": { "$ref": "#/$defs/packageSourceProfile" }
+          }
+        },
         "registries": {
           "type": "object",
           "propertyNames": {

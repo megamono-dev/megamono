@@ -26,6 +26,8 @@ import * as inferenceYalc from '../../lib/inference-yalc';
 import { workspaceInitGenerator } from './workspace-init';
 import { WorkspaceInitGeneratorSchema } from './schema';
 import { workspaceEjectGenerator } from '../workspace-eject/workspace-eject';
+import Ajv2020 from 'ajv/dist/2020';
+import { megamonoConfigSchema } from '../../lib/config';
 
 vi.mock('enquirer', () => ({ prompt: vi.fn() }));
 
@@ -39,6 +41,37 @@ describe('workspace-init generator', () => {
 
   beforeEach(() => {
     tree = createTreeWithEmptyWorkspace();
+  });
+
+  it('validates fresh and regenerated configuration against the published schema and runtime', async () => {
+    const ajv = new Ajv2020({ strict: false, validateFormats: false });
+    const validate = ajv.compile(
+      JSON.parse(
+        readFileSync(
+          join(__dirname, '../../../schemas/megamono.schema.json'),
+          'utf8',
+        ),
+      ),
+    );
+    for (let run = 0; run < 2; run++) {
+      await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+      const generated = readJson(tree, 'megamono.json');
+      expect(validate(generated), JSON.stringify(validate.errors)).toBe(true);
+      const parsed = megamonoConfigSchema.parse(generated);
+      expect(parsed.packageSources.profiles.migration.localReferences).toBe(
+        'warn',
+      );
+      expect(parsed.packageSources.profiles.ci.localReferences).toBe('reject');
+      expect(parsed.packageSources.profiles.release.localReferences).toBe(
+        'reject',
+      );
+      const invalid = {
+        ...generated,
+        packageSources: { profiles: { ci: { localReferences: 'typo' } } },
+      };
+      expect(validate(invalid)).toBe(false);
+      expect(megamonoConfigSchema.safeParse(invalid).success).toBe(false);
+    }
   });
 
   it('prints a selected module plan without mutation in dry-run mode', async () => {
