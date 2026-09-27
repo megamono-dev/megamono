@@ -1,4 +1,5 @@
 import { preserveWorkspaceYaml } from '../../lib/preserve-workspace-yaml';
+import { createAndroidApp, validateAndroidApplicationId } from './android';
 import {
   formatFiles,
   getProjects,
@@ -49,6 +50,7 @@ export const APP_TYPES = [
   'mobile',
   'desktop',
   'apple',
+  'android',
   'extension',
 ] as const satisfies readonly AppType[];
 
@@ -61,6 +63,7 @@ const APP_LABELS: Record<AppType, string> = {
   mobile: 'Expo mobile app',
   desktop: 'Tauri desktop app',
   apple: 'Apple native app',
+  android: 'Android native Kotlin app',
   extension: 'WXT browser extension',
 };
 const compatibility = JSON.parse(
@@ -98,12 +101,20 @@ interface NormalizedAppOptions {
   readonly type: AppType;
   readonly name: string;
   readonly displayName?: string;
+  readonly applicationId?: string;
   readonly directory: string;
   readonly scope: string;
   readonly projectName: string;
   readonly packageName: string;
   readonly platform:
-    'web' | 'node' | 'worker' | 'mobile' | 'apple' | 'rust' | 'extension';
+    | 'web'
+    | 'node'
+    | 'worker'
+    | 'mobile'
+    | 'apple'
+    | 'android'
+    | 'rust'
+    | 'extension';
   readonly tags: readonly string[];
   readonly port?: number;
   readonly styling?: ResolvedWebStyling;
@@ -242,6 +253,7 @@ function platform(type: AppType): NormalizedAppOptions['platform'] {
   if (type === 'worker') return 'worker';
   if (type === 'mobile') return 'mobile';
   if (type === 'apple') return 'apple';
+  if (type === 'android') return 'android';
   if (type === 'desktop') return 'rust';
   if (type === 'extension') return 'extension';
   return 'web';
@@ -356,12 +368,31 @@ async function normalizeOptions(
   const router = styling ? (raw.router ?? 'pages') : undefined;
   if (
     raw.displayName !== undefined &&
-    (type !== 'extension' ||
+    (!['extension', 'android'].includes(type) ||
       typeof raw.displayName !== 'string' ||
       !raw.displayName.trim())
   )
     throw new AppGeneratorError(
-      'displayName must be nonempty and applies only to extensions.',
+      'displayName must be nonempty and applies only to extensions or Android applications.',
+      2,
+      'options',
+    );
+  if (raw.applicationId !== undefined) {
+    if (type !== 'android')
+      throw new AppGeneratorError(
+        'applicationId applies only to Android applications.',
+        2,
+        'options',
+      );
+    validateAndroidApplicationId(raw.applicationId);
+  }
+  if (
+    type === 'android' &&
+    raw.displayName &&
+    [...raw.displayName].some((character) => character.charCodeAt(0) < 32)
+  )
+    throw new AppGeneratorError(
+      'Android displayName must not contain control characters.',
       2,
       'options',
     );
@@ -384,6 +415,7 @@ async function normalizeOptions(
     type,
     name,
     ...(raw.displayName ? { displayName: raw.displayName.trim() } : {}),
+    ...(raw.applicationId ? { applicationId: raw.applicationId } : {}),
     directory,
     scope,
     projectName: `${scope}-${name}`,
@@ -1177,6 +1209,10 @@ async function createDelegatedApp(
     tags: options.tags.join(','),
     skipFormat: true,
   };
+  if (options.type === 'android') {
+    createAndroidApp(tree, options);
+    return [];
+  }
   if (options.type === 'worker') {
     return [
       await generator('@megamono/nx-cloudflare', 'workerGenerator')(

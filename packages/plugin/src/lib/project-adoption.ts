@@ -17,6 +17,7 @@ export const PROJECT_ADOPTION_PLATFORMS = [
   'worker',
   'mobile',
   'apple',
+  'android',
   'rust',
   'php',
   'extension',
@@ -241,6 +242,11 @@ function inferPlatform(
   )
     add('apple', 'Apple manifest');
   if (tree.exists(`${root}/Cargo.toml`)) add('rust', 'Cargo manifest');
+  if (
+    tree.exists(`${root}/app/src/main/AndroidManifest.xml`) &&
+    tree.exists(`${root}/settings.gradle.kts`)
+  )
+    add('android', 'Android Gradle application');
   if (tree.exists(`${root}/composer.json`)) add('php', 'Composer manifest');
   for (const marker of extensionEvidence(tree, root))
     add('extension', `${marker.framework} manifest: ${marker.path}`);

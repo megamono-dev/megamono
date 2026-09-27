@@ -204,6 +204,7 @@ const SUPPORTED_PLATFORMS = new Set([
   'worker',
   'mobile',
   'apple',
+  'android',
   'rust',
   'php',
   'extension',

@@ -132,6 +132,7 @@
         "worker",
         "mobile",
         "apple",
+        "android",
         "rust",
         "php",
         "extension"

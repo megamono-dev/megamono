@@ -53,6 +53,32 @@ Without `--yes`, or with `--dry-run`, only the plan is displayed. `--skipInstall
 
 ## Application generation
 
+### Native Android / Kotlin
+
+`megamono add app android --yes` creates a native Kotlin/Jetpack Compose app in
+`apps/android`, separate from the Expo `mobile` preset. The direct generator is
+`nx generate @megamono/plugin:app --type=android --yes`. Use `--name=reader` for
+`apps/reader`, `--directory=apps/native-reader` for an explicit root, and
+`--displayName="Reader" --applicationId=com.example.reader` for Android identity.
+The default ID is derived safely from the scope and name; review it before distribution.
+
+The scaffold includes a checksum-pinned Gradle 8.13 wrapper, AGP 8.13.2, Kotlin
+2.2.10, Compose, and an Android manifest with no requested permissions. It needs
+JDK 17 and SDK platform 36/build tools 35.0.0 to build, not to generate. Set
+`JAVA_HOME` and `ANDROID_HOME`, or configure the SDK in Android Studio. Generation
+never accepts SDK licenses, starts emulators, installs onto devices, or configures
+release signing. See the generated README for the native toolchain setup.
+
+Nx `build`, `test`, `lint`, and `install` targets run the wrapper through an
+argument-vector Java launcher on all hosts. `install` requires an existing device
+or emulator and installs only a debug APK. Tests are JVM tests, not device/UI
+qualification. Native targets are non-cacheable and same-project execution is
+serialized; review compiler/SDK/environment/signing inputs before enabling Nx
+caching. Standard Unix and Windows Gradle wrappers remain available for IDE/native
+workflows. Existing Android projects are not imported or rewritten by this preset.
+
+### Shared generator behavior
+
 Application and library generation preserve existing `pnpm-workspace.yaml` comments while applying real workspace/dependency-policy changes. Invalid YAML fails before the composed generator runs. Neither wrapper chooses a new pnpm store or changes `.npmrc`.
 
 Use `megamono add app web --skipInstall --yes` (also available for `add library`) when installation must be controlled by the caller. This suppresses deferred generator callbacks, including dependency installation; declarations still change. Afterwards, run the workspace's established install command using its existing environment and store configuration. This does not bypass package-manager checks that happen before the Nx generator starts, and does not change the behavior of directly invoked third-party Nx generators.
@@ -403,8 +429,13 @@ const { writeFile } = require('node:fs/promises');
 const evidence = await createWebpackRuntimeEvidence({
   outputPath: absoluteBuildOutput,
   stats: stats.toJson({
-    all: false, version: true, hash: true, errors: true,
-    assets: true, chunks: true, ids: true,
+    all: false,
+    version: true,
+    hash: true,
+    errors: true,
+    assets: true,
+    chunks: true,
+    ids: true,
   }),
 });
 await writeFile(evidencePath, JSON.stringify(evidence, null, 2));

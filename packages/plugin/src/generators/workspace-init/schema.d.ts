@@ -30,6 +30,7 @@ export interface WorkspaceInitGeneratorSchema {
     | 'worker'
     | 'mobile'
     | 'apple'
+    | 'android'
     | 'rust'
     | 'php'
     | 'extension';

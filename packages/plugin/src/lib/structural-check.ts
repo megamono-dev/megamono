@@ -20,6 +20,7 @@ const platformTags = [
   'platform:worker',
   'platform:mobile',
   'platform:apple',
+  'platform:android',
   'platform:rust',
   'platform:php',
   'platform:extension',

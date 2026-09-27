@@ -8,7 +8,11 @@
     "displayName": {
       "type": "string",
       "minLength": 1,
-      "description": "Extension product name shown by the browser; defaults to the application basename."
+      "description": "Extension or Android product display name; defaults to the application basename."
+    },
+    "applicationId": {
+      "type": "string",
+      "description": "Android-only reverse-DNS application ID and Kotlin namespace."
     },
     "contentScriptMatches": {
       "type": "array",
@@ -32,6 +36,7 @@
         "mobile",
         "desktop",
         "apple",
+        "android",
         "extension"
       ],
       "description": "Application preset to create."

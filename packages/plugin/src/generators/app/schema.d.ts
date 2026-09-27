@@ -6,12 +6,14 @@ export type AppType =
   | 'mobile'
   | 'desktop'
   | 'apple'
+  | 'android'
   | 'extension';
 
 export interface AppGeneratorSchema {
   readonly type?: AppType;
   readonly name?: string;
   readonly displayName?: string;
+  readonly applicationId?: string;
   readonly directory?: string;
   readonly scope?: string;
   readonly port?: number;

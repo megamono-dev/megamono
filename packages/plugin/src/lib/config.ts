@@ -308,6 +308,7 @@ export const megamonoConfigSchema = z
           'worker',
           'mobile',
           'apple',
+          'android',
           'rust',
           'php',
           'extension',
