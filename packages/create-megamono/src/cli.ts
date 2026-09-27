@@ -27,6 +27,7 @@ export const APP_TYPE_OVERVIEWS = {
   mobile: 'Expo React Native app for iOS and Android',
   desktop: 'Tauri desktop app',
   apple: 'Native Swift/Xcode app (macOS required)',
+  android: 'Native Kotlin/Compose app (JDK and Android SDK to build)',
   site: 'Next.js marketing, documentation, or public site',
   extension: 'Browser extension',
 } as const satisfies Record<(typeof APP_IDS)[number], string>;

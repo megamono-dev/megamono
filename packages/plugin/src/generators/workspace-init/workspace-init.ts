@@ -934,6 +934,7 @@ function renderCiWorkflow(
   reusable = false,
 ): string {
   const linuxPlatforms = [
+    'android',
     'web',
     'node',
     'worker',
@@ -990,6 +991,7 @@ function renderCiWorkflow(
         with:
           fetch-depth: 0
 ${packageManagerSetup}
+${platforms.has('android') ? '      - uses: actions/setup-java@v5\n        with:\n          distribution: temurin\n          java-version: 17\n      - run: sdkmanager "platforms;android-36" "build-tools;35.0.0"\n' : ''}\
 ${platforms.has('rust') ? '      - uses: dtolnay/rust-toolchain@stable\n' : ''}${platforms.has('php') ? '      - uses: shivammathur/setup-php@v2\n        with:\n          php-version: 8.4\n' : ''}      - run: ${install}
 ${includeDocs ? `      - run: ${nx} run megamono-docs:validate --output-style=static\n` : ''}
       - run: ${nx} affected -t lint test build --exclude=tag:platform:apple --output-style=static`,

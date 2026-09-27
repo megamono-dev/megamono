@@ -613,6 +613,34 @@ describe('createPlan', () => {
     expect(rendered).toContain('--projects=acme-tools-apple');
   });
 
+  it.each(['darwin', 'linux'] as const)(
+    'plans native Android applications on %s without Expo or Apple dependencies',
+    (platform) => {
+      const plan = createPlan(
+        options('/workspace', { apps: ['android'], platform, verify: 'build' }),
+      );
+      const rendered = renderPlan(plan);
+      expect(rendered).toContain('--type=android');
+      expect(rendered).toContain('--name=android');
+      expect(rendered).toContain('--platforms=android');
+      expect(rendered).toContain('--projects=acme-tools-android');
+      expect(rendered).not.toContain('@nx/expo');
+      expect(rendered).not.toContain('@megamono/nx-apple');
+    },
+  );
+
+  it('plans multiple named Android apps independently', () => {
+    const plan = createPlan(
+      options('/workspace', {
+        apps: ['android:reader', 'android:admin'],
+        verify: 'none',
+      }),
+    );
+    const rendered = renderPlan(plan);
+    expect(rendered).toContain('--name=reader');
+    expect(rendered).toContain('--name=admin');
+  });
+
   it('plans the pinned nx-cloudflare Worker generator', () => {
     const plan = createPlan(
       options('/workspace', { apps: ['worker'], verify: 'build' }),

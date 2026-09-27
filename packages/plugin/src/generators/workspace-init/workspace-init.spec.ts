@@ -1185,6 +1185,34 @@ export default [
     expect(ci).not.toContain('shivammathur/setup-php');
   });
 
+  it('includes a Linux JDK/SDK build job for Android-only workspaces', async () => {
+    addProjectConfiguration(tree, 'reader', {
+      root: 'apps/android',
+      projectType: 'application',
+      tags: [
+        'platform:android',
+        'scope:product',
+        'type:app',
+        'visibility:internal',
+      ],
+      targets: {},
+    });
+    await workspaceInitGenerator(tree, {
+      only: 'ci',
+      yes: true,
+      bootstrap: true,
+      defaultPlatform: 'android',
+    });
+    const workflow = tree.read('.github/workflows/megamono-ci.yml', 'utf8');
+    expect(workflow).toContain('runs-on: ubuntu-latest');
+    expect(workflow).toContain('actions/setup-java@v5');
+    expect(workflow).toContain('java-version: 17');
+    expect(workflow).toContain(
+      'sdkmanager "platforms;android-36" "build-tools;35.0.0"',
+    );
+    expect(workflow).not.toContain('runs-on: macos-latest');
+  });
+
   it('adopts independent module subsets without emitting unselected surfaces', async () => {
     await workspaceInitGenerator(tree, {
       only: 'agents,skills',

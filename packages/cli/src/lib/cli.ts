@@ -181,6 +181,7 @@ export const APP_TYPE_CHOICES: readonly AppTypeChoice[] = [
   { name: 'mobile', message: 'Mobile — Expo application' },
   { name: 'desktop', message: 'Desktop — Tauri application' },
   { name: 'apple', message: 'Apple — native SwiftUI application' },
+  { name: 'android', message: 'Android — native Kotlin/Compose application' },
   { name: 'extension', message: 'Extension — WXT browser extension' },
 ];
 
@@ -308,6 +309,7 @@ Examples:
   megamono add app web
   megamono add app api --name=admin-api --interactive=false --yes
   megamono add app web --dry-run
+  megamono add app android --applicationId=com.example.app --yes
   megamono add library browser-auth --platform=web --yes
   megamono add library client --publishable --access=public --skipInstall --yes
   megamono add database events --adapter=drizzle
@@ -320,6 +322,8 @@ Examples:
 Application types: ${APP_TYPE_CHOICES.map(({ name }) => name).join(', ')}
 Web styling: ${WEB_STYLING_CHOICES.map(({ name }) => name).join(', ')}
 Next.js router: --router=pages|app (web/site only; default pages)
+Android options: --displayName=<product-name> --applicationId=<reverse-DNS-id>
+  Defaults to apps/android; --name selects apps/<name>. JDK 17 and Android SDK 36 required to build.
 Extension options: --displayName=<product-name> --manifestVersion=2|3
   --contentScriptMatches=<patterns> explicitly opts into page access.
   Omit for a background-only extension with no permissions.

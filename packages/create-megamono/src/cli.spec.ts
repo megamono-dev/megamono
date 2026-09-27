@@ -192,6 +192,17 @@ describe('CLI entrypoint', () => {
     expect(prompt.close).toHaveBeenCalledOnce();
   });
 
+  it('offers native Android instances in the guided app cart', async () => {
+    const prompt = scriptedPrompt(
+      ['add', 'android', 'reader', 'add', 'android', 'admin', 'continue'],
+      [],
+    );
+    expect(await selectApplications(prompt)).toEqual([
+      'android:reader',
+      'android:admin',
+    ]);
+  });
+
   it('validates names and duplicate roots before adding an app', async () => {
     const prompt = scriptedPrompt(
       ['add', 'extension', 'add', 'web', 'continue'],

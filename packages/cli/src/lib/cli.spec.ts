@@ -401,6 +401,7 @@ afterEach(async () => {
 
 describe('@megamono/cli', () => {
   it.each([
+    ['add', 'app', 'android', '--help'],
     ['add', 'app', 'extension', '--help'],
     ['add', 'app', 'extension', '-h'],
     ['add', 'app', '--help'],
@@ -415,6 +416,7 @@ describe('@megamono/cli', () => {
       expect((await runMegamonoCli(args, harness.value)).exitCode).toBe(0);
       expect(harness.invocations).toEqual([]);
       expect(harness.stdout.join('')).toContain('--displayName');
+      expect(harness.stdout.join('')).toContain('--applicationId');
       expect(harness.stderr).toEqual([]);
       expect(await readFile(join(root, 'package.json'), 'utf8')).toBe(
         '{invalid',
@@ -856,6 +858,35 @@ describe('@megamono/cli', () => {
         capture: false,
       },
     ]);
+  });
+
+  it('delegates Android identity options without installing Expo or Apple plugins', async () => {
+    const root = await workspace('pnpm', ['nx', '@megamono/plugin']);
+    const harness = io(root);
+    const result = await runMegamonoCli(
+      [
+        'add',
+        'app',
+        'android',
+        '--name=reader',
+        '--displayName=Reader',
+        '--applicationId=com.example.reader',
+        '--interactive=false',
+        '--yes',
+      ],
+      harness.value,
+    );
+    expect(result.exitCode).toBe(0);
+    expect(harness.invocations).toHaveLength(1);
+    expect(harness.invocations[0].args).toEqual(
+      expect.arrayContaining([
+        '@megamono/plugin:app',
+        '--type=android',
+        '--name=reader',
+        '--displayName=Reader',
+        '--applicationId=com.example.reader',
+      ]),
+    );
   });
 
   it('delegates library options and dry-run planning', async () => {

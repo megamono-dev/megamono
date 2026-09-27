@@ -32,6 +32,7 @@ export const APP_IDS = [
   'mobile',
   'desktop',
   'apple',
+  'android',
   'site',
   'extension',
 ] as const;
@@ -497,6 +498,7 @@ function requestedPlatforms(options: NormalizedCreateOptions): string[] {
         if (app === 'mobile') return 'mobile';
         if (app === 'desktop') return 'rust';
         if (app === 'apple') return 'apple';
+        if (app === 'android') return 'android';
         if (app === 'extension') return 'extension';
         return 'web';
       }),

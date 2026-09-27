@@ -13,6 +13,24 @@ Megamono is an Nx-based toolkit for creating, adopting, and governing polyglot m
 - `@megamono/nx-extension` — WXT browser-extension inference and generators
 - `@megamono/nx-render` — Render Blueprint inference and deployment preflight
 
+## Native Android applications
+
+Add a Kotlin/Jetpack Compose app to an initialized workspace:
+
+```bash
+megamono add app android --yes
+megamono add app android --name=reader --displayName="Reader" --applicationId=com.example.reader --yes
+```
+
+The default root is `apps/android`; named instances use `apps/<name>`. For a new
+workspace, select Android in the app picker or pass `create-megamono studio android`
+(multiple instances work as `android:reader android:admin`). This is a native
+Android preset, separate from Expo's `mobile` preset, and ships in `@megamono/plugin`.
+JDK 17 and Android SDK 36/build tools 35.0.0 are needed for the generated build,
+test, lint, and device-install targets. Generation itself is offline. The existing
+`create-megamono` host support remains macOS/Linux; generated Gradle projects and
+the Java launcher support Windows paths as well, with cross-host CI qualification.
+
 ## Development
 
 Install dependencies and run tasks through the workspace Nx CLI:
