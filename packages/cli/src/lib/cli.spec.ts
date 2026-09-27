@@ -453,10 +453,12 @@ describe('@megamono/cli', () => {
   it('includes sanitized error context and can explicitly submit feedback', async () => {
     const root = await workspace('pnpm');
     const harness = io(root);
-    const submitFeedback = vi.fn(async () => ({
-      id: 'feedback-123',
-      url: 'https://app.megamono.com/feedback/feedback-123',
-    }));
+    const submitFeedback = vi.fn<HostedAuthOperations['submitFeedback']>(
+      async () => ({
+        id: 'feedback-123',
+        url: 'https://app.megamono.com/feedback/feedback-123',
+      }),
+    );
     const auth: HostedAuthOperations = {
       login: vi.fn(),
       profile: vi.fn(),
