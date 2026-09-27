@@ -4,6 +4,9 @@ on:
     paths:
       [
         'packages/nx-cargo/**',
+        'packages/plugin/src/generators/app/**',
+        'packages/plugin/e2e/android.e2e.mjs',
+        'packages/plugin/package.json',
         '.github/workflows/native-execution.yml',
         'package-lock.json',
       ]
@@ -11,6 +14,30 @@ on:
 permissions:
   contents: read
 jobs:
+  android:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      MEGAMONO_ANDROID_NATIVE_E2E: 'true'
+      NX_DAEMON: 'false'
+      NX_ISOLATE_PLUGINS: 'false'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+      - run: npm ci
+      - run: npm exec nx -- run @megamono/plugin:e2e-android
   native:
     strategy:
       fail-fast: false

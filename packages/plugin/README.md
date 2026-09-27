@@ -77,6 +77,14 @@ serialized; review compiler/SDK/environment/signing inputs before enabling Nx
 caching. Standard Unix and Windows Gradle wrappers remain available for IDE/native
 workflows. Existing Android projects are not imported or rewritten by this preset.
 
+Maintainers can run `npm exec nx -- run @megamono/plugin:e2e-android` to check the
+packed generator, bundled assets, dry run, and resolved Nx graph. Set
+`MEGAMONO_ANDROID_NATIVE_E2E=true`, `JAVA_HOME`, and `ANDROID_HOME` to additionally
+build an APK and run the generated JVM test and Android Lint. The fixture uses a
+directory containing spaces and never installs onto a device. The native-execution
+workflow runs this opt-in qualification on macOS, Linux, and Windows. A passing
+generation-only fixture does not qualify the Android toolchain.
+
 ### Shared generator behavior
 
 Application and library generation preserve existing `pnpm-workspace.yaml` comments while applying real workspace/dependency-policy changes. Invalid YAML fails before the composed generator runs. Neither wrapper chooses a new pnpm store or changes `.npmrc`.

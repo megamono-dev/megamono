@@ -89,6 +89,7 @@ export function createAndroidApp(
       readFileSync(join(assets, file), 'utf8'),
     );
   }
+  tree.changePermissions(`${root}/gradlew`, 0o755);
   write(
     'gradle/wrapper/gradle-wrapper.properties',
     `distributionBase=GRADLE_USER_HOME

@@ -43,6 +43,17 @@
   ],
   "nx": {
     "targets": {
+      "e2e-android": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/android.e2e.mjs",
+          "cwd": "."
+        }
+      },
       "e2e-governance": {
         "executor": "nx:run-commands",
         "cache": false,

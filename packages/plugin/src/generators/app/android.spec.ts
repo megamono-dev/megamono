@@ -4,7 +4,10 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { appGenerator } from './app';
 import { ANDROID_TOOLCHAIN } from './android';
-import { DEFAULT_MEGAMONO_CONFIG, megamonoConfigSchema } from '../../lib/config';
+import {
+  DEFAULT_MEGAMONO_CONFIG,
+  megamonoConfigSchema,
+} from '../../lib/config';
 
 function workspace() {
   const tree = createTreeWithEmptyWorkspace();
@@ -74,6 +77,10 @@ describe('native Android app generator', () => {
     ).toBe(ANDROID_TOOLCHAIN.wrapperSha256);
     expect(tree.read(`${root}/gradle.mjs`, 'utf8')).toContain('shell: false');
     expect(tree.exists(`${root}/gradlew.bat`)).toBe(true);
+    expect(
+      tree.listChanges().find((change) => change.path === `${root}/gradlew`)
+        ?.options?.mode,
+    ).toBe(0o755);
   });
 
   it('supports custom names, directories, IDs and safely escaped display names', async () => {
