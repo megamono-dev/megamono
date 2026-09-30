@@ -52,3 +52,62 @@ It writes `render.proposed.yaml`, never `render.yaml`. Procfile commands that
 name one Nx project inherit that project's root; dashboard-only services need
 an explicit mapping. Web services without a verified health endpoint retain a
 validator warning—the generator does not invent an application route.
+
+## Prisma deployment chain
+
+For Prisma services, the adoption generator also updates the mapped Nx project's
+`build.dependsOn` with each database's `generate` target and records the explicit
+project dependencies. Review these changes with the Blueprint proposal. It never
+runs a migration or promotes the proposal to `render.yaml`.
+
+Register schema/project ownership in `megamono.json`. Database dependencies can
+be selected from declared Nx/package dependencies, or supplied explicitly in the
+adoption map (required when only source-inferred relationships are available):
+
+```json
+{
+  "services": {
+    "api": {
+      "project": "api",
+      "root": "apps/api",
+      "databases": ["primary"]
+    }
+  }
+}
+```
+
+`primary` is the logical Megamono database name, not a guessed Render resource
+name. Every selection needs an existing schema and a database `generate` target.
+An unresolved Node service in a Prisma workspace requires a reviewed selection;
+use an empty list only for a service that does not consume Prisma. This does not
+override a known Prisma dependency.
+
+The proposal uses the workspace as Render's `rootDir` so sibling libraries,
+Prisma configuration, and migrations remain available. An existing narrower
+service root must be reviewed first. With pnpm, a typical result is:
+
+```yaml
+rootDir: .
+buildCommand: pnpm install --frozen-lockfile && pnpm exec nx run 'api:build'
+preDeployCommand: pnpm exec prisma migrate deploy --schema 'libs/prisma/primary/prisma' --config 'libs/prisma/primary/prisma.config.ts'
+```
+
+The schema and configuration paths come from the selected database, including
+custom schema locations. The API build runs client generation through its Nx
+dependencies. Keep the same service-to-project mapping in the Render inference
+plugin when promoting this workspace-root proposal. Existing build commands must
+invoke the mapped Nx build; existing custom pre-deploy commands require explicit
+composition and are never silently replaced or appended to.
+
+Render runs pre-deploy commands on a separate instance: generating a client there
+does not update the deployed filesystem. Pre-deploy is supported for paid web,
+private, and worker services. Docker, cron, and explicitly free services require
+a separately reviewed strategy rather than this generated Node chain. See
+[Render deploy steps](https://render.com/docs/deploys) and
+[monorepo roots](https://render.com/docs/monorepo-support).
+
+Before enabling deployment, review and commit migration SQL, confirm backups,
+release approval, credentials, and the intended database. Keep the Prisma CLI,
+configuration, schema, and migrations in the pre-deploy artifact. `migrate deploy`
+applies committed migrations; it does not replace review or backup procedures.
+Do not substitute `migrate dev`, `db push`, or reset commands in production.

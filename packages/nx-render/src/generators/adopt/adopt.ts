@@ -1,11 +1,13 @@
 import {
   formatFiles,
   getProjects,
+  updateProjectConfiguration,
   logger,
   type GeneratorCallback,
   type Tree,
 } from '@nx/devkit';
 import { stringify } from 'yaml';
+import { invokesNxBuild, prismaDeployment } from './prisma';
 
 export interface RenderAdoptGeneratorSchema {
   readonly procfile?: string;
@@ -18,6 +20,7 @@ export interface RenderAdoptGeneratorSchema {
 interface ServiceMapping {
   readonly project?: string;
   readonly root?: string;
+  readonly databases?: readonly string[];
 }
 
 interface ProposedService extends Record<string, unknown> {
@@ -28,6 +31,7 @@ interface ProposedService extends Record<string, unknown> {
   readonly buildCommand?: string;
   readonly startCommand?: string;
   readonly healthCheckPath?: string;
+  readonly preDeployCommand?: string;
 }
 
 function normalizedPath(value: string, option: string): string {
@@ -96,7 +100,9 @@ function inventoryServices(value: Record<string, unknown>): ProposedService[] {
     throw new Error('render.services.json must contain a services array.');
   return value.services.map((raw, index) => {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw))
-      throw new Error(`render.services.json services[${index}] must be an object.`);
+      throw new Error(
+        `render.services.json services[${index}] must be an object.`,
+      );
     const service = raw as Record<string, unknown>;
     if (typeof service.name !== 'string' || typeof service.type !== 'string')
       throw new Error(
@@ -140,12 +146,19 @@ export async function renderAdoptGenerator(
     : procfileServices(tree.read(procfile, 'utf8') ?? '');
   const serviceMappings = mappings(tree, options.serviceProjects);
   const projects = getProjects(tree);
+  const buildUpdates = new Map<string, ReturnType<typeof prismaDeployment>>();
   const proposed = services.map((service) => {
     const mapping = serviceMappings[service.name];
     const inferredProject = service.startCommand
       ? commandProject(service.startCommand)
       : null;
-    const projectName = mapping?.project ?? inferredProject;
+    const rootMatches = [...projects].filter(
+      ([, entry]) => entry.root === (mapping?.root ?? service.rootDir),
+    );
+    const projectName =
+      mapping?.project ??
+      inferredProject ??
+      (rootMatches.length === 1 ? rootMatches[0][0] : undefined);
     const project = projectName ? projects.get(projectName) : undefined;
     const root = mapping?.root ?? project?.root ?? service.rootDir;
     if (!root || root === '.')
@@ -156,16 +169,103 @@ export async function renderAdoptGenerator(
       throw new Error(
         `Render service ${service.name} references unknown Nx project ${projectName}.`,
       );
+    const databaseNames = mapping?.databases;
+    if (
+      databaseNames !== undefined &&
+      (!Array.isArray(databaseNames) ||
+        databaseNames.some((name) => typeof name !== 'string'))
+    )
+      throw new Error(
+        `Render service ${service.name} databases must be an array of logical database names.`,
+      );
+    const prisma = prismaDeployment(
+      tree,
+      projects,
+      projectName ?? undefined,
+      databaseNames,
+    );
     const next = { ...service, rootDir: root };
+    if (prisma) {
+      if (
+        (service.runtime && service.runtime !== 'node') ||
+        service.type === 'cron' ||
+        service.plan === 'free'
+      )
+        throw new Error(
+          `Render service ${service.name} requires a reviewed Prisma deployment strategy: generated pre-deploy support is limited to paid Node web/private/worker services.`,
+        );
+      if (service.rootDir && service.rootDir !== '.')
+        throw new Error(
+          `Render Prisma service ${service.name} must build from the workspace root; review rootDir and command paths before adoption.`,
+        );
+      if (
+        service.buildCommand &&
+        !invokesNxBuild(service.buildCommand, prisma.projectName)
+      )
+        throw new Error(
+          `Render service ${service.name} buildCommand must invoke ${prisma.projectName}:build so its Prisma generation dependencies run; custom build commands require review.`,
+        );
+      if (
+        service.preDeployCommand &&
+        service.preDeployCommand !== prisma.migration
+      )
+        throw new Error(
+          `Render service ${service.name} already owns preDeployCommand. Review and compose the required migrations explicitly: ${prisma.migration}`,
+        );
+      next.rootDir = '.';
+      next.buildCommand = service.buildCommand ?? prisma.build;
+      next.preDeployCommand = prisma.migration;
+      const previous = buildUpdates.get(prisma.projectName);
+      buildUpdates.set(
+        prisma.projectName,
+        previous
+          ? {
+              ...prisma,
+              dependencies: [...previous.dependencies, ...prisma.dependencies],
+              databases: [...previous.databases, ...prisma.databases],
+            }
+          : prisma,
+      );
+    }
     if (service.type === 'web' && !service.healthCheckPath)
       logger.warn(
         `Render service ${service.name} has no verified health endpoint; the proposal intentionally omits healthCheckPath.`,
       );
     return next;
   });
+  for (const prisma of buildUpdates.values()) {
+    if (!prisma) continue;
+    const build = prisma.project.targets?.build;
+    if (!build)
+      throw new Error(`Missing build target for ${prisma.projectName}.`);
+    const dependencies = [...(build.dependsOn ?? [])];
+    for (const dependency of prisma.dependencies) {
+      if (
+        !dependencies.some(
+          (entry) => JSON.stringify(entry) === JSON.stringify(dependency),
+        )
+      )
+        dependencies.push(dependency);
+    }
+    updateProjectConfiguration(tree, prisma.projectName, {
+      ...prisma.project,
+      implicitDependencies: [
+        ...new Set([
+          ...(prisma.project.implicitDependencies ?? []),
+          ...prisma.databases
+            .map(({ project }) => project)
+            .filter((project) => project !== prisma.projectName),
+        ]),
+      ],
+      targets: {
+        ...prisma.project.targets,
+        build: { ...build, dependsOn: dependencies },
+      },
+    });
+  }
   tree.write(
     output,
-    `# Review this proposal before promoting it to render.yaml.\n${stringify({ services: proposed })}`,
+    `# Review this proposal before promoting it to render.yaml.\n# Prisma: review and commit migrations, confirm backups and release approval.\n# Keep the Prisma CLI, config and migrations available in the pre-deploy environment.\n${stringify({ services: proposed })}`,
   );
   await formatFiles(tree);
   return () => undefined;

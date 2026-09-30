@@ -14,7 +14,7 @@
     },
     "serviceProjects": {
       "type": "string",
-      "description": "JSON adoption map containing explicit service project roots."
+      "description": "JSON adoption map containing service project roots and optional databases arrays of logical Prisma database names from megamono.json. Prisma services receive build generation dependencies and a migration pre-deploy proposal."
     },
     "output": {
       "type": "string",

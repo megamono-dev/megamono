@@ -1,10 +1,126 @@
-import { addProjectConfiguration } from '@nx/devkit';
+import { addProjectConfiguration, readProjectConfiguration } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { renderAdoptGenerator } from './adopt';
 
 describe('Render adoption proposal generator', () => {
+  function prismaFixture(manager = 'pnpm@11.24.0') {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write('package.json', JSON.stringify({ packageManager: manager }));
+    addProjectConfiguration(tree, 'api', {
+      root: 'apps/api',
+      projectType: 'application',
+      implicitDependencies: ['db'],
+      targets: { build: { command: 'webpack', dependsOn: ['^build'] } },
+    });
+    addProjectConfiguration(tree, 'db', {
+      root: 'libs/prisma/primary',
+      targets: {
+        generate: {
+          command: 'prisma generate --schema prisma',
+          options: { cwd: 'libs/prisma/primary' },
+        },
+      },
+    });
+    tree.write(
+      'libs/prisma/primary/prisma/schema.prisma',
+      'generator client { provider = "prisma-client" }',
+    );
+    tree.write('libs/prisma/primary/prisma.config.ts', 'export default {};');
+    tree.write(
+      'megamono.json',
+      JSON.stringify({
+        databases: {
+          primary: {
+            adapter: 'prisma',
+            project: 'db',
+            schema: 'libs/prisma/primary/prisma',
+          },
+        },
+      }),
+    );
+    tree.write('Procfile', 'web: pnpm exec nx run api:serve:production\n');
+    return tree;
+  }
+
+  it.each([
+    'npm@11.0.0',
+    'pnpm@11.24.0',
+    'yarn@1.22.22',
+    'yarn@4.0.0',
+    'bun@1.3.0',
+  ])(
+    'generates Prisma build ordering and schema/config-specific reviewed migration commands (%s)',
+    async (manager) => {
+      const tree = prismaFixture(manager);
+      await renderAdoptGenerator(tree, {});
+      const service = parse(tree.read('render.proposed.yaml', 'utf8') ?? '')
+        .services[0];
+      expect(service.rootDir).toBe('.');
+      expect(service.buildCommand).toContain("nx run 'api:build'");
+      expect(service.preDeployCommand).toContain(
+        "prisma migrate deploy --schema 'libs/prisma/primary/prisma' --config 'libs/prisma/primary/prisma.config.ts'",
+      );
+      expect(service.buildCommand).not.toContain('migrate');
+      expect(service.preDeployCommand).not.toContain('generate');
+      const expected = ['^build', { projects: ['db'], target: 'generate' }];
+      expect(
+        readProjectConfiguration(tree, 'api').targets?.build.dependsOn,
+      ).toEqual(expected);
+      await renderAdoptGenerator(tree, { force: true });
+      expect(
+        readProjectConfiguration(tree, 'api').targets?.build.dependsOn,
+      ).toEqual(expected);
+      expect(tree.exists('render.yaml')).toBe(false);
+    },
+  );
+
+  it.each([
+    { rootDir: 'apps/api' },
+    { preDeployCommand: 'npm run custom-migration' },
+    { runtime: 'docker' },
+    { plan: 'free' },
+    { buildCommand: 'webpack' },
+  ])(
+    'fails before writing when Prisma deployment requires review: %j',
+    async (overrides) => {
+      const tree = prismaFixture();
+      tree.write(
+        'render.services.json',
+        JSON.stringify({
+          services: [
+            {
+              type: 'web',
+              name: 'web',
+              runtime: 'node',
+              startCommand: 'pnpm exec nx run api:serve',
+              ...overrides,
+            },
+          ],
+        }),
+      );
+      const before = tree.listChanges();
+      await expect(renderAdoptGenerator(tree, {})).rejects.toThrow();
+      expect(tree.listChanges()).toEqual(before);
+    },
+  );
+
+  it('uses explicit database mappings and rejects unknown databases without writes', async () => {
+    const tree = prismaFixture();
+    tree.write(
+      'render-map.json',
+      JSON.stringify({
+        services: { web: { project: 'api', databases: ['missing'] } },
+      }),
+    );
+    const before = tree.listChanges();
+    await expect(
+      renderAdoptGenerator(tree, { serviceProjects: 'render-map.json' }),
+    ).rejects.toThrow();
+    expect(tree.listChanges()).toEqual(before);
+  });
+
   it('converts Procfile commands into a review-only Nx-aware Blueprint', async () => {
     const tree = createTreeWithEmptyWorkspace();
     addProjectConfiguration(tree, 'api', {

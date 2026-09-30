@@ -34,4 +34,18 @@ Versioned preflight diagnostics cover malformed Blueprints, unsafe or missing ro
 
 ## Adoption and release gates
 
+For a reviewed Node/Prisma service, adoption selects named Megamono databases
+from explicit service mappings or declared project/package dependencies. It
+adds each database's client-generation target before the API build and proposes
+`preDeployCommand` using `prisma migrate deploy` with the selected schema and
+configuration paths. Shared workspace inputs require workspace-root execution.
+Ambiguous selections, conflicting existing commands, and unsupported service
+plans/runtimes stop for review before writes. Blueprint promotion, migration SQL
+review, backup verification, and release approval remain repository-owned.
+
+Health reports independently check the resolved graph's Prisma dependencies for
+build-time generation and schema-specific pre-deploy migrations. Arbitrary shell
+wrappers are unverified evidence, not proof of a valid deployment chain. No
+generator, graph discovery, or health invocation executes database migrations.
+
 The existing-workspace survey detects a repository-owned `render.yaml`. It inventories services and derives a proposed mapping only from an explicit `rootDir` or exact Nx project references in declared service commands. Root-level services remain decision-required: the caller reviews `adoptionTemplates.render.serviceProjects` and passes its `serviceProjects` value through `--renderServiceProjects`. Init validates every service, project, and root before registering the plugin object in `nx.json`; it does not change the Blueprint or reinterpret a workspace-root command as an app-root command. Selecting the inference module registers `@megamono/nx-render`, records the manifest in `megamono.json`, and preserves the Blueprint unchanged. The package belongs to the fixed-version public `megamono` release group. Unit tests and the packed Nx compatibility fixture must validate inference across the declared Nx range before `next` or `latest` publication.
