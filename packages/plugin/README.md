@@ -698,6 +698,18 @@ npm exec nx run megamono-docs:health
 
 Health checks cover npm, Expo SDK, SwiftPM, and Cargo dependency alignment,
 spec drift, stale plans, orphaned libraries, and integration-template drift.
+For Render-inferred services that depend on a registered Prisma project, health
+also checks for build-time client generation and a schema/config-specific
+`prisma migrate deploy` pre-deploy step. Dependency traversal includes shared
+persistence libraries. Missing steps and roots that exclude shared database
+inputs appear as `render:prisma-*` findings under `spec-drift`, even when the
+docs module is not adopted. Existing report-only/fail-on-findings behavior is
+unchanged. This is bounded static evidence, not a database readiness certificate:
+custom shell wrappers or deployment scripts that cannot be verified are reported
+with reduced confidence and need independent qualification or a reviewed,
+decision-backed suppression. Checks never execute migrations. Keep migration SQL
+review, backups, deployment credentials, and release approval in the release
+process; generation belongs in the build, not the isolated pre-deploy instance.
 Findings are written deterministically to `.megamono/health.json`.
 Structural and health checks exclude inferred projects inside `.yalc` or
 `node_modules`, including nested copies. Those are installed dependencies, not

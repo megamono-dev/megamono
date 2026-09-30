@@ -6,6 +6,7 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { ProjectGraph } from '@nx/devkit';
 import { valid as validVersion } from 'semver';
 import { repositoryOwnedGraph } from './repository-graph';
+import { renderPrismaFindings } from './render-prisma-health';
 import type { MegamonoConfig } from './config';
 import type { RepositoryDocument } from './docs';
 import { inspectManagedSkills } from './managed-skills';
@@ -1488,6 +1489,11 @@ export async function runRepositoryHealth(options: {
             ),
             ...cloudflare.specDrift,
             ...renderPreflightFindings(options.graph),
+            ...renderPrismaFindings(
+              options.workspaceRoot,
+              options.graph,
+              options.config,
+            ),
             ...databaseDrift,
           ]
         : [],
