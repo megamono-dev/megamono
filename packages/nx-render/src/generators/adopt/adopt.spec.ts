@@ -76,6 +76,67 @@ describe('Render adoption proposal generator', () => {
     },
   );
 
+  it('retains an already generated command chain when adopting its inventory again', async () => {
+    const tree = prismaFixture();
+    await renderAdoptGenerator(tree, {});
+    const proposal = tree.read('render.proposed.yaml', 'utf8') ?? '';
+    tree.write('render.services.json', JSON.stringify(parse(proposal)));
+    await renderAdoptGenerator(tree, { force: true });
+    expect(tree.read('render.proposed.yaml', 'utf8')).toBe(proposal);
+  });
+
+  it('keeps migration commands bound to each explicitly selected database', async () => {
+    const tree = prismaFixture();
+    addProjectConfiguration(tree, 'audit-db', {
+      root: 'libs/audit db',
+      targets: {
+        generate: { command: 'prisma generate --schema schema.prisma' },
+      },
+    });
+    tree.write(
+      'libs/audit db/schema.prisma',
+      'generator client { provider = "prisma-client" }',
+    );
+    tree.write('libs/audit db/prisma.config.ts', 'export default {};');
+    tree.write(
+      'megamono.json',
+      JSON.stringify({
+        databases: {
+          primary: {
+            adapter: 'prisma',
+            project: 'db',
+            schema: 'libs/prisma/primary/prisma',
+          },
+          audit: {
+            adapter: 'prisma',
+            project: 'audit-db',
+            schema: 'libs/audit db/schema.prisma',
+          },
+        },
+      }),
+    );
+    tree.write(
+      'render-map.json',
+      JSON.stringify({
+        services: { web: { project: 'api', databases: ['primary', 'audit'] } },
+      }),
+    );
+    await renderAdoptGenerator(tree, { serviceProjects: 'render-map.json' });
+    const service = parse(tree.read('render.proposed.yaml', 'utf8') ?? '')
+      .services[0];
+    expect(service.preDeployCommand).toContain(
+      "--schema 'libs/audit db/schema.prisma' --config 'libs/audit db/prisma.config.ts'",
+    );
+    expect(service.preDeployCommand).toContain(
+      "--schema 'libs/prisma/primary/prisma'",
+    );
+    expect(service.preDeployCommand.split(' && ')).toHaveLength(2);
+    expect(readProjectConfiguration(tree, 'api').implicitDependencies).toEqual([
+      'db',
+      'audit-db',
+    ]);
+  });
+
   it.each([
     { rootDir: 'apps/api' },
     { preDeployCommand: 'npm run custom-migration' },

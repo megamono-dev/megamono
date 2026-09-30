@@ -74,6 +74,22 @@
           "command": "node packages/plugin/e2e/prisma-buildable.e2e.mjs"
         }
       },
+      "e2e-render-prisma": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build",
+          {
+            "projects": [
+              "nx-render"
+            ],
+            "target": "build"
+          }
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/render-prisma.e2e.mjs"
+        }
+      },
       "e2e-inferred-targets": {
         "executor": "nx:run-commands",
         "cache": false,

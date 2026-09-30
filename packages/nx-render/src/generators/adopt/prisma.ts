@@ -1,4 +1,5 @@
 import type { ProjectConfiguration, Tree } from '@nx/devkit';
+import { posix } from 'node:path';
 
 interface Database {
   adapter: string;
@@ -161,7 +162,7 @@ export function prismaDeployment(
       throw new Error(
         `Prisma database ${name} requires a registered project and generate target.`,
       );
-    const schema = db.schema;
+    let schema = db.schema;
     if (
       !schema ||
       !safePath(schema) ||
@@ -171,15 +172,35 @@ export function prismaDeployment(
         `Prisma database ${name} requires an existing, safe schema path in megamono.json.`,
       );
     const config = `${owner.root}/prisma.config.ts`;
+    const selectedConfig = tree.exists(config)
+      ? config
+      : tree.exists('prisma.config.ts')
+        ? 'prisma.config.ts'
+        : undefined;
+    // Megamono records schema.prisma as inventory evidence, while Prisma 7's
+    // config can select the whole folder (including Playstack model fragments).
+    // Never override that verified folder with the single entry file.
+    const configuredSchema = selectedConfig
+      ? tree
+          .read(selectedConfig, 'utf8')
+          ?.match(/\bschema\s*:\s*['"]([^'"]+)['"]/)?.[1]
+      : undefined;
+    if (
+      selectedConfig &&
+      configuredSchema &&
+      schema.endsWith('/schema.prisma')
+    ) {
+      const folder = posix.normalize(
+        posix.join(posix.dirname(selectedConfig), configuredSchema),
+      );
+      if (folder === posix.dirname(schema)) schema = folder;
+    }
     return {
       name,
       project: db.project,
+      buildable: Boolean(owner.targets.build),
       schema,
-      config: tree.exists(config)
-        ? config
-        : tree.exists('prisma.config.ts')
-          ? 'prisma.config.ts'
-          : undefined,
+      config: selectedConfig,
     };
   });
   const migration = databases
@@ -194,9 +215,9 @@ export function prismaDeployment(
     databases,
     migration,
     build: `${install} && ${exec} nx run ${quote(`${projectName}:build`)}`,
-    dependencies: databases.map(({ project }) => ({
-      projects: [project],
-      target: 'generate',
-    })),
+    dependencies: databases.flatMap(({ project, buildable }) => [
+      { projects: [project], target: 'generate' },
+      ...(buildable ? [{ projects: [project], target: 'build' }] : []),
+    ]),
   };
 }
