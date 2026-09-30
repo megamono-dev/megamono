@@ -763,6 +763,7 @@ function renderIndex(
   title: string,
   documents: readonly RepositoryDocument[],
   indexPath: string,
+  designHandoff = false,
 ): string {
   const rows = [...documents]
     .filter((document) => document.data.type !== 'report')
@@ -777,6 +778,12 @@ function renderIndex(
   return `${[
     `# ${title}`,
     '',
+    ...(designHandoff
+      ? [
+          '[Design handoff](design/README.md) — visual references, tokens, and spec mappings (outside the lifecycle corpus).',
+          '',
+        ]
+      : []),
     '| ID | Type | Status | Visibility | Projects | Topics | Summary |',
     '|---|---|---|---|---|---|---|',
     ...rows,
@@ -818,8 +825,16 @@ export async function generateDocsIndexes(
   const changed: string[] = [];
   const hot = documents.filter((document) => !document.archived);
   const archived = documents.filter((document) => document.archived);
+  const designHandoff = await stat(
+    join(absoluteDocsRoot, 'design', 'README.md'),
+  )
+    .then((entry) => entry.isFile())
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return false;
+      throw error;
+    });
   const hotContent = await format(
-    renderIndex('Repository documentation index', hot, hotPath),
+    renderIndex('Repository documentation index', hot, hotPath, designHandoff),
     { parser: 'markdown' },
   );
   const archiveContent = await format(

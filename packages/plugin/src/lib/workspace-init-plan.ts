@@ -1,5 +1,6 @@
 import { getProjects, type Tree } from '@nx/devkit';
 import { dirname } from 'node:path';
+import { designHandoffFiles } from './docs-design';
 import { extensionEvidence } from './extension-evidence';
 import ignore = require('ignore');
 import matter = require('gray-matter');
@@ -135,6 +136,7 @@ export interface WorkspaceInitSurvey {
     readonly roots: readonly string[];
     readonly corpusDirectories: readonly string[];
     readonly markdown: readonly string[];
+    readonly designAssets: readonly string[];
     readonly classifications: readonly WorkspaceInitDocumentationClassification[];
     readonly unclassified: readonly string[];
   };
@@ -1045,7 +1047,12 @@ export function surveyWorkspaceInit(
       !path.startsWith('.agents/skills/') &&
       !path.startsWith('.claude/skills/'),
   );
-  const documentation = classifyDocumentation(tree, markdown);
+  const designRoot = `${resolveWorkspaceDocsContract(tree).root}/design/`;
+  const designAssets = files.filter((path) => path.startsWith(designRoot));
+  const documentation = classifyDocumentation(
+    tree,
+    markdown.filter((path) => !path.startsWith(designRoot)),
+  );
   const roots = new Set(
     markdown
       .map((path) => path.split('/')[0])
@@ -1194,6 +1201,7 @@ export function surveyWorkspaceInit(
   const documentationInventory = {
     roots: [...roots].sort(compare),
     markdown,
+    designAssets,
     ...documentation,
   };
   return {
@@ -1556,6 +1564,15 @@ export function createWorkspaceInitPlan(
         tree.exists(path) ? 'retain' : 'add',
         path,
         'Keep the canonical documentation directory in the repository.',
+      );
+    }
+    for (const { target } of designHandoffFiles(docsRoot)) {
+      operation(
+        operations,
+        'docs',
+        tree.exists(target) ? 'retain' : 'add',
+        target,
+        'Seed repository-owned visual handoff guidance and asset directories without replacing existing files.',
       );
     }
     for (const key of [docs.module, `${docs.module}/*`]) {
@@ -2116,6 +2133,10 @@ ${values(survey.manifests.unsupported)}
 - Roots: ${survey.documentation.roots.join(', ') || 'none'}
 - Corpus-like directories: ${survey.documentation.corpusDirectories.join(', ') || 'none'}
 - Markdown files: ${survey.documentation.markdown.length}
+
+### Design handoff assets (repository-owned, outside the lifecycle corpus)
+
+${values(survey.documentation.designAssets)}
 
 ### High-confidence classification proposals
 

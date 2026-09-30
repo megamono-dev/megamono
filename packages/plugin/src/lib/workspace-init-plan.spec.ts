@@ -11,6 +11,59 @@ import {
 } from './workspace-init-plan';
 
 describe('workspace init survey and plan', () => {
+  it.each(['docs', 'handbook'])(
+    'recognizes %s design assets without proposing lifecycle migration',
+    (docsRoot) => {
+      const tree = createTreeWithEmptyWorkspace();
+      tree.write('megamono.json', JSON.stringify({ docs: { root: docsRoot } }));
+      const assets = [
+        'README.md',
+        'manifest.md',
+        'tokens.json',
+        'boards/research/01-study.md',
+        'screenshots/example.png',
+      ].map((path) => `${docsRoot}/design/${path}`);
+      for (const path of assets) tree.write(path, 'owned');
+      const before = tree.listChanges();
+      const survey = surveyWorkspaceInit(tree);
+      expect(survey.documentation.designAssets).toEqual([...assets].sort());
+      expect(survey.documentation.classifications).toEqual([]);
+      expect(survey.documentation.unclassified).toEqual([]);
+      expect(survey.adoptionTemplates.documentation.documents).toEqual({});
+      expect(renderWorkspaceInitSurvey(survey)).toContain(
+        'Design handoff assets',
+      );
+      expect(tree.listChanges()).toEqual(before);
+    },
+  );
+
+  it('previews adding missing design seeds and retaining existing references', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write('docs/design/README.md', '# Owned\n');
+    const plan = createWorkspaceInitPlan(tree, { only: 'docs' });
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          target: 'docs/design/README.md',
+          action: 'retain',
+        }),
+        expect.objectContaining({
+          target: 'docs/design/manifest.md',
+          action: 'add',
+        }),
+        expect.objectContaining({
+          target: 'docs/design/boards/.gitkeep',
+          action: 'add',
+        }),
+        expect.objectContaining({
+          target: 'docs/design/screenshots/.gitkeep',
+          action: 'add',
+        }),
+      ]),
+    );
+    expect(tree.exists('docs/design/manifest.md')).toBe(false);
+  });
+
   it('discovers Xcode-only portfolios without counting embedded workspaces or build products', () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write(

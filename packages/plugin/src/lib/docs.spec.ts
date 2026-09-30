@@ -35,6 +35,51 @@ async function fixture(): Promise<string> {
 }
 
 describe('repository documentation', () => {
+  it('links the design handoff without requiring lifecycle metadata or indexing its assets', async () => {
+    const root = await fixture();
+    try {
+      await mkdir(join(root, 'docs/design/boards'), { recursive: true });
+      await writeFile(
+        join(root, 'docs/design/README.md'),
+        '# Design handoff\n',
+      );
+      await writeFile(
+        join(root, 'docs/design/manifest.md'),
+        '# Board mapping\n',
+      );
+      await writeFile(
+        join(root, 'docs/design/boards/example.html'),
+        '<main>Example</main>',
+      );
+      const result = await validateRepositoryDocs(
+        root,
+        DEFAULT_MEGAMONO_CONFIG,
+      );
+      expect(result.diagnostics).toEqual([]);
+      expect(result.documents).toHaveLength(1);
+      await generateDocsIndexes(
+        root,
+        DEFAULT_MEGAMONO_CONFIG,
+        result.documents,
+      );
+      expect(await readFile(join(root, 'docs/INDEX.md'), 'utf8')).toContain(
+        '[Design handoff](design/README.md)',
+      );
+      expect(
+        await readFile(join(root, 'docs/archives/INDEX.md'), 'utf8'),
+      ).not.toContain('Design handoff');
+      expect(
+        await generateDocsIndexes(
+          root,
+          DEFAULT_MEGAMONO_CONFIG,
+          result.documents,
+        ),
+      ).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('accepts scoped package names as exact Nx project identifiers', async () => {
     const root = await fixture();
     try {

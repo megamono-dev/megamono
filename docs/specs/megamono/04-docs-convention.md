@@ -71,6 +71,11 @@ docs/
   audits/         # judgement — evaluation against a stated standard
   research/       # exploration — findings without a verdict
   reports/        # observation — usually machine-generated
+  design/         # visual handoff — repository-owned, outside the lifecycle corpus
+    README.md     # source-of-truth and usage guidance
+    manifest.md   # maps visual references to specs and acceptance tests
+    boards/       # editable mockups and measurement references
+    screenshots/  # visual targets and comparison captures
   archives/       # cold storage, mirrors the structure above
     specs/
     plans/
@@ -329,6 +334,27 @@ A superseded decision stays in the corpus. The replacement declares `supersedes`
 Retrieval filters superseded records out of the default view and surfaces them only when a chain is being followed deliberately.
 
 ## `DESIGN.md`
+
+### Visual handoff assets
+
+The docs module also seeds `design/README.md`, `design/manifest.md`, and empty
+`design/boards/` and `design/screenshots/` directories. These are repository-owned
+seeds: initialization and regeneration preserve existing contents, including
+binary assets. Custom docs roots use the same relative structure.
+
+An optional `design/tokens.json` may hold shared design values; the handoff must
+declare whether it is authoritative or exported from an existing theme. Megamono
+does not invent token values or compile them. Larger repositories may group
+assets under `design/<project>/`.
+
+These assets are not a seventh lifecycle document type and require no corpus
+frontmatter. Surveys report them separately from migration proposals; the active
+docs index links to the handoff README when present. They are not automatically
+published, archived, or report-pruned. Accepted specs govern behavior; visual
+references illustrate it. Record discrepancies, sample content, platform/theme
+variants, capture dates, and acceptance-test mappings in the manifest.
+
+### Repository design brief
 
 Repo-wide design brief, optionally per-surface. Read by the agent **before any UI work**.
 

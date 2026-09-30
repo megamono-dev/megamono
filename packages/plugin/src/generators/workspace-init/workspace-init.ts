@@ -1,3 +1,4 @@
+import { designHandoffFiles } from '../../lib/docs-design';
 import {
   prependEslintFlatConfig,
   locateEslintFlatConfig,
@@ -1604,6 +1605,18 @@ export async function workspaceInitGenerator(
       : (existingConfig?.packageSources.registries ?? {});
   const docsContract = resolveWorkspaceDocsContract(tree, options);
   const docsRoot = docsContract.root;
+  // Formatting must not rewrite caller-owned handoff assets, including files
+  // already changed in the Tree by a composing generator.
+  const existingDesignAssets = new Map<string, Buffer>();
+  for (const { path, type } of tree.listChanges()) {
+    if (type === 'DELETE' || !path.startsWith(`${docsRoot}/design/`)) continue;
+    const bytes = tree.read(path);
+    if (bytes) existingDesignAssets.set(path, bytes);
+  }
+  const designSeeds = designHandoffFiles(docsRoot).map((file) => ({
+    ...file,
+    created: !tree.exists(file.target),
+  }));
   const docsStructureArtifacts = [
     ['docs.structure.specs', `${docsRoot}/specs/.gitkeep`],
     ['docs.structure.plans', `${docsRoot}/plans/.gitkeep`],
@@ -2252,14 +2265,15 @@ export async function workspaceInitGenerator(
   const files: Readonly<Record<string, string>> = {
     ...(modules.has('docs')
       ? {
-          [`${docsRoot}/INDEX.md`]: '# Repository documentation index\n',
+          [`${docsRoot}/INDEX.md`]:
+            '# Repository documentation index\n\n[Design handoff](design/README.md) — visual references, tokens, and spec mappings (outside the lifecycle corpus).\n',
           [`${docsRoot}/archives/INDEX.md`]: '# Archived documentation index\n',
         }
       : {}),
     ...(modules.has('agents')
       ? {
           [`${docsRoot}/DESIGN.md`]:
-            '# Design\n\n## Direction\n\n## Influences\n\n## Not this\n\n## System\n',
+            '# Design\n\n## Direction\n\n## Influences\n\n## Not this\n\n## System\n\n## Visual references\n\nKeep tokens, boards, screenshots, and their spec mappings in `design/` when the docs module is adopted. Declare which token source is authoritative.\n',
         }
       : {}),
     ...(modules.has('skills') ? { '.agents/skills/.gitkeep': '' } : {}),
@@ -2269,6 +2283,9 @@ export async function workspaceInitGenerator(
   }
   if (modules.has('docs')) {
     for (const [, path] of docsStructureArtifacts) tree.write(path, '');
+    for (const file of designSeeds) {
+      if (file.created) tree.write(file.target, file.content);
+    }
   }
   if (modules.has('skills')) logManagedSkills(applyManagedSkillTemplates(tree));
   const healthWorkflow = renderHealthWorkflow(
@@ -2342,7 +2359,7 @@ export async function workspaceInitGenerator(
       : `Read ${docsRoot}/DESIGN.md and existing repository guidance`;
     tree.write(
       'AGENTS.md',
-      `# Repository instructions\n\n${documentationGuidance} before changing the repository. Use Megamono generators instead of hand-rolling repository structure.\n`,
+      `# Repository instructions\n\n${documentationGuidance} before changing the repository. Use Megamono generators instead of hand-rolling repository structure.\n\nBefore UI work, read ${docsRoot}/DESIGN.md and any ${docsRoot}/design/ handoff. Follow accepted specs when visual references disagree, and report the discrepancy.\n`,
     );
   }
   const agentsPath = 'AGENTS.md';
@@ -2465,6 +2482,7 @@ export async function workspaceInitGenerator(
     ? addDependenciesToPackageJson(tree, {}, developmentDependencies)
     : () => undefined;
   await formatFiles(tree);
+  for (const [path, bytes] of existingDesignAssets) tree.write(path, bytes);
 
   registerFileArtifact(
     tree,
@@ -2639,6 +2657,21 @@ export async function workspaceInitGenerator(
           ejectable: false,
           claimExisting: true,
           allowManagedUpdate: true,
+        },
+        pluginVersion,
+      );
+    }
+    for (const file of designSeeds) {
+      if (!file.created) continue;
+      registerFileArtifact(
+        tree,
+        {
+          id: file.id,
+          module: 'docs',
+          mode: 'seeded',
+          target: file.target,
+          ejectable: false,
+          claimExisting: true,
         },
         pluginVersion,
       );

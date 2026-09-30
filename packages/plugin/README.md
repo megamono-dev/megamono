@@ -674,6 +674,15 @@ source projects require static declarations first.
 
 ## Validate a workspace
 
+The docs module (also used by `docs-init` and new-workspace setup) seeds a
+repository-owned visual handoff in `docs/design/`: `README.md`, `manifest.md`,
+`boards/`, and `screenshots/`. Keep `docs/DESIGN.md` as the concise design brief.
+Add `tokens.json` only when useful, with an explicit source-of-truth or export
+relationship to your theme. Existing assets are preserved, custom docs roots
+are supported, and design assets need no lifecycle frontmatter. The survey
+lists them separately; the active docs index links to the handoff README.
+Megamono does not compile tokens or automatically publish these references.
+
 ```sh
 npm exec nx run megamono:check
 npm exec nx run megamono:check --ci
