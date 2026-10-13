@@ -600,9 +600,16 @@ try {
     resolve(surveyWorkspace, 'pnpm-lock.yaml'),
     'lockfileVersion: 9\n',
   );
+  // Survey can report ambiguous ownership; mutation must still refuse it.
+  const ambiguousSurvey = await run(megamono, ['init', '--survey'], {
+    cwd: surveyWorkspace,
+    env: environment,
+    allowFailure: true,
+  });
+  assert(ambiguousSurvey.code === 0, 'Ambiguous ownership blocked survey.');
   const beforeAmbiguousInvocations = (await readInvocations(surveyWorkspace))
     .length;
-  const ambiguous = await run(megamono, ['init', '--survey'], {
+  const ambiguous = await run(megamono, ['init'], {
     cwd: surveyWorkspace,
     env: environment,
     allowFailure: true,
