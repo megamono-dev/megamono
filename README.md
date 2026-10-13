@@ -196,6 +196,70 @@ synchronizes internal Megamono pins in both compatibility registries, rebuilds a
 checks exports, then commits and tags the coherent release. Do not publish a
 manually versioned package without also synchronizing its scaffold pins.
 
+### First publication and npm trust
+
+The packages must exist on npm before their trusted publishers can be registered.
+For the initial release, use a maintainer's interactive npm session locally;
+keep credentials out of GitHub workflow secrets. Subsequent releases use OIDC.
+Use Node 24 and the repository's pinned npm version. The qualification command
+requires macOS with Xcode, Rust/Cargo, and `git-filter-repo`, just like the release
+fixtures. Start from a clean `main` checkout synchronized with `origin/main`,
+with successful CI, native-execution, and supported Nx compatibility runs.
+The manual `Release qualification` GitHub workflow runs the same checks on
+macOS without versioning or publishing packages.
+
+```sh
+npm login --registry=https://registry.npmjs.org
+npm whoami --registry=https://registry.npmjs.org
+npm ci
+npm run release:check-publishing
+npm run release:qualify
+```
+
+After qualification, choose the initial exact `next` version (the example uses
+`0.1.0-next.0`). Verify there are no existing `megamono@*` or `create-megamono@*`
+release tags before using `--first-release`. These commands mutate versions,
+commit and tag the release, then publish all ten packages publicly:
+
+```sh
+npm exec nx -- release version 0.1.0-next.0 --groups=megamono,create-megamono --preid=next --first-release --dry-run
+npm exec nx -- release version 0.1.0-next.0 --groups=megamono,create-megamono --preid=next --first-release --git-commit=false --git-tag=false
+node tools/sync-release-pins.mjs
+npm exec nx -- run-many -t build
+npm run packages:check-exports
+node tools/commit-release.mjs
+node tools/write-build-info.mjs
+npm exec nx -- release publish --groups=megamono,create-megamono --tag next --access public --first-release
+git push --follow-tags origin HEAD:refs/heads/main
+gh release create megamono@0.1.0-next.0 --verify-tag --generate-notes --title 'Megamono 0.1.0-next.0' --notes 'Includes create-megamono@0.1.0-next.0.' --prerelease --latest=false
+```
+
+If publication stops partway through, retain the release commit and tags.
+Inspect each package's registry version and `next` tag, then rerun only the publish
+step to finish missing packages. Never reset the commit or reuse a published
+version for different package bytes. Push and create the GitHub release only
+after all ten versions are present. A local bootstrap publication does not have
+GitHub OIDC provenance; subsequent workflow publications do.
+
+Register the publisher for every package with the authenticated npm CLI. Review
+any existing configuration with `npm trust list <package> --json` first; preserve
+matching publishers and investigate conflicting entries before changing them.
+For each of the ten package names, run:
+
+```sh
+npm trust github <package> --repository=megamono-dev/megamono --file=release.yml --allow-publish --yes --registry=https://registry.npmjs.org
+npm trust list <package> --json --registry=https://registry.npmjs.org
+```
+
+The publisher must allow direct `npm publish`, not just staging, and its
+environment remains unset to serve both protected channels. npm now supports
+multiple publishers; this repository intentionally uses one workflow publisher
+per package. Configure it immediately before the first OIDC `next` release:
+unvalidated configurations expire after two days. Verify that release succeeds
+with provenance before promoting to `latest`. See npm's
+[trusted publishing guide](https://docs.npmjs.com/trusted-publishers/) and
+[CLI trust reference](https://docs.npmjs.com/cli/v11/commands/npm-trust/).
+
 ## Specifications
 
 The canonical implementation specifications live in [`docs/specs/megamono`](docs/specs/megamono).

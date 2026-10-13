@@ -6,6 +6,7 @@
     "release:check": "node tools/check-release-policy.mjs && node tools/sync-release-pins.mjs --check",
     "release:test": "node --test tools/release-channel.test.mjs tools/sync-release-pins.test.mjs tools/publishing-setup.test.mjs",
     "release:check-publishing": "node tools/check-publishing-setup.mjs",
+    "release:qualify": "node tools/qualify-release.mjs",
     "build:identity": "node tools/write-build-info.mjs",
     "packages:check-exports": "node tools/write-build-info.mjs && node tools/check-packed-exports.mjs",
     "yalc:publish": "node tools/publish-yalc.mjs",
