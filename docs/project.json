@@ -12,7 +12,13 @@
         "{workspaceRoot}/content-collections.ts",
         "{workspaceRoot}/docs/**/*.md"
       ],
-      "outputs": ["{workspaceRoot}/.content-collections"]
+      "outputs": ["{workspaceRoot}/.content-collections"],
+      "dependsOn": [
+        {
+          "projects": ["@megamono/plugin"],
+          "target": "build"
+        }
+      ]
     },
     "index": {
       "executor": "@megamono/plugin:docs-index",
@@ -45,5 +51,6 @@
       ],
       "outputs": ["{workspaceRoot}/.megamono/health.json"]
     }
-  }
+  },
+  "implicitDependencies": ["@megamono/plugin"]
 }
