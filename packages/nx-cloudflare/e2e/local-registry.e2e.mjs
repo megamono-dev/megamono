@@ -390,7 +390,6 @@ try {
   );
   const nxEnvironment = {
     NX_DAEMON: 'false',
-    NX_CACHE_PROJECT_GRAPH: 'false',
   };
   const show = await run(
     'npm',

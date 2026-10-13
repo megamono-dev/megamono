@@ -271,7 +271,6 @@ try {
     CLANG_MODULE_CACHE_PATH: swiftCache,
     SWIFTPM_MODULECACHE_OVERRIDE: swiftCache,
     NX_DAEMON: 'false',
-    NX_CACHE_PROJECT_GRAPH: 'false',
   };
   await run(
     'npm',

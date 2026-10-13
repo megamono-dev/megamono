@@ -278,7 +278,6 @@ try {
 
   const nxEnvironment = {
     NX_DAEMON: 'false',
-    NX_CACHE_PROJECT_GRAPH: 'false',
   };
   const show = await run(
     'npm',
@@ -305,9 +304,10 @@ try {
     'Tauri build target does not run from the app root.',
   );
   assert(
-    project.targets['tauri-build'].options.command.includes(
-      "'npm' 'exec' 'tauri' '--' 'build' '--ci'",
-    ),
+    project.targets['tauri-build'].executor === '@megamono/nx-cargo:run' &&
+      project.targets['tauri-build'].options.tool === 'tauri' &&
+      project.targets['tauri-build'].options.args[0] === 'build' &&
+      project.targets['tauri-build'].options.args.includes('--ci'),
     'Tauri build target does not use the workspace-local npm CLI.',
   );
 
