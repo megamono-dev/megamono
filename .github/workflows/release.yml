@@ -17,6 +17,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: write
   id-token: write
 
@@ -54,6 +55,10 @@ jobs:
         run: node tools/resolve-release-channel.mjs
       - run: npm run release:check
       - run: npm run release:test
+      - name: Verify publishing environment protections
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: npm run release:check-publishing
       - name: Verify tested next versions before stable promotion
         if: inputs.channel == 'latest'
         run: node tools/check-next-promotion.mjs

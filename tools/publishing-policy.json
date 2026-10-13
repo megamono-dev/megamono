@@ -1,0 +1,15 @@
+{
+  "repository": "megamono-dev/megamono",
+  "visibility": "public",
+  "workflow": "release.yml",
+  "environments": {
+    "npm-next": {
+      "branches": ["main", "release/*"],
+      "requiredReviewers": []
+    },
+    "npm-latest": {
+      "branches": ["main"],
+      "requiredReviewers": ["ryanhefner"]
+    }
+  }
+}

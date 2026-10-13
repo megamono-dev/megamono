@@ -172,16 +172,24 @@ repository chooses to commit those files.
 
 ## Public validation releases
 
-All eight packages publish publicly from `megamono-dev/megamono`. The manual release workflow derives publication behavior from a protected channel rather than accepting independent access, prerelease, or dist-tag values:
+All ten packages publish publicly from `megamono-dev/megamono`. The manual release workflow derives publication behavior from a protected channel rather than accepting independent access, prerelease, or dist-tag values:
 
 - `next` publishes `X.Y.Z-next.N` packages to npm's `next` dist-tag from `main` or a `release/*` branch and creates a GitHub prerelease.
 - `latest` publishes stable packages to npm's `latest` dist-tag from `main` only and creates the latest GitHub release. Promotion requires a clean checkout, matching published npm `next` versions, and a source tree identical to each package's registry-reported `gitHead`. Missing revision history or changed source requires another evaluated `next` release first.
 
-The fixed `megamono` release group contains the seven `@megamono/*` packages. `create-megamono` retains an independent version and tag while participating in the same guarded workflow. The workflow serializes every channel, reruns packed consumer fixtures, derives first-release behavior from Git tags, and publishes with npm trusted publishing rather than a long-lived token.
+The fixed `megamono` release group contains the nine `@megamono/*` packages. `create-megamono` retains an independent version and tag while participating in the same guarded workflow. The workflow serializes every channel, reruns packed consumer fixtures, derives first-release behavior from Git tags, and publishes with npm trusted publishing rather than a long-lived token.
 
 Create protected GitHub environments named `npm-next` and `npm-latest`. Permit `main` and `release/*` for `npm-next`; permit only `main` and require reviewers for `npm-latest`. Configure each npm package's trusted publisher for organization `megamono-dev`, repository `megamono`, and workflow `release.yml`. Leave the npm publisher's environment field unset so the one publisher can serve both protected GitHub environments.
 
-Run `npm run release:check` and `npm run release:test` to verify registry, public access, repository metadata, release groups, channel/ref guards, and stable-promotion behavior locally.
+Run `npm run release:check` and `npm run release:test` to verify registry, public access, repository metadata, release groups, channel/ref guards, and stable-promotion behavior locally. Run
+`npm run release:check-publishing` to verify the live GitHub visibility and
+environment protections against `tools/publishing-policy.json`. The release
+workflow runs this check before versioning.
+
+The repository is public. `npm-next` allows `main` and `release/*`; `npm-latest`
+allows only `main` and requires `ryanhefner` to review the deployment. Self-review
+is allowed for this single-maintainer workflow; add a second maintainer before
+enabling GitHub's prevent-self-review option.
 
 The release workflow versions manifests without immediately committing or tagging,
 synchronizes internal Megamono pins in both compatibility registries, rebuilds and
