@@ -372,7 +372,7 @@ export function projectsFromWxtConfigs(
 }
 
 export const createNodes: CreateNodes<ExtensionPluginOptions> = [
-  '**/{wxt.config.{ts,js,mjs,mts},manifest{,.chrome,.firefox}.json,package.json}',
+  '**/{wxt.config.ts,wxt.config.js,wxt.config.mjs,wxt.config.mts,manifest.json,manifest.chrome.json,manifest.firefox.json,package.json}',
   async (
     configFiles: readonly string[] | string,
     options: ExtensionPluginOptions = {},

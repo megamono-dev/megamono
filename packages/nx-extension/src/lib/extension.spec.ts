@@ -1,7 +1,8 @@
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ProjectConfiguration } from '@nx/devkit';
+import { globWithWorkspaceContext } from 'nx/src/utils/workspace-context';
 import {
   createNodes,
   projectsFromWxtConfigs,
@@ -21,6 +22,32 @@ function record(overrides: Partial<WxtConfigRecord> = {}): WxtConfigRecord {
 }
 
 describe('WXT project inference', () => {
+  it('discovers every supported source filename with the native Nx glob parser', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'nx-extension-glob-'));
+    const filenames = [
+      'wxt.config.ts',
+      'wxt.config.js',
+      'wxt.config.mjs',
+      'wxt.config.mts',
+      'manifest.json',
+      'manifest.chrome.json',
+      'manifest.firefox.json',
+      'package.json',
+    ];
+    try {
+      await mkdir(join(root, 'apps/extension'), { recursive: true });
+      for (const filename of [...filenames, 'unrelated.json'])
+        await writeFile(join(root, 'apps/extension', filename), '{}');
+      expect(
+        (await globWithWorkspaceContext(root, [createNodes[0]])).sort(),
+      ).toEqual(
+        filenames.map((filename) => `apps/extension/${filename}`).sort(),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it.each([2, 3] as const)(
     'binds all inferred commands to the project and respects Firefox MV%s',
     (version) => {
