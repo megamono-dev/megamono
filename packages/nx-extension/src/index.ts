@@ -1,5 +1,6 @@
 export {
   createNodes,
+  createNodesV2,
   getExtensionDiagnostics,
   projectsFromWxtConfigs,
 } from './lib/extension';

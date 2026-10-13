@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ProjectConfiguration } from '@nx/devkit';
 import { globWithWorkspaceContext } from 'nx/src/utils/workspace-context';
+import { createNodesV2 } from '../index';
 import {
   createNodes,
   projectsFromWxtConfigs,
@@ -22,6 +23,9 @@ function record(overrides: Partial<WxtConfigRecord> = {}): WxtConfigRecord {
 }
 
 describe('WXT project inference', () => {
+  it('exports the transitional discovery hook required by Nx 21', () => {
+    expect(createNodesV2).toBe(createNodes);
+  });
   it('discovers every supported source filename with the native Nx glob parser', async () => {
     const root = await mkdtemp(join(tmpdir(), 'nx-extension-glob-'));
     const filenames = [
