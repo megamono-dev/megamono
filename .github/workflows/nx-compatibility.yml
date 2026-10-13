@@ -65,6 +65,9 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
+      - name: Use the repository npm version
+        shell: bash
+        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
       - run: npm ci
       - run: npm exec nx -- run @megamono/plugin:e2e-nx-compatibility --output-style=static
         env:
@@ -84,6 +87,9 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
+      - name: Use the repository npm version
+        shell: bash
+        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
       - run: npm ci
       - run: npm exec nx -- run @megamono/plugin:e2e-portfolio-compatibility --output-style=static
 
@@ -98,6 +104,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Use the repository npm version
+        shell: bash
+        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
       - run: npm ci
       - run: npm exec nx -- run @megamono/plugin:e2e-nx-compatibility --output-style=static
         env:

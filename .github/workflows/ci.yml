@@ -26,6 +26,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Use the repository npm version
+        shell: bash
+        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
       - run: npm ci
       - run: npm run release:check
       - run: npm run release:test
@@ -60,6 +63,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
+      - name: Use the repository npm version
+        shell: bash
+        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
       - run: npm ci
       - run: python -m pip install 'git-filter-repo>=2.47,<3'
       - run: npm exec nx -- run megamono-docs:validate --output-style=static

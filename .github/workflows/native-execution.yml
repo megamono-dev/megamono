@@ -36,6 +36,9 @@ jobs:
           java-version: 17
       - uses: android-actions/setup-android@v3
       - run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+      - name: Use the repository npm version
+        shell: bash
+        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
       - run: npm ci
       - run: npm exec nx -- run @megamono/plugin:e2e-android
   native:
@@ -51,5 +54,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: rustup component add clippy
+      - name: Use the repository npm version
+        shell: bash
+        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
       - run: npm ci
       - run: npm exec nx -- run nx-cargo:e2e-native-execution

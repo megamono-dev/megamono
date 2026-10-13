@@ -38,6 +38,9 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
       - uses: dtolnay/rust-toolchain@stable
+      - name: Use the repository npm version
+        shell: bash
+        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
       - run: npm ci
       - name: Require an OIDC-capable npm CLI
         run: |

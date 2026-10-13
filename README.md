@@ -33,10 +33,15 @@ the Java launcher support Windows paths as well, with cross-host CI qualificatio
 
 ## Development
 
+Use Node 24 and npm 11.21.0 to maintain this repository. CI pins npm explicitly
+because npm 10 does not interpret this lockfile consistently. Consumer fixtures
+still exercise the supported Node and package-manager ranges.
+
 Install dependencies and run tasks through the workspace Nx CLI:
 
 ```bash
-npm install
+npm install --global npm@11.21.0
+npm ci
 npm exec nx -- run-many -t build
 npm exec nx -- run-many -t test
 npm exec nx -- run-many -t lint
