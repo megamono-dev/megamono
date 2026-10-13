@@ -113,6 +113,19 @@ describe('workspace-init generator', () => {
     },
   );
 
+  it.each(['export default [];\n', 'export default [{ rules: {} }];\n'])(
+    'keeps managed ESLint defaults byte-stable across repeated adoption: %s',
+    async (source) => {
+      tree.write('eslint.config.mjs', source);
+      await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+      const applied = tree.read('eslint.config.mjs', 'utf8');
+      for (let run = 0; run < 3; run++) {
+        await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+        expect(tree.read('eslint.config.mjs', 'utf8')).toBe(applied);
+      }
+    },
+  );
+
   it('validates fresh and regenerated configuration against the published schema and runtime', async () => {
     const ajv = new Ajv2020({ strict: false, validateFormats: false });
     const validate = ajv.compile(

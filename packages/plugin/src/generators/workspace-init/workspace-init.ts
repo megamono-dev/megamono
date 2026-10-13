@@ -1127,6 +1127,11 @@ function wireEslintConfig(tree: Tree): EslintWiringResult {
       const start = current.indexOf(ESLINT_RULES_START);
       const end =
         current.indexOf(ESLINT_RULES_END, start) + ESLINT_RULES_END.length;
+      const array = locateEslintFlatConfig(current);
+      // Leave defaults that already lead the array in place. Removing and
+      // prepending them on every run accumulates whitespace without formatting.
+      if (array && current.slice(array.opening + 1, start).trim() === '')
+        return true;
       const moved = prependEslintFlatConfig(
         current.slice(0, start) + current.slice(end),
         current.slice(start, end),
