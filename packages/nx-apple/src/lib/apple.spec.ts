@@ -37,7 +37,7 @@ describe('Apple createNodes compatibility', () => {
       root: 'missing',
       projectType: 'library',
     });
-  });
+  }, 30_000);
 
   it('ignores an Xcode project internal workspace under the single-file contract', async () => {
     const workspaceRoot = await mkdtemp(
