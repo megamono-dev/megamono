@@ -328,6 +328,7 @@ try {
       '--access',
       'public',
       '--provenance=false',
+      '--tag=latest',
     ],
     { env: environment },
   );

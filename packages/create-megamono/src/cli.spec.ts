@@ -1,3 +1,4 @@
+import manifest from '../package.json';
 import { mkdir, mkdtemp, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -400,7 +401,7 @@ describe('CLI entrypoint', () => {
       const identity = JSON.parse(String(output.mock.calls[0]?.[0]));
       expect(identity).toMatchObject({
         package: 'create-megamono',
-        version: '0.0.1',
+        version: manifest.version,
         revision: 'development',
         buildId: 'development',
       });

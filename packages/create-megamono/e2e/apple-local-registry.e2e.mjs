@@ -1,3 +1,4 @@
+import { packageVersion } from '../../../tools/package-version.mjs';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -171,6 +172,7 @@ try {
         '--access',
         'public',
         '--provenance=false',
+        '--tag=latest',
       ],
       { env: environment },
     );
@@ -181,7 +183,7 @@ try {
     [
       'exec',
       '--yes',
-      'create-megamono@0.0.1',
+      `create-megamono@${await packageVersion('create-megamono')}`,
       '--',
       'Acme Tools',
       '--directory=acme-tools',

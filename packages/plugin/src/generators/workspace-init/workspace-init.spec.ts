@@ -20,6 +20,8 @@ import {
   updateProjectConfiguration,
   type Tree,
 } from '@nx/devkit';
+import compatibility from '../../../compatibility.json';
+import { readPluginVersion } from '../../lib/managed-skills';
 import { hashArtifactBytes } from '../../lib/managed-artifacts';
 import * as inferenceYalc from '../../lib/inference-yalc';
 
@@ -1688,10 +1690,14 @@ export default [
       '@megamono/nx-render',
     ]);
     expect(readJson(tree, 'package.json').devDependencies).toMatchObject({
-      '@megamono/nx-apple': '0.0.1',
-      '@megamono/nx-cargo': '0.0.1',
-      '@megamono/nx-cloudflare': '0.0.1',
-      '@megamono/nx-render': '0.0.1',
+      '@megamono/nx-apple':
+        compatibility.scaffoldPackages['@megamono/nx-apple'],
+      '@megamono/nx-cargo':
+        compatibility.scaffoldPackages['@megamono/nx-cargo'],
+      '@megamono/nx-cloudflare':
+        compatibility.scaffoldPackages['@megamono/nx-cloudflare'],
+      '@megamono/nx-render':
+        compatibility.scaffoldPackages['@megamono/nx-render'],
     });
     expect(readJson(tree, 'megamono.json').adoption.inference).toEqual({
       apple: {
@@ -1792,7 +1798,7 @@ export default [
       '.yalc/@megamono/nx-cloudflare/package.json',
       JSON.stringify({
         name: '@megamono/nx-cloudflare',
-        version: '0.0.1',
+        version: compatibility.scaffoldPackages['@megamono/nx-cloudflare'],
       }),
     );
 
@@ -1837,7 +1843,7 @@ export default [
           '@megamono/nx-extension',
           '@megamono/nx-cloudflare',
         ]),
-        '0.0.1',
+        readPluginVersion(),
         '/virtual',
       );
       expect(readJson(tree, 'nx.json').plugins).toContain(

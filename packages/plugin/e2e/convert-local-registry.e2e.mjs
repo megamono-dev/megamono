@@ -1,3 +1,4 @@
+import { packageVersion } from '../../../tools/package-version.mjs';
 import { spawn } from 'node:child_process';
 import {
   access,
@@ -10,6 +11,8 @@ import {
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+
+const releaseVersion = await packageVersion('@megamono/plugin');
 
 const workspaceRoot = resolve(import.meta.dirname, '../../..');
 const compatibility = JSON.parse(
@@ -141,7 +144,7 @@ async function writeFixture(root) {
           deploy: 'node src/deploy.mjs',
         },
         devDependencies: {
-          '@megamono/plugin': '0.0.1',
+          '@megamono/plugin': releaseVersion,
           nx: compatibility.scaffoldPackages['create-nx-workspace'],
           typescript: compatibility.scaffoldPackages.typescript,
         },
@@ -358,6 +361,7 @@ try {
       '--access',
       'public',
       '--provenance=false',
+      '--tag=latest',
     ],
     { env: environment },
   );
@@ -437,7 +441,10 @@ try {
     resolve(fixtureRoot, 'docs/reports/convert.md'),
     'utf8',
   );
-  assert(planLines(dryRun.stdout).length > 0, 'Dry-run omitted its ordered plan.');
+  assert(
+    planLines(dryRun.stdout).length > 0,
+    'Dry-run omitted its ordered plan.',
+  );
   assert(
     JSON.stringify(planLines(dryRun.stdout)) ===
       JSON.stringify(planLines(execution.stdout)),
@@ -847,7 +854,7 @@ try {
     ),
   );
   assert(
-    installedPlugin.version === '0.0.1',
+    installedPlugin.version === releaseVersion,
     'Fixture did not install the locally published plugin.',
   );
 

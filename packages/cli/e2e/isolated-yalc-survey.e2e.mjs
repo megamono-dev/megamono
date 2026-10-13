@@ -1,3 +1,4 @@
+import { packageVersion } from '../../../tools/package-version.mjs';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -137,7 +138,11 @@ try {
         sha256: digest(await readFile(tarballs[directory])),
       });
     }
-    const plugin = join(store, 'packages/@megamono/plugin/0.0.1');
+    const plugin = join(
+      store,
+      'packages/@megamono/plugin',
+      await packageVersion('@megamono/plugin'),
+    );
     await mkdir(plugin, { recursive: true });
     await run('tar', [
       '-xzf',

@@ -1,3 +1,4 @@
+import { packageVersion } from '../../../tools/package-version.mjs';
 import { spawn } from 'node:child_process';
 import {
   access,
@@ -691,6 +692,7 @@ try {
         '--access',
         'public',
         '--provenance=false',
+        '--tag=latest',
       ],
       { env: { ...environment, npm_config_cache: publishCache } },
     );
@@ -707,7 +709,7 @@ try {
     [
       'install',
       '--save-exact',
-      'create-megamono@0.0.1',
+      `create-megamono@${await packageVersion('create-megamono')}`,
       '--registry',
       registry,
     ],

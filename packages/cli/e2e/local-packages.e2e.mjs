@@ -1,3 +1,4 @@
+import { packageVersion } from '../../../tools/package-version.mjs';
 import { spawn } from 'node:child_process';
 import {
   chmod,
@@ -11,6 +12,9 @@ import {
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+
+const cliVersion = await packageVersion('@megamono/cli');
+const pluginVersion = await packageVersion('@megamono/plugin');
 
 const workspaceRoot = resolve(import.meta.dirname, '../../..');
 
@@ -156,6 +160,7 @@ async function publishPackage(directory, registry, environment) {
       '--access',
       'public',
       '--provenance=false',
+      '--tag=latest',
     ],
     { env: environment },
   );
@@ -168,7 +173,7 @@ async function createWorkspace(root, manager, registry, environment) {
     private: true,
     packageManager: manager === 'pnpm' ? 'pnpm@11.24.0' : 'npm@11.17.0',
     devDependencies: {
-      '@megamono/plugin': '0.0.1',
+      '@megamono/plugin': pluginVersion,
       nx: '23.1.1',
     },
   });
@@ -225,7 +230,7 @@ async function installPackedCli(temporaryRoot, environment) {
     { env: environment },
   );
   const executable = resolve(prefix, 'bin/megamono');
-  assert((await run(executable, ['--version'])).stdout.trim() === '0.0.1');
+  assert((await run(executable, ['--version'])).stdout.trim() === cliVersion);
   return executable;
 }
 
@@ -334,7 +339,7 @@ try {
       '@megamono/plugin',
       await createPackage(packageRoot, {
         name: '@megamono/plugin',
-        version: '0.0.1',
+        version: pluginVersion,
       }),
     ],
     [

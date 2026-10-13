@@ -1,3 +1,4 @@
+import { packageVersion } from '../../../tools/package-version.mjs';
 import { spawn } from 'node:child_process';
 import {
   access,
@@ -274,6 +275,7 @@ try {
         '--access',
         'public',
         '--provenance=false',
+        '--tag=latest',
       ],
       { env: environment },
     );
@@ -285,10 +287,18 @@ try {
     resolve(launcher, 'package.json'),
     '{"name":"megamono-equivalence-launcher","private":true}\n',
   );
-  await run('npm', ['install', '--save-exact', 'create-megamono@0.0.1'], {
-    cwd: launcher,
-    env: environment,
-  });
+  await run(
+    'npm',
+    [
+      'install',
+      '--save-exact',
+      `create-megamono@${await packageVersion('create-megamono')}`,
+    ],
+    {
+      cwd: launcher,
+      env: environment,
+    },
+  );
   const createCli = resolve(
     launcher,
     'node_modules/create-megamono/dist/cli.js',
@@ -336,8 +346,8 @@ try {
       'install',
       '--save-dev',
       '--save-exact',
-      '@megamono/plugin@0.0.1',
-      '@megamono/cli@0.0.1',
+      `@megamono/plugin@${await packageVersion('@megamono/plugin')}`,
+      `@megamono/cli@${await packageVersion('@megamono/cli')}`,
     ],
     { cwd: adoptedRoot, env: environment },
   );

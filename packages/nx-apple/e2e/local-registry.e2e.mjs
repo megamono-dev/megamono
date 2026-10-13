@@ -1,8 +1,11 @@
+import { packageVersion } from '../../../tools/package-version.mjs';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+
+const releaseVersion = await packageVersion('@megamono/nx-apple');
 
 const workspaceRoot = resolve(import.meta.dirname, '../../..');
 const compatibility = JSON.parse(
@@ -93,7 +96,7 @@ async function writeFixture(root) {
         name: 'nx-apple-local-registry-fixture',
         private: true,
         devDependencies: {
-          '@megamono/nx-apple': '0.0.1',
+          '@megamono/nx-apple': releaseVersion,
           nx: compatibility.scaffoldPackages['create-nx-workspace'],
         },
       },
@@ -252,6 +255,7 @@ try {
       '--access',
       'public',
       '--provenance=false',
+      '--tag=latest',
     ],
     { env: npmEnvironment },
   );
@@ -431,7 +435,7 @@ try {
     ),
   );
   assert(
-    installedPlugin.version === '0.0.1',
+    installedPlugin.version === releaseVersion,
     'Fixture did not install the published Apple plugin.',
   );
   succeeded = true;

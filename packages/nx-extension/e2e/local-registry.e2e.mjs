@@ -1,8 +1,11 @@
+import { packageVersion } from '../../../tools/package-version.mjs';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+
+const releaseVersion = await packageVersion('@megamono/nx-extension');
 
 const workspaceRoot = resolve(import.meta.dirname, '../../..');
 const compatibility = JSON.parse(
@@ -176,6 +179,7 @@ try {
       '--access',
       'public',
       '--provenance=false',
+      '--tag=latest',
     ],
     { env: environment },
   );
@@ -188,7 +192,7 @@ try {
         private: true,
         workspaces: ['apps/*'],
         devDependencies: {
-          '@megamono/nx-extension': '0.0.1',
+          '@megamono/nx-extension': releaseVersion,
           '@nx/devkit': compatibility.scaffoldPackages['create-nx-workspace'],
           nx: compatibility.scaffoldPackages['create-nx-workspace'],
           typescript: fixtureTypeScript,
@@ -269,7 +273,7 @@ try {
     ),
   );
   assert(
-    installedPlugin.version === '0.0.1',
+    installedPlugin.version === releaseVersion,
     'Fixture did not install the published extension plugin.',
   );
   // Remove generated browser targets so this build exercises inference rather

@@ -1,8 +1,11 @@
+import { packageVersion } from '../../../tools/package-version.mjs';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+
+const releaseVersion = await packageVersion('@megamono/nx-cloudflare');
 
 const workspaceRoot = resolve(import.meta.dirname, '../../..');
 const compatibility = JSON.parse(
@@ -131,7 +134,7 @@ async function writeFixture(root) {
         name: 'nx-cloudflare-local-registry-fixture',
         private: true,
         devDependencies: {
-          '@megamono/nx-cloudflare': '0.0.1',
+          '@megamono/nx-cloudflare': releaseVersion,
           nx: compatibility.scaffoldPackages['create-nx-workspace'],
           typescript: compatibility.scaffoldPackages.typescript,
           wrangler: compatibility.cloudflare.testedWranglerMinimum,
@@ -338,6 +341,7 @@ try {
       '--access',
       'public',
       '--provenance=false',
+      '--tag=latest',
     ],
     { env: npmEnvironment },
   );
@@ -349,7 +353,7 @@ try {
         name: 'nx-cloudflare-incompatible-wrangler-fixture',
         private: true,
         devDependencies: {
-          '@megamono/nx-cloudflare': '0.0.1',
+          '@megamono/nx-cloudflare': releaseVersion,
           wrangler: '4.104.0',
         },
       },
@@ -573,7 +577,7 @@ try {
     ),
   );
   assert(
-    installedManifest.version === '0.0.1',
+    installedManifest.version === releaseVersion,
     'Fixture did not install the published Cloudflare plugin.',
   );
   assert(

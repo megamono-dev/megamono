@@ -1,3 +1,4 @@
+import { packageVersion } from '../../../tools/package-version.mjs';
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -188,7 +189,12 @@ try {
     await chmod(wrapper, 0o755);
     env.PATH = `${dirname(wrapper)}:${env.PATH}`;
     for (const name of ['@megamono/plugin', 'create-megamono']) {
-      const location = join(store, 'packages', name, '0.0.1');
+      const location = join(
+        store,
+        'packages',
+        name,
+        await packageVersion(name),
+      );
       report.artifacts.push({
         package: name,
         files: await fingerprint(location),
@@ -200,7 +206,7 @@ try {
     private: true,
     dependencies: {
       npm: compatibility.packageManagers.npm,
-      'create-megamono': `file:${store}/packages/create-megamono/0.0.1`,
+      'create-megamono': `file:${store}/packages/create-megamono/${await packageVersion('create-megamono')}`,
       '@playstack/cli': `file:${store}/packages/@playstack/cli/0.1.0-beta.1`,
     },
   });

@@ -503,7 +503,9 @@ describe('createPlan', () => {
       'commit-workspace',
     ]);
     expect(rendered).toContain('create-nx-workspace@23.1.1');
-    expect(rendered).toContain('@megamono/plugin@0.0.1');
+    expect(rendered).toContain(
+      `@megamono/plugin@${compatibility.scaffoldPackages['@megamono/plugin']}`,
+    );
     expect(rendered).toContain('@nx/next@23.1.1');
     expect(rendered).toContain('@nx/eslint@23.1.1');
     expect(rendered).toContain('@nx/playwright@23.1.1');
@@ -578,7 +580,9 @@ describe('createPlan', () => {
       'commit-workspace',
     ]);
     const rendered = renderPlan(plan);
-    expect(rendered).toContain('@megamono/nx-cargo@0.0.1');
+    expect(rendered).toContain(
+      `@megamono/nx-cargo@${compatibility.scaffoldPackages['@megamono/nx-cargo']}`,
+    );
     expect(rendered).toContain('@megamono/plugin:app');
     expect(rendered).toContain('--type=desktop');
     expect(rendered).toContain('--defaultScope=acme-tools');
@@ -605,7 +609,9 @@ describe('createPlan', () => {
       'commit-workspace',
     ]);
     const rendered = renderPlan(plan);
-    expect(rendered).toContain('@megamono/nx-apple@0.0.1');
+    expect(rendered).toContain(
+      `@megamono/nx-apple@${compatibility.scaffoldPackages['@megamono/nx-apple']}`,
+    );
     expect(rendered).toContain('@megamono/plugin:app');
     expect(rendered).toContain('--type=apple');
     expect(rendered).toContain('--workspaceName=Acme Tools');
@@ -660,7 +666,9 @@ describe('createPlan', () => {
       'commit-workspace',
     ]);
     const rendered = renderPlan(plan);
-    expect(rendered).toContain('@megamono/nx-cloudflare@0.0.1');
+    expect(rendered).toContain(
+      `@megamono/nx-cloudflare@${compatibility.scaffoldPackages['@megamono/nx-cloudflare']}`,
+    );
     expect(rendered).toContain('wrangler@4.125.0');
     expect(rendered).toContain('@megamono/plugin:app');
     expect(rendered).toContain('--type=worker');
@@ -729,7 +737,9 @@ describe('createPlan', () => {
     });
     expect(registryInstall).not.toEqual(
       expect.objectContaining({
-        args: expect.arrayContaining(['@megamono/plugin@0.0.1']),
+        args: expect.arrayContaining([
+          `@megamono/plugin@${compatibility.scaffoldPackages['@megamono/plugin']}`,
+        ]),
       }),
     );
     expect(yalcInstall).toEqual({
@@ -738,16 +748,16 @@ describe('createPlan', () => {
       command: 'yalc',
       args: [
         'add',
-        '@megamono/nx-cargo@0.0.1',
-        '@megamono/nx-cloudflare@0.0.1',
-        '@megamono/plugin@0.0.1',
+        `@megamono/nx-cargo@${compatibility.scaffoldPackages['@megamono/nx-cargo']}`,
+        `@megamono/nx-cloudflare@${compatibility.scaffoldPackages['@megamono/nx-cloudflare']}`,
+        `@megamono/plugin@${compatibility.scaffoldPackages['@megamono/plugin']}`,
         '--dev',
         '--no-pure',
       ],
       cwd: 'staging',
     });
     expect(renderPlan(plan)).toContain(
-      '"@megamono/plugin@0.0.1" "--dev" "--no-pure"',
+      `"@megamono/plugin@${compatibility.scaffoldPackages['@megamono/plugin']}" "--dev" "--no-pure"`,
     );
   });
 
@@ -868,7 +878,7 @@ describe('executePlan', () => {
     await expect(preflightPlan(plan, async () => store)).rejects.toMatchObject({
       exitCode: 3,
       message: expect.stringContaining(
-        'missing: @megamono/nx-cloudflare@0.0.1',
+        `missing: @megamono/nx-cloudflare@${compatibility.scaffoldPackages['@megamono/nx-cloudflare']}`,
       ),
     });
     await expect(readFile(plan.options.stagingDirectory)).rejects.toMatchObject(
@@ -908,7 +918,7 @@ describe('executePlan', () => {
       expect.stringContaining(
         'npm install --save-dev --save-exact @nx/eslint@23.1.1 @nx/jest@23.1.1 @nx/nest@23.1.1',
       ),
-      'yalc add @megamono/plugin@0.0.1 --dev --no-pure',
+      `yalc add @megamono/plugin@${compatibility.scaffoldPackages['@megamono/plugin']} --dev --no-pure`,
       'npm install',
     ]);
     expect(invocations[4]).toContain('@megamono/plugin:app');
