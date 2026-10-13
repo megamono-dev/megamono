@@ -20,9 +20,22 @@ export function locateEslintFlatConfig(
   const diagnostics = (
     file as ts.SourceFile & { parseDiagnostics: readonly ts.Diagnostic[] }
   ).parseDiagnostics;
-  if (diagnostics.length) return undefined;
   const exports = file.statements.filter(ts.isExportAssignment);
   if (exports.length !== 1 || exports[0].isExportEquals) return undefined;
+  const assignment = exports[0];
+  // Older supported TypeScript parsers do not recognize newer JavaScript import
+  // attributes. Only errors touching the export prevent locating its array;
+  // all surrounding repository-owned bytes remain untouched.
+  if (
+    diagnostics.some(
+      (diagnostic) =>
+        diagnostic.start === undefined ||
+        (diagnostic.start <= assignment.end &&
+          diagnostic.start + (diagnostic.length ?? 0) >=
+            assignment.getStart(file)),
+    )
+  )
+    return undefined;
   let expression = exports[0].expression;
   while (ts.isParenthesizedExpression(expression))
     expression = expression.expression;

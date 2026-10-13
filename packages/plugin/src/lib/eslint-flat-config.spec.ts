@@ -8,6 +8,7 @@ describe('syntax-aware ESLint flat config editing', () => {
   it.each([
     'export default []',
     'export default [];',
+    'import config from "./megamono.json" with { type: "json" };\nexport default [];',
     'export\n default /* array */ ([{ files: ["**/*.ts"] }])',
     'export default [config // trailing line comment\n]',
     'export default [config /* trailing block comment */]',
