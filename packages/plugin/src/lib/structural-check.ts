@@ -265,6 +265,7 @@ function validateDependencies(
 interface PackageManifest {
   generators?: string;
   executors?: string;
+  readonly bin?: string | Readonly<Record<string, string>>;
   readonly name?: string;
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly devDependencies?: Readonly<Record<string, string>>;
@@ -291,6 +292,19 @@ function megamonoPackages(
   );
 }
 
+function hasBinary(
+  manifest: PackageManifest | undefined,
+  name: string,
+): boolean {
+  const bin = manifest?.bin;
+  return (
+    typeof bin === 'object' &&
+    bin !== null &&
+    typeof bin[name] === 'string' &&
+    bin[name].length > 0
+  );
+}
+
 async function validateManifests(
   workspaceRoot: string,
   graph: ProjectGraph,
@@ -301,10 +315,17 @@ async function validateManifests(
   // Plugin authors may compose other local Megamono plugins. This does not
   // permit applications (or Playstack packages) to ship Megamono at runtime.
   const localTooling = new Set<string>();
+  let hasLocalCli = false;
   for (const node of Object.values(graph.nodes)) {
     const manifest = await readManifest(
       join(workspaceRoot, node.data.root, 'package.json'),
     );
+    if (
+      node.type === 'lib' &&
+      manifest?.name === '@megamono/cli' &&
+      hasBinary(manifest, 'megamono')
+    )
+      hasLocalCli = true;
     if (
       node.type === 'lib' &&
       manifest?.name?.startsWith('@megamono/') &&
@@ -354,6 +375,16 @@ async function validateManifests(
       'optionalDependencies',
     ] as const) {
       for (const packageName of megamonoPackages(manifest[field])) {
+        // The published bootstrapper re-exports the repository-owned CLI's
+        // Springbar setup contract. This is tooling composition, not app runtime.
+        if (
+          node.type === 'lib' &&
+          manifest.name === 'create-megamono' &&
+          hasBinary(manifest, 'create-megamono') &&
+          packageName === '@megamono/cli' &&
+          hasLocalCli
+        )
+          continue;
         if (
           node.type === 'lib' &&
           manifest.name &&
