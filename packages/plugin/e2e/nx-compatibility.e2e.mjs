@@ -258,6 +258,17 @@ try {
       `Nx ${nxVersion} did not register the generated Apple application.`,
     );
   }
+  fixtureToolPath = join(temporaryRoot, 'fixture-tools');
+  mkdirSync(fixtureToolPath, { recursive: true });
+  // This fixture qualifies Nx graph APIs, not native Apple execution. Provide
+  // the advertised tool on Linux too, but fail if a target tries to invoke it.
+  // Real Apple build qualification runs in the macOS local-registry fixture.
+  const fakeXcodePath = join(fixtureToolPath, 'xcodebuild');
+  writeFileSync(
+    fakeXcodePath,
+    '#!/usr/bin/env node\nthrow new Error("Native Xcode execution is outside the Nx graph compatibility fixture.");\n',
+  );
+  chmodSync(fakeXcodePath, 0o755);
   run('npm', ['exec', 'nx', '--', 'run', 'megamono:check']);
 
   if (supportsInferencePlugins) {
@@ -287,17 +298,6 @@ try {
       join(fixtureRoot, 'crates/fixture-cargo/src/lib.rs'),
       'pub fn fixture() {}\n',
     );
-    fixtureToolPath = join(temporaryRoot, 'fixture-tools');
-    mkdirSync(fixtureToolPath, { recursive: true });
-    // This fixture qualifies Nx graph APIs, not native Apple execution. Provide
-    // the advertised tool on Linux too, but fail if a target tries to invoke it.
-    // Real Apple build qualification runs in the macOS local-registry fixture.
-    const fakeXcodePath = join(fixtureToolPath, 'xcodebuild');
-    writeFileSync(
-      fakeXcodePath,
-      '#!/usr/bin/env node\nthrow new Error("Native Xcode execution is outside the Nx graph compatibility fixture.");\n',
-    );
-    chmodSync(fakeXcodePath, 0o755);
     const cargoManifest = join(fixtureRoot, 'crates/fixture-cargo/Cargo.toml');
     const cargoRoot = join(fixtureRoot, 'crates/fixture-cargo');
     const fakeCargoPath = join(fixtureToolPath, 'cargo');

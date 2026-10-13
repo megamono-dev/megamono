@@ -23,6 +23,13 @@ mkdirSync(toolRoot, { recursive: true });
 const pnpmWrapper = join(toolRoot, 'pnpm');
 writeFileSync(pnpmWrapper, '#!/bin/sh\nexec corepack pnpm "$@"\n');
 chmodSync(pnpmWrapper, 0o755);
+// This fixture verifies graph/adoption behavior on Linux, not native execution.
+const xcodeFixture = join(toolRoot, 'xcodebuild');
+writeFileSync(
+  xcodeFixture,
+  '#!/usr/bin/env node\nthrow new Error("Native Xcode execution is outside the portfolio compatibility fixture.");\n',
+);
+chmodSync(xcodeFixture, 0o755);
 
 function run(command, args, cwd = fixtureRoot, environment = {}) {
   return execFileSync(command, args, {
