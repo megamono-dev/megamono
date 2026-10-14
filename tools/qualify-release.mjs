@@ -11,14 +11,24 @@ const npm = (args, env = {}) =>
 const nx = (...args) =>
   npm(['exec', 'nx', '--', ...args, '--output-style=stream']);
 
-npm(['run', 'release:check']);
-npm(['run', 'release:test']);
-// Generators delegate to other packed workspace packages at runtime. Finish
-// every build before tests load those packages from a clean checkout.
-nx('run-many', '-t', 'build');
-nx('run', 'megamono:check');
-nx('run', 'megamono-docs:validate');
-nx('run-many', '-t', 'lint', 'test');
+const phase = process.env.MEGAMONO_QUALIFY_PHASE ?? 'all';
+if (!['all', 'checks', 'consumers'].includes(phase))
+  throw new Error('MEGAMONO_QUALIFY_PHASE must be all, checks, or consumers.');
+
+if (phase !== 'consumers') {
+  npm(['run', 'release:check']);
+  npm(['run', 'release:test']);
+  // Generators delegate to other packed workspace packages at runtime. Finish
+  // every build before tests load those packages from a clean checkout.
+  nx('run-many', '-t', 'build');
+  nx('run', 'megamono:check');
+  nx('run', 'megamono-docs:validate');
+  nx('run-many', '-t', 'lint', 'test');
+}
+
+// next releases exercise public npm consumers after publication. Stable releases
+// retain the full pre-publication gate, and the standalone workflow is unchanged.
+if (phase === 'checks') process.exit(0);
 
 // Keep local first-publication and subsequent OIDC releases on the same gates.
 for (const target of [

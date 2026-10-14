@@ -130,7 +130,7 @@ function run(command, args, options = {}) {
       stderr += chunk;
     });
     child.once('error', reject);
-    child.once('exit', (code, signal) => {
+    child.once('close', (code, signal) => {
       if (code === 0) {
         resolvePromise({ stdout, stderr });
         return;
@@ -629,12 +629,36 @@ const temporaryRoot = await mkdtemp(
 const npmConfig = resolve(temporaryRoot, 'npmrc');
 const registryConfig = resolve(temporaryRoot, 'verdaccio.json');
 const commandBin = resolve(temporaryRoot, 'bin');
-const port = await availablePort();
-const registry = `http://127.0.0.1:${port}`;
+const consumerRegistry = process.env.MEGAMONO_MATRIX_REGISTRY?.replace(
+  /\/+$/,
+  '',
+);
+if (consumerRegistry) {
+  const url = new URL(consumerRegistry);
+  const publicNpm =
+    url.protocol === 'https:' && url.hostname === 'registry.npmjs.org';
+  const localFixture =
+    url.protocol === 'http:' &&
+    ['127.0.0.1', 'localhost'].includes(url.hostname);
+  assert(
+    (publicNpm || localFixture) &&
+      !url.username &&
+      !url.password &&
+      url.pathname === '/' &&
+      !url.search &&
+      !url.hash,
+    'Consumer registry must be public npm or a local test registry, without credentials.',
+  );
+  process.stdout.write(
+    `Using read-only consumer registry: ${consumerRegistry}\n`,
+  );
+}
+const port = consumerRegistry ? undefined : await availablePort();
+const registry = consumerRegistry ?? `http://127.0.0.1:${port}`;
 
 await writeFile(
   npmConfig,
-  `registry=https://registry.npmjs.org/\n@megamono:registry=${registry}\n//127.0.0.1:${port}/:_authToken=local-e2e-token\n`,
+  `registry=https://registry.npmjs.org/\n@megamono:registry=${registry}\n${consumerRegistry ? '' : `//127.0.0.1:${port}/:_authToken=local-e2e-token\n`}`,
   'utf8',
 );
 await mkdir(commandBin);
@@ -671,28 +695,30 @@ await writeFile(
   'utf8',
 );
 
-const verdaccio = spawn(
-  process.execPath,
-  [
-    resolve(workspaceRoot, 'node_modules/verdaccio/bin/verdaccio'),
-    '--config',
-    registryConfig,
-    '--listen',
-    `127.0.0.1:${port}`,
-  ],
-  { cwd: workspaceRoot, shell: false, stdio: ['ignore', 'pipe', 'pipe'] },
-);
+const verdaccio = consumerRegistry
+  ? undefined
+  : spawn(
+      process.execPath,
+      [
+        resolve(workspaceRoot, 'node_modules/verdaccio/bin/verdaccio'),
+        '--config',
+        registryConfig,
+        '--listen',
+        `127.0.0.1:${port}`,
+      ],
+      { cwd: workspaceRoot, shell: false, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
 let registryLog = '';
-verdaccio.stdout.on('data', (chunk) => {
+verdaccio?.stdout.on('data', (chunk) => {
   registryLog += chunk;
 });
-verdaccio.stderr.on('data', (chunk) => {
+verdaccio?.stderr.on('data', (chunk) => {
   registryLog += chunk;
 });
 
 let succeeded = false;
 try {
-  await waitForRegistry(registry, verdaccio, () => registryLog);
+  if (verdaccio) await waitForRegistry(registry, verdaccio, () => registryLog);
   const environment = {
     NX_DAEMON: 'false',
     npm_config_userconfig: npmConfig,
@@ -707,15 +733,17 @@ try {
       : {}),
   };
   const publishCache = resolve(temporaryRoot, 'npm-cache-publish');
-  for (const packagePath of [
-    './packages/plugin',
-    './packages/nx-apple',
-    './packages/nx-cargo',
-    './packages/nx-cloudflare',
-    './packages/nx-extension',
-    './packages/cli',
-    './packages/create-megamono',
-  ]) {
+  for (const packagePath of consumerRegistry
+    ? []
+    : [
+        './packages/plugin',
+        './packages/nx-apple',
+        './packages/nx-cargo',
+        './packages/nx-cloudflare',
+        './packages/nx-extension',
+        './packages/cli',
+        './packages/create-megamono',
+      ]) {
     await run(
       'npm',
       [
@@ -794,11 +822,13 @@ try {
       : 'create-megamono selection matrix passed: every app independently, the all-app combination, named sibling instances, and npm/pnpm generated outputs.\n',
   );
 } finally {
-  verdaccio.kill('SIGTERM');
-  await new Promise((resolvePromise) => {
-    if (verdaccio.exitCode !== null) resolvePromise();
-    else verdaccio.once('exit', resolvePromise);
-  });
+  if (verdaccio) {
+    verdaccio.kill('SIGTERM');
+    await new Promise((resolvePromise) => {
+      if (verdaccio.exitCode !== null) resolvePromise();
+      else verdaccio.once('exit', resolvePromise);
+    });
+  }
   if (succeeded) await rm(temporaryRoot, { recursive: true, force: true });
   else
     process.stderr.write(

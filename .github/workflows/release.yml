@@ -57,6 +57,16 @@ jobs:
           RELEASE_CHANNEL: ${{ inputs.channel }}
           RELEASE_SPECIFIER: ${{ inputs.specifier }}
         run: node tools/resolve-release-channel.mjs
+      - name: Verify first-publication credentials
+        if: steps.release.outputs.first_release == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo 'Set NPM_BOOTSTRAP_TOKEN in the npm-next environment for the first publication.' >&2
+            exit 1
+          fi
+          npm whoami --registry=https://registry.npmjs.org
       - run: npm run release:check
       - run: npm run release:test
       - name: Verify publishing environment protections
@@ -66,6 +76,13 @@ jobs:
       - name: Verify tested next versions before stable promotion
         if: inputs.channel == 'latest'
         run: node tools/check-next-promotion.mjs
+      - name: Require completed next consumer checks before stable promotion
+        if: inputs.channel == 'latest'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="megamono@$(node -p "require('./packages/plugin/package.json').version")"
+          test "$(gh release view "$tag" --json isPrerelease --jq .isPrerelease)" = true
       - name: Preview version changes
         env:
           FIRST_RELEASE: ${{ steps.release.outputs.first_release }}
@@ -78,6 +95,8 @@ jobs:
           npm exec nx -- "${args[@]}"
       - name: Qualify release packages
         shell: bash
+        env:
+          MEGAMONO_QUALIFY_PHASE: ${{ inputs.channel == 'next' && 'checks' || 'all' }}
         run: |
           mkdir -p tmp/release-qualification
           npm run release:qualify 2>&1 | tee tmp/release-qualification/qualification.log
@@ -117,11 +136,21 @@ jobs:
           npm exec nx -- run-many -t build
           npm run packages:check-exports
           node tools/commit-release.mjs
+          mkdir -p tmp/release-state
+          git bundle create tmp/release-state/release.bundle --all
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-state
+          path: tmp/release-state/
+          if-no-files-found: ignore
       - name: Publish public packages to npm
         id: publish
         env:
           DIST_TAG: ${{ steps.release.outputs.dist_tag }}
           FIRST_RELEASE: ${{ steps.release.outputs.first_release }}
+          NODE_AUTH_TOKEN: ${{ steps.release.outputs.first_release == 'true' && secrets.NPM_BOOTSTRAP_TOKEN || '' }}
+          NPM_CONFIG_PROVENANCE: 'true'
         run: |
           node tools/write-build-info.mjs
           args=(release publish --groups=megamono,create-megamono --tag "$DIST_TAG" --access public)
@@ -136,6 +165,12 @@ jobs:
         env:
           RELEASE_BRANCH: ${{ github.ref_name }}
         run: git push --follow-tags origin "HEAD:refs/heads/$RELEASE_BRANCH"
+      - name: Verify published npm packages and consumers
+        env:
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: |
+          mkdir -p tmp/release-qualification
+          npm run release:verify-published 2>&1 | tee tmp/release-qualification/published-consumers.log
       - name: Create GitHub release
         env:
           CHANNEL: ${{ steps.release.outputs.channel }}
@@ -151,3 +186,9 @@ jobs:
             args+=(--latest)
           fi
           gh "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: published-consumer-log
+          path: tmp/release-qualification/
+          if-no-files-found: ignore

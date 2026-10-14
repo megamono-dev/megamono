@@ -201,47 +201,58 @@ manually versioned package without also synchronizing its scaffold pins.
 ### First publication and npm trust
 
 The packages must exist on npm before their trusted publishers can be registered.
-For the initial release, use a maintainer's interactive npm session locally;
-keep credentials out of GitHub workflow secrets. Subsequent releases use OIDC.
-Use Node 24 and the repository's pinned npm version. The qualification command
-requires macOS with Xcode, Rust/Cargo, and `git-filter-repo`, just like the release
-fixtures. Start from a clean `main` checkout synchronized with `origin/main`,
-with successful CI, native-execution, and supported Nx compatibility runs.
-The manual `Release qualification` GitHub workflow runs the same checks on
-macOS without versioning or publishing packages.
+For the first publication, add a short-lived granular npm token as the
+`NPM_BOOTSTRAP_TOKEN` environment secret in GitHub's `npm-next` environment.
+Grant it package publish permissions covering the new `@megamono/*` packages and
+`create-megamono`, with bypass 2FA enabled for unattended publication. Organization
+management permissions alone do not grant package publishing access. Revoke the
+token after configuring and validating trusted publishing.
+
+The release workflow checks this credential before versioning. It exposes the
+token only to first-release authentication and publication steps; subsequent
+releases use OIDC. Both paths publish with provenance from the public repository.
+The GitHub environments `npm-next` and `npm-latest` are already configured.
+`GITHUB_TOKEN` and OIDC credentials are supplied automatically by GitHub.
+
+Dispatch the initial prerelease from clean, synchronized `main` after successful
+CI, native-execution, and supported Nx compatibility checks. The example initial
+version is `0.1.0-next.0` for all ten packages:
 
 ```sh
-npm login --registry=https://registry.npmjs.org
-npm whoami --registry=https://registry.npmjs.org
-npm ci
-npm run release:check-publishing
-npm run release:qualify
+gh workflow run release.yml --ref main -f channel=next -f specifier=0.1.0-next.0
 ```
 
-After qualification, choose the initial exact `next` version (the example uses
-`0.1.0-next.0`). Verify there are no existing `megamono@*` or `create-megamono@*`
-release tags before using `--first-release`. These commands mutate versions,
-commit and tag the release, then publish all ten packages publicly:
+For `next`, the workflow checks release policy, builds, tests, lints, and validates
+packed exports before publishing. After publication it verifies all ten exact
+registry versions, dist-tags, source revisions, and tarball exports. It then runs
+all thirteen packed-consumer gates, followed by the complete app-selection matrix
+and five production/browser cases using packages installed from public npm.
+Consumer verification never publishes to public npm.
+The GitHub prerelease is created only after these checks pass; stable promotion
+requires that completed prerelease and its matching source revision. Stable
+releases retain full pre-publication qualification and check published artifacts
+plus representative registry consumers afterward.
+
+`npm run release:qualify` and the manual `Release qualification` workflow still
+run the full pre-publication suite using isolated local registries. They do not
+require packages to exist on public npm. To repeat public consumer verification
+from the exact release checkout, run:
 
 ```sh
-npm exec nx -- release version 0.1.0-next.0 --groups=megamono,create-megamono --preid=next --first-release --dry-run
-npm exec nx -- release version 0.1.0-next.0 --groups=megamono,create-megamono --preid=next --first-release --git-commit=false --git-tag=false
-node tools/sync-release-pins.mjs
-npm exec nx -- run-many -t build
-npm run packages:check-exports
-node tools/commit-release.mjs
-node tools/write-build-info.mjs
-npm exec nx -- release publish --groups=megamono,create-megamono --tag next --access public --first-release
-git push --follow-tags origin HEAD:refs/heads/main
-gh release create megamono@0.1.0-next.0 --verify-tag --generate-notes --title 'Megamono 0.1.0-next.0' --notes 'Includes create-megamono@0.1.0-next.0.' --prerelease --latest=false
+RELEASE_CHANNEL=next npm run release:verify-published
 ```
 
-If publication stops partway through, retain the release commit and tags.
-Inspect each package's registry version and `next` tag, then rerun only the publish
-step to finish missing packages. Never reset the commit or reuse a published
-version for different package bytes. Push and create the GitHub release only
-after all ten versions are present. A local bootstrap publication does not have
-GitHub OIDC provenance; subsequent workflow publications do.
+These fixtures require macOS with Xcode, Rust/Cargo, and `git-filter-repo`, just
+like the release workflow. The release workflow synchronizes both scaffold
+compatibility registries when versions change.
+
+If publication stops partway through, download the `release-state` artifact. Its
+Git bundle preserves the release commit and tags even if they have not been
+pushed yet. Inspect each package's exact registry version and finish the missing
+publications from that recorded checkout. Never reset a published version or
+reuse it for different bytes. If post-publication consumer checks fail, the
+release commit and tags are already pushed, but no GitHub prerelease is created;
+fix the problem and publish a new `next` version before stable promotion.
 
 Register the publisher for every package with the authenticated npm CLI. Review
 any existing configuration with `npm trust list <package> --json` first; preserve
