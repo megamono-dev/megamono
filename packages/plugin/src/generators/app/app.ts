@@ -864,7 +864,7 @@ export default defineConfig({
   ...nxE2EPreset(import.meta.dirname, { testDir: './src' }),
   use: { baseURL, trace: 'on-first-retry' },
   webServer: {
-    command: \`${nx} run ${options.projectName}:dev --port=\${port}\`,
+    command: \`${nx} run ${options.projectName}:serve --port=\${port}\`,
     url: baseURL,
     reuseExistingServer: false,
     cwd: workspaceRoot,

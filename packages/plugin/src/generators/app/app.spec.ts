@@ -205,8 +205,14 @@ describe('app generator', () => {
       '"name": "fixture-web-e2e"',
     );
     expect(tree.read('apps/web-e2e/playwright.config.mts', 'utf8')).toContain(
-      'pnpm exec nx run fixture-web:dev --port=${port}',
+      'pnpm exec nx run fixture-web:serve --port=${port}',
     );
+    expect(
+      readProjectConfiguration(tree, 'fixture-web').targets?.serve,
+    ).toMatchObject({
+      executor: '@nx/next:server',
+      options: { dev: true },
+    });
 
     const first = snapshot(tree);
     await appGenerator(tree, {
