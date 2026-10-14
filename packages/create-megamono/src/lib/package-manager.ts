@@ -33,7 +33,7 @@ const adapters: Readonly<Record<PackageManager, PackageManagerAdapter>> = {
     install: (packages = []) =>
       packages.length
         ? ['add', '--save-dev', '--save-exact', ...packages]
-        : ['install'],
+        : ['install', '--no-frozen-lockfile'],
     scaffold: (packageName, args) => ['dlx', packageName, ...args],
   },
   yarn: {

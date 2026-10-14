@@ -32,7 +32,7 @@ const adapters: Readonly<Record<PackageManager, PackageManagerAdapter>> = {
     name: 'pnpm',
     lockfiles: ['pnpm-lock.yaml'],
     frozenInstall: 'pnpm install --frozen-lockfile',
-    install: 'pnpm install',
+    install: 'pnpm install --no-frozen-lockfile',
     nx: 'pnpm exec nx',
     runPrefix: 'pnpm run',
     minimumVersion: [8, 0],

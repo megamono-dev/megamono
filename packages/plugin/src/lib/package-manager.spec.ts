@@ -6,6 +6,11 @@ import {
 } from './package-manager';
 
 describe('plugin package-manager adapters', () => {
+  it('distinguishes pnpm dependency mutations from frozen CI installs', () => {
+    const adapter = packageManagerAdapter('pnpm');
+    expect(adapter.install).toBe('pnpm install --no-frozen-lockfile');
+    expect(adapter.frozenInstall).toBe('pnpm install --frozen-lockfile');
+  });
   it.each(PACKAGE_MANAGERS)('defines the complete %s contract', (manager) => {
     const adapter = packageManagerAdapter(manager);
     expect(adapter.install).toMatch(/^(npm|pnpm|yarn|bun) install/);

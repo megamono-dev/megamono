@@ -38,7 +38,7 @@ const adapters: Readonly<Record<PackageManager, PackageManagerAdapter>> = {
     minimumVersion: [8, 0],
     maximumMajorExclusive: 12,
     exec: (binary, args) => ['pnpm', ['exec', binary, ...args]],
-    installArgs: () => ['install'],
+    installArgs: () => ['install', '--no-frozen-lockfile'],
     addArgs: (packages, options = {}) => [
       'add',
       ...(options.development ? ['--save-dev'] : []),

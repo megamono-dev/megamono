@@ -2125,6 +2125,20 @@ async function addPlaystackCapabilities(
       commandArgs,
       `${command} ${commandArgs.join(' ')}`,
     );
+    if (!dryRun && workspace.packageManager === 'pnpm') {
+      // A capability command may update manifests without updating the lockfile.
+      // Finish that mutation before pnpm verifies dependencies for the next exec.
+      const installArgs = packageManagerAdapter(
+        workspace.packageManager,
+      ).installArgs();
+      await runRequired(
+        io,
+        workspace,
+        workspace.packageManager,
+        installArgs,
+        `${workspace.packageManager} ${installArgs.join(' ')}`,
+      );
+    }
   }
 }
 

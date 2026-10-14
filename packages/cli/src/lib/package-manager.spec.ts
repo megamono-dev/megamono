@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { PACKAGE_MANAGERS, packageManagerAdapter } from './package-manager.js';
 
 describe('package-manager adapters', () => {
+  it('allows pnpm dependency mutations to update the lockfile in CI', () => {
+    expect(packageManagerAdapter('pnpm').installArgs()).toEqual([
+      'install',
+      '--no-frozen-lockfile',
+    ]);
+  });
   it.each([
     ['npm', ['npm', ['exec', 'nx', '--', 'show', 'projects']]],
     ['pnpm', ['pnpm', ['exec', 'nx', 'show', 'projects']]],

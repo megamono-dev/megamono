@@ -1844,7 +1844,7 @@ describe('@megamono/cli', () => {
       },
       {
         command: 'pnpm',
-        args: ['install'],
+        args: ['install', '--no-frozen-lockfile'],
         cwd: root,
         capture: false,
       },
@@ -1860,6 +1860,12 @@ describe('@megamono/cli', () => {
           '--api=apps/api',
           '--local-packages=yalc',
         ],
+        cwd: root,
+        capture: false,
+      },
+      {
+        command: 'pnpm',
+        args: ['install', '--no-frozen-lockfile'],
         cwd: root,
         capture: false,
       },
@@ -2520,7 +2526,7 @@ describe('@megamono/cli', () => {
           '--no-pure',
         ],
       ],
-      ['pnpm', ['install']],
+      ['pnpm', ['install', '--no-frozen-lockfile']],
       ['pnpm', ['exec', 'playstack', 'init']],
     ]);
     const accounts = JSON.parse(

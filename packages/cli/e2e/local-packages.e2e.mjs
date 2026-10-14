@@ -288,6 +288,7 @@ await writeFile(
 );
 await chmod(resolve(managerBin, 'pnpm'), 0o755);
 const baseEnvironment = {
+  CI: 'true',
   FORCE_COLOR: '0',
   npm_config_audit: 'false',
   npm_config_cache: resolve(temporaryRoot, 'npm-cache'),
