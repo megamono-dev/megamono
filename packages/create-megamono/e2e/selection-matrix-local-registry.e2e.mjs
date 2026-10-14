@@ -14,6 +14,12 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const workspaceRoot = resolve(import.meta.dirname, '../../..');
+const compatibility = JSON.parse(
+  await readFile(
+    resolve(workspaceRoot, 'packages/create-megamono/compatibility.json'),
+    'utf8',
+  ),
+);
 const appRoots = {
   api: 'apps/api',
   apple: 'apps/apple',
@@ -614,12 +620,14 @@ await writeFile(
   'utf8',
 );
 await mkdir(commandBin);
-await writeFile(
-  resolve(commandBin, 'pnpm'),
-  '#!/bin/sh\nexec corepack pnpm@11.24.0 "$@"\n',
-  'utf8',
-);
-await chmod(resolve(commandBin, 'pnpm'), 0o755);
+for (const manager of ['npm', 'pnpm']) {
+  await writeFile(
+    resolve(commandBin, manager),
+    `#!/bin/sh\nexec corepack ${manager}@${compatibility.packageManagers[manager]} "$@"\n`,
+    'utf8',
+  );
+  await chmod(resolve(commandBin, manager), 0o755);
+}
 await writeFile(
   registryConfig,
   `${JSON.stringify(
