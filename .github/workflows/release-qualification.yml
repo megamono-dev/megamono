@@ -35,7 +35,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: npm run release:check-publishing
-      - run: npm run release:qualify
+      - name: Qualify release packages
+        shell: bash
+        run: |
+          mkdir -p tmp/release-qualification
+          npm run release:qualify 2>&1 | tee tmp/release-qualification/qualification.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-qualification-log
+          path: tmp/release-qualification/
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
         with:
