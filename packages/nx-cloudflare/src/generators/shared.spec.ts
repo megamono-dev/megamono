@@ -1,9 +1,41 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { CLOUDFLARE_RECOVERY_PATH, createPostFlushCallback } from './shared';
+import {
+  CLOUDFLARE_RECOVERY_PATH,
+  createPostFlushCallback,
+  typegenTask,
+} from './shared';
 
 describe('Cloudflare generator external command recovery', () => {
+  it.each([
+    ['npm', 'package-lock.json', ['exec', 'wrangler', '--']],
+    ['pnpm', 'pnpm-lock.yaml', ['exec', 'wrangler']],
+    ['yarn', 'yarn.lock', ['wrangler']],
+    ['bun', 'bun.lock', ['x', 'wrangler']],
+  ])(
+    'uses the %s workspace manager for type generation and recovery',
+    async (manager, lockfile, prefix) => {
+      const root = await mkdtemp(resolve(tmpdir(), 'nx-cloudflare-manager-'));
+      try {
+        await writeFile(resolve(root, lockfile as string), '');
+        const runner = vi.fn(async () => undefined);
+        const task = typegenTask(root, 'apps/api/wrangler.jsonc', runner);
+        await task.run();
+        const args = [
+          ...prefix,
+          'types',
+          'apps/api/worker-configuration.d.ts',
+          '--config',
+          'apps/api/wrangler.jsonc',
+        ];
+        expect(runner).toHaveBeenCalledWith(manager, args, root);
+        expect(task.retry).toBe([manager, ...args].join(' '));
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
   it('records completed steps and a deterministic retry after failure', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'nx-cloudflare-recovery-'));
     try {

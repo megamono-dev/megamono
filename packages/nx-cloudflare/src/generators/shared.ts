@@ -1,4 +1,5 @@
 import {
+  detectPackageManager,
   getProjects,
   logger,
   normalizePath,
@@ -271,15 +272,21 @@ export function typegenTask(
   const outputPath = normalizePath(
     join(dirname(configPath), 'worker-configuration.d.ts'),
   );
+  const manager = detectPackageManager(workspaceRoot);
+  const prefix =
+    manager === 'npm'
+      ? ['exec', 'wrangler', '--']
+      : manager === 'pnpm'
+        ? ['exec', 'wrangler']
+        : manager === 'bun'
+          ? ['x', 'wrangler']
+          : ['wrangler'];
+  const args = [...prefix, 'types', outputPath, '--config', configPath];
   return {
     id: 'wrangler-types',
-    retry: `npm exec wrangler -- types ${outputPath} --config ${configPath}`,
+    retry: [manager, ...args].join(' '),
     run: async () => {
-      await runner(
-        'npm',
-        ['exec', 'wrangler', '--', 'types', outputPath, '--config', configPath],
-        workspaceRoot,
-      );
+      await runner(manager, args, workspaceRoot);
     },
   };
 }
