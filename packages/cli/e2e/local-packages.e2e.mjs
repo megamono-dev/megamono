@@ -17,6 +17,12 @@ const cliVersion = await packageVersion('@megamono/cli');
 const pluginVersion = await packageVersion('@megamono/plugin');
 
 const workspaceRoot = resolve(import.meta.dirname, '../../..');
+const compatibility = JSON.parse(
+  await readFile(
+    resolve(workspaceRoot, 'packages/create-megamono/compatibility.json'),
+    'utf8',
+  ),
+);
 
 function run(command, args, options = {}) {
   return new Promise((resolvePromise, reject) => {
@@ -171,7 +177,7 @@ async function createWorkspace(root, manager, registry, environment) {
   await json(resolve(root, 'package.json'), {
     name: `fixture-${manager}`,
     private: true,
-    packageManager: manager === 'pnpm' ? 'pnpm@11.24.0' : 'npm@11.17.0',
+    packageManager: `${manager}@${compatibility.packageManagers[manager]}`,
     devDependencies: {
       '@megamono/plugin': pluginVersion,
       nx: '23.1.1',
@@ -274,6 +280,13 @@ writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\\n');
 }
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'megamono-cli-e2e-'));
+const managerBin = resolve(temporaryRoot, 'manager-bin');
+await mkdir(managerBin);
+await writeFile(
+  resolve(managerBin, 'pnpm'),
+  `#!/bin/sh\nexec corepack pnpm@${compatibility.packageManagers.pnpm} "$@"\n`,
+);
+await chmod(resolve(managerBin, 'pnpm'), 0o755);
 const baseEnvironment = {
   FORCE_COLOR: '0',
   npm_config_audit: 'false',
@@ -291,6 +304,7 @@ await writeFile(
 const environment = {
   ...baseEnvironment,
   npm_config_userconfig: npmConfig,
+  PATH: `${managerBin}:${process.env.PATH}`,
 };
 await json(registryConfig, {
   storage: resolve(temporaryRoot, 'registry-storage'),
@@ -466,7 +480,7 @@ try {
   const yalcEnvironment = {
     ...environment,
     MEGAMONO_E2E_YALC_STORE: yalcStore,
-    PATH: `${shimDirectory}:${process.env.PATH}`,
+    PATH: `${shimDirectory}:${environment.PATH}`,
   };
   await run(
     megamono,
