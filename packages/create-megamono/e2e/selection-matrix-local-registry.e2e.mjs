@@ -231,7 +231,6 @@ async function verifyCase(root, testCase, environment, createCliPath) {
   const caseEnvironment = {
     ...environment,
     npm_config_cache: npmCache,
-    ...(verifyMode === 'build' ? { NODE_ENV: 'production' } : {}),
   };
   const packageManager = testCase.packageManager;
   process.stdout.write(
@@ -683,6 +682,14 @@ try {
     NX_DAEMON: 'false',
     npm_config_userconfig: npmConfig,
     PATH: `${commandBin}:${process.env.PATH ?? ''}`,
+    ...(verifyMode === 'build'
+      ? {
+          PLAYWRIGHT_BROWSERS_PATH: resolve(
+            temporaryRoot,
+            'playwright-browsers',
+          ),
+        }
+      : {}),
   };
   const publishCache = resolve(temporaryRoot, 'npm-cache-publish');
   for (const packagePath of [
@@ -732,6 +739,31 @@ try {
     'node_modules/create-megamono/dist/cli.js',
   );
   assert(await exists(createCliPath), 'Packed create-megamono CLI is missing.');
+  if (
+    verifyMode === 'build' &&
+    cases.some(({ apps }) =>
+      apps.some((app) => ['web', 'site'].includes(appInstance(app).type)),
+    )
+  ) {
+    // Provision matching browsers privately rather than relying on a host cache.
+    await run(
+      'npm',
+      [
+        'install',
+        '--save-exact',
+        `@playwright/test@${compatibility.scaffoldPackages['@playwright/test']}`,
+      ],
+      {
+        cwd: launcher,
+        env: { ...environment, npm_config_cache: publishCache },
+      },
+    );
+    await run(
+      'npm',
+      ['exec', 'playwright', '--', 'install', 'chromium', 'firefox', 'webkit'],
+      { cwd: launcher, env: environment },
+    );
+  }
   await rm(publishCache, { recursive: true, force: true });
 
   for (const testCase of cases) {

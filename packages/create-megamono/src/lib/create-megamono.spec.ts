@@ -509,6 +509,7 @@ describe('createPlan', () => {
     expect(rendered).toContain('@nx/next@23.1.1');
     expect(rendered).toContain('@nx/eslint@23.1.1');
     expect(rendered).toContain('@nx/playwright@23.1.1');
+    expect(rendered).toContain('@playwright/test@1.64.1');
     expect(rendered).toContain('@megamono/plugin:app');
     expect(rendered).toContain('--type=site');
     expect(rendered).toContain('--type=web');

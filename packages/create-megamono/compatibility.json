@@ -84,6 +84,7 @@
     "@nx/next": "23.1.1",
     "@nx/nest": "23.1.1",
     "@nx/playwright": "23.1.1",
+    "@playwright/test": "1.64.1",
     "jest": "30.3.0",
     "jest-environment-node": "30.3.0",
     "jest-util": "30.3.0",

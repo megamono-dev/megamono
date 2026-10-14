@@ -608,12 +608,18 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         plugins.add(dependency);
       }
     }
-    if (app === 'api' || app === 'site' || app === 'web' || app === 'extension') {
+    if (
+      app === 'api' ||
+      app === 'site' ||
+      app === 'web' ||
+      app === 'extension'
+    ) {
       plugins.add('@nx/eslint');
     }
     if (app === 'site' || app === 'web') {
       plugins.add('@nx/js');
       plugins.add('@nx/playwright');
+      plugins.add('@playwright/test');
     }
     if (app === 'worker') {
       plugins.add('wrangler');
