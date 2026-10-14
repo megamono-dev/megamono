@@ -246,8 +246,7 @@ try {
     `--migrationStages=${JSON.stringify({ [integration]: { stage: 'shadow', verificationReport: 'verification.json', rollbackPlan: 'rollback.md' } })}`,
   ]);
   assert.equal(
-    JSON.parse(await readFile(ledgerPath, 'utf8')).integrations[instance]
-      .stage,
+    JSON.parse(await readFile(ledgerPath, 'utf8')).integrations[instance].stage,
     'shadow',
   );
   await put('verify.cjs', "throw new Error('contract failure');\n");

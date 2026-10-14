@@ -3,7 +3,10 @@ import { execFileSync } from 'node:child_process';
 import {
   mkdtempSync,
   mkdirSync,
+  existsSync,
   readFileSync,
+  statSync,
+  utimesSync,
   writeFileSync,
   rmSync,
 } from 'node:fs';
@@ -39,11 +42,19 @@ const run = (file, args, cwd = root) =>
   });
 const npm = (args, cwd = root) => run(process.execPath, [npmCli, ...args], cwd);
 const put = (path, value) => {
-  mkdirSync(dirname(join(root, path)), { recursive: true });
+  const file = join(root, path);
+  const previous = existsSync(file)
+    ? Math.floor(statSync(file).mtimeMs / 1000)
+    : 0;
+  mkdirSync(dirname(file), { recursive: true });
   writeFileSync(
-    join(root, path),
+    file,
     typeof value === 'string' ? value : JSON.stringify(value, null, 2),
   );
+  // Nx's persisted file hashes can reuse a same-second modification time.
+  // Model distinct edits without sleeps or clearing the graph/task caches.
+  const modified = Math.max(Math.floor(Date.now() / 1000), previous + 1);
+  utimesSync(file, modified, modified);
 };
 const read = (path) => JSON.parse(readFileSync(join(root, path), 'utf8'));
 try {
@@ -171,5 +182,7 @@ try {
   console.error(error.stdout?.toString(), error.stderr?.toString());
   throw error;
 } finally {
-  rmSync(root, { recursive: true, force: true });
+  if (process.env.MEGAMONO_E2E_KEEP === 'true')
+    console.error(`Retained governance fixture: ${root}`);
+  else rmSync(root, { recursive: true, force: true });
 }
