@@ -23,6 +23,49 @@ function record(overrides: Partial<WxtConfigRecord> = {}): WxtConfigRecord {
 }
 
 describe('WXT project inference', () => {
+  it.each(['wxt.config.ts', 'manifest.json'])(
+    'preserves declared scope tags when inferring %s',
+    async (filename) => {
+      const root = await mkdtemp(join(tmpdir(), 'nx-extension-scope-'));
+      try {
+        await mkdir(join(root, 'apps/extension'), { recursive: true });
+        await writeFile(
+          join(root, 'apps/extension/package.json'),
+          JSON.stringify({
+            name: '@product/browser',
+            nx: { tags: ['scope:product', 'visibility:internal'] },
+          }),
+        );
+        await writeFile(
+          join(root, 'apps/extension', filename),
+          filename === 'manifest.json'
+            ? JSON.stringify({
+                manifest_version: 3,
+                name: 'Browser',
+                version: '1.0.0',
+              })
+            : 'export default {};\n',
+        );
+        const callback = createNodes[1] as unknown as (
+          file: string,
+          options: { scope: string },
+          context: { workspaceRoot: string },
+        ) => Promise<{ projects: Record<string, ProjectConfiguration> }>;
+        const result = await callback(
+          `apps/extension/${filename}`,
+          { scope: 'fallback' },
+          { workspaceRoot: root },
+        );
+        expect(
+          result.projects['apps/extension'].tags?.filter((tag) =>
+            tag.startsWith('scope:'),
+          ),
+        ).toEqual(['scope:product']);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
   it('exports the transitional discovery hook required by Nx 21', () => {
     expect(createNodesV2).toBe(createNodes);
   });

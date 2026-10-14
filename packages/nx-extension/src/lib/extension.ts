@@ -110,7 +110,9 @@ function recordForConfig(
       ...new Set([
         ...configuredTags,
         'platform:extension',
-        `scope:${options.scope ?? 'shared'}`,
+        ...(configuredTags.some((tag) => tag.startsWith('scope:'))
+          ? []
+          : [`scope:${options.scope ?? 'shared'}`]),
         'type:app',
       ]),
     ].sort(),
@@ -248,7 +250,9 @@ function recordForManifest(
       ...new Set([
         ...configuredTags,
         'platform:extension',
-        `scope:${options.scope ?? 'shared'}`,
+        ...(configuredTags.some((tag) => tag.startsWith('scope:'))
+          ? []
+          : [`scope:${options.scope ?? 'shared'}`]),
         'type:app',
       ]),
     ].sort(),
