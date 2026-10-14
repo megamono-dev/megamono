@@ -154,6 +154,11 @@ describe('app generator', () => {
           '// application-owned customization\n',
         );
       }
+      if (styling === 'panda') {
+        expect(tree.read('apps/site/eslint.config.mjs', 'utf8')).toContain(
+          "ignores: ['**/styled-system/**']",
+        );
+      }
       const before = snapshot(tree);
       await appGenerator(tree, options);
       expect(snapshot(tree)).toBe(before);

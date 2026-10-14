@@ -1,4 +1,5 @@
 import { preserveWorkspaceYaml } from '../../lib/preserve-workspace-yaml';
+import { prependEslintFlatConfig } from '../../lib/eslint-flat-config';
 import { createAndroidApp, validateAndroidApplicationId } from './android';
 import {
   formatFiles,
@@ -1019,6 +1020,20 @@ async function createWebApp(
     );
   }
   if (styling === 'panda') {
+    const eslintPath = `${options.directory}/eslint.config.mjs`;
+    const eslintSource = tree.read(eslintPath, 'utf8') ?? '';
+    const eslintConfig = prependEslintFlatConfig(
+      eslintSource,
+      "  { ignores: ['**/styled-system/**'] },",
+    );
+    if (eslintConfig === undefined) {
+      throw new AppGeneratorError(
+        'Cannot exclude generated Panda output from the application flat ESLint config.',
+        3,
+        'plugin-incompatible',
+      );
+    }
+    tree.write(eslintPath, eslintConfig);
     tree.write(
       `${options.directory}/panda.config.ts`,
       `import { defineConfig } from '@pandacss/dev';\n\nexport default defineConfig({\n  preflight: true,\n  include: ['./src/**/*.{ts,tsx}'],\n  exclude: [],\n  outdir: 'styled-system',\n});\n`,
