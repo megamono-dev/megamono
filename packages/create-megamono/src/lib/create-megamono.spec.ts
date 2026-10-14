@@ -66,6 +66,15 @@ describe('normalizeCreateOptions', () => {
     expect(rendered).toContain('--projects=acme-tools-core,acme-tools-client');
     expect(rendered).not.toContain('@megamono/plugin:app');
     const ids = plan.steps.map((step) => step.id);
+    for (const name of plan.options.packages) {
+      expect(
+        plan.steps[ids.indexOf(`generate-package-${name}`) + 1],
+      ).toMatchObject({
+        id: `hydrate-package-${name}`,
+        command: 'npm',
+        args: ['install'],
+      });
+    }
     expect(ids.indexOf('configure-publishable-packages')).toBeLessThan(
       ids.indexOf('initialize-megamono'),
     );

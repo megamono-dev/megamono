@@ -720,6 +720,12 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         ]),
         'staging',
       ),
+      commandStep(
+        `hydrate-package-${name}`,
+        options.packageManager,
+        packageInstallArgs(options.packageManager),
+        'staging',
+      ),
     );
   }
   if (options.packages.length)
