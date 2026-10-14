@@ -221,17 +221,18 @@ try {
   );
   run('/bin/sh', ['-c', workflow.jobs.quality.steps.at(-1).run]);
   const integration = '@playstack/integration-fixture:fixture';
+  const instance = `${integration}@${encodeURIComponent('apps/api')}`;
   run(process.execPath, [
     ...args,
     `--migrationStages=${JSON.stringify({ [integration]: { stage: 'compare' } })}`,
   ]);
   const ledgerPath = join(root, '.megamono/playstack-integrations.json');
   const ledger = JSON.parse(await readFile(ledgerPath, 'utf8'));
-  assert.equal(ledger.integrations[integration].stage, 'compare');
+  assert.equal(ledger.integrations[instance].stage, 'compare');
   await put('verification.json', {
     schemaVersion: 1,
     integration,
-    fingerprint: ledger.integrations[integration].fingerprint,
+    fingerprint: ledger.integrations[instance].fingerprint,
     stage: 'shadow',
     result: 'passed',
     checks: ['runtime-ready'],
@@ -245,7 +246,7 @@ try {
     `--migrationStages=${JSON.stringify({ [integration]: { stage: 'shadow', verificationReport: 'verification.json', rollbackPlan: 'rollback.md' } })}`,
   ]);
   assert.equal(
-    JSON.parse(await readFile(ledgerPath, 'utf8')).integrations[integration]
+    JSON.parse(await readFile(ledgerPath, 'utf8')).integrations[instance]
       .stage,
     'shadow',
   );
