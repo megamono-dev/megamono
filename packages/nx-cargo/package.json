@@ -2,6 +2,20 @@
   "name": "@megamono/nx-cargo",
   "version": "0.0.1",
   "license": "MIT",
+  "description": "Nx plugin inferring Cargo and Rust projects, targets, and graph edges from Cargo manifests.",
+  "keywords": [
+    "megamono",
+    "nx",
+    "nx-plugin",
+    "cargo",
+    "rust",
+    "tauri"
+  ],
+  "author": "Ryan Hefner",
+  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/nx-cargo#readme",
+  "bugs": {
+    "url": "https://github.com/megamono-dev/megamono/issues"
+  },
   "type": "commonjs",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

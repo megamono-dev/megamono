@@ -2,6 +2,22 @@
   "name": "@megamono/nx-phpnative",
   "version": "0.0.1",
   "license": "MIT",
+  "description": "Nx plugin for NativePHP desktop and mobile application generators and project inference.",
+  "keywords": [
+    "megamono",
+    "nx",
+    "nx-plugin",
+    "nativephp",
+    "laravel",
+    "php",
+    "desktop",
+    "mobile"
+  ],
+  "author": "Ryan Hefner",
+  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/nx-phpnative#readme",
+  "bugs": {
+    "url": "https://github.com/megamono-dev/megamono/issues"
+  },
   "type": "commonjs",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

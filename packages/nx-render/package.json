@@ -2,6 +2,20 @@
   "name": "@megamono/nx-render",
   "version": "0.0.1",
   "license": "MIT",
+  "description": "Nx plugin for Render Blueprint inference, service targets, and configuration validation.",
+  "keywords": [
+    "megamono",
+    "nx",
+    "nx-plugin",
+    "render",
+    "blueprint",
+    "deployment"
+  ],
+  "author": "Ryan Hefner",
+  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/nx-render#readme",
+  "bugs": {
+    "url": "https://github.com/megamono-dev/megamono/issues"
+  },
   "type": "commonjs",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
