@@ -4,7 +4,7 @@
   "license": "MIT",
   "scripts": {
     "release:check": "node tools/check-release-policy.mjs && node tools/sync-release-pins.mjs --check",
-    "release:test": "node --test tools/release-channel.test.mjs tools/sync-release-pins.test.mjs tools/publishing-setup.test.mjs tools/published-release.test.mjs",
+    "release:test": "node --test tools/release-policy.test.mjs tools/release-channel.test.mjs tools/sync-release-pins.test.mjs tools/publishing-setup.test.mjs tools/published-release.test.mjs",
     "release:check-publishing": "node tools/check-publishing-setup.mjs",
     "release:qualify": "node tools/qualify-release.mjs",
     "release:verify-published": "node tools/check-published-release.mjs",

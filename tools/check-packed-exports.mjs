@@ -70,6 +70,10 @@ try {
       readFileSync(join(workspaceRoot, directory, 'package.json'), 'utf8'),
     );
     const files = packedFiles(directory);
+    for (const file of ['LICENSE', 'README.md']) {
+      if (!files.has(normalize(file)))
+        failures.push(`${manifest.name}: ${file}`);
+    }
     for (const target of [...new Set(manifestTargets(manifest))].sort()) {
       if (target.includes('*')) continue;
       const path = normalize(target.slice(2));

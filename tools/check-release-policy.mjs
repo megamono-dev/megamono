@@ -113,6 +113,36 @@ for (const [name, definition] of publicPackages) {
 
   if (manifest.name !== name) fail(`manifest name must be ${name}`);
   if (manifest.private) fail('private prevents registry publication');
+  if (manifest.license !== 'MIT') fail('license must be MIT');
+  for (const field of ['description', 'homepage', 'author']) {
+    if (typeof manifest[field] !== 'string' || !manifest[field].trim()) {
+      fail(`${field} is required for the npm listing`);
+    }
+  }
+  if (typeof manifest.bugs?.url !== 'string' || !manifest.bugs.url.trim()) {
+    fail('bugs.url is required for the npm listing');
+  }
+  if (
+    !Array.isArray(manifest.keywords) ||
+    manifest.keywords.length === 0 ||
+    manifest.keywords.some(
+      (keyword) => typeof keyword !== 'string' || !keyword.trim(),
+    )
+  ) {
+    fail('keywords must contain nonempty strings for npm discoverability');
+  }
+  for (const file of ['LICENSE', 'README.md']) {
+    try {
+      const content = await readFile(
+        join(root, definition.directory, file),
+        'utf8',
+      );
+      if (!content.trim()) fail(`${file} must not be empty`);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      fail(`${file} is missing from ${definition.directory}`);
+    }
+  }
   if (manifest.repository?.url !== expectedRepository) {
     fail('repository must link megamono-dev/megamono');
   }

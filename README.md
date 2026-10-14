@@ -183,7 +183,7 @@ The fixed `megamono` release group contains the nine `@megamono/*` packages. `cr
 
 Create protected GitHub environments named `npm-next` and `npm-latest`. Permit `main` and `release/*` for `npm-next`; permit only `main` and require reviewers for `npm-latest`. Configure each npm package's trusted publisher for organization `megamono-dev`, repository `megamono`, and workflow `release.yml`. Leave the npm publisher's environment field unset so the one publisher can serve both protected GitHub environments.
 
-Run `npm run release:check` and `npm run release:test` to verify registry, public access, repository metadata, release groups, channel/ref guards, and stable-promotion behavior locally. Run
+Run `npm run release:check` and `npm run release:test` to verify registry, public access, repository metadata, MIT licensing, npm listing metadata, package documentation, release groups, channel/ref guards, and stable-promotion behavior locally. Packed-package validation also requires each tarball to include its license and README. Run
 `npm run release:check-publishing` to verify the live GitHub visibility and
 environment protections against `tools/publishing-policy.json`. The release
 workflow runs this check before versioning.
