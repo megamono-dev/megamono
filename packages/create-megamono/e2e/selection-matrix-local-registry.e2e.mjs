@@ -308,11 +308,15 @@ async function verifyCase(root, testCase, environment, createCliPath) {
   );
   if (testCase.database) {
     const { adapter, name } = testCase.database;
-    const projectName = `${scope}-database-${name}`;
-    const expectedRoot = `packages/database-${name}`;
+    const projectName = `${scope}-${adapter}-${name}`;
+    const expectedRoot = `libs/${adapter}/${name}`;
+    const schema =
+      adapter === 'prisma'
+        ? `${expectedRoot}/prisma/schema.prisma`
+        : `${expectedRoot}/drizzle.config.ts`;
     assert(
       JSON.stringify(megamono.databases?.[name]) ===
-        JSON.stringify({ adapter, project: projectName }),
+        JSON.stringify({ adapter, project: projectName, schema }),
       `${testCase.id}: Megamono database mapping is incorrect.`,
     );
     const playstack = JSON.parse(
@@ -320,7 +324,7 @@ async function verifyCase(root, testCase, environment, createCliPath) {
     );
     const expectedTarget =
       adapter === 'prisma'
-        ? `${expectedRoot}/prisma/models`
+        ? `${expectedRoot}/prisma`
         : `${expectedRoot}/src/schema`;
     assert(
       JSON.stringify(playstack.databases?.[name]) ===
