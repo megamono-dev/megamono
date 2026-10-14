@@ -11,6 +11,8 @@ Megamono is an Nx-based toolkit for creating, adopting, and governing polyglot m
 - `@megamono/nx-cargo` — Cargo and Rust project inference
 - `@megamono/nx-cloudflare` — Cloudflare Worker project inference and generators
 - `@megamono/nx-extension` — WXT browser-extension inference and generators
+- `@megamono/nx-laravel` — Laravel project inference and generators
+- `@megamono/nx-phpnative` — NativePHP application generation and inference
 - `@megamono/nx-render` — Render Blueprint inference and deployment preflight
 
 ## Native Android applications
