@@ -1245,7 +1245,9 @@ export default [
     const workflow = tree.read('.github/workflows/megamono-ci.yml', 'utf8');
     expect(workflow).toContain('runs-on: ubuntu-latest');
     expect(workflow).toContain('actions/setup-java@v5');
-    expect(workflow).toContain('android-actions/setup-android@v3');
+    expect(workflow).toContain(
+      'android-actions/setup-android@v3\n        with:\n          packages: platform-tools',
+    );
     expect(workflow).toContain('java-version: 17');
     expect(workflow).toContain(
       'sdkmanager "platforms;android-36" "build-tools;35.0.0"',
