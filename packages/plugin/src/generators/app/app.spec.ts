@@ -400,7 +400,9 @@ describe('app generator', () => {
       }
       if (type === 'desktop') {
         const root = 'apps/desktop/src-tauri';
-        const config = JSON.parse(tree.read(`${root}/tauri.conf.json`, 'utf8')!);
+        const config = JSON.parse(
+          tree.read(`${root}/tauri.conf.json`, 'utf8')!,
+        );
         for (const icon of config.bundle.icon) {
           expect(tree.read(`${root}/${icon}`)?.length).toBeGreaterThan(100);
         }

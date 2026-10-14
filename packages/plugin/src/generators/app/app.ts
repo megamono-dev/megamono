@@ -1299,7 +1299,10 @@ function ensureWorkspacePackagePath(
   const current = tree.read(path, 'utf8') ?? 'packages:\n';
   const document = parseDocument(current);
   let packages = document.get('packages');
-  if ((packages === null || packages === undefined) && document.has('packages')) {
+  if (
+    (packages === null || packages === undefined) &&
+    document.has('packages')
+  ) {
     document.set('packages', document.createNode([]));
     packages = document.get('packages');
   }
