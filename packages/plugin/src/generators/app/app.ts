@@ -1448,7 +1448,7 @@ function createDesktopApp(
     });
     return { ...value, plugins: next };
   });
-  return [() => installPackagesTask(tree, true)];
+  return [];
 }
 
 async function confirm(options: AppGeneratorSchema): Promise<boolean> {
@@ -1522,6 +1522,8 @@ export async function appGenerator(
   restoreWorkspaceYaml();
   if (rawOptions.skipInstall) return () => undefined;
   return runTasksInSerial(
+    // New app manifests need installation even when root dependencies are unchanged.
+    () => installPackagesTask(tree, true),
     ...callbacks.filter(
       (callback): callback is GeneratorCallback =>
         typeof callback === 'function',

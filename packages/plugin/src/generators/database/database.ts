@@ -1469,7 +1469,7 @@ export async function databaseGenerator(
     relocatePrismaLayout(tree, options);
     writeConfigurations(tree, options);
     await formatFiles(tree);
-    return () => installPackagesTask(tree);
+    return () => installPackagesTask(tree, true);
   }
 
   if (state === 'adopt') {
@@ -1508,7 +1508,7 @@ export async function databaseGenerator(
   else writeDrizzle(tree, options);
   writeConfigurations(tree, options);
   await formatFiles(tree);
-  return () => installPackagesTask(tree);
+  return () => installPackagesTask(tree, true);
 }
 
 export default databaseGenerator;

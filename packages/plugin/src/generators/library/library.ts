@@ -1,8 +1,10 @@
 import {
   formatFiles,
   getProjects,
+  installPackagesTask,
   logger,
   readJson,
+  runTasksInSerial,
   updateJson,
   updateProjectConfiguration,
   workspaceRoot,
@@ -172,7 +174,9 @@ export async function libraryGenerator(
   );
   await formatFiles(tree);
   restoreWorkspaceYaml();
-  return options.skipInstall ? () => undefined : callback;
+  return options.skipInstall
+    ? () => undefined
+    : runTasksInSerial(() => installPackagesTask(tree, true), callback);
 }
 
 export default libraryGenerator;
