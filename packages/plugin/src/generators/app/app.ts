@@ -9,6 +9,7 @@ import {
   readJson,
   runTasksInSerial,
   updateJson,
+  updateProjectConfiguration,
   workspaceRoot,
   writeJson,
   type GeneratorCallback,
@@ -733,13 +734,30 @@ test('introduces the workspace and Commune development tools', async ({ page }) 
 function configureE2ePackage(tree: Tree, options: NormalizedAppOptions): void {
   const e2eRoot = `${options.directory}-e2e`;
   const packagePath = `${e2eRoot}/package.json`;
-  const projectExists = [...getProjects(tree).values()].some(
-    (project) => project.root === e2eRoot,
+  const e2eProject = [...getProjects(tree)].find(
+    ([, project]) => project.root === e2eRoot,
   );
-  if (!projectExists && tree.children(e2eRoot).length === 0) return;
+  if (!e2eProject && tree.children(e2eRoot).length === 0) return;
   updatePackage(tree, packagePath, options);
 
   if (options.type === 'api') {
+    if (e2eProject) {
+      const [name, project] = e2eProject;
+      const target = project.targets?.e2e ?? {};
+      updateProjectConfiguration(tree, name, {
+        ...project,
+        targets: {
+          ...project.targets,
+          e2e: {
+            ...target,
+            options: {
+              ...target.options,
+              jestConfig: `${e2eRoot}/jest.config.cjs`,
+            },
+          },
+        },
+      });
+    }
     updateJson(tree, packagePath, (value: Record<string, unknown>) => {
       const nx = (value.nx as Record<string, unknown> | undefined) ?? {};
       const targets = (nx.targets as Record<string, unknown> | undefined) ?? {};

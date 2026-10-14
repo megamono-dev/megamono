@@ -1,6 +1,7 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { describe, expect, it } from 'vitest';
 import { appGenerator, AppGeneratorError } from './app';
+import { readProjectConfiguration } from '@nx/devkit';
 import { parse } from 'yaml';
 
 function workspace() {
@@ -237,6 +238,10 @@ describe('app generator', () => {
     expect(tree.read('apps/api-e2e/package.json', 'utf8')).toContain(
       'apps/api-e2e/jest.config.cjs',
     );
+    expect(
+      readProjectConfiguration(tree, 'fixture-api-e2e').targets?.e2e.options
+        .jestConfig,
+    ).toBe('apps/api-e2e/jest.config.cjs');
     expect(tree.read('apps/api-e2e/jest.config.cjs', 'utf8')).toContain(
       "displayName: 'fixture-api-e2e'",
     );
