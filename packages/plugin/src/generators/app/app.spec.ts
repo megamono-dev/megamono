@@ -385,6 +385,8 @@ describe('app generator', () => {
       await appGenerator(tree, options);
       expect(tree.exists(expectedPath)).toBe(true);
       if (type === 'extension') {
+        expect(tree.exists('eslint.config.mjs')).toBe(true);
+        expect(tree.exists('apps/extension/eslint.config.mjs')).toBe(true);
         expect(tree.read(expectedPath, 'utf8')).toContain('manifestVersion: 3');
         expect(
           tree.read('apps/extension/entrypoints/content.ts', 'utf8'),

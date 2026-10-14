@@ -2312,7 +2312,7 @@ function requiredAppPlugins(type: string): readonly string[] {
   if (type === 'worker') return ['@megamono/nx-cloudflare'];
   if (type === 'apple') return ['@megamono/nx-apple'];
   if (type === 'desktop') return ['@megamono/nx-cargo'];
-  if (type === 'extension') return ['@megamono/nx-extension'];
+  if (type === 'extension') return ['@megamono/nx-extension', '@nx/eslint'];
   return [];
 }
 

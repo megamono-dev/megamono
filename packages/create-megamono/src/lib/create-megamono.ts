@@ -608,7 +608,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
         plugins.add(dependency);
       }
     }
-    if (app === 'api' || app === 'site' || app === 'web') {
+    if (app === 'api' || app === 'site' || app === 'web' || app === 'extension') {
       plugins.add('@nx/eslint');
     }
     if (app === 'site' || app === 'web') {

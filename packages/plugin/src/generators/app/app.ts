@@ -1249,6 +1249,16 @@ async function createDelegatedApp(
           ? { manifestVersion: options.manifestVersion }
           : {}),
       }),
+      await generator('@nx/eslint', 'lintProjectGenerator')(tree, {
+        project: options.projectName,
+        linter: 'eslint',
+        skipFormat: true,
+        eslintFilePatterns: [
+          `${options.directory}/entrypoints/**/*.{ts,tsx}`,
+          `${options.directory}/src/**/*.{ts,tsx}`,
+          `${options.directory}/wxt.config.ts`,
+        ],
+      }),
     ];
   }
   if (options.type === 'mobile') {
