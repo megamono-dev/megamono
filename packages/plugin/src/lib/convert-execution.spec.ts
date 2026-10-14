@@ -64,6 +64,26 @@ function acceptedAnalysis(tree: Tree, extra: Record<string, unknown> = {}) {
 }
 
 describe('conversion execution', () => {
+  it('keeps Megamono tooling at the root when creating the application manifest', () => {
+    const dependencies = { react: '^19.0.0' };
+    const devDependencies = {
+      '@megamono/plugin': '1.0.0',
+      '@megamono/nx-cargo': '1.0.0',
+      vite: '^8.0.0',
+    };
+    const tree = fixture({ dependencies, devDependencies });
+    tree.write('src/index.ts', 'export const app = true;\n');
+
+    applyConversionPlan(tree, acceptedAnalysis(tree));
+
+    expect(readJson(tree, 'package.json').devDependencies).toEqual(
+      devDependencies,
+    );
+    const application = readJson(tree, 'apps/example-app/package.json');
+    expect(application.devDependencies).toEqual({ vite: '^8.0.0' });
+    expect(application.dependencies).toEqual(dependencies);
+  });
+
   it('isolates verification commands from the parent Nx task context', () => {
     expect(
       convertSubprocessEnvironment({

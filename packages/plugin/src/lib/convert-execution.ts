@@ -366,6 +366,15 @@ export function applyConversionPlan(
   delete appManifest.nx;
   appManifest.name = sourceManifest.name || analysis.appName;
   appManifest.private = sourceManifest.private ?? true;
+  // Root tooling stays installed at the new workspace root. Copying it into
+  // the application introduces a dev-only boundary violation during conversion.
+  if (analysis.source === '.' && appManifest.devDependencies) {
+    appManifest.devDependencies = Object.fromEntries(
+      Object.entries(appManifest.devDependencies).filter(
+        ([name]) => !name.startsWith('@megamono/'),
+      ),
+    );
+  }
 
   rewriteExtractionImports(tree, analysis, scope);
   for (const operation of analysis.operations) {
