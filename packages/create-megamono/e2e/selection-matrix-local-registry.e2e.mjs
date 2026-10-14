@@ -135,19 +135,34 @@ function run(command, args, options = {}) {
         resolvePromise({ stdout, stderr });
         return;
       }
-      reject(
-        new Error(
-          [
-            `${command} ${args.join(' ')} exited ${
-              code === null ? `after signal ${signal ?? 'unknown'}` : code
-            }`,
-            stdout.trim(),
-            stderr.trim(),
-          ]
-            .filter(Boolean)
-            .join('\n'),
-        ),
+      const description = `${command} ${args.join(' ')} exited ${
+        code === null ? `after signal ${signal ?? 'unknown'}` : code
+      }`;
+      const logDirectory = resolve(workspaceRoot, 'tmp/release-qualification');
+      const logPath = resolve(
+        logDirectory,
+        `selection-matrix-command-${process.pid}.log`,
       );
+      mkdir(logDirectory, { recursive: true })
+        .then(() =>
+          writeFile(logPath, [description, stdout, stderr].join('\n')),
+        )
+        .then(
+          () =>
+            reject(
+              new Error(
+                [
+                  description,
+                  stdout.trim().slice(-8_000),
+                  stderr.trim().slice(-4_000),
+                  `Complete command output: ${logPath}`,
+                ]
+                  .filter(Boolean)
+                  .join('\n'),
+              ),
+            ),
+          reject,
+        );
     });
   });
 }
@@ -619,7 +634,7 @@ const registry = `http://127.0.0.1:${port}`;
 
 await writeFile(
   npmConfig,
-  `registry=${registry}\n//127.0.0.1:${port}/:_authToken=local-e2e-token\n`,
+  `registry=https://registry.npmjs.org/\n@megamono:registry=${registry}\n//127.0.0.1:${port}/:_authToken=local-e2e-token\n`,
   'utf8',
 );
 await mkdir(commandBin);
@@ -746,6 +761,9 @@ try {
     )
   ) {
     // Provision matching browsers privately rather than relying on a host cache.
+    process.stdout.write(
+      'Preparing private Playwright browsers for build verification.\n',
+    );
     await run(
       'npm',
       [
