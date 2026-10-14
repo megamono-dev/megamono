@@ -1223,22 +1223,6 @@ function preflightEslintConfig(tree: Tree): void {
   }
 }
 
-function configuredWorkspacePlatforms(
-  tree: Tree,
-  fallback?: string,
-): ReadonlySet<string> {
-  const platforms = new Set<string>();
-  for (const project of getProjects(tree).values()) {
-    for (const tag of project.tags ?? []) {
-      if (tag.startsWith('platform:')) {
-        platforms.add(tag.slice('platform:'.length));
-      }
-    }
-  }
-  if (platforms.size === 0) platforms.add(fallback ?? 'node');
-  return platforms;
-}
-
 function parseConfiguredPlatforms(source?: string): readonly string[] {
   if (!source) return [];
   const platforms = [...new Set(source.split(',').map((value) => value.trim()))]
@@ -2310,7 +2294,7 @@ export async function workspaceInitGenerator(
         )
       : false;
   const ciWorkflow = renderCiWorkflow(
-    configuredWorkspacePlatforms(tree, defaultPlatform),
+    configuredPlatforms,
     packageManager,
     workflowToolchain(tree, packageManager),
     config.adoption.modules.includes('docs'),

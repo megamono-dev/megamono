@@ -1200,6 +1200,30 @@ export default [
     expect(ci).not.toContain('shivammathur/setup-php');
   });
 
+  it('includes declared inferred platforms when selecting CI toolchains', async () => {
+    addProjectConfiguration(tree, 'tooling', {
+      root: 'tools',
+      projectType: 'library',
+      tags: ['platform:node', 'scope:shared', 'type:util'],
+    });
+    tree.write(
+      'apps/desktop/src-tauri/Cargo.toml',
+      '[package]\nname = "desktop"\nversion = "0.1.0"\n',
+    );
+
+    await workspaceInitGenerator(tree, {
+      only: 'ci,inference',
+      yes: true,
+      bootstrap: true,
+      platforms: 'rust',
+    });
+
+    expect(readJson(tree, 'megamono.json').platforms).toEqual(['rust']);
+    expect(tree.read('.github/workflows/megamono-ci.yml', 'utf8')).toContain(
+      'uses: dtolnay/rust-toolchain@stable',
+    );
+  });
+
   it('includes a Linux JDK/SDK build job for Android-only workspaces', async () => {
     addProjectConfiguration(tree, 'reader', {
       root: 'apps/android',
