@@ -14,6 +14,7 @@ import type { ExtensionApplicationSchema } from './schema';
 import { wxtCommand, wxtTargets } from '../../lib/wxt-targets';
 import { join } from 'node:path';
 import { satisfies } from 'semver';
+import { isMap, isSeq, parseDocument } from 'yaml';
 import {
   EXTENSION_TOOLCHAIN,
   extensionTypeScript,
@@ -56,17 +57,26 @@ function targets(
 function ensureWorkspace(tree: Tree, directory: string): void {
   if (tree.exists('pnpm-workspace.yaml')) {
     const current = tree.read('pnpm-workspace.yaml', 'utf8') ?? 'packages:\n';
-    if (!/^packages:\s*$/m.test(current)) {
+    const document = parseDocument(current);
+    let packages = document.get('packages');
+  if ((packages === null || packages === undefined) && document.has('packages')) {
+    document.set('packages', document.createNode([]));
+    packages = document.get('packages');
+  }
+    if (
+      document.errors.length ||
+      !isMap(document.contents) ||
+      !isSeq(packages) ||
+      packages.toJSON().some((value: unknown) => typeof value !== 'string')
+    ) {
       throw new Error('pnpm-workspace.yaml must contain a packages list.');
     }
-    const registered = [
-      ...current.matchAll(/^\s*-\s*['"]?([^'"\s]+)['"]?\s*$/gm),
-    ].some((match) => match[1] === directory || match[1] === 'apps/*');
+    const registered = packages.items.some(
+      (item) => String(item) === directory || String(item) === 'apps/*',
+    );
     if (!registered) {
-      tree.write(
-        'pnpm-workspace.yaml',
-        `${current.replace(/\s*$/, '')}\n  - '${directory}'\n`,
-      );
+      packages.add(directory);
+      tree.write('pnpm-workspace.yaml', document.toString());
     }
     return;
   }

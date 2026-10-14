@@ -1,8 +1,29 @@
 import { readJson, writeJson } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { extensionApplicationGenerator } from './application';
+import { parse } from 'yaml';
 
 describe('extension application generator', () => {
+  it('registers the app under packages while preserving trailing pnpm policies', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      'pnpm-workspace.yaml',
+      "# Reviewed policy\npackages:\n  - 'packages/*'\nallowBuilds:\n  esbuild: true # approved\nminimumReleaseAgeExclude:\n  - '@megamono/plugin@0.0.1'\n",
+    );
+    await extensionApplicationGenerator(tree, {
+      name: 'browser',
+      skipInstall: true,
+      skipFormat: true,
+    });
+    const source = tree.read('pnpm-workspace.yaml', 'utf8')!;
+    expect(parse(source)).toEqual({
+      packages: ['packages/*', 'apps/browser'],
+      allowBuilds: { esbuild: true },
+      minimumReleaseAgeExclude: ['@megamono/plugin@0.0.1'],
+    });
+    expect(source).toContain('# Reviewed policy');
+    expect(source).toContain('# approved');
+  });
   it('keeps root TypeScript, pins local build peers, and supports deferred installation', async () => {
     const tree = createTreeWithEmptyWorkspace();
     writeJson(tree, 'package.json', {
