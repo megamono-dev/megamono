@@ -124,6 +124,9 @@ describe('app generator', () => {
         yes: true,
       };
       await appGenerator(tree, options);
+      expect(tree.read('apps/site/eslint.config.mjs', 'utf8')).toContain(
+        "ignores: ['**/next-env.d.ts', '**/.next/**']",
+      );
       if (styling === 'chakra') {
         expect(
           JSON.parse(tree.read('packages/theme/package.json', 'utf8') ?? '{}')
@@ -201,6 +204,9 @@ describe('app generator', () => {
       '.main',
     );
     expect(tree.children('apps')).toEqual(['web', 'web-e2e']);
+    expect(tree.read('apps/web/eslint.config.mjs', 'utf8')).toContain(
+      "ignores: ['**/next-env.d.ts', '**/.next/**']",
+    );
     expect(tree.read('apps/web-e2e/package.json', 'utf8')).toContain(
       '"name": "fixture-web-e2e"',
     );

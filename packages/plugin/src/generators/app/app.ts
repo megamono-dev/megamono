@@ -955,6 +955,20 @@ async function createWebApp(
       skipFormat: true,
     }),
   );
+  // Next rewrites its declaration and creates app-local output during development.
+  const eslintPath = `${options.directory}/eslint.config.mjs`;
+  const eslintConfig = prependEslintFlatConfig(
+    tree.read(eslintPath, 'utf8') ?? '',
+    "  { ignores: ['**/next-env.d.ts', '**/.next/**'] },",
+  );
+  if (eslintConfig === undefined) {
+    throw new AppGeneratorError(
+      'Cannot exclude generated Next output from the application flat ESLint config.',
+      3,
+      'plugin-incompatible',
+    );
+  }
+  tree.write(eslintPath, eslintConfig);
   const dependencies: Record<string, string> =
     styling === 'chakra'
       ? {
