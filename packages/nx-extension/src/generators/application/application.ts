@@ -238,7 +238,8 @@ export async function extensionApplicationGenerator(
   return raw.skipInstall
     ? () => undefined
     : () => {
-        installPackagesTask(tree);
+        // App-scoped dependencies may change without changing the root manifest.
+        installPackagesTask(tree, true);
         verifyExtensionToolchain(join(tree.root, directory));
       };
 }
