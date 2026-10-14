@@ -589,7 +589,6 @@ try {
           'platform:node',
           'scope:shared',
           'type:util',
-          'visibility:internal',
         ],
       },
       null,
