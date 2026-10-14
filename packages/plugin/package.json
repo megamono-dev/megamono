@@ -43,6 +43,20 @@
   ],
   "nx": {
     "targets": {
+      "test": {
+        "dependsOn": [
+          "^build",
+          {
+            "projects": [
+              "nx-apple",
+              "nx-cargo",
+              "nx-cloudflare",
+              "nx-extension"
+            ],
+            "target": "build"
+          }
+        ]
+      },
       "e2e-android": {
         "executor": "nx:run-commands",
         "cache": false,
