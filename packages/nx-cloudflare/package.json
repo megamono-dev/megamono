@@ -1,6 +1,6 @@
 {
   "name": "@megamono/nx-cloudflare",
-  "version": "0.0.1",
+  "version": "0.1.0-next.0",
   "license": "MIT",
   "description": "Nx plugin inferring Cloudflare Worker projects, binding graph edges, and targets from Wrangler configuration.",
   "keywords": [

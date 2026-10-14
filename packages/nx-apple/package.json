@@ -1,6 +1,6 @@
 {
   "name": "@megamono/nx-apple",
-  "version": "0.0.1",
+  "version": "0.1.0-next.0",
   "license": "MIT",
   "description": "Nx plugin inferring Apple and Swift Package Manager projects, targets, and graph edges from Xcode workspaces.",
   "keywords": [

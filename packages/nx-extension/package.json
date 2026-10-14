@@ -1,6 +1,6 @@
 {
   "name": "@megamono/nx-extension",
-  "version": "0.0.1",
+  "version": "0.1.0-next.0",
   "license": "MIT",
   "description": "Nx plugin for WXT browser extension inference, targets, and application generators.",
   "keywords": [

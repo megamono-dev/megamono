@@ -1,6 +1,6 @@
 {
   "name": "@megamono/nx-phpnative",
-  "version": "0.0.1",
+  "version": "0.1.0-next.0",
   "license": "MIT",
   "description": "Nx plugin for NativePHP desktop and mobile application generators and project inference.",
   "keywords": [
@@ -80,7 +80,7 @@
   },
   "dependencies": {
     "tslib": "^2.3.0",
-    "@megamono/nx-laravel": "0.0.1"
+    "@megamono/nx-laravel": "0.1.0-next.0"
   },
   "peerDependencies": {
     "@nx/devkit": ">=22 <24",

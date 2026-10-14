@@ -1,6 +1,6 @@
 {
   "name": "@megamono/plugin",
-  "version": "0.0.1",
+  "version": "0.1.0-next.0",
   "license": "MIT",
   "description": "Nx plugin providing Megamono workspace initialization, generators, documentation tooling, conventions, and repository health checks.",
   "keywords": [
