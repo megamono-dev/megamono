@@ -1,6 +1,7 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { describe, expect, it } from 'vitest';
 import { appGenerator, AppGeneratorError } from './app';
+import { parse } from 'yaml';
 
 function workspace() {
   const tree = createTreeWithEmptyWorkspace();
@@ -32,6 +33,28 @@ function snapshot(tree: ReturnType<typeof workspace>): string {
 }
 
 describe('app generator', () => {
+  it('registers desktop packages without changing trailing pnpm policies', async () => {
+    const tree = workspace();
+    tree.write(
+      'pnpm-workspace.yaml',
+      "# Reviewed policy\npackages:\n  - 'packages/*'\nallowBuilds:\n  esbuild: true # approved\nminimumReleaseAgeExclude:\n  - '@megamono/plugin@0.0.1'\n",
+    );
+    await appGenerator(tree, {
+      type: 'desktop',
+      scope: 'fixture',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    const source = tree.read('pnpm-workspace.yaml', 'utf8')!;
+    expect(parse(source)).toEqual({
+      packages: ['packages/*', 'apps/*'],
+      allowBuilds: { esbuild: true },
+      minimumReleaseAgeExclude: ['@megamono/plugin@0.0.1'],
+    });
+    expect(source).toContain('# Reviewed policy');
+    expect(source).toContain('# approved');
+  });
   it.each([undefined, 'Quickzones'])(
     'uses the app basename or explicit extension display name: %s',
     async (displayName) => {
@@ -374,6 +397,19 @@ describe('app generator', () => {
         expect(tree.read('apps/mobile/package.json', 'utf8')).not.toContain(
           'platform:web',
         );
+      }
+      if (type === 'desktop') {
+        const root = 'apps/desktop/src-tauri';
+        const config = JSON.parse(tree.read(`${root}/tauri.conf.json`, 'utf8')!);
+        for (const icon of config.bundle.icon) {
+          expect(tree.read(`${root}/${icon}`)?.length).toBeGreaterThan(100);
+        }
+        const png = tree.read(`${root}/icons/icon.png`)!;
+        expect(png.subarray(0, 8)).toEqual(
+          Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+        );
+        // Tauri requires an RGBA PNG, rather than an indexed or RGB image.
+        expect(png[25]).toBe(6);
       }
       const first = snapshot(tree);
       await appGenerator(tree, options);

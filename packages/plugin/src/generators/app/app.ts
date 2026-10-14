@@ -3,6 +3,7 @@ import { createAndroidApp, validateAndroidApplicationId } from './android';
 import {
   formatFiles,
   getProjects,
+  installPackagesTask,
   logger,
   readJson,
   runTasksInSerial,
@@ -14,6 +15,7 @@ import {
   type Tree,
 } from '@nx/devkit';
 import { prompt } from 'enquirer';
+import { isMap, isSeq, parseDocument } from 'yaml';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, posix } from 'node:path';
@@ -1295,15 +1297,27 @@ function ensureWorkspacePackagePath(
   }
   const path = 'pnpm-workspace.yaml';
   const current = tree.read(path, 'utf8') ?? 'packages:\n';
-  if (!/^packages:\s*$/m.test(current)) {
+  const document = parseDocument(current);
+  let packages = document.get('packages');
+  if ((packages === null || packages === undefined) && document.has('packages')) {
+    document.set('packages', document.createNode([]));
+    packages = document.get('packages');
+  }
+  if (
+    document.errors.length ||
+    !isMap(document.contents) ||
+    !isSeq(packages) ||
+    packages.toJSON().some((value: unknown) => typeof value !== 'string')
+  ) {
     throw new AppGeneratorError(
       'pnpm-workspace.yaml must contain a packages list.',
       3,
       'package-manager',
     );
   }
-  if (!/^\s*-\s*['"]?apps\/\*['"]?\s*$/m.test(current)) {
-    tree.write(path, `${current.replace(/\s*$/, '')}\n  - 'apps/*'\n`);
+  if (!packages.items.some((item) => String(item) === 'apps/*')) {
+    packages.add('apps/*');
+    tree.write(path, document.toString());
   }
 }
 
@@ -1359,6 +1373,12 @@ function createDesktopApp(
     `${options.directory}/src-tauri/src/lib.rs`,
     `#[cfg_attr(mobile, tauri::mobile_entry_point)]\npub fn run() {\n  tauri::Builder::default()\n    .plugin(tauri_plugin_opener::init())\n    .run(tauri::generate_context!())\n    .expect("error while running tauri application");\n}\n`,
   );
+  for (const icon of ['icon.png', 'icon.ico', 'icon.icns']) {
+    tree.write(
+      `${options.directory}/src-tauri/icons/${icon}`,
+      readFileSync(join(__dirname, 'files/desktop-icons', icon)),
+    );
+  }
   writeJson(tree, `${options.directory}/src-tauri/tauri.conf.json`, {
     $schema: 'https://schema.tauri.app/config/2',
     productName: options.projectName,
@@ -1374,7 +1394,11 @@ function createDesktopApp(
       windows: [{ title: options.projectName, width: 800, height: 600 }],
       security: { csp: null },
     },
-    bundle: { active: true, targets: 'all' },
+    bundle: {
+      active: true,
+      targets: 'all',
+      icon: ['icons/icon.png', 'icons/icon.ico', 'icons/icon.icns'],
+    },
   });
   writeJson(tree, `${options.directory}/src-tauri/capabilities/default.json`, {
     $schema: '../gen/schemas/desktop-schema.json',
@@ -1396,7 +1420,7 @@ function createDesktopApp(
     });
     return { ...value, plugins: next };
   });
-  return [];
+  return [() => installPackagesTask(tree, true)];
 }
 
 async function confirm(options: AppGeneratorSchema): Promise<boolean> {
