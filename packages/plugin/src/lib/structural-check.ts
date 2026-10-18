@@ -6,6 +6,7 @@ import type { MegamonoConfig } from './config';
 import type { Diagnostic } from './diagnostics';
 import { isTauriProject } from './tauri-platform';
 import { repositoryOwnedGraph } from './repository-graph';
+import { checkNextPagesBoundary } from './next-pages-boundary';
 
 const typeTags = [
   'type:app',
@@ -195,6 +196,19 @@ function validateDependencies(
     const tauri =
       source.type === 'app' &&
       isTauriProject(join(workspaceRoot, source.data.root), existsSync);
+    const nextPages =
+      source.type === 'app' && sourcePlatform === 'web'
+        ? checkNextPagesBoundary(
+            workspaceRoot,
+            join(workspaceRoot, source.data.root),
+            graph,
+          )
+        : undefined;
+    for (const violation of nextPages?.violations ?? []) {
+      diagnostics.push(
+        projectDiagnostic('platform-boundary', sourceName, violation),
+      );
+    }
 
     for (const dependency of dependencies) {
       const target = graph.nodes[dependency.target];
@@ -236,6 +250,7 @@ function validateDependencies(
       if (
         targetPlatform &&
         sourcePlatform !== targetPlatform &&
+        !(nextPages && targetPlatform === 'node') &&
         !(tauri && ['rust', 'web', 'node'].includes(targetPlatform))
       ) {
         diagnostics.push(
