@@ -26,19 +26,25 @@ function json(path: string): Record<string, unknown> | undefined {
 }
 
 export function nextPagesDirectory(root: string): string | undefined {
-  if (
-    !['js', 'mjs', 'cjs', 'ts', 'mts', 'cts'].some((ext) =>
-      existsSync(join(root, `next.config.${ext}`)),
-    )
-  )
+  const config = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts']
+    .map((ext) => join(root, `next.config.${ext}`))
+    .find(existsSync);
+  if (!config || /\bpageExtensions\b/.test(readFileSync(config, 'utf8')))
     return undefined;
   // App Router server/client semantics need their own policy. Retain the strict
   // project boundary for those projects, including hybrid-router applications.
   if (['app', 'src/app'].some((path) => existsSync(join(root, path))))
     return undefined;
-  return ['pages', 'src/pages']
+  const pages = ['pages', 'src/pages']
     .map((path) => join(root, path))
     .find(existsSync);
+  const unsupported = (directory: string): boolean =>
+    readdirSync(directory, { withFileTypes: true }).some((entry) =>
+      entry.isDirectory()
+        ? unsupported(join(directory, entry.name))
+        : /\.mdx?$/.test(entry.name),
+    );
+  return pages && !unsupported(pages) ? pages : undefined;
 }
 
 function files(root: string): string[] {
@@ -56,6 +62,7 @@ export function hasBrowserExport(
   manifest: Record<string, unknown>,
   subpath: string,
   mode: RuntimeImport['mode'],
+  customConditions: readonly string[] = [],
 ): boolean {
   const exports = manifest.exports;
   let value: unknown = exports;
@@ -76,7 +83,10 @@ export function hasBrowserExport(
     if (!branch || typeof branch !== 'object' || Array.isArray(branch))
       return undefined;
     for (const [condition, target] of Object.entries(branch)) {
-      if (!['browser', mode, 'default'].includes(condition)) continue;
+      if (
+        !['browser', mode, 'default', ...customConditions].includes(condition)
+      )
+        continue;
       const selected = select(target, browser || condition === 'browser');
       if (selected !== undefined) return selected;
     }
@@ -217,7 +227,12 @@ export function checkNextPagesBoundary(
             : `.${specifier.slice(named.packageName.length)}`;
         if (
           !nodeRuntime &&
-          !hasBrowserExport(named.manifest, subpath, dependency.mode)
+          !hasBrowserExport(
+            named.manifest,
+            subpath,
+            dependency.mode,
+            options.customConditions,
+          )
         )
           report(
             `Browser code may not import platform:node through ${specifier}; use a browser export or a server data function.`,

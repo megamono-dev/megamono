@@ -89,6 +89,8 @@ and `import` versus `require` selection are respected.
 This policy supports JavaScript/TypeScript Pages Router source and does not
 execute Next configuration or inspect third-party npm package internals. App
 Router and hybrid-router applications retain the aggregate platform boundary.
+MDX pages and custom `pageExtensions` configurations also retain that boundary
+until their routing and import transforms have a supported source policy.
 Type/scope rules and adoption warning budgets are unchanged. Framework builds
 and browser bundle checks remain necessary deployment checks.
 

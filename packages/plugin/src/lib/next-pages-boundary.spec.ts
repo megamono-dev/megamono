@@ -161,6 +161,7 @@ it.each([
   "import producer = require('@fixture/producer'); export default function Page() { return producer }",
   "export default function Page() { return require('@fixture/' + 'producer') }",
   "import fs from 'node:fs'; export default function Page() { return fs.readFileSync('file') }",
+  "import fs from 'node:fs'; export default function getServerSideProps() { return fs.readFileSync('file') }",
   "import 'server-only'; export default function Page() { return null }",
 ])('rejects browser runtime imports: %s', (source) => {
   file('apps/site/src/pages/index.tsx', source);
@@ -360,6 +361,51 @@ it('resolves immutable local module names without rejecting public browser asset
   file(
     'apps/site/src/pages/index.tsx',
     "const path = '@fixture/producer'; export default function Page() { return import(path) }",
+  );
+  expect(violations()?.[0]).toContain('@fixture/producer');
+});
+
+it.each(['mdx', 'custom-extensions'])(
+  'retains the aggregate boundary for unsupported routing: %s',
+  async (variant) => {
+    if (variant === 'mdx')
+      file(
+        'apps/site/src/pages/guide.mdx',
+        "import {enqueue} from '@fixture/producer'; <div>{enqueue()}</div>",
+      );
+    else
+      file(
+        'apps/site/next.config.mjs',
+        "export default {pageExtensions: ['mdx', 'tsx']}",
+      );
+    expect(
+      (await checkWorkspaceStructure(root, graph, DEFAULT_MEGAMONO_CONFIG)).map(
+        (d) => d.code,
+      ),
+    ).toContain('platform-boundary');
+  },
+);
+
+it('respects active custom export conditions before a browser fallback', () => {
+  const manifest = {
+    exports: {
+      './contracts': {
+        development: './server.ts',
+        browser: './browser.ts',
+        default: './server.ts',
+      },
+    },
+  };
+  expect(hasBrowserExport(manifest, './contracts', 'import')).toBe(true);
+  expect(
+    hasBrowserExport(manifest, './contracts', 'import', ['development']),
+  ).toBe(false);
+});
+
+it('retains Edge restrictions through TypeScript assertions', () => {
+  file(
+    'apps/site/src/pages/api/edge.ts',
+    "import {enqueue} from '@fixture/producer'; export const config = ({runtime: 'edge'} as const) satisfies Record<string, string>; export default () => enqueue();",
   );
   expect(violations()?.[0]).toContain('@fixture/producer');
 });

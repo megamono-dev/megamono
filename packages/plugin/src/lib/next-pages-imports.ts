@@ -14,6 +14,16 @@ const dataExports = new Set([
 ]);
 
 export function nextPagesEdgeRuntime(filename: string, text: string): boolean {
+  const unwrap = (node: ts.Expression): ts.Expression => {
+    while (
+      ts.isAsExpression(node) ||
+      ts.isSatisfiesExpression(node) ||
+      ts.isParenthesizedExpression(node) ||
+      ts.isTypeAssertionExpression(node)
+    )
+      node = node.expression;
+    return node;
+  };
   const source = ts.createSourceFile(
     filename,
     text,
@@ -29,10 +39,14 @@ export function nextPagesEdgeRuntime(filename: string, text: string): boolean {
       statement.declarationList.declarations.some((declaration) => {
         if (!ts.isIdentifier(declaration.name) || !declaration.initializer)
           return false;
-        const value = declaration.initializer;
-        const edge = (node: ts.Node) =>
-          ts.isStringLiteral(node) &&
-          ['edge', 'experimental-edge'].includes(node.text);
+        const value = unwrap(declaration.initializer);
+        const edge = (expression: ts.Expression) => {
+          const node = unwrap(expression);
+          return (
+            ts.isStringLiteral(node) &&
+            ['edge', 'experimental-edge'].includes(node.text)
+          );
+        };
         if (declaration.name.text === 'runtime') return edge(value);
         return (
           declaration.name.text === 'config' &&
@@ -99,7 +113,16 @@ export function nextPagesImports(
   const dataRoots = new Set<ts.Node>();
   if (page) {
     for (const statement of source.statements) {
-      if (!exported(statement)) continue;
+      if (
+        !exported(statement) ||
+        (ts.canHaveModifiers(statement) &&
+          ts
+            .getModifiers(statement)
+            ?.some(
+              (modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword,
+            ))
+      )
+        continue;
       if (
         ts.isFunctionDeclaration(statement) &&
         statement.name &&
