@@ -92,6 +92,12 @@ Router and hybrid-router applications retain the aggregate platform boundary.
 Type/scope rules and adoption warning budgets are unchanged. Framework builds
 and browser bundle checks remain necessary deployment checks.
 
+The ESLint platform rule uses the same data-function import analysis and local
+server/browser reachability when checking Node built-ins and relative imports.
+A helper reached exclusively through server entries may use Node APIs; a helper
+also reached by browser code retains browser restrictions. Classification is
+refreshed when source files or route entries change in an editor session.
+
 When `structure-review` recommends extracting or moving a project, it must propose the complete tag change needed to preserve this matrix. A recommendation that would immediately fail deterministic checks without naming the required tag or dependency correction is incomplete.
 
 ### Megamono versus Playstack rules

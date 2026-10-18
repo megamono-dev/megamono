@@ -2,9 +2,16 @@ import { builtinModules } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import type { Rule } from 'eslint';
 import { findProjectMetadata, filePlatform } from '../project-metadata';
+import { nextPagesLintContext } from '../next-pages';
+import {
+  nextPagesImports,
+  nextPagesEdgeRuntime,
+} from '../../lib/next-pages-imports';
 
 type SourceNode = Rule.Node & {
   readonly source?: { readonly value?: unknown };
+  readonly importKind?: string;
+  readonly exportKind?: string;
 };
 type ImportExpressionNode = Rule.Node & {
   readonly source?: { readonly value?: unknown };
@@ -74,7 +81,21 @@ export const platformBoundary: Rule.RuleModule = {
       (context.options[0] as { readonly workspaceRoot?: string } | undefined)
         ?.workspaceRoot ?? context.cwd;
     const sourceProject = findProjectMetadata(filename, workspaceRoot);
-    const sourcePlatform = filePlatform(sourceProject, filename);
+    const next = nextPagesLintContext(workspaceRoot, sourceProject, filename);
+    const currentEdge =
+      next && nextPagesEdgeRuntime(filename, context.sourceCode.text);
+    const sourcePlatform = currentEdge
+      ? 'web'
+      : next?.serverOnly
+        ? 'node'
+        : filePlatform(sourceProject, filename);
+    const nextImports = next?.page
+      ? nextPagesImports(
+          filename,
+          context.sourceCode.text,
+          !nextPagesEdgeRuntime(filename, context.sourceCode.text),
+        )
+      : undefined;
     // A Jest Node/jsdom test runs in a Node process even when the application
     // under test is a browser frontend. Require both a test filename and an
     // explicit leading environment docblock; never infer this for production.
@@ -94,17 +115,27 @@ export const platformBoundary: Rule.RuleModule = {
             ),
         );
     const inspect = (node: Rule.Node) => {
+      if (
+        (node as SourceNode).importKind === 'type' ||
+        (node as SourceNode).exportKind === 'type'
+      )
+        return;
       const specifier = importedValue(node);
       if (!specifier || !sourceProject) return;
+      const nextImport = nextImports?.find(
+        (entry) => entry.start === node.range?.[0],
+      );
+      if (nextImports && !nextImport) return;
+      const runtimePlatform = nextImport?.serverOnly ? 'node' : sourcePlatform;
       if (
         isNodeBuiltin(specifier) &&
-        sourcePlatform !== 'node' &&
+        runtimePlatform !== 'node' &&
         !nodeHostedTest
       ) {
         context.report({
           node,
           messageId: 'nodeBuiltin',
-          data: { platform: sourcePlatform ?? 'neutral', specifier },
+          data: { platform: runtimePlatform ?? 'neutral', specifier },
         });
         return;
       }
@@ -115,7 +146,10 @@ export const platformBoundary: Rule.RuleModule = {
       if (
         !targetProject ||
         !targetPlatform ||
-        sourcePlatform === targetPlatform
+        runtimePlatform === targetPlatform ||
+        (next &&
+          runtimePlatform === 'node' &&
+          sourceProject.root === targetProject.root)
       ) {
         return;
       }
@@ -123,7 +157,7 @@ export const platformBoundary: Rule.RuleModule = {
         node,
         messageId: 'projectPlatform',
         data: {
-          source: sourcePlatform ?? 'neutral',
+          source: runtimePlatform ?? 'neutral',
           target: targetPlatform,
           specifier,
         },
