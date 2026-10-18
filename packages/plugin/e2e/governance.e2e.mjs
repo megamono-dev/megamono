@@ -175,8 +175,69 @@ try {
   config.adoption.ratchets[0].initialCount = 0;
   put('megamono.json', config);
   check();
+  // Model the consumer's two mixed-runtime Next apps against the packed
+  // plugin, the generated target, real Nx graph inference, and a zero budget.
+  put('libs/server/package.json', {
+    name: '@fixture/server',
+    private: true,
+    exports: {
+      '.': './index.ts',
+      './contracts': {
+        browser: './contracts.ts',
+        default: './contracts.ts',
+      },
+    },
+  });
+  put('libs/server/contracts.ts', 'export const contract = true;\n');
+  const tsconfig = read('tsconfig.base.json');
+  tsconfig.compilerOptions.paths['@fixture/server/contracts'] = [
+    'libs/server/contracts.ts',
+  ];
+  put('tsconfig.base.json', tsconfig);
+  const nextPage = `import { server } from '@fixture/server';
+import { contract } from '@fixture/server/contracts';
+export const getServerSideProps = wrapper(async () => ({ props: { server } }));
+export default function Page() { return contract; }
+`;
+  for (const name of ['site', 'cloud']) {
+    put(`apps/${name}/project.json`, {
+      name,
+      projectType: 'application',
+      sourceRoot: `apps/${name}/src`,
+      tags: ['type:app', `scope:${name}`, 'platform:web', 'visibility:public'],
+    });
+    put(`apps/${name}/next.config.mjs`, 'export default {};\n');
+    put(`apps/${name}/tsconfig.json`, {
+      extends: '../../tsconfig.base.json',
+      compilerOptions: { moduleResolution: 'bundler', module: 'esnext' },
+    });
+    put(`apps/${name}/src/pages/index.tsx`, nextPage);
+    put(
+      `apps/${name}/src/pages/api/signup.ts`,
+      "import { server } from '@fixture/server'; export default () => server;\n",
+    );
+  }
+  check();
+  check();
+  put(
+    'apps/site/src/pages/index.tsx',
+    nextPage.replace('return contract;', 'return server;'),
+  );
+  check('adoption-ratchet-exceeded');
+  put('apps/site/src/pages/index.tsx', nextPage);
+  check();
+  const serverManifest = read('libs/server/package.json');
+  delete serverManifest.exports['./contracts'].browser;
+  put('libs/server/package.json', serverManifest);
+  check('adoption-ratchet-exceeded');
+  serverManifest.exports['./contracts'] = {
+    browser: './contracts.ts',
+    default: './contracts.ts',
+  };
+  put('libs/server/package.json', serverManifest);
+  check();
   console.log(
-    'Packed generated governance target recomputes imports, tags, edges, removals and warning budgets without cache reuse.',
+    'Packed governance target recomputes imports, tags, edges, removals, Next.js server/browser contexts and warning budgets without cache reuse.',
   );
 } catch (error) {
   console.error(error.stdout?.toString(), error.stderr?.toString());
