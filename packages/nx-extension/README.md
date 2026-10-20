@@ -1,5 +1,93 @@
 # `@megamono/nx-extension`
 
+Develop and package browser extensions through Nx. WXT projects receive
+Chrome and Firefox targets; existing hand-authored extensions retain the
+commands and framework declared by their repository.
+
+[Documentation](https://megamono.com/docs/platforms/extension) · [Requirements](https://megamono.com/docs/workflows/requirements)
+
+## When to use it
+
+Choose this plugin to add a WXT extension or bring an existing browser extension
+into your Nx graph. A WXT migration is optional: manifest-only projects expose
+only their declared build, development, test, and lint scripts.
+
+## Get started
+
+Install at the Nx workspace root and add the plugin to your existing `nx.json`:
+
+```sh
+npm install --save-dev @megamono/nx-extension@next
+```
+
+```json
+{
+  "plugins": ["@megamono/nx-extension"]
+}
+```
+
+Existing WXT configuration and supported source manifests are discovered
+without regenerating your application. To create a new WXT app, preview first:
+
+```sh
+npm exec nx -- generate @megamono/nx-extension:application browser \
+  --manifestVersion=3 \
+  --dry-run
+```
+
+Rerun without `--dry-run` to create and install the application. New apps are
+background-only by default, without host access or content-script permissions.
+Add permissions and match patterns deliberately as features need them.
+
+## Develop and package
+
+Find the generated or discovered project name, then replace `your-extension`
+with that name in the examples:
+
+```sh
+npm exec nx -- show projects
+npm exec nx -- show project your-extension
+npm exec nx -- run your-extension:dev-chrome
+```
+
+Run finite build and package tasks separately from a running development server:
+
+```sh
+npm exec nx -- run your-extension:build
+npm exec nx -- run your-extension:package
+```
+
+| WXT target                  | Purpose                                            |
+| --------------------------- | -------------------------------------------------- |
+| `prepare`, `typecheck`      | Prepare WXT-generated types and check TypeScript   |
+| `dev-chrome`, `dev-firefox` | Start development for one browser                  |
+| `build`                     | Build Chrome and Firefox bundles                   |
+| `package`                   | Produce browser archives, including Firefox source |
+
+Finite targets share an ordered chain and are non-cacheable because WXT updates
+shared generated state. Use one Nx invocation at a time for the same app.
+Manifest-only projects have their own declared scripts instead of this WXT target
+set. Store submission requires repository-owned commands and credentials;
+Safari uses a separate Apple wrapper project.
+
+## Requirements and help
+
+This is a workspace development dependency. It can be used with Nx without
+adopting the core Megamono workspace modules or creating a hosted account.
+Examples use npm; retain your workspace's established package manager.
+
+See [requirements and compatibility](https://megamono.com/docs/workflows/requirements)
+for supported Node/Nx versions and platform tools, and the
+[package guide](https://megamono.com/docs/platforms/extension) for the full workflow.
+For problems, [report an issue](https://github.com/megamono-dev/megamono/issues).
+
+MIT licensed. See [LICENSE](./LICENSE).
+
+## Advanced reference
+
+<details>
+<summary>Configuration, execution details, and maintainer qualification</summary>
+
 Nx inference and generation for WXT and repository-authored browser extensions.
 
 The plugin recognizes WXT configuration as the fully managed target surface.
@@ -27,8 +115,6 @@ For other filenames, declare source paths in the application's `package.json`:
 Paths must remain inside the package and cannot name generated directories.
 Megamono's adoption survey reads the same declaration. Existing Vite scripts
 and deployment wrappers remain application-owned; adopting WXT is optional.
-
-Nx 18–23 inference and generation for WXT browser extensions.
 
 All inferred commands run with `cwd: "{projectRoot}"`. Choose an explicit
 manifest version when generating a new app with
@@ -92,7 +178,7 @@ Use `--displayName="Quickzones"` to set the browser-facing product name through
 the main `add app extension` command. Without it, the selected application
 basename is used, independently of the workspace/package scope.
 
-### WXT build scheduling
+#### WXT build scheduling
 
 Generated and inferred finite targets use the same ordered chain:
 `prepare → typecheck → build-chrome → build-firefox → package-chrome → package-firefox → package-firefox-source`.
@@ -111,7 +197,7 @@ Use one Nx invocation for finite tasks. Do not run separate builds, packaging,
 or dev servers concurrently against the same app directory; this DAG is not a
 cross-process lock. Use separate worktrees for independent concurrent builds.
 
-### Toolchain ownership and peer checks
+#### Toolchain ownership and peer checks
 
 New apps keep the repository's TypeScript declaration when its complete range is
 within `>=5.4 <7`; absent a declaration, the default is `5.9.3`. Conflicting,
@@ -138,3 +224,5 @@ node -e "require('@megamono/nx-extension').verifyExtensionToolchain(process.cwd(
 Finish with the typecheck/build/package targets and your package manager's full
 peer check. A post-install failure leaves generated files for review; it never
 rewrites workspace overrides or changes package-manager/store settings to fix peers.
+
+</details>
