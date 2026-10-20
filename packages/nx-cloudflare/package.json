@@ -13,7 +13,7 @@
     "durable-objects"
   ],
   "author": "Ryan Hefner",
-  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/nx-cloudflare#readme",
+  "homepage": "https://megamono.com/docs/platforms/cloudflare",
   "bugs": {
     "url": "https://github.com/megamono-dev/megamono/issues"
   },

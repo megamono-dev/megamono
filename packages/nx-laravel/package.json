@@ -12,7 +12,7 @@
     "composer"
   ],
   "author": "Ryan Hefner",
-  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/nx-laravel#readme",
+  "homepage": "https://megamono.com/docs/platforms/laravel",
   "bugs": {
     "url": "https://github.com/megamono-dev/megamono/issues"
   },

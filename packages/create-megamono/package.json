@@ -12,7 +12,7 @@
     "bootstrap"
   ],
   "author": "Ryan Hefner",
-  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/create-megamono#readme",
+  "homepage": "https://megamono.com/docs/cli/create-megamono",
   "bugs": {
     "url": "https://github.com/megamono-dev/megamono/issues"
   },

@@ -12,7 +12,7 @@
     "tauri"
   ],
   "author": "Ryan Hefner",
-  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/nx-cargo#readme",
+  "homepage": "https://megamono.com/docs/platforms/cargo",
   "bugs": {
     "url": "https://github.com/megamono-dev/megamono/issues"
   },
