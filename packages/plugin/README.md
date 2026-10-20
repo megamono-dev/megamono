@@ -1,6 +1,99 @@
 # `@megamono/plugin`
 
-## Governance execution safety
+Add workspace conventions, generators, documentation, and repository checks to Nx.
+This is the workspace-local implementation behind the `megamono` CLI and the
+setup created by `create-megamono`.
+
+[Documentation](https://megamono.com/docs) ·
+[Generators](https://megamono.com/docs/generators) ·
+[Requirements](https://megamono.com/docs/workflows/requirements)
+
+## When to use this package
+
+Install this package in an existing Nx workspace to adopt Megamono modules or
+invoke its generators and executors directly. It is a root development dependency;
+applications do not need it at runtime.
+
+For a guided adoption workflow, use [`@megamono/cli`](https://megamono.com/docs/cli).
+For a new repository, start with
+[`create-megamono`](https://megamono.com/docs/cli/create-megamono), which configures
+the local plugin for you. Platform inference is available through the separate
+[Apple, Cargo, Cloudflare, extension, Render, and PHP plugins](https://megamono.com/docs/platforms).
+
+## Get started in an existing workspace
+
+Start from a clean branch and install the current public prerelease at the
+workspace root. Keep your existing package manager; the examples use npm.
+
+```sh
+git switch -c chore/adopt-megamono
+npm install --save-dev @megamono/plugin@next
+git add package.json package-lock.json
+git commit -m "chore: add Megamono workspace tooling"
+npm exec nx -- generate @megamono/plugin:workspace-init --survey
+npm exec nx -- generate @megamono/plugin:workspace-init --profile=pilot --dry-run
+```
+
+The survey inventories the repository. The pilot plan selects lint, health, and
+project inference while retaining your existing CI and release workflows. Review
+the plan and supply any requested mappings, then apply it:
+
+```sh
+npm exec nx -- generate @megamono/plugin:workspace-init --profile=pilot --yes
+npm exec nx -- run megamono:check
+npm exec nx -- run megamono:health
+```
+
+Review generated files and run the workspace's existing tests and builds.
+`megamono:check` enforces repository rules; the health report provides advice and
+coverage information. A generated health report does not certify a deployment.
+
+## What you can add
+
+| Need                                           | Capability                                                     | Guide                                                                         |
+| ---------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Consistent applications and shared code        | Application and TypeScript library generators                  | [Generators](https://megamono.com/docs/generators)                            |
+| Repository rules that can be adopted gradually | Project tags, structural checks, ESLint rules, warning budgets | [Governance](https://megamono.com/docs/workflows/governance)                  |
+| Documentation people and agents can navigate   | Specs, plans, decisions, indexes, and lifecycle checks         | [Repository documentation](https://megamono.com/docs/workflows/documentation) |
+| Database projects and generated clients        | Prisma and Drizzle setup                                       | [Databases](https://megamono.com/docs/generators/database)                    |
+| Blog or changelog data                         | Content Collections libraries and document types               | [Content libraries](https://megamono.com/docs/generators/content-lib)         |
+| Existing product capabilities                  | Package-authored, optional Playstack integrations              | [Playstack](https://megamono.com/docs/workflows/playstack)                    |
+
+Choose modules through an adoption profile or `--only`; review the
+[workspace initialization options](https://megamono.com/docs/generators/workspace-init)
+before broadening adoption. Available generator names are recorded in
+[`availability.json`](./availability.json); reserved or gated features are not
+runnable generators.
+
+## Working with platform boundaries
+
+Keep both structural and source-level checks enabled. Next.js Pages Router
+applications can use Node dependencies in API routes and server data functions;
+browser code still needs browser-safe entry points. Node packages can declare
+those entry points through explicit `browser` export conditions. App Router,
+hybrid-router, and custom route-format projects retain the aggregate boundary.
+
+Local workspace tooling is MIT licensed and works without a hosted account.
+Playstack and the hosted Megamono service are optional. Exact Node, Nx,
+TypeScript, and package-manager ranges are listed in the
+[requirements guide](https://megamono.com/docs/workflows/requirements) and
+[`compatibility.json`](./compatibility.json).
+
+## Learn more
+
+- [Adopt an existing workspace](https://megamono.com/docs/workflows/adoption)
+- [Browse generators](https://megamono.com/docs/generators)
+- [Run checks and tasks](https://megamono.com/docs/actions)
+- [Report an issue](https://github.com/megamono-dev/megamono/issues)
+
+MIT licensed. See [LICENSE](./LICENSE).
+
+## Advanced reference
+
+<details>
+<summary>Generator behavior, integrations, runtime verification, and maintainer workflows</summary>
+
+### Governance execution safety
 
 Health JSON reports include `purpose: "advisory"`, `readiness: "not-assessed"`,
 and per-family `coverage` (`completed`, `partial`, or `skipped`, with reasons).
@@ -37,13 +130,13 @@ rules during migration. Intact managed sections are repositioned on regeneration
 modified/ejected sections are never moved. Explicit consumer rule overrides remain
 the way to change this policy; review them alongside checker warning budgets.
 
-## Buildable Prisma clients
+### Buildable Prisma clients
 
 `megamono add database primary --adapter=prisma --buildable --yes` opts a **new** database project into Prisma client generation followed by TypeScript compilation. `--client-output=src/db/client` selects a custom source directory. The project exports `dist/index.js` and declarations, records generated/build outputs for Nx, and keeps its package private. Consumer builds must depend on this project's `build` (through the Nx graph or an explicit dependency).
 
 This profile targets Prisma/client 7.10.0 with the engine-free ESM generator. Existing conflicting dependency selections fail for review, rather than being replaced. Add application models before generating; install/configure a PostgreSQL driver adapter in the application. Compilation and package import tests do not establish live database or deployment correctness. Existing schemas, engine-based clients, client lifecycle, release workflows and migrations are never converted. Without `--buildable`, the existing schema-only workflow is unchanged.
 
-## TypeScript libraries
+### TypeScript libraries
 
 `megamono add library browser-auth --platform=web --yes` composes the locally installed `@nx/js` generator, creates a private `libs/browser-auth` library, and applies scope/type/platform tags. The default platform is `neutral` (no platform tag); `web`, `node`, `mobile`, and `worker` are explicit alternatives. `--type=util|ui|data|feature` selects the dependency-boundary role. Mobile means portable TypeScript for a mobile consumer, not native framework scaffolding.
 
@@ -51,9 +144,9 @@ This profile targets Prisma/client 7.10.0 with the engine-free ESM generator. Ex
 
 Without `--yes`, or with `--dry-run`, only the plan is displayed. `--skipInstall` writes dependency declarations but suppresses the deferred Nx install callback; run your usual workspace installation afterwards, retaining its package-manager/store settings. The equivalent direct invocation is `nx generate @megamono/plugin:library --name=client ...`. A compatible local `@nx/js` is required. Generated libraries intentionally start without a test runner; add relevant tests before adopting them.
 
-## Application generation
+### Application generation
 
-### Native Android / Kotlin
+#### Native Android / Kotlin
 
 `megamono add app android --yes` creates a native Kotlin/Jetpack Compose app in
 `apps/android`, separate from the Expo `mobile` preset. The direct generator is
@@ -85,7 +178,7 @@ directory containing spaces and never installs onto a device. The native-executi
 workflow runs this opt-in qualification on macOS, Linux, and Windows. A passing
 generation-only fixture does not qualify the Android toolchain.
 
-### Shared generator behavior
+#### Shared generator behavior
 
 Application and library generation preserve existing `pnpm-workspace.yaml` comments while applying real workspace/dependency-policy changes. Invalid YAML fails before the composed generator runs. Neither wrapper chooses a new pnpm store or changes `.npmrc`.
 
@@ -103,9 +196,9 @@ Nx generators, executors, and ESLint rules for Megamono workspaces. The package
 implements versioned workspace configuration, documentation lifecycle tooling,
 repository structural checks, and deterministic repository health reporting.
 
-## Initialize an existing workspace
+### Initialize an existing workspace
 
-### Adopt an existing email preview
+#### Adopt an existing email preview
 
 `emails-adopt` maps an existing email library, shared token file, synthetic
 fixtures, and reviewed Nx targets. It installs nothing and does not modify
@@ -140,19 +233,19 @@ enable production sending, invent email templates, or claim provider/client
 deliverability. Maintainers can run `@megamono/plugin:e2e-email-preview-consumer`
 to qualify the packed adoption path with real Chakra Email and Playstack capture.
 
-### Workspace conventions
+#### Workspace conventions
 
 ```sh
-npm exec nx g @megamono/plugin:workspace-init --defaultPlatform=node
+npm exec nx -- generate @megamono/plugin:workspace-init --defaultPlatform=node
 ```
 
 For a mature mixed workspace, survey first and resolve only genuine ambiguity:
 
 ```sh
-npm exec nx g @megamono/plugin:workspace-init --survey --format=json
-npm exec nx g @megamono/plugin:playstack-integrate --packages=@playstack/rate-limit --api=apps/api --planOnly
-npm exec nx g @megamono/plugin:workspace-init --profile=pilot --dry-run
-npm exec nx g @megamono/plugin:workspace-init \
+npm exec nx -- generate @megamono/plugin:workspace-init --survey --format=json
+npm exec nx -- generate @megamono/plugin:playstack-integrate --packages=@playstack/rate-limit --api=apps/api --planOnly
+npm exec nx -- generate @megamono/plugin:workspace-init --profile=pilot --dry-run
+npm exec nx -- generate @megamono/plugin:workspace-init \
   --only=docs,agents,ci,lint \
   --adoptionMap=.megamono/adoption.json \
   --docsAdoptionMap=.megamono/docs-adoption.json \
@@ -186,7 +279,7 @@ target edits remain conflicts; generated source does not copy graph defaults.
 For example:
 
 ```sh
-npm exec nx g @megamono/plugin:playstack-integrate \
+npm exec nx -- generate @megamono/plugin:playstack-integrate \
   --packages=@playstack/nest-auth,@playstack/nest-billing,@playstack/webhooks \
   --api=apps/api \
   --persistence=application \
@@ -248,7 +341,7 @@ array covering all required test IDs. These are application-reviewed
 attestations: the generator records their digests but never executes a traffic
 cutover, database migration, or rollback. Invalid transitions fail before writes.
 
-### Application migration contract gates
+#### Application migration contract gates
 
 Use `--migrationContracts` to supplement package manifests with reviewed
 application acceptance requirements. Keys are active `package:integration` IDs
@@ -397,7 +490,7 @@ retains compatible existing ranges, lists missing dependencies individually,
 and refuses incompatible, duplicate, or non-semver declarations instead of
 silently upgrading an adopted workspace.
 
-## Verify a production runtime
+### Verify a production runtime
 
 Workspace initialization adds a generic `megamono:verify-runtime` target. It
 inspects an existing JavaScript build and fails when an external package is
@@ -425,7 +518,7 @@ bundler/runtime evidence and a clean deployment install. Keep it advisory while
 qualifying a repository's actual emitted output; do not suppress all missing
 dependency findings to work around an unsupported loader.
 
-### Opt-in Webpack Node chunk evidence
+#### Opt-in Webpack Node chunk evidence
 
 For a completed, immutable Webpack 5 Node build, record the chunk graph and
 SHA-256 hashes of **all** emitted JavaScript. In your existing build callback,
@@ -506,7 +599,7 @@ The adoption survey also maps nested Dockerfiles to their owning Nx project and
 uses exact Nx command references for root Dockerfiles. Ambiguous container
 ownership stays visible as a decision rather than becoming a guessed target.
 
-## Generator availability
+### Generator availability
 
 Integration and existing-email verification mappings resolve Nx's complete project
 graph, including inferred Jest targets. Explicit workspace target overrides remain
@@ -519,7 +612,7 @@ fixture-gated, and reserved generator names. The published `generators.json`
 and `executors.json` collections are produced with:
 
 ```sh
-npm exec nx -- run plugin:sync-collections
+npm exec nx -- run @megamono/plugin:sync-collections
 ```
 
 Only entries marked `available` are emitted. Programmatic callers can use
@@ -544,14 +637,14 @@ separation, and stable reruns with npm and pnpm:
 npm exec nx -- run @megamono/plugin:e2e-playstack-yalc
 ```
 
-## Convert an existing application repository
+### Convert an existing application repository
 
 After committing `nx init` on a non-default conversion branch, preview the
 write-free plan and then rerun it with explicit acceptance:
 
 ```sh
-npm exec nx g @megamono/plugin:convert existing-app --dry-run --no-interactive
-npm exec nx g @megamono/plugin:convert existing-app --acceptPlan --no-interactive
+npm exec nx -- generate @megamono/plugin:convert existing-app --dry-run --no-interactive
+npm exec nx -- generate @megamono/plugin:convert existing-app --acceptPlan --no-interactive
 ```
 
 Convert preserves existing package commands behind Nx `build`, `test`, `lint`,
@@ -562,13 +655,13 @@ map. `--report=<path>` persists a repository-valid report whose body contains
 the same Markdown analysis, while `--verify=build` adds application build and
 test verification after the default configuration checks.
 
-## Analyze a repository import
+### Analyze a repository import
 
 On a clean, non-default host branch, inspect a local or remote source without
 changing either repository:
 
 ```sh
-npm exec nx run megamono:import -- --source=../source-app --ref=main --name=source-app
+npm exec nx -- run megamono:import -- --source=../source-app --ref=main --name=source-app
 ```
 
 Analysis resolves and prints the immutable source SHA, existing commands,
@@ -578,7 +671,7 @@ never included in output. After approving the report, execute the supported
 subtree path by repeating the resolved SHA and choosing the verification depth:
 
 ```sh
-npm exec nx run megamono:import -- \
+npm exec nx -- run megamono:import -- \
   --source=../source-app \
   --ref=main \
   --name=source-app \
@@ -613,7 +706,7 @@ and squash carries only the approved snapshot. Filter-repo requires a compatible
 `git-filter-repo` executable on `PATH`; squash additionally requires
 `--allow-history-loss`.
 
-### Import a workspace with several projects
+#### Import a workspace with several projects
 
 Use a reviewed Nx target configuration for the structured `monorepo` option.
 For example, add a named configuration under the existing `megamono:import`
@@ -672,7 +765,7 @@ to host projects are redirected; aliases/relative imports into discarded
 duplicates fail preflight. Complex workspace selectors and inference-only
 source projects require static declarations first.
 
-## Validate a workspace
+### Validate a workspace
 
 The docs module (also used by `docs-init` and new-workspace setup) seeds a
 repository-owned visual handoff in `docs/design/`: `README.md`, `manifest.md`,
@@ -684,16 +777,16 @@ lists them separately; the active docs index links to the handoff README.
 Megamono does not compile tokens or automatically publish these references.
 
 ```sh
-npm exec nx run megamono:check
-npm exec nx run megamono:check --ci
-npm exec nx run megamono:check --profile=migration
-npm exec nx run megamono:check --profile=release
-npm exec nx run megamono-docs:validate
-npm exec nx run megamono-docs:index
-npm exec nx run megamono-docs:index --check
-npm exec nx run megamono-docs:archive --id=<id> --status=<terminal-status> --dry-run
-npm exec nx run megamono-docs:prune-reports
-npm exec nx run megamono-docs:health
+npm exec nx -- run megamono:check
+npm exec nx -- run megamono:check --ci
+npm exec nx -- run megamono:check --profile=migration
+npm exec nx -- run megamono:check --profile=release
+npm exec nx -- run megamono-docs:validate
+npm exec nx -- run megamono-docs:index
+npm exec nx -- run megamono-docs:index --check
+npm exec nx -- run megamono-docs:archive --id=<id> --status=<terminal-status> --dry-run
+npm exec nx -- run megamono-docs:prune-reports
+npm exec nx -- run megamono-docs:health
 ```
 
 Health checks cover npm, Expo SDK, SwiftPM, and Cargo dependency alignment,
@@ -726,7 +819,7 @@ Package-source profiles keep local evaluation separate from publication policy.
 also require the selected manager's lockfile. `--ci` remains an alias for the
 `ci` profile, and `CI=true` selects it when no profile is passed.
 
-## ESLint rules
+### ESLint rules
 
 The `@megamono/plugin/eslint` flat-config export provides
 `docs-visibility-boundary`, `no-deep-relative-imports`, `platform-boundary`,
@@ -747,14 +840,14 @@ explicitly selecting `node` or `jsdom` may import Node built-ins (for example,
 Web Crypto polyfills). Production files and unqualified/browser tests do not
 receive that allowance. Cross-project imports still follow the application platform.
 
-## Create repository records
+### Create repository records
 
 ```sh
-npm exec nx g @megamono/plugin:docs-spec <project> "<title>"
-npm exec nx g @megamono/plugin:docs-plan <project> "<title>"
-npm exec nx g @megamono/plugin:docs-decision "<title>" --project=<project>
-npm exec nx g @megamono/plugin:docs-research "<title>" --project=<project>
-npm exec nx g @megamono/plugin:docs-audit <target> --project=<project> --spec=<spec-id>
+npm exec nx -- generate @megamono/plugin:docs-spec <project> "<title>"
+npm exec nx -- generate @megamono/plugin:docs-plan <project> "<title>"
+npm exec nx -- generate @megamono/plugin:docs-decision "<title>" --project=<project>
+npm exec nx -- generate @megamono/plugin:docs-research "<title>" --project=<project>
+npm exec nx -- generate @megamono/plugin:docs-audit <target> --project=<project> --spec=<spec-id>
 ```
 
 Record generators default to internal visibility, validate controlled topics before
@@ -779,16 +872,16 @@ resolution. CI-only fixture exceptions use an exact
 `<manifest>#<dependency-location>` locator, such as
 `package.json#devDependencies.@megamono/plugin`, and do not weaken release.
 
-## Develop the plugin
+### Develop the plugin
 
 ```sh
-npm exec nx run @megamono/plugin:typecheck
-npm exec nx run @megamono/plugin:test
-npm exec nx run @megamono/plugin:lint
-npm exec nx run @megamono/plugin:build
+npm exec nx -- run @megamono/plugin:typecheck
+npm exec nx -- run @megamono/plugin:test
+npm exec nx -- run @megamono/plugin:lint
+npm exec nx -- run @megamono/plugin:build
 ```
 
-# Prisma installation policy
+### Prisma installation policy
 
 When adding or relocating a Prisma project, pnpm 11 workspaces (and earlier
 workspaces using `allowBuilds`) must have explicit build-script decisions for `prisma` and
@@ -807,7 +900,7 @@ policy qualification to the repository. Relocation reuses existing dependency
 specifiers and checks decisions without changing them. Legacy pnpm 8–10 policies
 without `allowBuilds` remain repository-owned.
 
-# Prisma relocation handoff
+### Prisma relocation handoff
 
 Database relocation plans distinguish automatic schema/command edits from pending
 application work. They list detected `@prisma/client` source references and
@@ -818,7 +911,7 @@ rewrite application imports, generate the client, or qualify runtime assets.
 Relocation preserves model timestamp annotations and project identity; incoming
 artifacts and non-UTC timestamp behavior require separate review.
 
-# Upgrading cached workspace checks
+### Upgrading cached workspace checks
 
 Rerun the reviewed `workspace-init`/`adopt --write` plan to add all supported root
 lockfiles, package-policy configuration, and the `CI` environment input to
@@ -832,7 +925,7 @@ trees or host tools. After a same-version Yalc refresh or host-toolchain change,
 run an uncached check and the separate uncached health/package diagnostics. Cache
 hits are not installation or runtime qualification.
 
-# Application-scoped integration records
+### Application-scoped integration records
 
 Integration ledgers now use `package:integration@<URL-encoded-application-root>`
 keys. `.megamono/playstack-integration-plans.json` indexes independent plan
@@ -847,7 +940,7 @@ matches the selected application exactly. Ambiguous or changed legacy records
 fail before writes: reconcile the original application/evidence first rather than
 assigning another application's qualification to the new root.
 
-# Pilot health scope
+### Pilot health scope
 
 When adoption explicitly excludes docs, health skips corpus validation,
 specification coverage, and stale-plan checks and reports that reduced scope.
@@ -856,7 +949,7 @@ available. Decision-backed suppressions require docs adoption and fail closed
 without it. Workspaces with older, empty adoption metadata retain full-health
 behavior; adopting docs still requires a valid corpus.
 
-# Local inference adoption
+### Local inference adoption
 
 `megamono adopt --write --profile=pilot --local-packages=yalc` forwards local
 distribution selection to workspace initialization. Before changes, the generator
@@ -866,3 +959,5 @@ print that closure. Approved runs add it through Yalc after files are flushed,
 then install dependencies; internal runtime edges use the local closure rather
 than silently falling back to registry packages. Optional provider peers are not
 automatically selected. Surveys do not install or register these packages.
+
+</details>
