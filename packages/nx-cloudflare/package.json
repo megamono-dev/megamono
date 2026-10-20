@@ -2,15 +2,18 @@
   "name": "@megamono/nx-cloudflare",
   "version": "0.1.0-next.0",
   "license": "MIT",
-  "description": "Nx plugin inferring Cloudflare Worker projects, binding graph edges, and targets from Wrangler configuration.",
+  "description": "Nx plugin for Cloudflare Workers: generate applications, discover Wrangler projects and binding dependencies, and run development and deployment targets.",
   "keywords": [
     "megamono",
     "nx",
     "nx-plugin",
+    "monorepo",
     "cloudflare",
+    "cloudflare-workers",
     "workers",
     "wrangler",
-    "durable-objects"
+    "durable-objects",
+    "serverless"
   ],
   "author": "Ryan Hefner",
   "homepage": "https://megamono.com/docs/platforms/cloudflare",

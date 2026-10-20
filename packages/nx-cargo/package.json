@@ -2,13 +2,16 @@
   "name": "@megamono/nx-cargo",
   "version": "0.1.0-next.0",
   "license": "MIT",
-  "description": "Nx plugin inferring Cargo and Rust projects, targets, and graph edges from Cargo manifests.",
+  "description": "Nx plugin for Rust and Cargo workspaces: dependency graphs, build and test targets, Clippy linting, and Tauri integration.",
   "keywords": [
     "megamono",
     "nx",
     "nx-plugin",
-    "cargo",
+    "monorepo",
     "rust",
+    "cargo",
+    "cargo-workspace",
+    "clippy",
     "tauri"
   ],
   "author": "Ryan Hefner",

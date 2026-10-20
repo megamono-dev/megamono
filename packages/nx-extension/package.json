@@ -2,15 +2,19 @@
   "name": "@megamono/nx-extension",
   "version": "0.1.0-next.0",
   "license": "MIT",
-  "description": "Nx plugin for WXT browser extension inference, targets, and application generators.",
+  "description": "Nx plugin for browser extensions: generate WXT applications, discover existing extension projects, and build and package Chrome and Firefox extensions.",
   "keywords": [
     "megamono",
     "nx",
     "nx-plugin",
+    "monorepo",
     "browser-extension",
+    "webextension",
     "wxt",
     "chrome",
-    "firefox"
+    "chrome-extension",
+    "firefox",
+    "firefox-extension"
   ],
   "author": "Ryan Hefner",
   "homepage": "https://megamono.com/docs/platforms/extension",

@@ -2,14 +2,17 @@
   "name": "create-megamono",
   "version": "0.1.0-next.0",
   "license": "MIT",
-  "description": "Create a new Megamono workspace: an Nx monorepo with conventions, documentation, and governance wired up.",
+  "description": "Create a new Nx monorepo with Megamono project generators, documentation, project boundaries, and CI conventions.",
   "keywords": [
     "megamono",
     "nx",
     "monorepo",
+    "workspace",
     "create",
     "scaffolding",
-    "bootstrap"
+    "bootstrap",
+    "generators",
+    "documentation"
   ],
   "author": "Ryan Hefner",
   "homepage": "https://megamono.com/docs/cli/create-megamono",

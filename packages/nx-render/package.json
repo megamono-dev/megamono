@@ -2,14 +2,18 @@
   "name": "@megamono/nx-render",
   "version": "0.1.0-next.0",
   "license": "MIT",
-  "description": "Nx plugin for Render Blueprint inference, service targets, and configuration validation.",
+  "description": "Nx plugin for Render Blueprints: map services to projects, run service commands, validate configuration, and propose Blueprint adoption.",
   "keywords": [
     "megamono",
     "nx",
     "nx-plugin",
+    "monorepo",
     "render",
+    "render-com",
     "blueprint",
-    "deployment"
+    "render-blueprint",
+    "deployment",
+    "infrastructure-as-code"
   ],
   "author": "Ryan Hefner",
   "homepage": "https://megamono.com/docs/platforms/render",
