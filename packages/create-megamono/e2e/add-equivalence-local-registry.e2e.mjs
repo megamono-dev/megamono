@@ -222,6 +222,19 @@ await writeFile(
       storage: resolve(temporaryRoot, 'registry-storage'),
       uplinks: { npmjs: { url: 'https://registry.npmjs.org/' } },
       packages: {
+        // Local packages must never fall through to their published npm versions.
+        '@megamono/*': {
+          access: '$all',
+          publish: '$all',
+          unpublish: '$all',
+          proxy: [],
+        },
+        'create-megamono': {
+          access: '$all',
+          publish: '$all',
+          unpublish: '$all',
+          proxy: [],
+        },
         '**': {
           access: '$all',
           publish: '$all',

@@ -8,6 +8,17 @@ uplinks:
     maxage: 60m
 
 packages:
+  # Keep local builds isolated from the versions already published on npm.
+  '@megamono/*':
+    access: $all
+    publish: $all
+    unpublish: $all
+    proxy: []
+  create-megamono:
+    access: $all
+    publish: $all
+    unpublish: $all
+    proxy: []
   '**':
     # give all users (including non-authenticated users) full access
     # because it is a local registry

@@ -141,7 +141,9 @@ async function verifyInstalledCollections(fixtureRoot, environment) {
     `Fixture installed @megamono/plugin ${packageJson.version} instead of ${compatibility.scaffoldPackages['@megamono/plugin']}.`,
   );
 
-  const availability = await readJson(resolve(packageRoot, 'availability.json'));
+  const availability = await readJson(
+    resolve(packageRoot, 'availability.json'),
+  );
   const generators = (await readJson(resolve(packageRoot, 'generators.json')))
     .generators;
   const executors = (await readJson(resolve(packageRoot, 'executors.json')))
@@ -161,7 +163,11 @@ async function verifyInstalledCollections(fixtureRoot, environment) {
     availableGenerators,
     'Installed generator collection',
   );
-  assertSameNames(executors, availableExecutors, 'Installed executor collection');
+  assertSameNames(
+    executors,
+    availableExecutors,
+    'Installed executor collection',
+  );
   for (const name of unavailableGenerators) {
     assert(
       !(name in generators),
@@ -240,6 +246,19 @@ await writeFile(
       storage: resolve(temporaryRoot, 'registry-storage'),
       uplinks: { npmjs: { url: 'https://registry.npmjs.org/' } },
       packages: {
+        // Local packages must never fall through to their published npm versions.
+        '@megamono/*': {
+          access: '$all',
+          publish: '$all',
+          unpublish: '$all',
+          proxy: [],
+        },
+        'create-megamono': {
+          access: '$all',
+          publish: '$all',
+          unpublish: '$all',
+          proxy: [],
+        },
         '**': {
           access: '$all',
           publish: '$all',
@@ -262,8 +281,7 @@ await writeFile(
       name: 'megamono-collection-resolution-fixture',
       private: true,
       devDependencies: {
-        '@megamono/plugin':
-          compatibility.scaffoldPackages['@megamono/plugin'],
+        '@megamono/plugin': compatibility.scaffoldPackages['@megamono/plugin'],
         nx: compatibility.scaffoldPackages['create-nx-workspace'],
         typescript: compatibility.scaffoldPackages.typescript,
       },

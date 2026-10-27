@@ -122,7 +122,12 @@ try {
     let output;
     let failed = false;
     try {
-      output = nx(['run', 'megamono:check', '--verbose']);
+      output = nx([
+        'run',
+        'megamono:check',
+        '--verbose',
+        '--output-style=static',
+      ]);
     } catch (error) {
       if (!errorCode) throw error;
       failed = true;
