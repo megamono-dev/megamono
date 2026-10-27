@@ -16,7 +16,7 @@ describe('dependency compatibility', () => {
       { name: 'eslint', range: '>=8 <11', reason: 'lint integration' },
       {
         name: '@content-collections/core',
-        range: '0.15.2',
+        range: '0.15.3',
         installIfMissing: true,
         reason: 'docs loader',
       },

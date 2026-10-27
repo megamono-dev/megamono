@@ -35,19 +35,28 @@ the Java launcher support Windows paths as well, with cross-host CI qualificatio
 
 ## Development
 
-Use Node 24 and npm 11.21.0 to maintain this repository. CI pins npm explicitly
+Use Node 24.22.1 (`nvm use`) and npm 11.21.1 to maintain this repository. CI pins npm explicitly
 because npm 10 does not interpret this lockfile consistently. Consumer fixtures
 still exercise the supported Node and package-manager ranges.
 
 Install dependencies and run tasks through the workspace Nx CLI:
 
 ```bash
-npm install --global npm@11.21.0
+nvm use
+npm install --global npm@11.21.1
 npm ci
 npm exec nx -- run-many -t build
 npm exec nx -- run-many -t test
 npm exec nx -- run-many -t lint
 ```
+
+Native dependency install scripts are approved by exact version in the root
+`package.json` `allowScripts` field. After a dependency update, use
+`npm install-scripts ls` to review any newly blocked scripts.
+
+Nx 23.3.1 pins Undici 7.29.0. The scoped `nx` override selects patched Undici
+7.30.1; recheck the upstream pin before removing this override. New workspace
+scaffolds stay on Nx 23.2.1 until a newer release includes the patched dependency.
 
 Inspect the project graph with:
 
@@ -58,12 +67,17 @@ npm exec nx -- graph
 ## Compatibility
 
 New workspaces use pinned Node 24, npm 11 by default (or an explicitly selected
-pnpm, Yarn, or Bun baseline), Nx 23.1, and TypeScript 6. `megamono init`
+pnpm, Yarn, or Bun baseline), Nx 23.2.1, and TypeScript 6. `megamono init`
 preserves existing npm 9–11, pnpm 8–11, Yarn 1.22–4, or Bun 1.x workspaces on
 Node 18.18–24, Nx 17–23, and TypeScript 5.2–6. Read-only survey remains
 available when mutation toolchains are not ready. Apple, Cargo, Cloudflare, extension, and Render inference plugins require Nx 18 or newer. CI verifies
 packed packages against every supported Nx major and monitors `nx@next` in a
 non-blocking canary.
+
+New Tauri desktop applications require Rust 1.90 or newer. Their Cargo
+requirements keep the core runtime on the matching JavaScript API minor and
+the opener plugin on the exact matching npm version, following
+[Tauri's version compatibility guidance](https://v2.tauri.app/develop/updating-dependencies/#sync-npm-packages-and-cargo-crates-versions).
 
 ## Local package validation
 

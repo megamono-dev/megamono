@@ -104,7 +104,7 @@ try {
     packageManager: 'pnpm@11.24.0',
     devDependencies: {
       '@megamono/plugin': `file:${pluginTarball}`,
-      nx: '23.1.1',
+      nx: '23.3.1',
       typescript: '6.0.3',
     },
   });

@@ -115,7 +115,7 @@ redirect Nx cache/workspace-data writes to their disposable staging directory
 and disable its daemon.
 
 Maintainers: `npm exec nx -- run @megamono/cli:e2e-isolated-yalc-survey` runs the
-packed CLI with real npm, Yalc and Nx 22.7.8/23.1.1 in two disposable consumers.
+packed CLI with real npm, Yalc and Nx 22.7.8/23.3.1 in two disposable consumers.
 It enforces a read-only private store, checks complete consumer/store snapshots
 (including node_modules and symlink identities), checks the real global Yalc
 installation registry hash, audits that only `yalc dir` ran, and checks staging

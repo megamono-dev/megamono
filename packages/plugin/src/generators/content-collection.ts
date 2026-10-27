@@ -12,7 +12,7 @@ import { normalizeSlug, readDocsGeneratorConfig } from './docs-record';
 import { assertPlaystackWorkspaceCompatibility } from './playstack-workspace';
 
 const contentCollectionVersion = 1;
-const contentCollectionsVersion = '0.15.2';
+const contentCollectionsVersion = '0.15.3';
 const playstackContentVersion = compatiblePlaystackPackageVersion(
   'content-lib',
   '@playstack/content',

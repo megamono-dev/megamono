@@ -1,7 +1,7 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { describe, expect, it } from 'vitest';
 import { appGenerator, AppGeneratorError } from './app';
-import { readProjectConfiguration } from '@nx/devkit';
+import { readJson, readProjectConfiguration, updateJson } from '@nx/devkit';
 import { parse } from 'yaml';
 
 function workspace() {
@@ -34,6 +34,84 @@ function snapshot(tree: ReturnType<typeof workspace>): string {
 }
 
 describe('app generator', () => {
+  it('keeps desktop Rust and JavaScript versions compatible after Cargo resolution', async () => {
+    const tree = workspace();
+    await appGenerator(tree, {
+      type: 'desktop',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    const manifest = readJson(tree, 'apps/desktop/package.json');
+    const cargo = tree.read('apps/desktop/src-tauri/Cargo.toml', 'utf8') ?? '';
+    const rustCore = cargo.match(
+      /^tauri = \{ version = "(~\d+\.\d+\.\d+)"/m,
+    )?.[1];
+
+    expect(rustCore).toBeDefined();
+    expect(cargo).toContain('rust-version = "1.90"');
+    expect(rustCore?.slice(1).split('.').slice(0, 2)).toEqual(
+      manifest.dependencies['@tauri-apps/api'].split('.').slice(0, 2),
+    );
+    expect(cargo).toContain(
+      `tauri-plugin-opener = "=${manifest.dependencies['@tauri-apps/plugin-opener']}"`,
+    );
+  });
+
+  it('uses qualified framework versions instead of older Nx web defaults', async () => {
+    const tree = workspace();
+    await appGenerator(tree, {
+      type: 'site',
+      styling: 'css-modules',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    const root = readJson(tree, 'package.json');
+    const app = readJson(tree, 'apps/site/package.json');
+    const framework = {
+      next: '16.4.3',
+      react: '19.3.1',
+      'react-dom': '19.3.1',
+    };
+    expect(root.dependencies).toMatchObject(framework);
+    expect(app.dependencies).toMatchObject(framework);
+    expect(root.devDependencies['eslint-config-next']).toBe('16.4.3');
+  });
+
+  it('retains existing workspace framework declarations when adding a web app', async () => {
+    const tree = workspace();
+    const framework = {
+      next: '^15.5.18',
+      react: '^18.3.1',
+      'react-dom': '^18.3.1',
+    };
+    updateJson(tree, 'package.json', (value) => ({
+      ...value,
+      dependencies: { ...value.dependencies, ...framework },
+      devDependencies: {
+        ...value.devDependencies,
+        'eslint-config-next': '^15.5.18',
+      },
+    }));
+    await appGenerator(tree, {
+      type: 'site',
+      styling: 'css-modules',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    expect(readJson(tree, 'package.json').dependencies).toMatchObject(
+      framework,
+    );
+    expect(readJson(tree, 'apps/site/package.json').dependencies).toMatchObject(
+      framework,
+    );
+    expect(
+      readJson(tree, 'package.json').devDependencies['eslint-config-next'],
+    ).toBe('^15.5.18');
+  });
+
   it('registers desktop packages without changing trailing pnpm policies', async () => {
     const tree = workspace();
     tree.write(

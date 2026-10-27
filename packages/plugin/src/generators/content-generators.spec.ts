@@ -76,7 +76,7 @@ describe('content collection generators', () => {
       private: true,
       dependencies: { '@playstack/content': '0.1.0-beta.1' },
       devDependencies: {
-        '@content-collections/core': '0.15.2',
+        '@content-collections/core': '0.15.3',
         zod: '^4.1.12',
       },
       megamono: {

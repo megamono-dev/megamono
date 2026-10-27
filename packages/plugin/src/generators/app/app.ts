@@ -2,6 +2,7 @@ import { preserveWorkspaceYaml } from '../../lib/preserve-workspace-yaml';
 import { prependEslintFlatConfig } from '../../lib/eslint-flat-config';
 import { createAndroidApp, validateAndroidApplicationId } from './android';
 import {
+  addDependenciesToPackageJson,
   formatFiles,
   getProjects,
   installPackagesTask,
@@ -75,6 +76,7 @@ const compatibility = JSON.parse(
 ) as {
   readonly scaffoldPackages: Record<string, string>;
   readonly rustCrates: Record<string, string>;
+  readonly tauri: { readonly rustVersion: string };
 };
 
 function packageVersion(name: string): string {
@@ -940,6 +942,36 @@ async function createWebApp(
   const appRouter = options.router === 'app';
   const routeRoot = `${options.directory}/src/${appRouter ? 'app' : 'pages'}`;
   const callbacks: (GeneratorCallback | void)[] = [];
+  const manifest = readJson<{
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  }>(tree, 'package.json');
+  const declaredVersion = (name: string) =>
+    manifest.dependencies?.[name] ??
+    manifest.devDependencies?.[name] ??
+    manifest.peerDependencies?.[name];
+  const frameworkDependencies = Object.fromEntries(
+    ['next', 'react', 'react-dom'].map((name) => [
+      name,
+      declaredVersion(name) ?? packageVersion(name),
+    ]),
+  );
+  // Nx's defaults can lag security releases. Seed qualified versions only for
+  // missing packages; existing workspace declarations remain authoritative.
+  callbacks.push(
+    addDependenciesToPackageJson(
+      tree,
+      Object.fromEntries(
+        Object.entries(frameworkDependencies).filter(
+          ([name]) => !declaredVersion(name),
+        ),
+      ),
+      declaredVersion('eslint-config-next')
+        ? {}
+        : { 'eslint-config-next': packageVersion('eslint-config-next') },
+    ),
+  );
   if (styling === 'chakra') callbacks.push(await ensureTheme(tree, options));
   callbacks.push(
     await generator('@nx/next', 'applicationGenerator')(tree, {
@@ -995,12 +1027,10 @@ async function createWebApp(
             : styling === 'panda'
               ? { '@pandacss/dev': packageVersion('@pandacss/dev') }
               : {};
-  updatePackage(
-    tree,
-    `${options.directory}/package.json`,
-    options,
-    dependencies,
-  );
+  updatePackage(tree, `${options.directory}/package.json`, options, {
+    ...frameworkDependencies,
+    ...dependencies,
+  });
   const e2eRoot = `${options.directory}-e2e`;
   if (tree.exists(`${e2eRoot}/package.json`))
     updatePackage(tree, `${e2eRoot}/package.json`, options);
@@ -1423,7 +1453,7 @@ function createDesktopApp(
   );
   tree.write(
     `${options.directory}/src-tauri/Cargo.toml`,
-    `[package]\nname = "${options.projectName}"\nversion = "0.1.0"\nedition = "2021"\n\n[lib]\nname = "${crateName}_lib"\ncrate-type = ["staticlib", "cdylib", "rlib"]\n\n[build-dependencies]\ntauri-build = { version = "${rustCrateVersion('tauri-build')}", features = [] }\n\n[dependencies]\ntauri = { version = "${rustCrateVersion('tauri')}", features = [] }\ntauri-plugin-opener = "${rustCrateVersion('tauri-plugin-opener')}"\nserde = { version = "${rustCrateVersion('serde')}", features = ["derive"] }\nserde_json = "${rustCrateVersion('serde_json')}"\n`,
+    `[package]\nname = "${options.projectName}"\nversion = "0.1.0"\nedition = "2021"\nrust-version = "${compatibility.tauri.rustVersion}"\n\n[lib]\nname = "${crateName}_lib"\ncrate-type = ["staticlib", "cdylib", "rlib"]\n\n[build-dependencies]\ntauri-build = { version = "${rustCrateVersion('tauri-build')}", features = [] }\n\n[dependencies]\ntauri = { version = "~${rustCrateVersion('tauri')}", features = [] }\ntauri-plugin-opener = "=${rustCrateVersion('tauri-plugin-opener')}"\nserde = { version = "${rustCrateVersion('serde')}", features = ["derive"] }\nserde_json = "${rustCrateVersion('serde_json')}"\n`,
   );
   tree.write(
     `${options.directory}/src-tauri/src/main.rs`,

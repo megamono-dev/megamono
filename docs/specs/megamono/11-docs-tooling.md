@@ -29,7 +29,7 @@ Implementation layer for `spec-megamono-0004`. That document defines the taxonom
 
 The corpus needs a queryable graph — to validate that referenced IDs resolve, to find inbound references before archiving a document, to generate `INDEX.md`, and to let internal tooling render docs.
 
-Hand-rolling that means writing a front-matter parser, a schema validator, a watcher, and a type generator. [Content Collections](https://www.content-collections.dev/) supplies that machinery. V1 pins `@content-collections/core` to `0.15.2` and Zod to `>=4.1 <5`; upgrades require the fixture suite because this is a pre-1.0 dependency.
+Hand-rolling that means writing a front-matter parser, a schema validator, a watcher, and a type generator. [Content Collections](https://www.content-collections.dev/) supplies that machinery. V1 pins `@content-collections/core` to `0.15.3` and Zod to `>=4.1 <5`; upgrades require the fixture suite because this is a pre-1.0 dependency.
 
 ### The non-negotiable constraint
 
@@ -227,7 +227,7 @@ The mitigation is already structural: front matter and file layout are plain mar
 
 ## Acceptance criteria
 
-- The checked-in Megamono corpus builds with `@content-collections/core@0.15.2` and validates without exceptions.
+- The checked-in Megamono corpus builds with `@content-collections/core@0.15.3` and validates without exceptions.
 - `README.md`, `OVERVIEW.md`, and generated indexes are not parsed as corpus records.
 - Duplicate and dangling IDs fail with both source paths in the diagnostic.
 - A reference from the hot corpus to an archived record and the reverse both validate.

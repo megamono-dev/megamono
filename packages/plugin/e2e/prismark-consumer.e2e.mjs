@@ -173,8 +173,8 @@ export class PlatformModule {}
     },
     devDependencies: {
       '@megamono/plugin': `file:./${packed.filename}`,
-      nx: '23.1.1',
-      '@nx/devkit': '23.1.1',
+      nx: '23.3.1',
+      '@nx/devkit': '23.3.1',
       typescript: '5.9.3',
       '@types/node': '24.13.3',
       prisma: '7.9.1',

@@ -116,7 +116,7 @@ export function workspaceInitDependencyRequirements(
       ? [
           {
             name: '@content-collections/core',
-            range: '0.15.2',
+            range: '0.15.3',
             installIfMissing: true,
             reason: 'The repository documentation loader uses this API.',
           },

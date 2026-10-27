@@ -526,7 +526,7 @@ describe('CLI entrypoint', () => {
         ]),
       ).resolves.toBe(0);
       expect(output).toHaveBeenCalledWith(
-        expect.stringContaining('"pnpm" "dlx" "create-nx-workspace@23.1.1"'),
+        expect.stringContaining('"pnpm" "dlx" "create-nx-workspace@23.2.1"'),
       );
       expect(output).toHaveBeenCalledWith(
         expect.stringContaining('--router=app'),

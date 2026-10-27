@@ -394,7 +394,7 @@ describe('createPlan', () => {
           command: 'pnpm',
           args: expect.arrayContaining([
             'dlx',
-            'create-nx-workspace@23.1.1',
+            'create-nx-workspace@23.2.1',
             '--packageManager=pnpm',
           ]),
         }),
@@ -405,9 +405,9 @@ describe('createPlan', () => {
             'add',
             '--save-dev',
             '--save-exact',
-            '@nx/eslint@23.1.1',
-            '@nx/next@23.1.1',
-            '@nx/playwright@23.1.1',
+            '@nx/eslint@23.2.1',
+            '@nx/next@23.2.1',
+            '@nx/playwright@23.2.1',
           ]),
         }),
         expect.objectContaining({
@@ -448,8 +448,8 @@ describe('createPlan', () => {
   });
 
   it.each([
-    ['yarn', 'yarn', 'create', 'nx-workspace@23.1.1', 'add', ['nx']],
-    ['bun', 'bun', 'x', 'create-nx-workspace@23.1.1', 'add', ['x', 'nx']],
+    ['yarn', 'yarn', 'create', 'nx-workspace@23.2.1', 'add', ['nx']],
+    ['bun', 'bun', 'x', 'create-nx-workspace@23.2.1', 'add', ['x', 'nx']],
   ] as const)(
     'uses %s consistently across bootstrap, install, and Nx delegation',
     (manager, command, scaffoldVerb, scaffoldPackage, addVerb, nxParts) => {
@@ -511,13 +511,13 @@ describe('createPlan', () => {
       'verify-acme-tools-web-e2e',
       'commit-workspace',
     ]);
-    expect(rendered).toContain('create-nx-workspace@23.1.1');
+    expect(rendered).toContain('create-nx-workspace@23.2.1');
     expect(rendered).toContain(
       `@megamono/plugin@${compatibility.scaffoldPackages['@megamono/plugin']}`,
     );
-    expect(rendered).toContain('@nx/next@23.1.1');
-    expect(rendered).toContain('@nx/eslint@23.1.1');
-    expect(rendered).toContain('@nx/playwright@23.1.1');
+    expect(rendered).toContain('@nx/next@23.2.1');
+    expect(rendered).toContain('@nx/eslint@23.2.1');
+    expect(rendered).toContain('@nx/playwright@23.2.1');
     expect(rendered).toContain('@playwright/test@1.64.1');
     expect(rendered).toContain('@megamono/plugin:app');
     expect(rendered).toContain('--type=site');
@@ -544,20 +544,20 @@ describe('createPlan', () => {
       createPlan(options('/workspace', { apps: ['api'], verify: 'build' })),
     );
 
-    expect(rendered).toContain('@nx/eslint@23.1.1');
-    expect(rendered).toContain('@nx/jest@23.1.1');
-    expect(rendered).toContain('@swc/jest@0.2.38');
+    expect(rendered).toContain('@nx/eslint@23.2.1');
+    expect(rendered).toContain('@nx/jest@23.2.1');
+    expect(rendered).toContain('@swc/jest@0.2.39');
     expect(rendered).toContain('@types/jest@30.0.0');
-    expect(rendered).toContain('jest@30.3.0');
-    expect(rendered).toContain('jest-environment-node@30.3.0');
-    expect(rendered).toContain('jest-util@30.3.0');
-    expect(rendered).toContain('ts-jest@29.4.7');
+    expect(rendered).toContain('jest@30.5.2');
+    expect(rendered).toContain('jest-environment-node@30.5.2');
+    expect(rendered).toContain('jest-util@30.5.1');
+    expect(rendered).toContain('ts-jest@29.4.15');
     expect(rendered).toContain('@megamono/plugin:app');
     expect(rendered).toContain('--type=api');
     expect(rendered).toContain('--name=api');
     expect(rendered).toContain('--scope=acme-tools');
     expect(rendered).toContain('--port=43016');
-    expect(rendered).toContain('ts-node@10.9.1');
+    expect(rendered).toContain('ts-node@10.9.2');
     expect(rendered).toContain('acme-tools-api-e2e:e2e');
   });
 
@@ -679,7 +679,7 @@ describe('createPlan', () => {
     expect(rendered).toContain(
       `@megamono/nx-cloudflare@${compatibility.scaffoldPackages['@megamono/nx-cloudflare']}`,
     );
-    expect(rendered).toContain('wrangler@4.125.0');
+    expect(rendered).toContain('wrangler@4.153.0');
     expect(rendered).toContain('@megamono/plugin:app');
     expect(rendered).toContain('--type=worker');
     expect(rendered).toContain('--scope=acme-tools');
@@ -742,7 +742,7 @@ describe('createPlan', () => {
         '--save-dev',
         '--save-exact',
         'typescript@6.0.3',
-        'wrangler@4.125.0',
+        'wrangler@4.153.0',
       ]),
     });
     expect(registryInstall).not.toEqual(
@@ -841,7 +841,7 @@ describe('executePlan', () => {
           'utf8',
         ),
       ),
-    ).toMatchObject({ private: true, packageManager: 'npm@11.17.0' });
+    ).toMatchObject({ private: true, packageManager: 'npm@11.21.1' });
     await expect(
       readFile(resolve(plan.options.destination, 'package-lock.json'), 'utf8'),
     ).resolves.toBe('{}');
@@ -924,9 +924,9 @@ describe('executePlan', () => {
     await executePlan(plan, runner, undefined, async () => store);
 
     expect(invocations.slice(0, 4)).toEqual([
-      expect.stringContaining('create-nx-workspace@23.1.1'),
+      expect.stringContaining('create-nx-workspace@23.2.1'),
       expect.stringContaining(
-        'npm install --save-dev --save-exact @nx/eslint@23.1.1 @nx/jest@23.1.1 @nx/nest@23.1.1',
+        'npm install --save-dev --save-exact @nx/eslint@23.2.1 @nx/jest@23.2.1 @nx/nest@23.2.1',
       ),
       `yalc add @megamono/plugin@${compatibility.scaffoldPackages['@megamono/plugin']} --dev --no-pure`,
       'npm install',
@@ -941,7 +941,7 @@ describe('executePlan', () => {
           'utf8',
         ),
       ),
-    ).toEqual({ packageManager: 'npm@11.17.0' });
+    ).toEqual({ packageManager: 'npm@11.21.1' });
   });
 
   it.each(['prisma', 'drizzle', 'none'])(
@@ -1021,7 +1021,7 @@ describe('executePlan', () => {
           'utf8',
         ),
       ),
-    ).toEqual({ packageManager: 'npm@11.17.0' });
+    ).toEqual({ packageManager: 'npm@11.21.1' });
     expect(
       JSON.parse(
         await readFile(

@@ -15,13 +15,13 @@
     "prisma": {
       "provider": "postgresql",
       "pnpmAllowBuilds": ["@prisma/engines", "prisma"],
-      "runtimePackages": { "@prisma/client": "7.10.0" },
-      "developmentPackages": { "prisma": "7.10.0", "dotenv": "16.4.7" }
+      "runtimePackages": { "@prisma/client": "7.10.1" },
+      "developmentPackages": { "prisma": "7.10.1", "dotenv": "16.6.1" }
     },
     "drizzle": {
       "provider": "postgresql",
-      "runtimePackages": { "drizzle-orm": "0.45.2" },
-      "developmentPackages": { "drizzle-kit": "0.31.10" }
+      "runtimePackages": { "drizzle-orm": "0.45.4" },
+      "developmentPackages": { "drizzle-kit": "0.31.11" }
     }
   },
   "adoptionToolchains": {
@@ -53,15 +53,15 @@
       { "nx": "20.0.1", "typescript": "5.6.2", "node": "20" },
       { "nx": "21.6.11", "typescript": "5.9.3", "node": "22" },
       { "nx": "22.2.3", "typescript": "5.9.3", "node": "22" },
-      { "nx": "23.1.1", "typescript": "6.0.3", "node": "24" }
+      { "nx": "23.3.1", "typescript": "6.0.3", "node": "24" }
     ],
     "future": { "nx": "next", "typescript": "next", "node": "24" }
   },
   "packageManagers": {
-    "pnpm": "11.24.0",
-    "npm": "11.17.0",
-    "yarn": "4.9.4",
-    "bun": "1.1.26"
+    "pnpm": "11.28.9",
+    "npm": "11.21.1",
+    "yarn": "4.18.1",
+    "bun": "1.4.4"
   },
   "pnpmAllowBuilds": [
     "@parcel/watcher",
@@ -74,48 +74,52 @@
     "workerd"
   ],
   "scaffoldPackages": {
-    "create-nx-workspace": "23.1.1",
-    "@nx/eslint": "23.1.1",
-    "@nx/jest": "23.1.1",
-    "@swc/jest": "0.2.38",
+    "create-nx-workspace": "23.2.1",
+    "@nx/eslint": "23.2.1",
+    "@nx/jest": "23.2.1",
+    "@swc/jest": "0.2.39",
     "@types/jest": "30.0.0",
-    "@nx/js": "23.1.1",
-    "@nx/vitest": "23.1.1",
-    "@nx/next": "23.1.1",
-    "@nx/nest": "23.1.1",
-    "@nx/playwright": "23.1.1",
+    "@nx/js": "23.2.1",
+    "@nx/vitest": "23.2.1",
+    "@nx/next": "23.2.1",
+    "@nx/nest": "23.2.1",
+    "@nx/playwright": "23.2.1",
     "@playwright/test": "1.64.1",
-    "jest": "30.3.0",
-    "jest-environment-node": "30.3.0",
-    "jest-util": "30.3.0",
-    "ts-jest": "29.4.7",
-    "ts-node": "10.9.1",
-    "@chakra-ui/react": "3.36.1",
+    "jest": "30.5.2",
+    "jest-environment-node": "30.5.2",
+    "jest-util": "30.5.1",
+    "ts-jest": "29.4.15",
+    "ts-node": "10.9.2",
+    "@chakra-ui/react": "3.37.0",
     "@emotion/react": "11.14.0",
     "tailwindcss": "4.3.3",
     "@tailwindcss/postcss": "4.3.3",
-    "@pandacss/dev": "1.12.0",
-    "@stylexjs/stylex": "0.19.0",
-    "@stylexjs/babel-plugin": "0.19.0",
-    "@stylexjs/postcss-plugin": "0.19.0",
-    "@nx/expo": "23.1.1",
-    "create-tauri-app": "4.6.2",
-    "@tauri-apps/api": "2.11.1",
-    "@tauri-apps/cli": "2.11.4",
-    "@tauri-apps/plugin-opener": "2.5.4",
-    "vite": "8.1.4",
-    "vitest": "4.1.10",
-    "create-cloudflare": "2.72.2",
-    "wrangler": "4.125.0",
-    "wxt": "0.21.4",
-    "@cloudflare/vitest-plugin": "1.0.0",
+    "@pandacss/dev": "1.12.1",
+    "@stylexjs/stylex": "0.19.1",
+    "@stylexjs/babel-plugin": "0.19.1",
+    "@stylexjs/postcss-plugin": "0.19.1",
+    "@nx/expo": "23.2.1",
+    "create-tauri-app": "4.7.5",
+    "@tauri-apps/api": "2.12.4",
+    "@tauri-apps/cli": "2.12.4",
+    "@tauri-apps/plugin-opener": "2.7.2",
+    "vite": "8.3.5",
+    "vitest": "4.1.12",
+    "create-cloudflare": "2.74.4",
+    "wrangler": "4.153.0",
+    "wxt": "0.21.5",
+    "@cloudflare/vitest-plugin": "1.4.8",
     "typescript": "6.0.3",
     "@megamono/plugin": "0.1.0-next.0",
     "@megamono/nx-apple": "0.1.0-next.0",
     "@megamono/nx-cargo": "0.1.0-next.0",
     "@megamono/nx-cloudflare": "0.1.0-next.0",
     "@megamono/nx-extension": "0.1.0-next.0",
-    "@megamono/nx-render": "0.1.0-next.0"
+    "@megamono/nx-render": "0.1.0-next.0",
+    "next": "16.4.3",
+    "eslint-config-next": "16.4.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "cloudflare": {
     "wrangler": ">=4.105 <5",
@@ -129,12 +133,15 @@
     "clickhouse": "25.8",
     "typesense": "30.2"
   },
+  "tauri": {
+    "rustVersion": "1.90"
+  },
   "rustCrates": {
-    "tauri": "2.11.5",
-    "tauri-build": "2.6.3",
-    "tauri-plugin-opener": "2.5.4",
+    "tauri": "2.12.5",
+    "tauri-build": "2.7.4",
+    "tauri-plugin-opener": "2.7.2",
     "serde": "1.0.229",
-    "serde_json": "1.0.151"
+    "serde_json": "1.0.154"
   },
   "externalTools": {
     "git-filter-repo": ">=2.47 <3"

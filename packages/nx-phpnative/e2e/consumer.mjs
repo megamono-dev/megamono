@@ -59,7 +59,7 @@ const put = async (path, value) => {
 const json = async (path) =>
   JSON.parse(await readFile(join(root, path), 'utf8'));
 try {
-  const nxVersion = process.env.MEGAMONO_TEST_NX_VERSION ?? '23.1.1';
+  const nxVersion = process.env.MEGAMONO_TEST_NX_VERSION ?? '23.3.1';
   const dependencies = { nx: nxVersion, '@nx/devkit': nxVersion };
   for (const name of ['nx-laravel', 'nx-phpnative']) {
     const packed = JSON.parse(
