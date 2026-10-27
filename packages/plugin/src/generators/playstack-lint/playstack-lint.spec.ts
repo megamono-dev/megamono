@@ -64,6 +64,7 @@ describe('playstack-lint generator', () => {
 
   it('does not mistake logic edits for formatting changes in semicolon-free sections', async () => {
     const tree = fixture();
+    tree.delete('.oxfmtrc.json');
     tree.write(
       '.prettierrc',
       JSON.stringify({ semi: false, singleQuote: false }),

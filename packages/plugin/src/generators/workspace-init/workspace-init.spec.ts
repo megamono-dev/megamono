@@ -1657,6 +1657,7 @@ export default [
         '{"name":"format-fixture","private":true}',
       );
       writeFileSync(join(root, '.prettierignore'), ignore);
+      writeFileSync(join(root, '.prettierrc'), '{}');
       writeFileSync(join(root, 'source.ts'), 'export const value={a:1,b:2}');
       // Resolve the existing tools without installing or copying dependencies.
       mkdirSync(join(root, 'node_modules'));
