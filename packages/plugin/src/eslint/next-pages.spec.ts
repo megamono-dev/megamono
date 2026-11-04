@@ -139,7 +139,7 @@ tester.run('Next Pages platform-boundary', platformBoundary, {
 
 it('refreshes server-only classification when browser reachability changes in an editor session', () => {
   const linter = new Linter({ cwd: root });
-  const config = [
+  const config: Linter.Config[] = [
     {
       files: ['**/*.js'],
       plugins: { test: { rules: { boundary: platformBoundary } } },
