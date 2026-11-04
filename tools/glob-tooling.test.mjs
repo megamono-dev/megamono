@@ -35,12 +35,13 @@ async function fixture(t) {
   };
 }
 
-test('modern consumers resolve the qualified glob while Rollup retains its legacy API', () => {
+test('all reviewed consumers resolve the qualified glob public API', () => {
   for (const name of [
     '@jest/reporters',
     'jest-config',
     'jest-runtime',
     'test-exclude',
+    '@rollup/plugin-commonjs',
   ]) {
     const consumer = fromConsumer(name);
     assert.equal(consumer('glob/package.json').version, '14.0.3', name);
@@ -48,10 +49,6 @@ test('modern consumers resolve the qualified glob while Rollup retains its legac
     assert.equal(typeof glob, 'function', name);
     assert.equal(typeof glob.sync, 'function', name);
   }
-  const rollup = fromConsumer('@rollup/plugin-commonjs');
-  assert.equal(rollup('glob/package.json').version, '8.1.0');
-  assert.equal(typeof rollup('glob'), 'function');
-  assert.equal(typeof rollup('glob').sync, 'function');
 });
 
 test('test-exclude preserves synchronous and asynchronous coverage selection', async (t) => {

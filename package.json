@@ -13,7 +13,7 @@
     "yalc:publish": "node tools/publish-yalc.mjs",
     "yalc:install-cli": "node tools/install-yalc-cli.mjs",
     "yalc:install-clis": "node tools/install-yalc-cli.mjs",
-    "postinstall": "node tools/patch-magicast-bundle.mjs",
+    "postinstall": "node tools/patch-magicast-bundle.mjs && node tools/patch-minimatch-consumers.mjs",
     "tooling:check": "nx run @megamono/workspace:tooling-check",
     "tooling:test": "nx run @megamono/workspace:tooling-test",
     "security:audit": "npm audit --audit-level=low --registry=https://registry.npmjs.org",
@@ -38,7 +38,7 @@
     "@nx/vitest": "23.3.1",
     "@nx/webpack": "23.3.1",
     "@swc-node/register": "~1.12.1",
-    "@swc/cli": "~0.8.1",
+    "@swc/cli": "0.8.1",
     "@swc/core": "~1.16.20",
     "@swc/helpers": "~0.5.23",
     "@swc/jest": "0.2.39",
@@ -47,7 +47,7 @@
     "@types/semver": "7.8.0",
     "@vitest/coverage-v8": "~4.1.12",
     "@vitest/ui": "~4.1.12",
-    "eslint": "~10.13.0",
+    "eslint": "10.13.0",
     "gray-matter": "^4.0.3",
     "jest": "30.5.2",
     "jest-environment-node": "30.5.2",
@@ -56,9 +56,11 @@
     "jsdom": "^27.4.0",
     "jsonc-eslint-parser": "^3.3.0",
     "magicast": "0.5.5",
+    "minimatch": "11.0.4",
     "nx": "23.3.1",
     "oxfmt": "0.75.0",
     "prettier": "^3.9.10",
+    "rollup": "4.67.4",
     "source-map-js": "1.2.2",
     "ts-jest": "29.4.15",
     "ts-node": "10.9.2",
@@ -88,7 +90,7 @@
         "executor": "nx:run-commands",
         "cache": false,
         "options": {
-          "command": "node tools/patch-magicast-bundle.mjs --check",
+          "command": "node tools/patch-magicast-bundle.mjs --check && node tools/patch-minimatch-consumers.mjs --check",
           "cwd": "."
         }
       },
@@ -96,7 +98,7 @@
         "executor": "nx:run-commands",
         "cache": false,
         "options": {
-          "command": "node --test tools/magicast-bundle.test.mjs tools/glob-tooling.test.mjs",
+          "command": "node --test tools/magicast-bundle.test.mjs tools/glob-tooling.test.mjs tools/minimatch-patch.test.mjs tools/minimatch-nx-tooling.test.mjs tools/minimatch-consumer-tooling.test.mjs",
           "cwd": "."
         }
       },
@@ -120,11 +122,6 @@
     "@nx/devkit": "23.3.1"
   },
   "overrides": {
-    "nx": {
-      "brace-expansion": "5.0.12",
-      "smol-toml": "^1.9.1",
-      "undici": "7.30.1"
-    },
     "@jest/reporters@30.5.2": {
       "glob": "14.0.3"
     },
@@ -135,6 +132,46 @@
       "glob": "14.0.3"
     },
     "test-exclude@7.0.2": {
+      "glob": "14.0.3",
+      "minimatch": "11.0.4"
+    },
+    "@eslint/config-array@0.23.5": {
+      "minimatch": "11.0.4"
+    },
+    "@nx/devkit@23.3.1": {
+      "minimatch": "11.0.4"
+    },
+    "@nx/jest@23.3.1": {
+      "minimatch": "11.0.4"
+    },
+    "@nx/playwright@23.3.1": {
+      "minimatch": "11.0.4"
+    },
+    "@nx/react@23.3.1": {
+      "minimatch": "11.0.4"
+    },
+    "@swc/cli@0.8.1": {
+      "minimatch": "11.0.4"
+    },
+    "@typescript-eslint/typescript-estree@8.72.1": {
+      "minimatch": "11.0.4"
+    },
+    "@verdaccio/core@8.4.0": {
+      "minimatch": "11.0.4"
+    },
+    "eslint@10.13.0": {
+      "minimatch": "11.0.4"
+    },
+    "fork-ts-checker-webpack-plugin@9.1.0": {
+      "minimatch": "11.0.4"
+    },
+    "nx@23.3.1": {
+      "brace-expansion": "5.0.12",
+      "smol-toml": "^1.9.1",
+      "undici": "7.30.1",
+      "minimatch": "11.0.4"
+    },
+    "@rollup/plugin-commonjs@25.0.8": {
       "glob": "14.0.3"
     }
   },

@@ -74,19 +74,51 @@ unset and a writable copy of npm's existing immutable cache entry. The writable
 cache avoids this agent sandbox's restrictions on user-cache temporary files;
 no original package bytes were fetched or substituted for that cache-path check.
 
-### Remaining minimatch paths
+### Local minimatch migration
 
 `tools/minimatch-tooling-review.mjs` reports the lockfile's direct consumer edges,
-actual installed resolutions, and bounded legacy API evidence. Nx and Verdaccio
-call `makeRe`; the Rollup dependency uses an older glob implementation with
-RegExp-shaped matcher state. Minimatch 11 removes these contracts.
+actual installed resolutions, and bounded source evidence. Originally Nx and
+Verdaccio called `makeRe`, fork checker used a callable default export, and the
+Rollup CommonJS plugin used an older glob implementation. Minimatch 11 removes
+the regex-generation API, and glob 14 has no default ESM export.
 
 The reviewed current Nx 24.0.4 still depends on minimatch 10.2.5. Supported
 maintenance releases of minimatch 3, 5, 9, and 10 remain below the advisory's
-patched version, 11.0.1. A blanket major override is not qualified, and a local
-maintenance backport would remain version-flagged without a separate explicit
-advisory decision. No override, audit exclusion, or exception was added for this
-finding.
+patched version, 11.0.1. Instead of a maintenance backport, the repository now
+uses twelve exact-consumer overrides to minimatch 11.0.4 and a fifth glob 14.0.3
+override for `@rollup/plugin-commonjs@25.0.8`. There is no global minimatch
+override. The repository uses Node 24; these local changes do not narrow the
+published packages' Node 18 adoption range or modify adopting workspaces.
+
+The postinstall script applies eight compatibility patches across four exact
+tool versions. Nx's three callers retain project matching, virtual-tree glob
+matching, and release-branch tag strategies through the new matcher API.
+Verdaccio's CJS and ESM ACL implementations retain first-match ordering and
+failure behavior. Two fork-checker imports use the named matcher, and the
+CommonJS plugin's ESM entry uses glob's named export. All owner manifests,
+tarball integrities, target dependency resolutions, and original/patched bytes
+are checked before any file is written; all writes are staged before atomic
+replacement. Unknown artifacts fail installation. Exact provenance is in
+`tools/minimatch-consumers.provenance.json`.
+
+Six integrity tests passed, including refusal before partial writes, dependency
+and integrity drift, temporary-file collisions, symlink escape, and recovery
+from a reviewed mixed state. Nine actual Nx/lint/source-selection cases and
+eight actual Verdaccio/fork-checker/Rollup cases passed before and after the
+migration. The latter eight produce exactly equal recorded behavior, using a
+real Rollup engine in both CJS and ESM formats. The candidate engine is pinned
+to Rollup 4.67.4. These are bounded compatibility cases, not a claim that every
+possible minimatch pattern has identical semantics across major versions.
+
+npm initially retained four stale nested optional resolutions despite recognizing
+the overrides. The strict dependency guards caught them before patching. A
+temporary copy of the lockfile had only those known invalid entries removed;
+npm then regenerated the tree, pruning fourteen stale/orphaned entries without
+changing any retained record. A second resolver run was byte-for-byte stable and
+`npm ls --package-lock-only` reported no override problems. The adopted lockfile
+then passed a frozen offline `npm ci`, applied both patch sets automatically,
+and passed all thirty-three tooling fixtures from the normal npm cache with no
+skips. No advisory exclusion or exception was added.
 
 ### Glob and deepmerge
 
@@ -100,19 +132,20 @@ retained by glob 14. Version-qualified overrides now select glob 14.0.3 for
 TestExclude sync/async include/exclude behavior, and a real Jest CLI run covering
 project discovery, sibling-extension diagnostics, and glob-based coverage
 thresholds. The same behavioral fixtures also passed before the migration.
-Rollup's glob 8 is outside this cancellation advisory and is preserved, although
-its minimatch dependency remains part of the separate minimatch finding.
+Rollup's original glob 8 was outside this cancellation advisory. It was
+subsequently migrated separately to remove its old minimatch dependency, with
+the ESM compatibility patch and real bundle/execution fixtures described above.
 
 Deepmerge's latest reviewed version is 4.3.1 and the advisory lists no patched
 version. Neither an unsupported downgrade nor a severity exclusion is used to
 declare it resolved.
 
-The post-migration npm audit no longer reports the glob cancellation advisory.
-It reports two underlying advisories: minimatch (moderate) and deepmerge (low),
-with zero high or critical findings. npm's propagated package totals are 71
-reports (67 moderate, 4 low), compared with 70 before the migration (68 moderate,
-2 low). These totals describe affected package entries, not independent bugs;
-the underlying advisory count changed from three to two. The adjacent
+The final npm audit no longer reports either minimatch or glob. Its only
+underlying advisory is deepmerge (low), with zero moderate, high, or critical
+findings. npm reports twenty-three affected package entries, including propagated
+parents; those are not twenty-three independent bugs. The original audit reported
+seventy package entries across three advisories, and the initial four-consumer
+glob migration reported seventy-one entries across two advisories. The adjacent
 [evidence snapshot](tooling-dependencies-20261103.evidence.json) records both
 summaries, raw-report hashes, installed resolutions, and upstream metadata
 provenance. No clean-audit result is claimed.
@@ -127,10 +160,18 @@ Primary references:
 
 ## Result
 
-Nx 24 adoption, the local Magicast repair, and the scoped glob migration have
-passed their bounded consumer checks. All thirty workspace lint/test/build
-targets passed after the migration. Minimatch and deepmerge
-remain open tooling findings; no audit all-clear or production approval is given.
+Nx 24 adoption, the local Magicast repair, and the scoped glob/minimatch migration
+have passed their bounded consumer checks. All thirty workspace lint/test/build
+targets passed with caching disabled after the minimatch migration. Deepmerge
+remains an open tooling finding; no audit all-clear or production approval is
+given. Root-only patches and overrides are not automatically distributed to
+Flightpaths or other adopted repositories.
+
+The real localhost Verdaccio fixture also passed a package publication and clean
+consumer installation, discovering and resolving all nineteen generators and
+ten executors. All ten public packages passed packed export validation. The
+workspace suite passed 1,147 unit tests with one existing skipped test, and all
+twenty-six release policy/admission tests passed.
 
 The release qualification runner now verifies the installed tooling artifact,
 runs the tooling fixtures, and audits all dependency classes at the low-severity

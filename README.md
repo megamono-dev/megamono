@@ -58,26 +58,37 @@ Nx 23.3.1 pins Undici 7.29.0. The scoped `nx` override selects patched Undici
 7.30.1; recheck the upstream pin before removing this override. New workspace
 scaffolds stay on Nx 23.2.1 until a newer release includes the patched dependency.
 
-Version-qualified overrides move Jest 30.5.2's reporters/config/runtime and
-test-exclude 7.0.2 to glob 14.0.3. Their ordinary project discovery, extension
-diagnostics, include/exclude rules, and coverage thresholds are exercised by
-`npm run tooling:test`. Rollup's older glob implementation is preserved. Recheck
-these overrides and fixtures when upgrading the owning consumers; this is a
-qualified migration for those consumers, not a blanket glob or minimatch update.
+Version-qualified overrides move the reviewed Jest, test-exclude, and Rollup
+CommonJS consumers to glob 14.0.3, and twelve reviewed consumers to minimatch
+11.0.4. Eight compiled files in Nx, Verdaccio, fork checker, and the CommonJS
+plugin receive guarded compatibility patches for the removed matching APIs and
+glob's named ESM export. `tools/minimatch-consumers.provenance.json` records exact
+owner versions, tarball integrities, manifests, and original/patched file hashes.
+All inputs are checked before any write. ESLint and SWC CLI have exact direct
+pins so npm can enforce the matching version-qualified overrides.
+
+`npm run tooling:test` covers project and file selection, release-tag strategies,
+ACL ordering, watch/issue filters, and actual Jest, Vitest, and Rollup consumers.
+The Rollup test engine is pinned to 4.67.4. Recheck these overrides and patches
+when upgrading the owning tools. They apply only to this repository's toolchain;
+Megamono does not emit them into adopted workspaces or narrow its published
+Node 18 adoption range. Use the committed lockfile with `npm ci`; installed
+resolutions are verified so stale nested optional dependencies cannot silently
+bypass the scoped overrides.
 
 The repository's `npm ci` postinstall applies a reviewed, hash-guarded patch to
 Magicast 0.5.5: its embedded source-map-js 1.2.1 implementation is removed and
 replaced with the separately installed, pinned 1.2.2 dependency. This affects
 development coverage tooling. The provenance and exact artifact hashes live in
 `tools/magicast-bundle.provenance.json`; an unknown artifact or dependency version
-fails installation rather than silently skipping the patch. After an install
+fails installation rather than silently skipping either patch set. After an install
 with lifecycle scripts disabled, run `npm run postinstall` explicitly.
-`npm run tooling:check` verifies the installed artifact, and `npm run tooling:test`
-qualifies parse/edit/generate, source maps, and Vitest coverage threshold updates.
+`npm run tooling:check` verifies both installed patch sets. The Magicast fixtures
+qualify parse/edit/generate, source maps, and Vitest coverage threshold updates.
 The tests use the original immutable npm tarball from the install cache; when it
 is unavailable, their error gives an explicit prefetch command and
 `MEGAMONO_MAGICAST_TARBALL` override. Review and replace this patch when upgrading
-Magicast; it is not an upstream release or an audit exception.
+Magicast; these local repairs are not upstream releases or audit exceptions.
 
 Inspect the project graph with:
 
@@ -277,11 +288,11 @@ from the exact release checkout, run:
 RELEASE_CHANNEL=next npm run release:verify-published
 ```
 
-Qualification first checks the installed Magicast artifact, runs the tooling
+Qualification first checks both installed patch sets, runs the tooling
 consumer fixtures, and executes `npm run security:audit` across all dependency
 classes at the low-severity threshold. An advisory or registry failure stops
-admission before builds or publication. The current minimatch and deepmerge
-findings therefore remain release blockers. `npm run tooling:review-minimatch`
+admission before builds or publication. The current low-severity deepmerge
+finding therefore remains a release blocker. `npm run tooling:review-minimatch`
 prints actual installed consumer resolutions and bounded legacy API evidence;
 it is an inventory, not an audit exception or release approval. See the
 [tooling dependency audit](docs/audits/tooling-dependencies-20261103.md) for scope,
