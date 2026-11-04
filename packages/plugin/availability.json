@@ -228,6 +228,12 @@
       "implementation": "./dist/executors/import/import",
       "schema": "./dist/executors/import/schema.json",
       "description": "Analyze and safely import one repository into a Megamono host"
+    },
+    "expo-doctor": {
+      "status": "available",
+      "implementation": "./dist/executors/expo-doctor/expo-doctor",
+      "schema": "./dist/executors/expo-doctor/schema.json",
+      "description": "Run locally installed Expo Doctor for an application without installing tools"
     }
   }
 }
