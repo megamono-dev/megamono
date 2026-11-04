@@ -387,6 +387,20 @@
           "command": "node packages/plugin/e2e/portfolio-compatibility.e2e.mjs",
           "cwd": "."
         }
+      },
+      "e2e-expo-consumer": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "outputs": [
+          "{workspaceRoot}/tmp/expo-consumer"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/expo-consumer.e2e.mjs",
+          "cwd": "."
+        }
       }
     },
     "tags": [

@@ -188,7 +188,7 @@ function targetDefaults(
   if (!selected) {
     const matching = Object.keys(defaults)
       .filter((pattern) => {
-        if (/[\[\]{}()]/.test(pattern)) {
+        if (/[[\]{}()]/.test(pattern)) {
           const entries = Array.isArray(defaults[pattern])
             ? defaults[pattern]
             : [defaults[pattern]];

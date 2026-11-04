@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 const runner = fileURLToPath(new URL('./qualify-release.mjs', import.meta.url));
 
-function qualify(t, refusedCommand) {
+function qualify(t, refusedCommand, phase = 'checks') {
   const directory = mkdtempSync(join(tmpdir(), 'megamono-release-admission-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const bin = join(directory, 'bin');
@@ -37,7 +37,7 @@ if (args.join(' ') === ${JSON.stringify(refusedCommand)}) process.exit(42);
     env: {
       ...process.env,
       PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-      MEGAMONO_QUALIFY_PHASE: 'checks',
+      MEGAMONO_QUALIFY_PHASE: phase,
     },
   });
   return {
@@ -72,4 +72,17 @@ test('an unignored advisory prevents builds and release qualification', (t) => {
     ['run', 'tooling:test'],
     ['run', 'security:audit'],
   ]);
+});
+
+test('a failed packed Expo qualification prevents subsequent release consumers', (t) => {
+  const refused =
+    'exec nx -- run @megamono/plugin:e2e-expo-consumer --skip-nx-cache --output-style=stream';
+  const { result, commands } = qualify(t, refused, 'consumers');
+  assert.notEqual(result.status, 0);
+  assert.equal(commands.at(-1).join(' '), refused);
+  assert(
+    !commands.some((args) =>
+      args.includes('@megamono/plugin:e2e-convert-local-registry'),
+    ),
+  );
 });

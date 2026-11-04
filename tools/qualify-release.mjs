@@ -45,6 +45,7 @@ for (const target of [
   '@megamono/plugin:e2e-integration-consumer',
   '@megamono/plugin:e2e-prismark-consumer',
   '@megamono/plugin:e2e-governance',
+  '@megamono/plugin:e2e-expo-consumer',
   '@megamono/plugin:e2e-convert-local-registry',
   '@megamono/plugin:e2e-nx-compatibility',
   'nx-phpnative:e2e-php-consumer',
