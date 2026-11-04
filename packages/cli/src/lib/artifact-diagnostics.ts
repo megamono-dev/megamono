@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
+import { localPackageManifest } from './local-package.js';
 import {
   accessSync,
   constants,
@@ -206,11 +206,7 @@ export function diagnoseArtifacts(options: {
   const packages = names.map((name) => {
     let installed = join(options.root, 'node_modules', name);
     try {
-      installed = dirname(
-        createRequire(join(options.root, 'package.json')).resolve(
-          `${name}/package.json`,
-        ),
-      );
+      installed = dirname(localPackageManifest(options.root, name));
     } catch {
       /* Keep an explicit missing location. */
     }

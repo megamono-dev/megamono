@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { localPackageManifest } from './local-package.js';
 import { existsSync } from 'node:fs';
 import {
   DEFAULT_ARTIFACT_MANIFEST,
@@ -715,7 +716,7 @@ async function assertActiveToolchainPreflight(
 
 function localPackageAvailable(root: string, name: string): boolean {
   try {
-    createRequire(join(root, 'package.json')).resolve(`${name}/package.json`);
+    localPackageManifest(root, name);
     return true;
   } catch {
     return false;
@@ -1085,7 +1086,7 @@ function localPackageInvocation(
   args: readonly string[],
 ): readonly [string, readonly string[]] {
   const require = createRequire(join(root, 'package.json'));
-  const manifestPath = require.resolve([packageName, 'package.json'].join('/'));
+  const manifestPath = localPackageManifest(root, packageName);
   const manifest = require(manifestPath) as {
     readonly bin?: string | Readonly<Record<string, string>>;
   };
@@ -1113,7 +1114,7 @@ function localNxCommandInvocation(
 
 function localNxVersion(root: string): string {
   const require = createRequire(join(root, 'package.json'));
-  const manifestPath = require.resolve(['nx', 'package.json'].join('/'));
+  const manifestPath = localPackageManifest(root, 'nx');
   const manifest = require(manifestPath) as { readonly version?: unknown };
   if (typeof manifest.version !== 'string' || manifest.version.length === 0) {
     throw new CliError(
@@ -1512,9 +1513,7 @@ async function localGeneratorAvailability(
   root: string,
   name: string,
 ): Promise<LocalGeneratorAvailability | undefined> {
-  const packageJson = createRequire(join(root, 'package.json')).resolve(
-    '@megamono/plugin/package.json',
-  );
+  const packageJson = localPackageManifest(root, '@megamono/plugin');
   const registry = JSON.parse(
     await readFile(join(dirname(packageJson), 'availability.json'), 'utf8'),
   ) as {
@@ -2199,9 +2198,7 @@ async function localPackageVersion(
   name: string,
 ): Promise<string> {
   try {
-    const manifest = createRequire(join(root, 'package.json')).resolve(
-      `${name}/package.json`,
-    );
+    const manifest = localPackageManifest(root, name);
     const value = JSON.parse(await readFile(manifest, 'utf8')) as {
       version?: unknown;
     };
@@ -2216,9 +2213,7 @@ async function localPackageVersion(
 async function pluginScaffoldVersions(
   root: string,
 ): Promise<Record<string, string>> {
-  const manifest = createRequire(join(root, 'package.json')).resolve(
-    '@megamono/plugin/package.json',
-  );
+  const manifest = localPackageManifest(root, '@megamono/plugin');
   const compatibility = JSON.parse(
     await readFile(join(dirname(manifest), 'compatibility.json'), 'utf8'),
   ) as { scaffoldPackages?: Record<string, string> };
@@ -2229,9 +2224,7 @@ async function pluginPlaystackCompatibility(root: string): Promise<{
   readonly node: string;
   readonly eslint: string;
 }> {
-  const manifest = createRequire(join(root, 'package.json')).resolve(
-    '@megamono/plugin/package.json',
-  );
+  const manifest = localPackageManifest(root, '@megamono/plugin');
   const compatibility = JSON.parse(
     await readFile(join(dirname(manifest), 'compatibility.json'), 'utf8'),
   ) as {
