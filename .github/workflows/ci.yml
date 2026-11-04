@@ -30,6 +30,7 @@ jobs:
         shell: bash
         run: npm install --global "$(node -p 'require("./package.json").packageManager')"
       - run: npm ci
+      - run: npm exec nx -- run-many -t tooling-check tooling-test --projects=@megamono/workspace --output-style=static
       - run: npm run release:check
       - run: npm run release:test
       - uses: nrwl/nx-set-shas@v5

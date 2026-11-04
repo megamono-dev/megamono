@@ -12,7 +12,10 @@
     "packages:check-exports": "node tools/write-build-info.mjs && node tools/check-packed-exports.mjs",
     "yalc:publish": "node tools/publish-yalc.mjs",
     "yalc:install-cli": "node tools/install-yalc-cli.mjs",
-    "yalc:install-clis": "node tools/install-yalc-cli.mjs"
+    "yalc:install-clis": "node tools/install-yalc-cli.mjs",
+    "postinstall": "node tools/patch-magicast-bundle.mjs",
+    "tooling:check": "nx run @megamono/workspace:tooling-check",
+    "tooling:test": "nx run @megamono/workspace:tooling-test"
   },
   "private": true,
   "devDependencies": {
@@ -50,9 +53,11 @@
     "jiti": "2.7.0",
     "jsdom": "^27.4.0",
     "jsonc-eslint-parser": "^3.3.0",
+    "magicast": "0.5.5",
     "nx": "23.3.1",
     "oxfmt": "0.75.0",
     "prettier": "^3.9.10",
+    "source-map-js": "1.2.2",
     "ts-jest": "29.4.15",
     "ts-node": "10.9.2",
     "tslib": "^2.8.1",
@@ -75,6 +80,22 @@
           "port": 4873,
           "config": ".verdaccio/config.yml",
           "storage": "tmp/local-registry/storage"
+        }
+      },
+      "tooling-check": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "node tools/patch-magicast-bundle.mjs --check",
+          "cwd": "."
+        }
+      },
+      "tooling-test": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "node --test tools/magicast-bundle.test.mjs",
+          "cwd": "."
         }
       }
     },

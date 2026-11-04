@@ -66,6 +66,20 @@ npm exec nx -- graph
 
 ## Compatibility
 
+The repository's `npm ci` postinstall applies a reviewed, hash-guarded patch to
+Magicast 0.5.5: its embedded source-map-js 1.2.1 implementation is removed and
+replaced with the separately installed, pinned 1.2.2 dependency. This affects
+development coverage tooling. The provenance and exact artifact hashes live in
+`tools/magicast-bundle.provenance.json`; an unknown artifact or dependency version
+fails installation rather than silently skipping the patch. After an install
+with lifecycle scripts disabled, run `npm run postinstall` explicitly.
+`npm run tooling:check` verifies the installed artifact, and `npm run tooling:test`
+qualifies parse/edit/generate, source maps, and Vitest coverage threshold updates.
+The tests use the original immutable npm tarball from the install cache; when it
+is unavailable, their error gives an explicit prefetch command and
+`MEGAMONO_MAGICAST_TARBALL` override. Review and replace this patch when upgrading
+Magicast; it is not an upstream release or an audit exception.
+
 New workspaces use pinned Node 24, npm 11 by default (or an explicitly selected
 pnpm, Yarn, or Bun baseline), Nx 23.2.1, and TypeScript 6. `megamono init`
 preserves existing npm 9–11, pnpm 8–11, Yarn 1.22–4, or Bun 1.x workspaces on
