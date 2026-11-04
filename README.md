@@ -65,14 +65,6 @@ diagnostics, include/exclude rules, and coverage thresholds are exercised by
 these overrides and fixtures when upgrading the owning consumers; this is a
 qualified migration for those consumers, not a blanket glob or minimatch update.
 
-Inspect the project graph with:
-
-```bash
-npm exec nx -- graph
-```
-
-## Compatibility
-
 The repository's `npm ci` postinstall applies a reviewed, hash-guarded patch to
 Magicast 0.5.5: its embedded source-map-js 1.2.1 implementation is removed and
 replaced with the separately installed, pinned 1.2.2 dependency. This affects
@@ -86,6 +78,14 @@ The tests use the original immutable npm tarball from the install cache; when it
 is unavailable, their error gives an explicit prefetch command and
 `MEGAMONO_MAGICAST_TARBALL` override. Review and replace this patch when upgrading
 Magicast; it is not an upstream release or an audit exception.
+
+Inspect the project graph with:
+
+```bash
+npm exec nx -- graph
+```
+
+## Compatibility
 
 New workspaces use pinned Node 24, npm 11 by default (or an explicitly selected
 pnpm, Yarn, or Bun baseline), Nx 23.2.1, and TypeScript 6. `megamono init`
@@ -276,6 +276,16 @@ from the exact release checkout, run:
 ```sh
 RELEASE_CHANNEL=next npm run release:verify-published
 ```
+
+Qualification first checks the installed Magicast artifact, runs the tooling
+consumer fixtures, and executes `npm run security:audit` across all dependency
+classes at the low-severity threshold. An advisory or registry failure stops
+admission before builds or publication. The current minimatch and deepmerge
+findings therefore remain release blockers. `npm run tooling:review-minimatch`
+prints actual installed consumer resolutions and bounded legacy API evidence;
+it is an inventory, not an audit exception or release approval. See the
+[tooling dependency audit](docs/audits/tooling-dependencies-20261103.md) for scope,
+remediation evidence, and remaining qualification work.
 
 These fixtures require macOS with Xcode, Rust/Cargo, and `git-filter-repo`, just
 like the release workflow. The release workflow synchronizes both scaffold

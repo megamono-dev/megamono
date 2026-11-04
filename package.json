@@ -4,7 +4,7 @@
   "license": "MIT",
   "scripts": {
     "release:check": "node tools/check-release-policy.mjs && node tools/sync-release-pins.mjs --check",
-    "release:test": "node --test tools/release-policy.test.mjs tools/release-channel.test.mjs tools/sync-release-pins.test.mjs tools/publishing-setup.test.mjs tools/published-release.test.mjs",
+    "release:test": "node --test tools/release-policy.test.mjs tools/release-channel.test.mjs tools/sync-release-pins.test.mjs tools/publishing-setup.test.mjs tools/published-release.test.mjs tools/release-admission.test.mjs",
     "release:check-publishing": "node tools/check-publishing-setup.mjs",
     "release:qualify": "node tools/qualify-release.mjs",
     "release:verify-published": "node tools/check-published-release.mjs",
@@ -15,7 +15,9 @@
     "yalc:install-clis": "node tools/install-yalc-cli.mjs",
     "postinstall": "node tools/patch-magicast-bundle.mjs",
     "tooling:check": "nx run @megamono/workspace:tooling-check",
-    "tooling:test": "nx run @megamono/workspace:tooling-test"
+    "tooling:test": "nx run @megamono/workspace:tooling-test",
+    "security:audit": "npm audit --audit-level=low --registry=https://registry.npmjs.org",
+    "tooling:review-minimatch": "nx run @megamono/workspace:tooling-review-minimatch"
   },
   "private": true,
   "devDependencies": {
@@ -95,6 +97,14 @@
         "cache": false,
         "options": {
           "command": "node --test tools/magicast-bundle.test.mjs tools/glob-tooling.test.mjs",
+          "cwd": "."
+        }
+      },
+      "tooling-review-minimatch": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "node tools/minimatch-tooling-review.mjs",
           "cwd": "."
         }
       }

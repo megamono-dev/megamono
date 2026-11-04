@@ -16,6 +16,9 @@ if (!['all', 'checks', 'consumers'].includes(phase))
   throw new Error('MEGAMONO_QUALIFY_PHASE must be all, checks, or consumers.');
 
 if (phase !== 'consumers') {
+  npm(['run', 'tooling:check']);
+  npm(['run', 'tooling:test']);
+  npm(['run', 'security:audit']);
   npm(['run', 'release:check']);
   npm(['run', 'release:test']);
   // Generators delegate to other packed workspace packages at runtime. Finish

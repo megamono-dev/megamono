@@ -1,0 +1,722 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-11-04T01:18:31.322Z",
+  "repository": "megamono-dev/megamono",
+  "sourceParentRevision": "8385b6442b2002f1c176c8f6e07531c081d0afbc",
+  "scope": "Megamono repository development tooling; no SDK production-runtime or hosted application approval.",
+  "dependencySha256": {
+    "package.json": "aad8d3c76680b662051c347fa782d2dd3086a7668de93c569b53825deed56756",
+    "package-lock.json": "0cdc8d87b3afe3f195617cfea6a1035a0e1f393cf593736b9c957e2b09e9c21c"
+  },
+  "audit": {
+    "beforeGlobMigration": {
+      "recordedAt": "2026-11-04T01:01:18.326Z",
+      "rawReportSha256": "c56570a8f818dee7ca5396193c13ea439ad3fed0e6d429382b5b3d6f3ffcdc09",
+      "auditExitCode": 1,
+      "reportedPackages": {
+        "info": 0,
+        "low": 2,
+        "moderate": 68,
+        "high": 0,
+        "critical": 0,
+        "total": 70
+      },
+      "underlyingAdvisories": [
+        {
+          "name": "deepmerge",
+          "title": "deepmerge mergeObject() allows prototype poisoning of returned objects",
+          "severity": "low",
+          "range": ">=4.2.0 <=4.3.1",
+          "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4"
+        },
+        {
+          "name": "glob",
+          "title": "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal",
+          "severity": "moderate",
+          "range": ">=9.0.0 <=14.0.1",
+          "url": "https://github.com/advisories/GHSA-3g3m-2fjr-6pw4"
+        },
+        {
+          "name": "minimatch",
+          "title": "minimatch has potential denial of service via globparts amplification",
+          "severity": "moderate",
+          "range": "<11.0.1",
+          "url": "https://github.com/advisories/GHSA-g3hv-75wg-m249"
+        }
+      ]
+    },
+    "afterGlobMigration": {
+      "recordedAt": "2026-11-04T01:16:07.334Z",
+      "rawReportSha256": "1b242ca9f9ad32c387dae87d23be3ff3207578d213c197d113df87c06f85e149",
+      "auditExitCode": 1,
+      "reportedPackages": {
+        "info": 0,
+        "low": 4,
+        "moderate": 67,
+        "high": 0,
+        "critical": 0,
+        "total": 71
+      },
+      "underlyingAdvisories": [
+        {
+          "name": "deepmerge",
+          "title": "deepmerge mergeObject() allows prototype poisoning of returned objects",
+          "severity": "low",
+          "range": ">=4.2.0 <=4.3.1",
+          "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4"
+        },
+        {
+          "name": "minimatch",
+          "title": "minimatch has potential denial of service via globparts amplification",
+          "severity": "moderate",
+          "range": "<11.0.1",
+          "url": "https://github.com/advisories/GHSA-g3hv-75wg-m249"
+        }
+      ]
+    },
+    "interpretation": "npm counts affected package reports, including propagated parent packages. These are not counts of independent advisories. The remaining underlying advisories are minimatch and deepmerge. Magicast embedded-code remediation is verified separately from registry audit results."
+  },
+  "minimatch": {
+    "installedInventory": {
+      "schemaVersion": 1,
+      "reviewedAt": "2026-11-04T01:14:11.998Z",
+      "scope": "Read-only npm lockfile, installed-resolution, and legacy API inventory.",
+      "lockfileSha256": "0cdc8d87b3afe3f195617cfea6a1035a0e1f393cf593736b9c957e2b09e9c21c",
+      "consumers": [
+        {
+          "path": "node_modules/@eslint/config-array",
+          "name": "@eslint/config-array",
+          "version": "0.23.5",
+          "requestedMinimatch": "^10.2.4",
+          "installed": {
+            "path": "node_modules/minimatch",
+            "version": "10.2.5",
+            "manifestSha256": "4b3a08a7ad20dead8bbe4b4fe97a2746bded7c51d218ef3034eb4e330ad31f08",
+            "lockedVersion": "10.2.5",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/@jest/reporters/node_modules/glob",
+          "name": "glob",
+          "version": "14.0.3",
+          "requestedMinimatch": "^11.0.2",
+          "installed": {
+            "path": "node_modules/@jest/reporters/node_modules/minimatch",
+            "version": "11.0.4",
+            "manifestSha256": "6b31405e9b7b9a3613bd001ebf468b7a7d7a7a1b5c83fa5f00240631a0c369b5",
+            "lockedVersion": "11.0.4",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/@nx/devkit",
+          "name": "@nx/devkit",
+          "version": "23.3.1",
+          "requestedMinimatch": "10.2.5",
+          "installed": {
+            "path": "node_modules/minimatch",
+            "version": "10.2.5",
+            "manifestSha256": "4b3a08a7ad20dead8bbe4b4fe97a2746bded7c51d218ef3034eb4e330ad31f08",
+            "lockedVersion": "10.2.5",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/@nx/jest",
+          "name": "@nx/jest",
+          "version": "23.3.1",
+          "requestedMinimatch": "10.2.5",
+          "installed": {
+            "path": "node_modules/minimatch",
+            "version": "10.2.5",
+            "manifestSha256": "4b3a08a7ad20dead8bbe4b4fe97a2746bded7c51d218ef3034eb4e330ad31f08",
+            "lockedVersion": "10.2.5",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/@nx/playwright",
+          "name": "@nx/playwright",
+          "version": "23.3.1",
+          "requestedMinimatch": "10.2.5",
+          "installed": {
+            "path": "node_modules/minimatch",
+            "version": "10.2.5",
+            "manifestSha256": "4b3a08a7ad20dead8bbe4b4fe97a2746bded7c51d218ef3034eb4e330ad31f08",
+            "lockedVersion": "10.2.5",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/@nx/react",
+          "name": "@nx/react",
+          "version": "23.3.1",
+          "requestedMinimatch": "10.2.5",
+          "installed": {
+            "path": "node_modules/minimatch",
+            "version": "10.2.5",
+            "manifestSha256": "4b3a08a7ad20dead8bbe4b4fe97a2746bded7c51d218ef3034eb4e330ad31f08",
+            "lockedVersion": "10.2.5",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/@rollup/plugin-commonjs/node_modules/glob",
+          "name": "glob",
+          "version": "8.1.0",
+          "requestedMinimatch": "^5.0.1",
+          "installed": {
+            "path": "node_modules/@rollup/plugin-commonjs/node_modules/minimatch",
+            "version": "5.1.9",
+            "manifestSha256": "dc1b9424c2ec4c845ba05e7402f7d22807f4ac85d31725892fd3dcafaa08f800",
+            "lockedVersion": "5.1.9",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/@swc/cli",
+          "name": "@swc/cli",
+          "version": "0.8.1",
+          "requestedMinimatch": "^9.0.3",
+          "installed": {
+            "path": "node_modules/@swc/cli/node_modules/minimatch",
+            "version": "9.0.9",
+            "manifestSha256": "07347ae64d38f4cc1be3ffcc83322ec40d4609f5f3e9dc027ae91a4617239ac2",
+            "lockedVersion": "9.0.9",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/@typescript-eslint/typescript-estree",
+          "name": "@typescript-eslint/typescript-estree",
+          "version": "8.72.1",
+          "requestedMinimatch": "^10.2.2",
+          "installed": {
+            "path": "node_modules/minimatch",
+            "version": "10.2.5",
+            "manifestSha256": "4b3a08a7ad20dead8bbe4b4fe97a2746bded7c51d218ef3034eb4e330ad31f08",
+            "lockedVersion": "10.2.5",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/@verdaccio/core",
+          "name": "@verdaccio/core",
+          "version": "8.4.0",
+          "requestedMinimatch": "10.2.6",
+          "installed": {
+            "path": "node_modules/@verdaccio/core/node_modules/minimatch",
+            "version": "10.2.6",
+            "manifestSha256": "bb847ba240909c9a36d4eaeb4e0efdc3e31182aeef208c1611259a48f282ea75",
+            "lockedVersion": "10.2.6",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/eslint",
+          "name": "eslint",
+          "version": "10.13.0",
+          "requestedMinimatch": "^10.2.5",
+          "installed": {
+            "path": "node_modules/minimatch",
+            "version": "10.2.5",
+            "manifestSha256": "4b3a08a7ad20dead8bbe4b4fe97a2746bded7c51d218ef3034eb4e330ad31f08",
+            "lockedVersion": "10.2.5",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/fork-ts-checker-webpack-plugin",
+          "name": "fork-ts-checker-webpack-plugin",
+          "version": "9.1.0",
+          "requestedMinimatch": "^3.0.4",
+          "installed": {
+            "path": "node_modules/fork-ts-checker-webpack-plugin/node_modules/minimatch",
+            "version": "3.1.5",
+            "manifestSha256": "eefa1c89527d52bbb2e8b053fe8ecf3e3ced399bdba82cf27e0e92edfd833938",
+            "lockedVersion": "3.1.5",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/jest-config/node_modules/glob",
+          "name": "glob",
+          "version": "14.0.3",
+          "requestedMinimatch": "^11.0.2",
+          "installed": {
+            "path": "node_modules/jest-config/node_modules/minimatch",
+            "version": "11.0.4",
+            "manifestSha256": "6b31405e9b7b9a3613bd001ebf468b7a7d7a7a1b5c83fa5f00240631a0c369b5",
+            "lockedVersion": "11.0.4",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/jest-runtime/node_modules/glob",
+          "name": "glob",
+          "version": "14.0.3",
+          "requestedMinimatch": "^11.0.2",
+          "installed": {
+            "path": "node_modules/jest-runtime/node_modules/minimatch",
+            "version": "11.0.4",
+            "manifestSha256": "6b31405e9b7b9a3613bd001ebf468b7a7d7a7a1b5c83fa5f00240631a0c369b5",
+            "lockedVersion": "11.0.4",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/nx",
+          "name": "nx",
+          "version": "23.3.1",
+          "requestedMinimatch": "10.2.5",
+          "installed": {
+            "path": "node_modules/minimatch",
+            "version": "10.2.5",
+            "manifestSha256": "4b3a08a7ad20dead8bbe4b4fe97a2746bded7c51d218ef3034eb4e330ad31f08",
+            "lockedVersion": "10.2.5",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/test-exclude",
+          "name": "test-exclude",
+          "version": "7.0.2",
+          "requestedMinimatch": "^10.2.2",
+          "installed": {
+            "path": "node_modules/minimatch",
+            "version": "10.2.5",
+            "manifestSha256": "4b3a08a7ad20dead8bbe4b4fe97a2746bded7c51d218ef3034eb4e330ad31f08",
+            "lockedVersion": "10.2.5",
+            "matchesLock": true
+          }
+        },
+        {
+          "path": "node_modules/test-exclude/node_modules/glob",
+          "name": "glob",
+          "version": "14.0.3",
+          "requestedMinimatch": "^11.0.2",
+          "installed": {
+            "path": "node_modules/test-exclude/node_modules/glob/node_modules/minimatch",
+            "version": "11.0.4",
+            "manifestSha256": "6b31405e9b7b9a3613bd001ebf468b7a7d7a7a1b5c83fa5f00240631a0c369b5",
+            "lockedVersion": "11.0.4",
+            "matchesLock": true
+          }
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "path": "node_modules/nx/dist/src/utils/find-matching-projects.js",
+          "api": "makeRe(",
+          "lines": [204],
+          "sha256": "f55e29a08c635eee1d4a08e03f4254d130a9a69d5a92e6e5a8e169df3eb71d61"
+        },
+        {
+          "path": "node_modules/nx/dist/src/generators/utils/glob.js",
+          "api": "makeRe(",
+          "lines": [36],
+          "sha256": "2fb2a697656405498f176dd5d6aeb318b4a34e35d2eb7aa86e65cc886b0a068c"
+        },
+        {
+          "path": "node_modules/@verdaccio/core/build/auth-utils.js",
+          "api": "makeRe(",
+          "lines": [24],
+          "sha256": "f882a7a82c9eb01227f911844620821a295ab40bc21d60547c77489211fe3e36"
+        },
+        {
+          "path": "node_modules/@rollup/plugin-commonjs/node_modules/glob/sync.js",
+          "api": "this.minimatch.set",
+          "lines": [42, 45],
+          "sha256": "b1e2a092e21d73699e51d6f3c0c1cda90d75d1601757be158a85d01872578138"
+        },
+        {
+          "path": "node_modules/fork-ts-checker-webpack-plugin/lib/issue/issue-match.js",
+          "api": "minimatch_1.default)",
+          "lines": [16],
+          "sha256": "7a401e55aab0dc61442112bb0989feec16b7dce81dc2c7f0d3d54b42b640a1ef"
+        }
+      ],
+      "limitations": [
+        "Not a registry audit, advisory exception, exploit assessment, or release approval.",
+        "Legacy API anchors are deliberately bounded and are not all minimatch call sites.",
+        "An absent anchor or changed dependency version does not establish remediation."
+      ]
+    },
+    "upstream": {
+      "reviewedAt": "2026-11-04T00:57:21.193Z",
+      "method": "Read-only public npm registry metadata. No installs, package mutation, fresh audit, or exploit probes. Failed reads are explicit.",
+      "sources": [
+        {
+          "name": "minimatch",
+          "reviewedAt": "2026-11-04T00:57:19.097Z",
+          "source": "https://registry.npmjs.org/minimatch",
+          "responseSha256": "8d26754a4ac7a94684cb188268af20313ba68896d51143ed1188dfcb216c6cb3",
+          "latest": "11.0.4",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/minimatch/11.0.4",
+            "minimatch": null,
+            "glob": null,
+            "distIntegrity": "sha512-/UJ1dEoVQTjPNDh6SGlUo+ueLMmoHTas4q+8yaAR/5t6nLAIiBDJtoYUh20IYleix7ehiQkgczb84PE3uzHkxg=="
+          },
+          "maintenance": {
+            "3": "3.1.5",
+            "5": "5.1.9",
+            "9": "9.0.9",
+            "10": "10.2.6"
+          }
+        },
+        {
+          "name": "@eslint/config-array",
+          "reviewedAt": "2026-11-04T00:57:19.153Z",
+          "source": "https://registry.npmjs.org/%40eslint%2Fconfig-array",
+          "responseSha256": "e4da3f2b00f424d435b1e82dd9bc3f0db6b0596c5001597a708173fc2691eca7",
+          "latest": "0.23.5",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/%40eslint%2Fconfig-array/0.23.5",
+            "minimatch": "^10.2.4",
+            "glob": null,
+            "distIntegrity": "sha512-Y3kKLvC1dvTOT+oGlqNQ1XLqK6D1HU2YXPc52NmAlJZbMMWDzGYXMiPRJ8TYD39muD/OTjlZmNJ4ib7dvSrMBA=="
+          }
+        },
+        {
+          "name": "@nx/devkit",
+          "reviewedAt": "2026-11-04T00:57:19.328Z",
+          "source": "https://registry.npmjs.org/%40nx%2Fdevkit",
+          "responseSha256": "ff22a9b2ba22b97f9933b7f4ef33fcf00cbf8c516132c4fc350c9bb286eff15d",
+          "latest": "24.0.4",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/%40nx%2Fdevkit/24.0.4",
+            "minimatch": "10.2.5",
+            "glob": null,
+            "distIntegrity": "sha512-g42KgT36Ecs9mtvPbIRkUOi0pg3Nbs5U5n8BnD0Apn0DieaFUo/ytWjsQPn2SfRq76GcZmAnMSYrbS0KX37TvQ=="
+          }
+        },
+        {
+          "name": "@nx/jest",
+          "reviewedAt": "2026-11-04T00:57:19.554Z",
+          "source": "https://registry.npmjs.org/%40nx%2Fjest",
+          "responseSha256": "eaa6ce76db71b301d5aeb7a86a07eac37b4f8aabb87592d58fbaa0e82511472e",
+          "latest": "24.0.4",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/%40nx%2Fjest/24.0.4",
+            "minimatch": "10.2.5",
+            "glob": null,
+            "distIntegrity": "sha512-I6ABcOPvET2R8wWIBR9pQC2F2nFwDmTfs2mnYyuPbMqQ1m9s9h38KTCOYFqfSEctz18wZxk3TCJdxwQbwC/fow=="
+          }
+        },
+        {
+          "name": "@nx/playwright",
+          "reviewedAt": "2026-11-04T00:57:19.769Z",
+          "source": "https://registry.npmjs.org/%40nx%2Fplaywright",
+          "responseSha256": "85a886b7635a49c0b244dff3ea573f1fb54c97e1c6f57f8069fabc7806abe2e6",
+          "latest": "24.0.4",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/%40nx%2Fplaywright/24.0.4",
+            "minimatch": "10.2.5",
+            "glob": null,
+            "distIntegrity": "sha512-1VqdFClRzAzs93k2JgAyejtcWWjXxoBpkSYmETFNGH5Z4jJFaPdq8VsB7/kC/1cGdFioRX76BP3kN8v0DL71LQ=="
+          }
+        },
+        {
+          "name": "@nx/react",
+          "reviewedAt": "2026-11-04T00:57:20.046Z",
+          "source": "https://registry.npmjs.org/%40nx%2Freact",
+          "responseSha256": "6f0a226711ae080ef2f60f84dc47c5b0ee2e7e164a19dabbdcc67892c72cb60b",
+          "latest": "24.0.4",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/%40nx%2Freact/24.0.4",
+            "minimatch": "10.2.5",
+            "glob": null,
+            "distIntegrity": "sha512-3f8K2C0OHtaRatAJbjwuwaLRzdlJTjmk9h/Lh1kFie74OEPq0QOz2Eel24iijNb1XrVXiRyKZRALRRo8q+vr5g=="
+          }
+        },
+        {
+          "name": "glob",
+          "reviewedAt": "2026-11-04T00:57:20.102Z",
+          "source": "https://registry.npmjs.org/glob",
+          "responseSha256": "90419b2d0c1049053362239360a7a411298f4a2d52ed0bd0e9aeb6a7acdca2f6",
+          "latest": "14.0.3",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/glob/14.0.3",
+            "minimatch": "^11.0.2",
+            "glob": null,
+            "distIntegrity": "sha512-A1vjIwC3qpdCso45Iw127gnp7sPhqgY8lUQhDrArIs+GbmfaaVPFuoyy7WyLT9EPZCRZ7j7aLdwUhQmHWesEow=="
+          }
+        },
+        {
+          "name": "@swc/cli",
+          "reviewedAt": "2026-11-04T00:57:20.146Z",
+          "source": "https://registry.npmjs.org/%40swc%2Fcli",
+          "responseSha256": "a6e55538b499fc9e38f9615e33ff76c874f23be05ce3d0189b657c6cc5915a82",
+          "latest": "0.8.2",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/%40swc%2Fcli/0.8.2",
+            "minimatch": "^9.0.3",
+            "glob": null,
+            "distIntegrity": "sha512-4RAfbHx1oz/9zFutxIjm7famgfQeQ6s3Tc5rIWxXfB+QlA5y5rHKFi8NDCZ5iqZuZkMZTzMAHoWRRlioLO5i7Q=="
+          }
+        },
+        {
+          "name": "@typescript-eslint/typescript-estree",
+          "reviewedAt": "2026-11-04T00:57:20.562Z",
+          "source": "https://registry.npmjs.org/%40typescript-eslint%2Ftypescript-estree",
+          "responseSha256": "178c188a25691c550eafa77348fadf9b91ef18cbc7b0b38f26262bcaa5992225",
+          "latest": "8.72.1",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/%40typescript-eslint%2Ftypescript-estree/8.72.1",
+            "minimatch": "^10.2.2",
+            "glob": null,
+            "distIntegrity": "sha512-DAlUoUV93hIvrtIQLwCbmZQYVZwOMhiHJrOVUUIWicFZaIYjTRqlY3I/NZevfkLmSqkNHRu2qYDcq9lrn16oOQ=="
+          }
+        },
+        {
+          "name": "@verdaccio/core",
+          "reviewedAt": "2026-11-04T00:57:20.638Z",
+          "source": "https://registry.npmjs.org/%40verdaccio%2Fcore",
+          "responseSha256": "5a5818dfcd5ef773adcfce645b67b66a67649b22306dc63ecfa5eb61477958b6",
+          "latest": "8.4.0",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/%40verdaccio%2Fcore/8.4.0",
+            "minimatch": "10.2.6",
+            "glob": null,
+            "distIntegrity": "sha512-+0Fug/ilB+LmTgh1oO4vum054ADtJM1gGgZtUUwz6nxbtvnCmRK/kKl8Wa3d2UtySYkTAQOtET1WJwlkzzQ4DA=="
+          }
+        },
+        {
+          "name": "eslint",
+          "reviewedAt": "2026-11-04T00:57:20.713Z",
+          "source": "https://registry.npmjs.org/eslint",
+          "responseSha256": "82f33defb6ec458e2ed8ef00f05d49be747b0b3fc76a67c838608569fa5b26b8",
+          "latest": "10.14.0",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/eslint/10.14.0",
+            "minimatch": "^10.2.6",
+            "glob": null,
+            "distIntegrity": "sha512-T0pNsxkb9IKmtQjhpK3d7nWOpFv+YHuMbTJnSVMoQblF0onvXfErrtp4V1jHtsQPan7dKaGVD0q1WCXnzMF31A=="
+          }
+        },
+        {
+          "name": "fork-ts-checker-webpack-plugin",
+          "reviewedAt": "2026-11-04T00:57:20.770Z",
+          "source": "https://registry.npmjs.org/fork-ts-checker-webpack-plugin",
+          "responseSha256": "81af04b094d58e306d1e7ad2b1cf63941ac110478e1151a33aba8239263929de",
+          "latest": "9.1.0",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/fork-ts-checker-webpack-plugin/9.1.0",
+            "minimatch": "^3.0.4",
+            "glob": null,
+            "distIntegrity": "sha512-mpafl89VFPJmhnJ1ssH+8wmM2b50n+Rew5x42NeI2U78aRWgtkEtGmctp7iT16UjquJTjorEmIfESj3DxdW84Q=="
+          }
+        },
+        {
+          "name": "nx",
+          "reviewedAt": "2026-11-04T00:57:21.145Z",
+          "source": "https://registry.npmjs.org/nx",
+          "responseSha256": "1767826f5db03fc3aa37f5473764a46464682171bb49579c5f722d46e097f20c",
+          "latest": "24.0.4",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/nx/24.0.4",
+            "minimatch": "10.2.5",
+            "glob": null,
+            "distIntegrity": "sha512-2CfR+V584K05+wdWGiiJhXTzIWWtJdKPBkzlZSp4HDY+RwGhIOUZ6W/Q/7i+9GISQPEdyeOpAboSkbcdvZGfTg=="
+          }
+        },
+        {
+          "name": "test-exclude",
+          "reviewedAt": "2026-11-04T00:57:21.193Z",
+          "source": "https://registry.npmjs.org/test-exclude",
+          "responseSha256": "d4cd513ff37c46a8ad515a6b209d34ee5150c77b027085b884ee75b618d53980",
+          "latest": "8.0.0",
+          "latestManifest": {
+            "source": "https://registry.npmjs.org/test-exclude/8.0.0",
+            "minimatch": "^10.2.2",
+            "glob": "^13.0.6",
+            "distIntegrity": "sha512-ZOffsNrXYggvU1mDGHk54I96r26P8SyMjO5slMKSc7+IWmtB/MQKnEC2fP51imB3/pT6YK5cT5E8f+Dd9KdyOQ=="
+          }
+        }
+      ],
+      "primarySources": [
+        "https://github.com/advisories/GHSA-g3hv-75wg-m249",
+        "https://raw.githubusercontent.com/isaacs/minimatch/v11.0.1/changelog.md"
+      ]
+    }
+  },
+  "additionalUpstreamReview": {
+    "method": "Read-only public registry metadata, no installs or security probes.",
+    "results": [
+      {
+        "name": "glob",
+        "reviewedAt": "2026-11-04T01:02:25.774Z",
+        "source": "https://registry.npmjs.org/glob",
+        "responseSha256": "90419b2d0c1049053362239360a7a411298f4a2d52ed0bd0e9aeb6a7acdca2f6",
+        "latest": "14.0.3",
+        "maintenance": {
+          "8": "8.1.0",
+          "9": "9.3.5",
+          "10": "10.5.0",
+          "11": "11.1.0",
+          "12": "12.0.0",
+          "13": "13.0.6",
+          "14": "14.0.3"
+        },
+        "manifests": [
+          {
+            "version": "8.1.0",
+            "minimatch": "^5.0.1",
+            "engines": {
+              "node": ">=12"
+            },
+            "distIntegrity": "sha512-r8hpEjiQEYlF2QU0df3dS+nxxSIreXQS1qRhMJM0Q5NDdR386C7jb7Hwwod8Fgiuex+k0GFjgft18yvxm5XoCQ==",
+            "source": "https://registry.npmjs.org/glob/8.1.0"
+          },
+          {
+            "version": "9.3.5",
+            "minimatch": "^8.0.2",
+            "engines": {
+              "node": ">=16 || 14 >=14.17"
+            },
+            "distIntegrity": "sha512-e1LleDykUz2Iu+MTYdkSsuWX8lvAjAcs0Xef0lNIu0S2wOAzuTxCJtcd9S3cijlwYF18EsU3rzb8jPVobxDh9Q==",
+            "source": "https://registry.npmjs.org/glob/9.3.5"
+          },
+          {
+            "version": "10.5.0",
+            "minimatch": "^9.0.4",
+            "distIntegrity": "sha512-DfXN8DfhJ7NH3Oe7cFmu3NCu1wKbkReJ8TorzSAFbSKrlNaQSKfIzqYqVY8zlbs2NLBbWpRiU52GX2PbaBVNkg==",
+            "source": "https://registry.npmjs.org/glob/10.5.0"
+          },
+          {
+            "version": "11.1.0",
+            "minimatch": "^10.1.1",
+            "engines": {
+              "node": "20 || >=22"
+            },
+            "distIntegrity": "sha512-vuNwKSaKiqm7g0THUBu2x7ckSs3XJLXE+2ssL7/MfTGPLLcrJQ/4Uq1CjPTtO5cCIiRxqvN6Twy1qOwhL0Xjcw==",
+            "source": "https://registry.npmjs.org/glob/11.1.0"
+          },
+          {
+            "version": "12.0.0",
+            "minimatch": "^10.1.1",
+            "engines": {
+              "node": "20 || >=22"
+            },
+            "distIntegrity": "sha512-5Qcll1z7IKgHr5g485ePDdHcNQY0k2dtv/bjYy0iuyGxQw2qSOiiXUXJ+AYQpg3HNoUMHqAruX478Jeev7UULw==",
+            "source": "https://registry.npmjs.org/glob/12.0.0"
+          },
+          {
+            "version": "13.0.6",
+            "minimatch": "^10.2.2",
+            "engines": {
+              "node": "18 || 20 || >=22"
+            },
+            "distIntegrity": "sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw==",
+            "source": "https://registry.npmjs.org/glob/13.0.6"
+          },
+          {
+            "version": "14.0.3",
+            "minimatch": "^11.0.2",
+            "engines": {
+              "node": "18 || 20 || >=22"
+            },
+            "distIntegrity": "sha512-A1vjIwC3qpdCso45Iw127gnp7sPhqgY8lUQhDrArIs+GbmfaaVPFuoyy7WyLT9EPZCRZ7j7aLdwUhQmHWesEow==",
+            "source": "https://registry.npmjs.org/glob/14.0.3"
+          }
+        ]
+      },
+      {
+        "name": "deepmerge",
+        "reviewedAt": "2026-11-04T01:02:25.825Z",
+        "source": "https://registry.npmjs.org/deepmerge",
+        "responseSha256": "5f1fd329ff9830223ea84451a66ffacc2f0fb593fbda20e8548d5eb3dd29c123",
+        "latest": "4.3.1",
+        "maintenance": {
+          "2": "2.2.1",
+          "3": "3.3.0",
+          "4": "4.3.1",
+          "5": null
+        },
+        "manifests": [
+          {
+            "version": "2.2.1",
+            "engines": {
+              "node": ">=0.10.0"
+            },
+            "distIntegrity": "sha512-R9hc1Xa/NOBi9WRVUWg19rl1UB7Tt4kuPd+thNJgFZoxXsTz7ncaPaeIm+40oSGuP33DfMb4sZt1QIGiJzC4EA==",
+            "source": "https://registry.npmjs.org/deepmerge/2.2.1"
+          },
+          {
+            "version": "3.3.0",
+            "engines": {
+              "node": ">=0.10.0"
+            },
+            "distIntegrity": "sha512-GRQOafGHwMHpjPx9iCvTgpu9NojZ49q794EEL94JVEw6VaeA8XTUyBKvAkOOjBX9oJNiV6G3P+T+tihFjo2TqA==",
+            "source": "https://registry.npmjs.org/deepmerge/3.3.0"
+          },
+          {
+            "version": "4.3.1",
+            "engines": {
+              "node": ">=0.10.0"
+            },
+            "distIntegrity": "sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==",
+            "source": "https://registry.npmjs.org/deepmerge/4.3.1"
+          }
+        ]
+      }
+    ]
+  },
+  "qualification": {
+    "nx24": {
+      "version": "24.0.4",
+      "forcedPeers": false,
+      "packedCoreAndInference": "passed",
+      "packedLaravelAndNativePHP": "passed",
+      "focusedPlanningAndPreflightTests": 29,
+      "linuxMatrix": "configured; not run on the local final commit"
+    },
+    "magicast": {
+      "provenance": "../../tools/magicast-bundle.provenance.json",
+      "consumerTests": 7,
+      "originalTarballIntegrityVerified": true,
+      "coverageThresholdRewrite": "passed with module-resolution tracing",
+      "cleanNpmCiPostinstall": "passed",
+      "cleanOfflineCacheFixture": "passed without the explicit tarball override"
+    },
+    "glob": {
+      "version": "14.0.3",
+      "consumers": [
+        "@jest/reporters@30.5.2",
+        "jest-config@30.5.2",
+        "jest-runtime@30.5.2",
+        "test-exclude@7.0.2"
+      ],
+      "preservedRollupGlob": "8.1.0",
+      "consumerTests": 3,
+      "baselineBehavior": "passed",
+      "migratedBehavior": "passed",
+      "registryCancellationAdvisory": "absent after migration"
+    },
+    "workspace": {
+      "lintTestBuildTargets": 30,
+      "passedUnitTests": 1147,
+      "existingSkippedUnitTests": 1,
+      "toolingTests": 10,
+      "releasePolicyAndAdmissionTests": 26,
+      "packedExports": 10,
+      "structure": "passed",
+      "docsValidation": "passed"
+    }
+  },
+  "releaseApproved": false,
+  "remaining": [
+    "minimatch GHSA-g3hv-75wg-m249",
+    "deepmerge GHSA-gcqx-w48m-w2h4",
+    "Linux CI on final revision",
+    "Complete repository-owned package distribution and application deployment qualification"
+  ],
+  "limitations": [
+    "No advisory exclusions or suppressions were added.",
+    "Ordinary compatibility fixtures do not establish exploit reachability or universal matching equivalence.",
+    "Local tooling overrides and installed-artifact patches are not emitted into adopting repositories.",
+    "No public package publication, hosted provider/recovery journey, or production deployment was performed."
+  ]
+}
