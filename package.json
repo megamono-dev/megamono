@@ -17,7 +17,8 @@
     "tooling:check": "nx run @megamono/workspace:tooling-check",
     "tooling:test": "nx run @megamono/workspace:tooling-test",
     "security:audit": "npm audit --audit-level=low --registry=https://registry.npmjs.org",
-    "tooling:review-minimatch": "nx run @megamono/workspace:tooling-review-minimatch"
+    "tooling:review-minimatch": "nx run @megamono/workspace:tooling-review-minimatch",
+    "tooling:review-deepmerge": "nx run @megamono/workspace:tooling-review-deepmerge"
   },
   "private": true,
   "devDependencies": {
@@ -98,7 +99,7 @@
         "executor": "nx:run-commands",
         "cache": false,
         "options": {
-          "command": "node --test tools/magicast-bundle.test.mjs tools/glob-tooling.test.mjs tools/minimatch-patch.test.mjs tools/minimatch-nx-tooling.test.mjs tools/minimatch-consumer-tooling.test.mjs",
+          "command": "node --test tools/magicast-bundle.test.mjs tools/glob-tooling.test.mjs tools/minimatch-patch.test.mjs tools/minimatch-nx-tooling.test.mjs tools/minimatch-consumer-tooling.test.mjs tools/deepmerge-tooling-review.test.mjs",
           "cwd": "."
         }
       },
@@ -107,6 +108,14 @@
         "cache": false,
         "options": {
           "command": "node tools/minimatch-tooling-review.mjs",
+          "cwd": "."
+        }
+      },
+      "tooling-review-deepmerge": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "node tools/deepmerge-tooling-review.mjs",
           "cwd": "."
         }
       }
