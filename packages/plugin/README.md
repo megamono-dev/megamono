@@ -117,6 +117,20 @@ Doctor before its lint/test/build phase. Equivalent repository-owned workflows
 remain unchanged: add the Doctor target to workflows that do not reach a guarded
 build/export target.
 
+New mobile apps declare their own SDK-compatible React, React DOM, native
+runtime, Expo modules and test/build tools. The maintained Nx Expo generator
+selects the SDK lane; existing root and web dependency declarations retain their
+versions and ownership. Ambiguous SDK ranges, incompatible native runtimes, or
+conflicting Expo inference policies require explicit configuration review.
+
+New Metro configuration extends `expo/metro-config`, retains its monorepo
+defaults, and resolves React entrypoints from the mobile app so hoisted native
+libraries use the same React singleton. Existing application configurations are
+not migrated by adding another app. On Nx 18 and newer, generation uses
+maintained inference, reusing a compatible unscoped registration or adding an
+exact scope for the new app's configuration files. Custom target names and
+dependency export ordering are preserved.
+
 Install and pin an `expo-doctor` development dependency compatible with the
 app's Expo SDK and Node version using the workspace package manager, and commit
 the lockfile. Megamono runs only that installed tool from the app directory. It
@@ -141,9 +155,11 @@ React/React Native compatibility. Static inspection never executes project
 configuration and always reports validation as `not-assessed`. An import or a
 configured target is not proof of a passing Doctor, bundle, native or cloud build.
 
-The packed Expo consumer regression lane runs actual Doctor and iOS/Android
-JavaScript exports with split mobile/web React versions. It is a tested SDK
-combination, not blanket support for every Expo release or native deployment.
+The packed Expo consumer regression lane covers adoption and new application
+generation with SDK 54/Nx 23.3.1 and split mobile/web React versions. It runs
+actual Doctor and iOS/Android JavaScript exports; other SDKs, older Nx target
+behavior and native/cloud builds require their own qualification. Unit tests of
+SDK selection do not establish bundle compatibility for every supported lane.
 
 Strict package-source profiles also reject root `.yalc`/`yalc.lock` state even
 when ignored. The diagnostic distinguishes active manifest/configuration

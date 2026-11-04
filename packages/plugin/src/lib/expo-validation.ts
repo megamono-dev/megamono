@@ -73,7 +73,8 @@ function inferredTargets(
 ): Record<string, TargetConfiguration> {
   // The maintained Expo plugin infers these commands from the app config. Add
   // only dependency overlays; Nx remains responsible for the actual commands.
-  // Scoped plugins need the resolved graph supplied by the adoption caller.
+  // General glob scopes need the resolved graph supplied by the adoption
+  // caller; exact app-config filenames can also be checked in the Tree.
   if (
     !tree.exists(posix.join(root, 'metro.config.js')) ||
     !['app.json', 'app.config.js', 'app.config.ts'].some((file) =>
@@ -82,30 +83,36 @@ function inferredTargets(
   )
     return {};
   const plugins = manifest(tree, 'nx.json').plugins ?? [];
-  const plugin = plugins.find(
-    (entry) =>
-      (typeof entry === 'string' ? entry : entry.plugin) === '@nx/expo/plugin',
-  );
-  if (
-    !plugin ||
-    (typeof plugin === 'object' && (plugin.include || plugin.exclude))
-  )
-    return {};
-  const options = typeof plugin === 'object' ? (plugin.options ?? {}) : {};
-  return Object.fromEntries(
-    [
+  const configs = ['app.json', 'app.config.js', 'app.config.ts']
+    .map((file) => posix.join(root, file))
+    .filter((file) => tree.exists(file));
+  const applicable = plugins.filter((entry) => {
+    if (
+      (typeof entry === 'string' ? entry : entry.plugin) !== '@nx/expo/plugin'
+    )
+      return false;
+    if (typeof entry === 'string') return true;
+    if (entry.exclude?.length) return false;
+    return (
+      !entry.include ||
+      entry.include.some((pattern) => configs.includes(pattern))
+    );
+  });
+  const result: Record<string, TargetConfiguration> = {};
+  for (const plugin of applicable) {
+    const options = typeof plugin === 'object' ? (plugin.options ?? {}) : {};
+    for (const [option, fallback] of [
       ['buildTargetName', 'build'],
       ['exportTargetName', 'export'],
       ['runIosTargetName', 'run-ios'],
       ['runAndroidTargetName', 'run-android'],
-    ].map(([option, fallback]) => {
+    ]) {
       const targetName = options[option] ?? fallback;
       if (targetName === EXPO_DOCTOR_TARGET)
         throw new Error(
           `The Expo ${option} reserves ${EXPO_DOCTOR_TARGET} for a build/export command. Choose a different Expo target name before configuring validation.`,
         );
-      return [
-        targetName,
+      const target =
         option === 'exportTargetName'
           ? { command: 'expo export', dependsOn: [`^${targetName}`] }
           : option === 'buildTargetName'
@@ -115,10 +122,18 @@ function inferredTargets(
                   option === 'runIosTargetName'
                     ? 'expo run:ios'
                     : 'expo run:android',
-              },
-      ];
-    }),
-  );
+              };
+      if (
+        result[targetName] &&
+        JSON.stringify(result[targetName]) !== JSON.stringify(target)
+      )
+        throw new Error(
+          `Conflicting Expo inference policies for ${targetName}; review target names before configuring validation.`,
+        );
+      result[targetName] = target;
+    }
+  }
+  return result;
 }
 
 function localDependencies(

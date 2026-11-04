@@ -120,6 +120,23 @@ npm exec nx g @megamono/plugin:app --type=web --name=web --interactive=false --y
 
 V1 supports `web`, `site`, `api`, `worker`, `mobile`, `desktop`, `apple`, and `extension`. It reads `megamono.json`, derives a conventional name and root when omitted interactively, and composes the maintained ecosystem generator with Megamono-owned post-processing. Web and site use the Pages Router, `src/`, ESLint, Playwright, and the selected Chakra, Emotion, Tailwind, Panda, StyleX, CSS Modules, or inline billboard renderer. Chakra remains the suggested greenfield answer, not an enforced convention. API uses Nest plus a feature library rather than retaining substantive code in the application composition root. Mobile composes Expo and receives `platform:mobile`; Worker, Apple, desktop, and browser extension surfaces delegate to the corresponding Megamono language plugin or scaffold adapter. Every project receives the accepted `platform`, `scope`, `type`, and `visibility` tags.
 
+Mobile generation selects SDK requirements through the public maintained Nx
+Expo initializer without retaining probe writes or running its install callback.
+The new app owns SDK-compatible runtime, React singleton, and test/build tool
+declarations; existing root dependencies and sibling web versions retain their
+sections and ranges. Unbounded or conflicting SDK/native requirements are
+preflight conflicts rather than implicit upgrades. New configuration extends
+Expo's Metro defaults, with app-local React resolution for hoisted native
+libraries; adding a mobile app does not migrate other apps' Metro configuration.
+
+On Nx 18 and newer, mobile generation uses maintained Expo inference without
+legacy manifest-mutating `sync-deps` prerequisites. It reuses an equivalent
+unscoped policy or adds a registration with exact filenames for the new app.
+Different existing target policies require review instead of guessing scope
+matching. Doctor prerequisites retain configured target aliases and dependency
+export ordering. Older Nx behavior requires separate qualification; the current
+Nx 23.3.1/SDK 54 packed regression lane does not establish its compatibility.
+
 The generator inventories project names, roots, targets, ports, and required plugins before mutation. An equivalent existing project is a no-op; an occupied name or root with a different contract is a preflight conflict. The default project basename equals the app type, `--name` supports additional instances, and explicit `--directory` and `--port` values must be unique and workspace-safe. Automatic ports use the stable registry in `megamono.json`, so generation order does not change an existing assignment.
 
 Source templates are seeded and repository-owned after creation. Generator reruns validate their project contract but never replace modified application source. `scaffolding.web.styling` is only the preferred input for the next web scaffold; it is not checked by lint, health, or structural validation. Adoption detects Chakra before its Emotion substrate, StyleX, Panda (including Park UI), Tailwind (including shadcn/ui), and standalone Emotion, and leaves an unknown setup as `auto`. Project configuration and explicitly registered managed sections follow the ownership rules in `spec-megamono-0014`. The generator supports the common interactive, non-interactive, confirmation, dry-run, recovery, and idempotency contract from `spec-megamono-0000`.

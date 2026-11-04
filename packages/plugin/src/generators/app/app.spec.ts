@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { appGenerator, AppGeneratorError } from './app';
 import { readJson, readProjectConfiguration, updateJson } from '@nx/devkit';
 import { parse } from 'yaml';
+import { runInNewContext } from 'node:vm';
+import * as nodePath from 'node:path';
 
 function workspace() {
   const tree = createTreeWithEmptyWorkspace();
@@ -111,6 +113,440 @@ describe('app generator', () => {
       readJson(tree, 'package.json').devDependencies['eslint-config-next'],
     ).toBe('^15.5.18');
   });
+
+  it('keeps a new mobile app on its Expo React lane without changing web dependencies', async () => {
+    const tree = workspace();
+    const framework = {
+      react: '19.3.1',
+      'react-dom': '19.3.1',
+      expo: '~54.0.38',
+    };
+    updateJson(tree, 'package.json', (value) => ({
+      ...value,
+      dependencies: { ...value.dependencies, ...framework },
+    }));
+    tree.write(
+      'apps/site/package.json',
+      JSON.stringify({
+        name: '@fixture/site',
+        dependencies: {
+          next: '16.4.3',
+          react: '19.3.1',
+          'react-dom': '19.3.1',
+        },
+      }),
+    );
+    const web = tree.read('apps/site/package.json', 'utf8');
+    await appGenerator(tree, {
+      type: 'mobile',
+      scope: 'fixture',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    expect(readJson(tree, 'package.json').dependencies).toMatchObject(
+      framework,
+    );
+    expect(readJson(tree, 'apps/site/package.json')).toEqual(
+      JSON.parse(web ?? '{}'),
+    );
+    expect(
+      readJson(tree, 'apps/mobile/package.json').dependencies,
+    ).toMatchObject({
+      expo: '~54.0.38',
+      react: '19.1.0',
+      'react-dom': '19.1.0',
+      'react-native': '0.81.5',
+    });
+    expect(
+      readJson(tree, 'apps/mobile/package.json').devDependencies[
+        'react-test-renderer'
+      ],
+    ).toBe('19.1.0');
+    for (const name of [
+      '@testing-library/react-native',
+      'jest-expo',
+      'react-test-renderer',
+    ]) {
+      expect(
+        readJson(tree, 'apps/mobile/package.json').dependencies[name],
+      ).toBeUndefined();
+      expect(
+        readJson(tree, 'apps/mobile/package.json').devDependencies[name],
+      ).toBeDefined();
+      expect(
+        readJson(tree, 'package.json').devDependencies[name],
+      ).toBeUndefined();
+    }
+    expect(
+      readJson(tree, 'apps/mobile/package.json').dependencies[
+        '@expo/vector-icons'
+      ],
+    ).toBeUndefined();
+    expect(
+      readJson(tree, 'apps/mobile/package.json').dependencies[
+        '@expo/metro-config'
+      ],
+    ).toBeUndefined();
+    expect(
+      readJson(tree, 'apps/mobile/package.json').expo.autolinking.exclude,
+    ).toEqual(['react', 'react-dom']);
+    expect(
+      readJson(tree, 'package.json').dependencies['@expo/vector-icons'],
+    ).toBeUndefined();
+    const calls: unknown[][] = [];
+    const defaults = {
+      projectRoot: '/fixture/apps/mobile',
+      watchFolders: ['/fixture/owned-by-expo'],
+      transformer: { assetRegistryPath: 'expo-owned' },
+      resolver: {
+        nodeModulesPaths: [
+          '/fixture/apps/mobile/node_modules',
+          '/fixture/node_modules',
+        ],
+        assetExts: ['png', 'svg'],
+        sourceExts: ['ts', 'tsx'],
+        resolveRequest: (...args: unknown[]) => {
+          calls.push(args);
+          return 'expo-resolved';
+        },
+      },
+    };
+    const sandbox = {
+      __dirname: '/fixture/apps/mobile',
+      module: { exports: undefined as unknown },
+      require: Object.assign(
+        (name: string) => {
+          expect(name).toBe('expo/metro-config');
+          return { getDefaultConfig: () => defaults };
+        },
+        {
+          resolve: (name: string) =>
+            `/fixture/apps/mobile/${name.replace(/^\.\//, '')}`,
+        },
+      ),
+    };
+    runInNewContext(
+      tree.read('apps/mobile/metro.config.js', 'utf8') ?? '',
+      sandbox,
+    );
+    const metro = sandbox.module.exports as typeof defaults;
+    expect(metro.projectRoot).toBe(defaults.projectRoot);
+    expect(metro.watchFolders).toEqual(['/fixture/owned-by-expo']);
+    expect(metro.resolver.nodeModulesPaths).toEqual(
+      defaults.resolver.nodeModulesPaths,
+    );
+    expect(metro.transformer.assetRegistryPath).toBe('expo-owned');
+    const context = {
+      originModulePath: '/fixture/node_modules/react-native/index.js',
+    };
+    expect(
+      metro.resolver.resolveRequest(context, 'react/jsx-runtime', 'ios'),
+    ).toBe('expo-resolved');
+    expect(calls[0]).toEqual([
+      { ...context, originModulePath: '/fixture/apps/mobile/index.js' },
+      'react/jsx-runtime',
+      'ios',
+    ]);
+    metro.resolver.resolveRequest(context, 'react-native', 'android');
+    expect(calls[1]).toEqual([context, 'react-native', 'android']);
+    const jestSandbox = {
+      module: { exports: undefined as unknown },
+      __dirname: '/fixture/apps/mobile',
+      require: Object.assign(
+        (name: string) => {
+          expect(name).toBe('node:path');
+          return nodePath;
+        },
+        {
+          resolve: (name: string) =>
+            `/fixture/apps/mobile/node_modules/${name}`,
+        },
+      ),
+    };
+    runInNewContext(
+      tree.read('apps/mobile/jest.config.cts', 'utf8') ?? '',
+      jestSandbox,
+    );
+    const jestConfig = jestSandbox.module.exports as {
+      moduleNameMapper: Record<string, string>;
+    };
+    expect(jestConfig.moduleNameMapper['^react$']).toBe(
+      '/fixture/apps/mobile/node_modules/react',
+    );
+    expect(jestConfig.moduleNameMapper['^react/(.*)$']).toBe(
+      '/fixture/apps/mobile/node_modules/react/$1',
+    );
+    expect(jestConfig.moduleNameMapper['^react-dom/(.*)$']).toBe(
+      '/fixture/apps/mobile/node_modules/react-dom/$1',
+    );
+    expect(jestConfig.moduleNameMapper['^react-test-renderer/(.*)$']).toBe(
+      '/fixture/apps/mobile/node_modules/react-test-renderer/$1',
+    );
+    expect(jestConfig.moduleNameMapper['[.]svg$']).toBe(
+      '@nx/expo/plugins/jest/svg-mock',
+    );
+  });
+
+  it('selects the maintained SDK for a new mobile app and retains every pre-existing root declaration', async () => {
+    const tree = workspace();
+    const owned = {
+      dependencies: {
+        react: '19.3.1',
+        'react-dom': '19.3.1',
+        '@nx/react-native': '23.3.1',
+        'babel-preset-expo': '99.0.0',
+        'expo-splash-screen': '99.0.0',
+      },
+      devDependencies: {
+        '@types/react': '19.3.0',
+        'react-test-renderer': '19.3.1',
+        'jest-expo': '~55.0.18',
+        '@testing-library/react-native': '~13.1.0',
+      },
+      peerDependencies: { 'some-public-peer': '>=1 <2' },
+      optionalDependencies: { 'some-optional-peer': '^1.0.0' },
+    };
+    updateJson(tree, 'package.json', (manifest) => ({ ...manifest, ...owned }));
+    await appGenerator(tree, {
+      type: 'mobile',
+      scope: 'fixture',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    expect(readJson(tree, 'package.json')).toMatchObject(owned);
+    expect(
+      readJson(tree, 'package.json').dependencies['@types/react'],
+    ).toBeUndefined();
+    expect(
+      readJson(tree, 'package.json').devDependencies['babel-preset-expo'],
+    ).toBeUndefined();
+    const app = readJson(tree, 'apps/mobile/package.json');
+    expect(app.dependencies).toMatchObject({
+      expo: '~56.0.0',
+      react: '19.2.0',
+      'react-dom': '19.2.0',
+      'react-native': '0.85.3',
+    });
+    expect(app.devDependencies['react-test-renderer']).toBe('19.2.0');
+    expect(app.devDependencies['jest-expo']).toBe('~56.0.4');
+    expect(app.devDependencies['babel-preset-expo']).toBe('~56.0.14');
+    expect(app.devDependencies['@types/react']).toBe('~19.2.0');
+    expect(app.dependencies['expo-splash-screen']).toBe('~56.0.10');
+    expect(Object.values(app.dependencies)).not.toContain('*');
+    expect(app.devDependencies['@testing-library/react-native']).toBe(
+      '~13.2.0',
+    );
+  });
+
+  it('keeps fresh SDK runtime packages local when the existing web app uses React 18', async () => {
+    const tree = workspace();
+    updateJson(tree, 'package.json', (manifest) => ({
+      ...manifest,
+      dependencies: { react: '18.3.1', 'react-dom': '18.3.1' },
+      devDependencies: { '@types/react': '18.3.23' },
+    }));
+    await appGenerator(tree, {
+      type: 'mobile',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    const root = readJson(tree, 'package.json');
+    expect(root.dependencies).toMatchObject({
+      react: '18.3.1',
+      'react-dom': '18.3.1',
+    });
+    expect(root.dependencies.expo).toBeUndefined();
+    expect(root.dependencies['react-native']).toBeUndefined();
+    expect(root.dependencies['expo-splash-screen']).toBeUndefined();
+    expect(root.devDependencies['@expo/cli']).toBeUndefined();
+    const app = readJson(tree, 'apps/mobile/package.json');
+    expect(app.dependencies).toMatchObject({
+      expo: '~56.0.0',
+      react: '19.2.0',
+      'react-native': '0.85.3',
+      'expo-splash-screen': '~56.0.10',
+    });
+    expect(app.devDependencies).toMatchObject({
+      'babel-preset-expo': '~56.0.14',
+      '@types/react': '~19.2.0',
+      '@expo/cli': '~56.1.14',
+    });
+  });
+
+  it.each(['latest', 'file:../expo', '*', '>=0', '>=54 <57', '^57.0.0'])(
+    'refuses an ambiguous or conflicting existing Expo declaration without keeping probe writes: %s',
+    async (expo) => {
+      const tree = workspace();
+      updateJson(tree, 'package.json', (manifest) => ({
+        ...manifest,
+        dependencies: { expo, react: '19.3.1' },
+      }));
+      const before = snapshot(tree);
+      await expect(
+        appGenerator(tree, {
+          type: 'mobile',
+          yes: true,
+          interactive: false,
+          skipInstall: true,
+        }),
+      ).rejects.toMatchObject({ diagnosticCode: 'app-compatibility' });
+      expect(snapshot(tree)).toBe(before);
+    },
+  );
+
+  it('refuses a conflicting native runtime without introducing a second SDK lane', async () => {
+    const tree = workspace();
+    updateJson(tree, 'package.json', (manifest) => ({
+      ...manifest,
+      dependencies: { expo: '~54.0.38', 'react-native': '0.85.3' },
+    }));
+    const before = snapshot(tree);
+    await expect(
+      appGenerator(tree, {
+        type: 'mobile',
+        yes: true,
+        interactive: false,
+        skipInstall: true,
+      }),
+    ).rejects.toMatchObject({ diagnosticCode: 'app-compatibility' });
+    expect(snapshot(tree)).toBe(before);
+  });
+
+  it('refuses an unbounded native runtime declaration before writes', async () => {
+    const tree = workspace();
+    updateJson(tree, 'package.json', (manifest) => ({
+      ...manifest,
+      dependencies: { expo: '~54.0.38', 'react-native': '*' },
+    }));
+    const before = snapshot(tree);
+    await expect(
+      appGenerator(tree, {
+        type: 'mobile',
+        yes: true,
+        interactive: false,
+        skipInstall: true,
+      }),
+    ).rejects.toMatchObject({ diagnosticCode: 'app-compatibility' });
+    expect(snapshot(tree)).toBe(before);
+  });
+
+  it('registers inference only for the new app without migrating other projects', async () => {
+    const tree = workspace();
+    const existing = {
+      plugin: '@nx/expo/plugin',
+      include: ['apps/legacy/**'],
+      options: { exportTargetName: 'bundle', buildTargetName: 'cloud-build' },
+    };
+    updateJson(tree, 'nx.json', (nx) => ({ ...nx, plugins: [existing] }));
+    await appGenerator(tree, {
+      type: 'mobile',
+      scope: 'fixture',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    expect(readJson(tree, 'nx.json').plugins).toEqual([
+      existing,
+      {
+        plugin: '@nx/expo/plugin',
+        options: existing.options,
+        include: [
+          'apps/mobile/app.json',
+          'apps/mobile/app.config.js',
+          'apps/mobile/app.config.ts',
+        ],
+      },
+    ]);
+    const project = readProjectConfiguration(tree, 'fixture-mobile');
+    expect(project.targets?.bundle).toEqual({
+      dependsOn: ['^bundle', 'expo-doctor'],
+    });
+    expect(project.targets?.['cloud-build']).toEqual({
+      dependsOn: ['expo-doctor'],
+    });
+    expect(project.targets?.['sync-deps']).toBeUndefined();
+  });
+
+  it('reuses equivalent unscoped Expo policies and refuses conflicting policies before writes', async () => {
+    const tree = workspace();
+    updateJson(tree, 'nx.json', (nx) => ({
+      ...nx,
+      plugins: [
+        '@nx/expo/plugin',
+        {
+          plugin: '@nx/expo/plugin',
+          include: ['apps/other/**'],
+          options: { exportTargetName: 'export' },
+        },
+      ],
+    }));
+    await appGenerator(tree, {
+      type: 'mobile',
+      scope: 'fixture',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    expect(readJson(tree, 'nx.json').plugins).toHaveLength(2);
+    const conflict = workspace();
+    updateJson(conflict, 'nx.json', (nx) => ({
+      ...nx,
+      plugins: [
+        '@nx/expo/plugin',
+        {
+          plugin: '@nx/expo/plugin',
+          include: ['apps/other/**'],
+          options: { exportTargetName: 'bundle' },
+        },
+      ],
+    }));
+    const before = snapshot(conflict);
+    await expect(
+      appGenerator(conflict, {
+        type: 'mobile',
+        yes: true,
+        interactive: false,
+        skipInstall: true,
+      }),
+    ).rejects.toMatchObject({ diagnosticCode: 'app-compatibility' });
+    expect(snapshot(conflict)).toBe(before);
+  });
+
+  it.each([
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies',
+  ] as const)(
+    'retains caller-owned Expo declarations in %s while selecting its SDK lane',
+    async (section) => {
+      const tree = workspace();
+      updateJson(tree, 'package.json', (manifest) => ({
+        ...manifest,
+        dependencies: { react: '19.3.1', 'react-dom': '19.3.1' },
+        [section]: { expo: '~54.0.38' },
+      }));
+      await appGenerator(tree, {
+        type: 'mobile',
+        yes: true,
+        interactive: false,
+        skipInstall: true,
+      });
+      const root = readJson(tree, 'package.json');
+      expect(root[section].expo).toBe('~54.0.38');
+      expect(root.dependencies.expo).toBeUndefined();
+      expect(
+        readJson(tree, 'apps/mobile/package.json').dependencies,
+      ).toMatchObject({
+        expo: '~54.0.38',
+        react: '19.1.0',
+        'react-dom': '19.1.0',
+        'react-native': '0.81.5',
+      });
+    },
+  );
 
   it('registers desktop packages without changing trailing pnpm policies', async () => {
     const tree = workspace();

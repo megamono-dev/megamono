@@ -23,7 +23,9 @@ import { isMap, isSeq, parseDocument } from 'yaml';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, posix } from 'node:path';
+import { intersects, minVersion, subset, validRange } from 'semver';
 import { isSafeWorkspaceRelativePath } from '../../lib/config';
+import { nxWorkspaceCapabilities } from '../../lib/workspace-compatibility';
 import {
   assertWorkspaceMutationGitPreflight,
   collectWorkspaceInitHostState,
@@ -1278,6 +1280,368 @@ async function createApiApp(
   return callbacks;
 }
 
+const dependencySections = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+] as const;
+const mobileTestPackages = [
+  '@testing-library/react-native',
+  'jest-expo',
+  'react-test-renderer',
+] as const;
+const mobileDevPackages = [
+  ...mobileTestPackages,
+  '@types/react',
+  'babel-preset-expo',
+  '@expo/cli',
+  '@babel/runtime',
+] as const;
+const mobileSdkPackages = [
+  ...mobileDevPackages,
+  'react',
+  'react-dom',
+  'react-native',
+  '@expo/cli',
+  '@expo/vector-icons',
+  '@expo/metro',
+  '@expo/metro-config',
+  '@expo/metro-runtime',
+  'expo-splash-screen',
+  'expo-status-bar',
+  'expo-system-ui',
+  'react-native-web',
+  'react-native-svg',
+  'react-native-svg-transformer',
+  'metro-config',
+  'metro-resolver',
+] as const;
+const unusedMobilePackages = [
+  '@expo/vector-icons',
+  '@expo/metro-config',
+  'metro-config',
+  'metro-resolver',
+] as const;
+type DependencyManifest = Partial<
+  Record<(typeof dependencySections)[number], Record<string, string>>
+>;
+
+function dependencyDeclarations(manifest: DependencyManifest, name: string) {
+  return dependencySections.flatMap((section) => {
+    const version = manifest[section]?.[name];
+    return version ? [{ section, version }] : [];
+  });
+}
+
+function restoreDependencyDeclarations(
+  tree: Tree,
+  original: DependencyManifest,
+): void {
+  const names = new Set(
+    dependencySections.flatMap((section) =>
+      Object.keys(original[section] ?? {}),
+    ),
+  );
+  updateJson(tree, 'package.json', (manifest: DependencyManifest) => {
+    for (const section of dependencySections) {
+      if (!manifest[section] && !original[section]) continue;
+      const dependencies = { ...manifest[section] };
+      for (const name of names) {
+        const existing = original[section]?.[name];
+        if (existing !== undefined) dependencies[name] = existing;
+        else delete dependencies[name];
+      }
+      manifest[section] = dependencies;
+    }
+    return manifest;
+  });
+}
+
+async function mobileSdkLane(
+  tree: Tree,
+  original: DependencyManifest,
+): Promise<Record<'expo' | 'react' | 'react-dom' | 'react-native', string>> {
+  const existingExpo = dependencyDeclarations(original, 'expo');
+  if (
+    existingExpo.length > 1 ||
+    (existingExpo[0] && !boundedRuntimeRange(existingExpo[0].version))
+  ) {
+    throw new AppGeneratorError(
+      'Expo must have one explicit semver declaration bounded to a single SDK major before adding a mobile app. Retain the selected SDK and resolve duplicate declarations, unbounded ranges, or local/tag protocols first.',
+      3,
+      'compatibility',
+    );
+  }
+  const existingNative = dependencyDeclarations(original, 'react-native');
+  if (
+    existingNative.length > 1 ||
+    (existingNative[0] && !boundedRuntimeRange(existingNative[0].version))
+  ) {
+    throw new AppGeneratorError(
+      'React Native must have one explicit semver declaration bounded to one native runtime lane before adding a mobile app; choose a compatible native SDK before generation.',
+      3,
+      'compatibility',
+    );
+  }
+
+  const baseline = await probeMobileSdk(tree, true);
+  if (
+    existingExpo[0] &&
+    (minVersion(existingExpo[0].version)?.major ?? 0) >
+      (minVersion(baseline.dependencies?.expo ?? '')?.major ?? 0)
+  )
+    throw new AppGeneratorError(
+      'The declared Expo SDK is newer than the lane selected by the installed Nx Expo toolchain. Install the declared SDK or select a compatible Nx Expo version before generation; Megamono will not change the existing SDK.',
+      3,
+      'compatibility',
+    );
+  const selected = existingExpo.length
+    ? await probeMobileSdk(tree, false)
+    : baseline;
+  const lane = Object.fromEntries(
+    ['expo', 'react', 'react-dom', 'react-native'].map((name) => {
+      const version = selected.dependencies?.[name];
+      if (!version || !validRange(version) || !minVersion(version))
+        throw new AppGeneratorError(
+          `The installed Expo initializer did not provide a supported ${name} SDK requirement.`,
+          3,
+          'plugin-incompatible',
+        );
+      return [name, version];
+    }),
+  ) as Record<'expo' | 'react' | 'react-dom' | 'react-native', string>;
+  if (existingExpo[0] && !intersects(existingExpo[0].version, lane.expo))
+    throw new AppGeneratorError(
+      `The installed Nx Expo generator selected ${lane.expo}, which conflicts with the workspace's ${existingExpo[0].version}. Select a supported SDK/plugin combination before generation; Megamono will not upgrade the existing SDK.`,
+      3,
+      'compatibility',
+    );
+  if (
+    existingNative[0] &&
+    !intersects(existingNative[0].version, lane['react-native'])
+  )
+    throw new AppGeneratorError(
+      `The selected Expo SDK requires React Native ${lane['react-native']}, but this workspace owns ${existingNative[0].version}. Resolve native compatibility before adding an app.`,
+      3,
+      'compatibility',
+    );
+  return {
+    expo: existingExpo[0]?.version ?? lane.expo,
+    react: minVersion(lane.react)?.version ?? lane.react,
+    'react-dom': minVersion(lane['react-dom'])?.version ?? lane['react-dom'],
+    'react-native': existingNative[0]?.version ?? lane['react-native'],
+  };
+}
+
+function boundedRuntimeRange(range: string): boolean {
+  if (!validRange(range)) return false;
+  const minimum = minVersion(range);
+  if (!minimum || (!minimum.major && !minimum.minor)) return false;
+  const lower = minimum.major ? `${minimum.major}.0.0` : `0.${minimum.minor}.0`;
+  const upper = minimum.major
+    ? `${minimum.major + 1}.0.0`
+    : `0.${minimum.minor + 1}.0`;
+  return subset(range, `>=${lower} <${upper}`);
+}
+
+async function probeMobileSdk(
+  tree: Tree,
+  withoutExpo: boolean,
+): Promise<DependencyManifest> {
+  // Ask the public maintained initializer for its SDK lane, without retaining
+  // probe writes or running the returned installation callback. Existing web
+  // React versions must not mask the SDK's own React requirement.
+  const originals = new Map<string, Buffer | null>();
+  const remember = (path: string) => {
+    if (tree.exists(path) && !tree.isFile(path))
+      throw new AppGeneratorError(
+        'The installed Expo initializer cannot be safely probed because it modifies a directory.',
+        3,
+        'plugin-incompatible',
+      );
+    if (!originals.has(path)) originals.set(path, tree.read(path));
+  };
+  const probe = new Proxy(tree, {
+    get(target, property) {
+      if (property === 'write')
+        return (...args: Parameters<Tree['write']>) => {
+          remember(args[0]);
+          return target.write(...args);
+        };
+      if (property === 'delete')
+        return (path: string) => {
+          remember(path);
+          return target.delete(path);
+        };
+      if (property === 'rename')
+        return (from: string, to: string) => {
+          remember(from);
+          remember(to);
+          return target.rename(from, to);
+        };
+      if (property === 'changePermissions')
+        return () => {
+          throw new AppGeneratorError(
+            'The installed Expo initializer changes permissions during SDK selection; review its compatibility before generation.',
+            3,
+            'plugin-incompatible',
+          );
+        };
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  let selected: DependencyManifest;
+  try {
+    updateJson(probe, 'package.json', (manifest: DependencyManifest) => {
+      const selectedExpo = dependencyDeclarations(manifest, 'expo')[0]?.version;
+      for (const section of dependencySections) {
+        const dependencies = manifest[section];
+        if (!dependencies) continue;
+        for (const name of ['react', 'react-dom', 'react-native', 'expo'])
+          delete dependencies[name];
+      }
+      if (!withoutExpo && selectedExpo)
+        manifest.dependencies = {
+          ...manifest.dependencies,
+          expo: selectedExpo,
+        };
+      return manifest;
+    });
+    await generator('@nx/expo', 'expoInitGenerator')(probe, {
+      keepExistingVersions: false,
+      addPlugin: false,
+      skipFormat: true,
+    });
+    selected = readJson<DependencyManifest>(tree, 'package.json');
+  } finally {
+    for (const [path, bytes] of [...originals].reverse()) {
+      if (bytes) tree.write(path, bytes);
+      else tree.delete(path);
+    }
+  }
+  return selected;
+}
+
+function mobileMetroConfig(): string {
+  return `const { getDefaultConfig } = require('expo/metro-config');
+
+// Expo owns monorepo roots and resolution defaults for this app's SDK.
+const config = getDefaultConfig(__dirname);
+config.transformer.babelTransformerPath = require.resolve('react-native-svg-transformer/expo');
+config.resolver.assetExts = config.resolver.assetExts.filter((extension) => extension !== 'svg');
+config.resolver.sourceExts = [...new Set([...config.resolver.sourceExts, 'svg'])];
+
+// Hoisted native libraries must use this app's React singleton, including JSX
+// runtimes. Sibling web apps can retain their separately supported versions.
+const expoResolveRequest = config.resolver.resolveRequest;
+const appEntry = require.resolve('./index.js');
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const appContext = /^(react|react-dom)(\\/|$)/.test(moduleName)
+    ? { ...context, originModulePath: appEntry }
+    : context;
+  return (expoResolveRequest ?? context.resolveRequest)(appContext, moduleName, platform);
+};
+
+module.exports = config;
+`;
+}
+
+function scopeMobileJestReact(tree: Tree, directory: string): void {
+  for (const extension of ['cts', 'ts', 'cjs', 'js', 'mts', 'mjs']) {
+    const path = `${directory}/jest.config.${extension}`;
+    const source = tree.read(path, 'utf8');
+    if (!source) continue;
+    if (!/moduleNameMapper\s*:\s*\{/.test(source))
+      throw new AppGeneratorError(
+        'The installed Expo generator emits an unsupported Jest configuration; review app-scoped React resolution before using this template.',
+        3,
+        'plugin-incompatible',
+      );
+    const entries = ['react', 'react-dom', 'react-test-renderer']
+      .flatMap((name) => [
+        `    '^${name}$': require.resolve('${name}', { paths: [__dirname] }),`,
+        `    '^${name}/(.*)$': require('node:path').join(require('node:path').dirname(require.resolve('${name}/package.json', { paths: [__dirname] })), '$1'),`,
+      ])
+      .join('\n');
+    tree.write(
+      path,
+      source.replace(
+        /moduleNameMapper\s*:\s*\{/,
+        (match) => `${match}\n${entries}`,
+      ),
+    );
+  }
+}
+
+interface ExpoInferenceRegistration {
+  readonly plugin: '@nx/expo/plugin';
+  readonly options?: Readonly<Record<string, unknown>>;
+  readonly include?: readonly string[];
+  readonly exclude?: readonly string[];
+}
+
+function newMobileInference(
+  tree: Tree,
+  directory: string,
+): ExpoInferenceRegistration | undefined {
+  if (nxWorkspaceCapabilities(tree).major < 18) return undefined;
+  const nx = readJson<{
+    plugins?: readonly (string | ExpoInferenceRegistration)[];
+  }>(tree, 'nx.json');
+  const registrations = (nx.plugins ?? []).filter(
+    (entry) =>
+      (typeof entry === 'string' ? entry : entry.plugin) === '@nx/expo/plugin',
+  );
+  const defaults = {
+    startTargetName: 'start',
+    buildTargetName: 'build',
+    prebuildTargetName: 'prebuild',
+    serveTargetName: 'serve',
+    installTargetName: 'install',
+    exportTargetName: 'export',
+    submitTargetName: 'submit',
+    runIosTargetName: 'run-ios',
+    runAndroidTargetName: 'run-android',
+    buildDepsTargetName: 'build-deps',
+    watchDepsTargetName: 'watch-deps',
+  };
+  const policy = (entry: string | ExpoInferenceRegistration) =>
+    JSON.stringify(
+      Object.fromEntries(
+        Object.entries({
+          ...defaults,
+          ...(typeof entry === 'object' ? entry.options : {}),
+        }).sort(([left], [right]) => left.localeCompare(right)),
+      ),
+    );
+  if (new Set(registrations.map(policy)).size > 1)
+    throw new AppGeneratorError(
+      'Existing Nx Expo registrations use different target policies. Review and choose one compatible policy before adding a mobile app; Megamono will not guess which scoped policy applies or rewrite existing registrations.',
+      3,
+      'compatibility',
+    );
+  if (
+    registrations.some(
+      (entry) =>
+        typeof entry === 'string' ||
+        (entry.include === undefined && entry.exclude === undefined),
+    )
+  )
+    return undefined;
+  const representative = registrations[0];
+  return {
+    plugin: '@nx/expo/plugin',
+    ...(typeof representative === 'object' && representative.options
+      ? { options: representative.options }
+      : {}),
+    include: ['app.json', 'app.config.js', 'app.config.ts'].map(
+      (file) => `${directory}/${file}`,
+    ),
+  };
+}
+
 async function createDelegatedApp(
   tree: Tree,
   options: NormalizedAppOptions,
@@ -1340,13 +1704,127 @@ async function createDelegatedApp(
     ];
   }
   if (options.type === 'mobile') {
-    const callbacks = [
-      await generator('@nx/expo', 'expoApplicationGenerator')(tree, {
+    const originalManifest = readJson<DependencyManifest>(tree, 'package.json');
+    const inference = newMobileInference(tree, options.directory);
+    const sdk = await mobileSdkLane(tree, originalManifest);
+    if (inference)
+      updateJson(tree, 'nx.json', (value) => ({
+        ...value,
+        plugins: [...(value.plugins ?? []), inference],
+      }));
+    if (
+      dependencyDeclarations(originalManifest, 'expo').length &&
+      !originalManifest.dependencies?.expo &&
+      !originalManifest.devDependencies?.expo
+    )
+      updateJson(tree, 'package.json', (manifest: DependencyManifest) => ({
+        ...manifest,
+        dependencies: { ...manifest.dependencies, expo: sdk.expo },
+      }));
+    updateJson(tree, 'package.json', (manifest: DependencyManifest) => {
+      // Existing declarations may belong to another app or toolchain. Let
+      // the maintained generator select this SDK's own requirements, then
+      // restore the caller's declarations before installation can occur.
+      for (const section of dependencySections)
+        for (const name of mobileSdkPackages) delete manifest[section]?.[name];
+      return manifest;
+    });
+    let appTask: GeneratorCallback | void;
+    try {
+      appTask = await generator('@nx/expo', 'expoApplicationGenerator')(tree, {
         ...common,
         e2eTestRunner: 'none',
+      });
+    } catch (error) {
+      restoreDependencyDeclarations(tree, originalManifest);
+      throw error;
+    }
+    const callbacks = [appTask];
+    const generatedManifest = readJson<DependencyManifest>(
+      tree,
+      'package.json',
+    );
+    restoreDependencyDeclarations(tree, originalManifest);
+    const appManifest = readJson<DependencyManifest>(
+      tree,
+      `${options.directory}/package.json`,
+    );
+    const runtimeNames = new Set([
+      ...Object.entries(appManifest.dependencies ?? {})
+        .filter(([, version]) => version === '*')
+        .map(([name]) => name),
+      ...mobileSdkPackages.filter(
+        (name) =>
+          !mobileDevPackages.some((dev) => dev === name) &&
+          !unusedMobilePackages.some((unused) => unused === name),
+      ),
+    ]);
+    const runtimeDependencies = Object.fromEntries(
+      [...runtimeNames].flatMap((name) => {
+        const selected = dependencyDeclarations(generatedManifest, name)[0]
+          ?.version;
+        if (!selected && !appManifest.dependencies?.[name]) return [];
+        if (!selected || !validRange(selected))
+          throw new AppGeneratorError(
+            `The installed Expo generator did not provide a bounded ${name} requirement for the new app. Review this template's compatibility before installation.`,
+            3,
+            'plugin-incompatible',
+          );
+        return [[name, selected]];
       }),
-    ];
-    updatePackage(tree, `${options.directory}/package.json`, options);
+    );
+    const testDependencies = Object.fromEntries(
+      mobileDevPackages.flatMap((name) => {
+        const version =
+          name === 'react-test-renderer'
+            ? sdk.react
+            : dependencyDeclarations(generatedManifest, name)[0]?.version;
+        const selectedTypes =
+          name === '@types/react' && version ? minVersion(version) : undefined;
+        return version
+          ? [[name, selectedTypes ? `~${selectedTypes.version}` : version]]
+          : [];
+      }),
+    );
+    updateJson(tree, 'package.json', (manifest: DependencyManifest) => {
+      for (const name of [...mobileSdkPackages, 'expo']) {
+        if (dependencyDeclarations(originalManifest, name).length) continue;
+        for (const section of dependencySections)
+          delete manifest[section]?.[name];
+      }
+      return manifest;
+    });
+    updatePackage(tree, `${options.directory}/package.json`, options, {
+      ...runtimeDependencies,
+      ...sdk,
+    });
+    updateJson(tree, `${options.directory}/package.json`, (manifest) => {
+      for (const name of [
+        ...Object.keys(testDependencies),
+        ...unusedMobilePackages,
+      ])
+        delete manifest.dependencies?.[name];
+      return {
+        ...manifest,
+        main: './index.js',
+        devDependencies: { ...manifest.devDependencies, ...testDependencies },
+        expo: {
+          ...manifest.expo,
+          autolinking: {
+            ...manifest.expo?.autolinking,
+            exclude: [
+              ...new Set([
+                ...(manifest.expo?.autolinking?.exclude ?? []),
+                'react',
+                'react-dom',
+              ]),
+            ],
+          },
+        },
+      };
+    });
+    tree.write(`${options.directory}/metro.config.js`, mobileMetroConfig());
+    scopeMobileJestReact(tree, options.directory);
     wireExpoValidation(tree, undefined, [options.projectName]);
     logger.warn(
       'Install expo-doctor compatible with this app SDK and Node version before running its expo-doctor/build targets. Direct EAS commands need their own validation checks.',

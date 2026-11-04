@@ -32,6 +32,86 @@ function app(tree: Tree) {
 }
 
 describe('Expo validation wiring', () => {
+  it('selects the new app exact scope after another app’s scoped registration', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    app(tree);
+    const project = readProjectConfiguration(tree, 'mobile');
+    project.targets = {};
+    tree.write('apps/mobile/project.json', JSON.stringify(project));
+    tree.write(
+      'nx.json',
+      JSON.stringify({
+        plugins: [
+          {
+            plugin: '@nx/expo/plugin',
+            include: ['apps/other/**'],
+            options: { exportTargetName: 'bundle' },
+          },
+          {
+            plugin: '@nx/expo/plugin',
+            include: [
+              'apps/mobile/app.json',
+              'apps/mobile/app.config.js',
+              'apps/mobile/app.config.ts',
+            ],
+            options: { exportTargetName: 'bundle' },
+          },
+        ],
+      }),
+    );
+    wireExpoValidation(tree);
+    const targets = readProjectConfiguration(tree, 'mobile').targets;
+    expect(targets?.build).toEqual({ dependsOn: ['expo-doctor'] });
+    expect(targets?.bundle).toEqual({ dependsOn: ['^bundle', 'expo-doctor'] });
+    expect(targets?.export).toBeUndefined();
+  });
+
+  it('does not infer an excluded exact scope or a missing exact configuration file', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    app(tree);
+    const project = readProjectConfiguration(tree, 'mobile');
+    project.targets = {};
+    tree.write('apps/mobile/project.json', JSON.stringify(project));
+    tree.write(
+      'nx.json',
+      JSON.stringify({
+        plugins: [
+          {
+            plugin: '@nx/expo/plugin',
+            include: ['apps/mobile/app.json'],
+            exclude: ['apps/mobile/**'],
+          },
+          { plugin: '@nx/expo/plugin', include: ['apps/mobile/app.config.ts'] },
+        ],
+      }),
+    );
+    wireExpoValidation(tree);
+    expect(
+      readProjectConfiguration(tree, 'mobile').targets?.build,
+    ).toBeUndefined();
+  });
+
+  it('refuses conflicting applicable inference roles rather than hiding a build alias', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    app(tree);
+    tree.write(
+      'nx.json',
+      JSON.stringify({
+        plugins: [
+          { plugin: '@nx/expo/plugin', options: { buildTargetName: 'bundle' } },
+          {
+            plugin: '@nx/expo/plugin',
+            include: ['apps/mobile/app.json'],
+            options: { exportTargetName: 'bundle' },
+          },
+        ],
+      }),
+    );
+    expect(() => wireExpoValidation(tree)).toThrow(
+      'Conflicting Expo inference policies',
+    );
+  });
+
   it('plans without mutations and preserves SDK, Metro and unrelated projects/targets', () => {
     const tree = createTreeWithEmptyWorkspace();
     app(tree);
