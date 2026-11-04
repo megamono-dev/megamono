@@ -112,12 +112,6 @@ jobs:
           name: prismark-consumer-qualification
           path: tmp/prismark-consumer/
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: expo-consumer-qualification
-          path: tmp/expo-consumer/
-          if-no-files-found: ignore
       - name: Require a clean release checkout
         run: |
           if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
@@ -197,4 +191,10 @@ jobs:
         with:
           name: published-consumer-log
           path: tmp/release-qualification/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: expo-consumer-qualification
+          path: tmp/expo-consumer/
           if-no-files-found: ignore
