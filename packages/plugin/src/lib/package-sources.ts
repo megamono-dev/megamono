@@ -344,9 +344,13 @@ export async function validatePackageSources(
       code: 'package-sources-local-state',
       path,
       message:
-        localReferences === 'warn'
+        (localReferences === 'warn'
           ? 'Yalc state is permitted during migration but must be replaced before release.'
-          : `${profileName} package policy does not permit Yalc state.`,
+          : `${profileName} package policy does not permit Yalc state, even when Git ignores it.`) +
+        (hasApprovedYalcReference || hasUnapprovedYalcReference
+          ? ' Yalc dependency addresses are present in package manifests or package-manager source configuration; replace those addresses with registry packages before release.'
+          : ' No Yalc dependency addresses were found in package manifests or package-manager source configuration; this may be leftover local state, rather than an active dependency.') +
+        ' Verify the committed dependency setup in a separate clean checkout without local Yalc state. This check does not remove local files or change dependency sources.',
     });
   }
   const npmrc = (await exists(join(root, '.npmrc')))
