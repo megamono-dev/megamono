@@ -1,4 +1,4 @@
-import { getProjects, type Tree } from '@nx/devkit';
+import { getProjects, type ProjectConfiguration, type Tree } from '@nx/devkit';
 import { dirname } from 'node:path';
 import { designHandoffFiles } from './docs-design';
 import { extensionEvidence } from './extension-evidence';
@@ -22,6 +22,7 @@ import {
   type PackageManager,
 } from './package-manager';
 import { workspaceInitDependencyAssessments } from './dependency-compatibility';
+import { planExpoValidation } from './expo-validation';
 import {
   createWorkspaceInventory,
   type WorkspaceInventory,
@@ -356,6 +357,10 @@ export interface WorkspaceInitCommitBatch {
 }
 
 export interface WorkspaceInitPlanOptions {
+  /** Resolved once by the generator and shared by preview/apply for Expo inference. */
+  readonly resolvedExpoProjects?: Readonly<
+    Record<string, ProjectConfiguration>
+  >;
   readonly bootstrap?: boolean;
   readonly only?: string | readonly WorkspaceInitModule[];
   readonly profile?: WorkspaceInitProfile;
@@ -1663,6 +1668,35 @@ export function createWorkspaceInitPlan(
     );
   }
   if (modules.includes('ci')) {
+    try {
+      for (const expo of planExpoValidation(
+        tree,
+        options.resolvedExpoProjects,
+      )) {
+        operation(
+          operations,
+          'ci',
+          expo.doctorExists ? 'retain' : 'add',
+          `${expo.root}#targets.expo-doctor`,
+          'Provide app-scoped Expo Doctor validation using a locally installed, SDK/Node-compatible tool; no automatic package installation.',
+        );
+        for (const target of expo.guardedTargets)
+          operation(
+            operations,
+            'ci',
+            'modify',
+            `${expo.root}#targets.${target}.dependsOn`,
+            'Run Expo Doctor before this build/export target while retaining its existing configuration.',
+          );
+        reductions.push({
+          module: 'ci',
+          capability: 'expo-validation',
+          reason: `${expo.name}: validation is configured, not yet executed. Install a compatible expo-doctor locally if needed, then run the expo-doctor target and platform exports; governance is not SDK or native build qualification.`,
+        });
+      }
+    } catch (error) {
+      conflicts.push(error instanceof Error ? error.message : String(error));
+    }
     const ciMode = options.ciMode ?? 'auto';
     const equivalent = survey.recommendations.find(
       (recommendation) => recommendation.module === 'ci',

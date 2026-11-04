@@ -83,6 +83,7 @@ import {
   type PackageManager,
 } from '../../lib/package-manager';
 import { workspaceInitDependencyAssessments } from '../../lib/dependency-compatibility';
+import { wireExpoValidation } from '../../lib/expo-validation';
 
 const compatibility = JSON.parse(
   readFileSync(join(__dirname, '../../../compatibility.json'), 'utf8'),
@@ -995,6 +996,7 @@ ${packageManagerSetup}
 ${platforms.has('android') ? '      - uses: actions/setup-java@v5\n        with:\n          distribution: temurin\n          java-version: 17\n      - uses: android-actions/setup-android@v3\n        with:\n          packages: platform-tools\n      - run: sdkmanager "platforms;android-36" "build-tools;35.0.0"\n' : ''}\
 ${platforms.has('rust') ? '      - uses: dtolnay/rust-toolchain@stable\n' : ''}${platforms.has('php') ? '      - uses: shivammathur/setup-php@v2\n        with:\n          php-version: 8.4\n' : ''}      - run: ${install}
 ${includeDocs ? `      - run: ${nx} run megamono-docs:validate --output-style=static\n` : ''}
+${platforms.has('mobile') ? `      - run: ${nx} affected -t expo-doctor --exclude=tag:platform:apple --output-style=static\n` : ''}\
       - run: ${nx} affected -t lint test build --exclude=tag:platform:apple --output-style=static`,
         ]
       : []),
@@ -1471,6 +1473,29 @@ export async function workspaceInitGenerator(
     only = await promptForModules();
   }
   const requestedModules = parseWorkspaceInitModules(only);
+  const expoGraph =
+    requestedModules.includes('ci') &&
+    tree.root !== '/virtual' &&
+    (workspaceSurvey.inventory.projects.some((project) =>
+      project.frameworks.some((framework) => framework.value === 'expo'),
+    ) ||
+      [...getProjects(tree).values()].some(
+        (project) =>
+          tree.exists(`${project.root}/metro.config.js`) &&
+          ['app.json', 'app.config.js', 'app.config.ts'].some((file) =>
+            tree.exists(`${project.root}/${file}`),
+          ),
+      ))
+      ? await createProjectGraphAsync({ exitOnError: false })
+      : undefined;
+  const resolvedExpoProjects = expoGraph
+    ? Object.fromEntries(
+        Object.entries(expoGraph.nodes).map(([name, node]) => [
+          name,
+          node.data,
+        ]),
+      )
+    : undefined;
   const lintCanWire =
     !requestedModules.includes('lint') ||
     workspaceSurvey.existing.eslint.some((path) =>
@@ -1482,6 +1507,7 @@ export async function workspaceInitGenerator(
   let defaultPlatform = options.defaultPlatform;
   let adoptionPlan = createWorkspaceInitPlan(tree, {
     ...options,
+    resolvedExpoProjects,
     yes: false,
     only: requestedModules,
     profile: undefined,
@@ -1505,6 +1531,7 @@ export async function workspaceInitGenerator(
     defaultPlatform = await promptForDefaultPlatform();
     adoptionPlan = createWorkspaceInitPlan(tree, {
       ...options,
+      resolvedExpoProjects,
       yes: false,
       only: requestedModules,
       profile: undefined,
@@ -1597,6 +1624,21 @@ export async function workspaceInitGenerator(
   // Formatting must not rewrite caller-owned handoff assets, including files
   // already changed in the Tree by a composing generator.
   const existingDesignAssets = new Map<string, Buffer>();
+  const existingExpoConfigs = new Map<string, Buffer>();
+  for (const project of getProjects(tree).values()) {
+    for (const file of [
+      'metro.config.js',
+      'metro.config.cjs',
+      'metro.config.mjs',
+      'metro.config.ts',
+      'app.config.js',
+      'app.config.ts',
+    ]) {
+      const path = `${project.root}/${file}`.replace(/^\.\//, '');
+      const bytes = tree.read(path);
+      if (bytes) existingExpoConfigs.set(path, bytes);
+    }
+  }
   for (const { path, type } of tree.listChanges()) {
     if (type === 'DELETE' || !path.startsWith(`${docsRoot}/design/`)) continue;
     const bytes = tree.read(path);
@@ -1817,6 +1859,14 @@ export async function workspaceInitGenerator(
         configuredPlatforms.add(tag.slice('platform:'.length));
       }
     }
+  }
+  if (modules.has('ci')) {
+    const expo = wireExpoValidation(tree, resolvedExpoProjects);
+    if (expo.length > 0) configuredPlatforms.add('mobile');
+    if (expo.length > 0)
+      logger.warn(
+        'Expo validation uses a locally installed expo-doctor compatible with each app SDK and Node version. Megamono does not install or upgrade it. Run each app’s expo-doctor target before building; direct EAS commands need their own checks.',
+      );
   }
   const coreProjectCanUpdate = managedArtifactCanUpdate(
     tree,
@@ -2472,6 +2522,7 @@ export async function workspaceInitGenerator(
     : () => undefined;
   await formatFiles(tree);
   for (const [path, bytes] of existingDesignAssets) tree.write(path, bytes);
+  for (const [path, bytes] of existingExpoConfigs) tree.write(path, bytes);
 
   registerFileArtifact(
     tree,

@@ -493,6 +493,13 @@ describe('app generator', () => {
         ).toContain('https://example.com/*');
       }
       if (type === 'mobile') {
+        const mobile = readProjectConfiguration(tree, 'fixture-mobile');
+        expect(mobile.targets?.['expo-doctor']).toEqual({
+          executor: '@megamono/plugin:expo-doctor',
+          cache: false,
+        });
+        expect(mobile.targets?.build?.dependsOn).toContain('expo-doctor');
+        expect(mobile.targets?.export?.dependsOn).toContain('expo-doctor');
         expect(tree.read('apps/mobile/package.json', 'utf8')).toContain(
           'platform:mobile',
         );

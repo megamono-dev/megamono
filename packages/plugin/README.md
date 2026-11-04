@@ -107,6 +107,50 @@ result (`null`), while `--failOnFindings` evaluates only the selected findings, 
 production readiness or unavailable checks. Report generation success is not
 deployment certification.
 
+### Expo adoption and validation
+
+Adopting the `ci` module detects Expo apps and adds a non-cacheable
+`expo-doctor` target. Existing build/export targets depend on Doctor; maintained
+`@nx/expo` inference receives dependency overlays rather than replacement
+commands. New `mobile` apps receive the same wiring. Generated affected CI runs
+Doctor before its lint/test/build phase. Equivalent repository-owned workflows
+remain unchanged: add the Doctor target to workflows that do not reach a guarded
+build/export target.
+
+Install and pin an `expo-doctor` development dependency compatible with the
+app's Expo SDK and Node version using the workspace package manager, and commit
+the lockfile. Megamono runs only that installed tool from the app directory. It
+does not download a tool on demand or raise the core adoption Node requirement
+to match the latest Doctor. For example, after selecting and installing the tool:
+
+```sh
+npm exec nx -- run mobile:expo-doctor
+npm exec nx -- run mobile:export
+```
+
+Use your actual Nx project and export target names. Custom Doctor targets are
+retained; keep them non-cacheable and independent of build/export targets. Direct
+EAS commands, custom build scripts and remote providers need their own validation
+wiring. Existing Metro configuration and app-specific React versions remain
+consumer-owned. Follow [Expo's Metro guidance](https://docs.expo.dev/guides/customizing-metro/)
+and validate each app's SDK rather than aligning mobile React to a newer web app.
+
+Health reports expose `platforms.expo` with declared/installed SDK versions,
+Doctor configuration and Node compatibility, Metro import evidence, and installed
+React/React Native compatibility. Static inspection never executes project
+configuration and always reports validation as `not-assessed`. An import or a
+configured target is not proof of a passing Doctor, bundle, native or cloud build.
+
+The packed Expo consumer regression lane runs actual Doctor and iOS/Android
+JavaScript exports with split mobile/web React versions. It is a tested SDK
+combination, not blanket support for every Expo release or native deployment.
+
+Strict package-source profiles also reject root `.yalc`/`yalc.lock` state even
+when ignored. The diagnostic distinguishes active manifest/configuration
+addresses from possible unused residue. Verify registry installation in a
+separate clean checkout without deleting local development files; do not weaken
+CI policy merely to make a developer checkout pass.
+
 Generated `megamono:check` targets are non-cacheable. The checker reads the Nx
 graph, repository sources/configuration, and installed artifact contents; the
 previous explicit input list did not qualify that complete cache contract.

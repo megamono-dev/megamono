@@ -77,6 +77,37 @@ megamono add skills
 
 Module add commands delegate to `workspace-init --only=<module>`. Application add delegates to the canonical `@megamono/plugin:app` generator from `spec-megamono-0003`; database add delegates to `@megamono/plugin:database` with a user-defined logical name and explicit or prompted adapter. Add commands require the initialized baseline rather than silently running init, inherit the same clean-worktree and branch safety rules, preview by default, and support `--dry-run` plus fully explicit `--interactive=false --yes` automation.
 
+### Expo validation during CI adoption
+
+The CI module adds an app-scoped, non-cacheable `expo-doctor` target for detected
+Expo applications and adds it as a prerequisite to existing build/export/native
+run targets. Maintained Nx Expo inference receives dependency-only overlays,
+including configured target names; resolved existing-project inference is used
+for scoped plugins. Existing custom Doctor targets and build configuration stay
+repository-owned. A Doctor prerequisite that would introduce a local task cycle
+is a conflict rather than an automatic rewrite. The operation plan discloses the
+target changes and records that validation has not yet run.
+
+Ambiguous wildcard Doctor prerequisites or filtered/complex target defaults that
+cannot be safely assessed require explicit configuration review before mutation.
+Preview and apply use the same resolved evidence for existing Expo inference.
+
+Generated affected CI runs Doctor before lint/test/build. Existing equivalent CI
+is retained, so callers must explicitly reach Doctor or a guarded target. Direct
+EAS commands and custom build entrypoints require their own integration. The
+executor resolves the installed Doctor from the app, checks its declared Node
+engine, and propagates failure; it never downloads or installs a tool. Consumers
+select a pinned Doctor compatible with their SDK and Node version. This optional
+platform tooling does not raise Megamono's core adoption Node floor.
+
+Adoption does not replace Metro configuration, upgrade an Expo SDK, or flatten
+app-specific React versions. Read-only health evidence distinguishes an installed
+SDK, static configuration, configured checks, and unassessed validation. Actual
+Doctor, per-platform exports and native/cloud qualification remain separate from
+governance success. A packed Expo fixture qualifies SDK-owned Metro defaults,
+Doctor failure propagation, and mobile/web React isolation in real iOS/Android
+JavaScript exports.
+
 ### Optional Springbar handoff
 
 `megamono init --springbar` preflights Springbar's read-only candidates, then

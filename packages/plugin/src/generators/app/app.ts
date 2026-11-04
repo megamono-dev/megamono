@@ -1,4 +1,5 @@
 import { preserveWorkspaceYaml } from '../../lib/preserve-workspace-yaml';
+import { wireExpoValidation } from '../../lib/expo-validation';
 import { prependEslintFlatConfig } from '../../lib/eslint-flat-config';
 import { createAndroidApp, validateAndroidApplicationId } from './android';
 import {
@@ -1346,6 +1347,10 @@ async function createDelegatedApp(
       }),
     ];
     updatePackage(tree, `${options.directory}/package.json`, options);
+    wireExpoValidation(tree, undefined, [options.projectName]);
+    logger.warn(
+      'Install expo-doctor compatible with this app SDK and Node version before running its expo-doctor/build targets. Direct EAS commands need their own validation checks.',
+    );
     const appSource = `${options.directory}/src/app/App.tsx`;
     if (tree.exists(appSource)) {
       tree.write(
