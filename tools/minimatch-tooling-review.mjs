@@ -4,103 +4,127 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { inventoryToolingDependency } from './tooling-dependency-inventory.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const digest = (value) => createHash('sha256').update(value).digest('hex');
-const lockBytes = await readFile(join(root, 'package-lock.json'));
-const lock = JSON.parse(lockBytes);
 
-async function installedMinimatch(consumerPath) {
-  try {
-    const require = createRequire(join(root, consumerPath, 'package.json'));
-    let directory = dirname(require.resolve('minimatch'));
-    while (directory !== dirname(directory)) {
-      try {
-        const manifestPath = join(directory, 'package.json');
-        const bytes = await readFile(manifestPath);
-        const manifest = JSON.parse(bytes);
-        if (manifest.name === 'minimatch') {
-          const path = relative(root, directory).replaceAll('\\', '/');
-          return {
-            path,
-            version: manifest.version,
-            manifestSha256: digest(bytes),
-            lockedVersion: lock.packages[path]?.version ?? null,
-            matchesLock: lock.packages[path]?.version === manifest.version,
-          };
-        }
-      } catch (error) {
-        if (error.code !== 'ENOENT') throw error;
-      }
-      directory = dirname(directory);
+export async function reviewMinimatch(workspaceRoot) {
+  const inventory = await inventoryToolingDependency(
+    workspaceRoot,
+    'minimatch',
+  );
+  const { root, layout } = inventory;
+  // Concrete legacy APIs; an absent/changed anchor cannot establish remediation.
+  const anchors = [
+    ['nx', 'dist/src/utils/find-matching-projects.js', 'makeRe('],
+    ['nx', 'dist/src/generators/utils/glob.js', 'makeRe('],
+    ['@verdaccio/core', 'build/auth-utils.js', 'makeRe('],
+    ['@rollup/plugin-commonjs', 'sync.js', 'this.minimatch.set', 'glob'],
+    [
+      'fork-ts-checker-webpack-plugin',
+      'lib/issue/issue-match.js',
+      'minimatch_1.default)',
+    ],
+  ];
+  const sourceEvidence = [];
+  for (const [name, file, api, resolvedDependency] of anchors) {
+    let owners;
+    try {
+      owners = layout?.packageRoots(name) ?? [];
+    } catch (error) {
+      sourceEvidence.push({ owner: name, file, api, error: error.message });
+      continue;
     }
-    return { error: 'Resolved entry has no minimatch package manifest.' };
-  } catch (error) {
-    return { error: error.code ?? error.message };
+    if (!owners.length)
+      sourceEvidence.push({ owner: name, file, api, missing: true });
+    for (const owner of owners) {
+      let path;
+      try {
+        let directory = owner;
+        if (resolvedDependency) {
+          const require = createRequire(join(owner, 'package.json'));
+          directory = dirname(
+            layout.artifact(
+              require.resolve(`${resolvedDependency}/package.json`),
+            ),
+          );
+        }
+        path = layout.artifact(join(directory, file));
+        const bytes = await readFile(path);
+        const lines = bytes
+          .toString('utf8')
+          .split('\n')
+          .flatMap((line, index) => (line.includes(api) ? [index + 1] : []));
+        sourceEvidence.push({
+          owner: name,
+          consumerPath: relative(root, owner).replaceAll('\\', '/'),
+          path: relative(root, path).replaceAll('\\', '/'),
+          api,
+          lines,
+          sha256: digest(bytes),
+        });
+      } catch (error) {
+        sourceEvidence.push({
+          owner: name,
+          consumerPath: relative(root, owner).replaceAll('\\', '/'),
+          file,
+          api,
+          ...(error.code === 'ENOENT' ||
+          error.code === 'MODULE_NOT_FOUND' ||
+          error.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+            ? { missing: true }
+            : { error: error.message }),
+        });
+      }
+    }
   }
+  return {
+    schemaVersion: 1,
+    reviewedAt: new Date().toISOString(),
+    scope:
+      'Read-only npm/PNPM lockfile, actual installed resolutions, and bounded legacy API inventory.',
+    lockfile: inventory.lockfile,
+    lockfileSha256: inventory.lockfile.sha256,
+    consumers: inventory.consumers.map((consumer) => ({
+      ...consumer,
+      requestedMinimatch: consumer.declaredRange ?? consumer.range,
+      ...(consumer.installed
+        ? {
+            installed: {
+              ...consumer.installed,
+              path: consumer.installed.packagePath,
+              matchesLock: consumer.installed.matchesLockedVersion,
+            },
+          }
+        : {}),
+    })),
+    sourceEvidence,
+    coverage: { installedResolutions: inventory.installedResolutions },
+    errors: inventory.errors,
+    limitations: [
+      'Not a registry audit, advisory exception, exploit assessment, or release approval.',
+      'PNPM snapshot dependency references are exact resolutions; declared ranges are read from installed consumer manifests.',
+      'PNPM physical copies retain snapshot candidates; peer-context directory encodings are not inferred and differing target-version candidates remain incomplete coverage.',
+      'Legacy API anchors are deliberately bounded and are not all minimatch call sites.',
+      'An absent anchor or changed dependency version does not establish remediation.',
+    ],
+  };
 }
 
-const consumers = await Promise.all(
-  Object.entries(lock.packages)
-    .filter(([, manifest]) => manifest.dependencies?.minimatch)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(async ([path, manifest]) => ({
-      path,
-      name: path.slice(path.lastIndexOf('node_modules/') + 13),
-      version: manifest.version,
-      requestedMinimatch: manifest.dependencies.minimatch,
-      installed: await installedMinimatch(path),
-    })),
-);
-
-// These are concrete legacy API consumers, not an exhaustive source scan.
-const anchors = [
-  ['node_modules/nx/dist/src/utils/find-matching-projects.js', 'makeRe('],
-  ['node_modules/nx/dist/src/generators/utils/glob.js', 'makeRe('],
-  ['node_modules/@verdaccio/core/build/auth-utils.js', 'makeRe('],
-  [
-    'node_modules/@rollup/plugin-commonjs/node_modules/glob/sync.js',
-    'this.minimatch.set',
-  ],
-  [
-    'node_modules/fork-ts-checker-webpack-plugin/lib/issue/issue-match.js',
-    'minimatch_1.default)',
-  ],
-];
-const sourceEvidence = await Promise.all(
-  anchors.map(async ([path, api]) => {
-    try {
-      const bytes = await readFile(join(root, path));
-      const lines = bytes
-        .toString('utf8')
-        .split('\n')
-        .flatMap((line, index) => (line.includes(api) ? [index + 1] : []));
-      return { path, api, lines, sha256: digest(bytes) };
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-      return { path, api, missing: true };
-    }
-  }),
-);
-
-process.stdout.write(
-  `${JSON.stringify(
-    {
-      schemaVersion: 1,
-      reviewedAt: new Date().toISOString(),
-      scope:
-        'Read-only npm lockfile, installed-resolution, and legacy API inventory.',
-      lockfileSha256: digest(lockBytes),
-      consumers,
-      sourceEvidence,
-      limitations: [
-        'Not a registry audit, advisory exception, exploit assessment, or release approval.',
-        'Legacy API anchors are deliberately bounded and are not all minimatch call sites.',
-        'An absent anchor or changed dependency version does not establish remediation.',
-      ],
-    },
-    null,
-    2,
-  )}\n`,
-);
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+) {
+  try {
+    if (process.argv.length !== 2)
+      throw new Error('Usage: node tools/minimatch-tooling-review.mjs');
+    const report = await reviewMinimatch(root);
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    if (report.errors.length) process.exitCode = 1;
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
+}

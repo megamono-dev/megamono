@@ -2,10 +2,10 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFile, realpath } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { inventoryToolingDependency } from './tooling-dependency-inventory.mjs';
 
 const toolRoot = dirname(fileURLToPath(import.meta.url));
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -25,16 +25,6 @@ export const evidenceRequests = {
     requestBody: { deepmerge: ['4.3.1'] },
   },
 };
-
-function inside(root, candidate) {
-  const path = relative(root, candidate);
-  return (
-    !isAbsolute(path) &&
-    path !== '..' &&
-    !path.startsWith('../') &&
-    !path.startsWith('..\\')
-  );
-}
 
 /** Provider facts remain separate: a rejected CVE does not imply GHSA/npm withdrawal. */
 export function summarizeDeepmergeEvidence(evidence) {
@@ -178,78 +168,13 @@ const cases = [
 process.stdout.write(JSON.stringify(cases));
 `;
 
-async function inspectInstalled(root, lock, path) {
-  const consumer = resolve(root, path);
-  if (!inside(root, consumer))
-    throw new Error(`Lockfile consumer path escapes the workspace: ${path}`);
-  const require = createRequire(join(consumer, 'package.json'));
-  const manifestPath = await realpath(
-    require.resolve('deepmerge/package.json'),
-  );
-  if (!inside(root, manifestPath))
-    throw new Error(
-      `Installed deepmerge resolves outside the workspace for ${path}.`,
-    );
-  const manifestBytes = await readFile(manifestPath);
-  const manifest = JSON.parse(manifestBytes);
-  if (manifest.name !== dependency)
-    throw new Error(`Resolved manifest is not deepmerge for ${path}.`);
-  const entry = await realpath(require.resolve('deepmerge'));
-  if (!inside(dirname(manifestPath), entry))
-    throw new Error(
-      `Installed deepmerge entry escapes its package for ${path}.`,
-    );
-  const packagePath = relative(root, dirname(manifestPath)).replaceAll(
-    '\\',
-    '/',
-  );
-  const locked = lock.packages[packagePath];
-  return {
-    packagePath,
-    version: manifest.version,
-    manifestSha256: digest(manifestBytes),
-    entry: relative(root, entry).replaceAll('\\', '/'),
-    entrySha256: digest(await readFile(entry)),
-    lockedVersion: locked?.version ?? null,
-    matchesLockedVersion: locked?.version === manifest.version,
-  };
-}
-
 export async function reviewDeepmerge(
   workspaceRoot,
   { live = false, fetchImplementation } = {},
 ) {
-  const root = await realpath(workspaceRoot);
-  const lockBytes = await readFile(join(root, 'package-lock.json'));
-  const lock = JSON.parse(lockBytes);
-  if (!lock.packages || typeof lock.packages !== 'object')
-    throw new Error('The npm lockfile has no packages inventory.');
-  const errors = [];
-  const consumers = [];
-  for (const [path, manifest] of Object.entries(lock.packages).sort(
-    ([a], [b]) => a.localeCompare(b),
-  )) {
-    for (const section of ['dependencies', 'optionalDependencies']) {
-      if (!manifest[section]?.deepmerge) continue;
-      const consumer = {
-        path,
-        version: manifest.version,
-        section,
-        range: manifest[section].deepmerge,
-      };
-      try {
-        consumer.installed = await inspectInstalled(root, lock, path);
-        if (!consumer.installed.matchesLockedVersion)
-          errors.push(
-            `${path}: installed deepmerge does not match its locked version.`,
-          );
-      } catch (error) {
-        consumer.error = error.message;
-        errors.push(`${path}: ${error.message}`);
-      }
-      consumers.push(consumer);
-    }
-  }
+  const inventory = await inventoryToolingDependency(workspaceRoot, dependency);
+  const { root, consumers } = inventory;
+  const errors = [...inventory.errors];
   const boundedBehavior = [];
   const seen = new Set();
   for (const consumer of consumers) {
@@ -307,7 +232,17 @@ export async function reviewDeepmerge(
       ),
       facts: summarizeDeepmergeEvidence(evidence),
       ...(!live && evidence.workspaceAudit
-        ? { recordedWorkspaceAudit: evidence.workspaceAudit }
+        ? {
+            recordedWorkspaceAudit: {
+              ...evidence.workspaceAudit,
+              lockfile: {
+                format: 'npm',
+                file: 'package-lock.json',
+                sha256: evidence.workspaceAudit.lockfileSha256,
+              },
+              historical: true,
+            },
+          }
         : {}),
       ...(live ? { records: evidence.records } : {}),
     };
@@ -324,18 +259,14 @@ export async function reviewDeepmerge(
     reviewedAt: new Date().toISOString(),
     scope:
       'Read-only lockfile/resolution inventory, bounded object behavior, and separate advisory-provider facts.',
-    lockfileSha256: digest(lockBytes),
+    lockfile: inventory.lockfile,
+    lockfileSha256: inventory.lockfile.sha256,
     consumers,
     boundedBehavior,
     advisoryEvidence,
     coverage: {
       lockInventory: 'completed',
-      installedResolutions: consumers.some(
-        (consumer) =>
-          consumer.error || !consumer.installed?.matchesLockedVersion,
-      )
-        ? 'partial'
-        : 'completed',
+      installedResolutions: inventory.installedResolutions,
       boundedBehavior:
         boundedBehavior.length === seen.size
           ? seen.size
@@ -350,6 +281,7 @@ export async function reviewDeepmerge(
       'Live npm bulk queries cover only deepmerge4.3.1, not a full-workspace audit. Any recorded full-workspace audit is dated evidence.',
       'CVE rejection, GitHub withdrawal, and npm advisory responses are distinct provider facts.',
       'Returned-object behavior is not an exploit demonstration or proof of a privilege boundary; global-prototype behavior is reported separately.',
+      'PNPM physical copies retain all named/versioned snapshot candidates; peer-context directory encodings are not inferred, and differing target-version candidates are incomplete coverage.',
       'Installed-resolution inventory and bounded examples do not establish all call-site reachability or absence of other security findings.',
       'This tool does not patch dependencies, suppress advisories, change audit thresholds, or approve a release.',
     ],

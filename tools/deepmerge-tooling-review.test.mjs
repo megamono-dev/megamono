@@ -1,17 +1,28 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { stringify } from 'yaml';
 import {
   evidenceRequests,
   fetchDeepmergeEvidence,
   reviewDeepmerge,
   summarizeDeepmergeEvidence,
 } from './deepmerge-tooling-review.mjs';
+import { createToolingLayout, readToolingLock } from './tooling-lock.mjs';
 
 const tools = dirname(fileURLToPath(import.meta.url));
 const root = resolve(tools, '..');
@@ -19,6 +30,19 @@ const snapshot = JSON.parse(
   await readFile(join(tools, 'deepmerge-advisory.evidence.json'), 'utf8'),
 );
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+async function installedDeepmergeSource() {
+  for (const path of createToolingLayout(root).packageRoots('deepmerge')) {
+    if (
+      JSON.parse(await readFile(join(path, 'package.json'), 'utf8')).version ===
+      '4.3.1'
+    )
+      return path;
+  }
+  throw new Error(
+    'The reviewed deepmerge4.3.1 fixture source is not installed.',
+  );
+}
 
 function mockFetch(evidence = snapshot) {
   const calls = [];
@@ -71,10 +95,10 @@ async function fixture(
     });
     await writeFile(
       join(directory, 'node_modules/review-consumer/package.json'),
-      '{"name":"review-consumer","version":"1.0.0"}',
+      '{"name":"review-consumer","version":"1.0.0","dependencies":{"deepmerge":"^4.3.1"}}',
     );
     await cp(
-      join(root, 'node_modules/deepmerge'),
+      await installedDeepmergeSource(),
       join(directory, 'node_modules/deepmerge'),
       { recursive: true },
     );
@@ -148,20 +172,107 @@ test('read-only installed inventory and isolated behavior do not mutate files or
   );
 });
 
-test('actual workspace review inventories every deepmerge edge and installed resolution without downloads', async () => {
-  const lock = JSON.parse(
-    await readFile(join(root, 'package-lock.json'), 'utf8'),
+test('PNPM physical consumer resolution runs the same bounded review without a root dependency alias', async (t) => {
+  const directory = await fixture(t);
+  const target = 'node_modules/.pnpm/deepmerge@4.3.1/node_modules/deepmerge';
+  const consumer =
+    'node_modules/.pnpm/review-consumer@1.0.0/node_modules/review-consumer';
+  await mkdir(dirname(join(directory, target)), { recursive: true });
+  await mkdir(dirname(join(directory, consumer)), { recursive: true });
+  await rename(
+    join(directory, 'node_modules/deepmerge'),
+    join(directory, target),
   );
-  const expected = Object.entries(lock.packages).flatMap(([path, manifest]) =>
+  await rename(
+    join(directory, 'node_modules/review-consumer'),
+    join(directory, consumer),
+  );
+  await symlink(
+    join(directory, target),
+    join(directory, dirname(consumer), 'deepmerge'),
+  );
+  await symlink(
+    join(directory, consumer),
+    join(directory, 'node_modules/review-consumer'),
+  );
+  await rm(join(directory, 'package-lock.json'));
+  const lock = join(directory, 'pnpm-lock.yaml');
+  await writeFile(
+    lock,
+    stringify({
+      lockfileVersion: '9.0',
+      importers: { '.': {} },
+      packages: {
+        'review-consumer@1.0.0': {
+          resolution: { integrity: 'sha512-fixture' },
+        },
+        'deepmerge@4.3.1': { resolution: { integrity: 'sha512-target' } },
+      },
+      snapshots: {
+        'review-consumer@1.0.0': { dependencies: { deepmerge: '4.3.1' } },
+        'deepmerge@4.3.1': {},
+      },
+    }),
+  );
+  const entry = join(directory, target, 'dist/cjs.js');
+  const before = await Promise.all([readFile(lock), readFile(entry)]);
+  const report = await reviewDeepmerge(directory);
+  assert.deepEqual(report.errors, []);
+  assert.equal(report.lockfile.format, 'pnpm');
+  assert.equal(report.lockfile.file, 'pnpm-lock.yaml');
+  assert.equal(report.consumers[0].path, consumer);
+  assert.equal(report.consumers[0].range, '^4.3.1');
+  assert.deepEqual(report.consumers[0].resolutionRefs, ['4.3.1']);
+  assert.equal(report.consumers[0].installed.matchesLockedVersion, true);
+  assert.equal(report.boundedBehavior.length, 1);
+  assert(
+    report.boundedBehavior[0].cases.every(
+      (item) => item.globalPrototypeUnchanged,
+    ),
+  );
+  assert.equal(report.advisoryEvidence.recordedWorkspaceAudit.historical, true);
+  assert.equal(
+    report.advisoryEvidence.recordedWorkspaceAudit.lockfile.format,
+    'npm',
+  );
+  assert.equal(
+    report.advisoryEvidence.recordedWorkspaceAudit.lockfile.sha256,
+    snapshot.workspaceAudit.lockfileSha256,
+  );
+  assert.deepEqual(
+    await Promise.all([readFile(lock), readFile(entry)]),
+    before,
+  );
+});
+
+test('actual workspace review inventories every deepmerge edge and installed resolution without downloads', async () => {
+  const lock = readToolingLock(root);
+  const expected = lock.entries.flatMap((manifest) =>
     ['dependencies', 'optionalDependencies'].flatMap((section) =>
-      manifest[section]?.deepmerge ? [`${path}:${section}`] : [],
+      manifest[section]?.deepmerge
+        ? [
+            lock.format === 'npm'
+              ? `${manifest.key}:${section}`
+              : `${manifest.name}@${manifest.version}:${section}`,
+          ]
+        : [],
     ),
   );
   const report = await reviewDeepmerge(root);
   assert.deepEqual(report.errors, []);
   assert.deepEqual(
-    report.consumers.map((item) => `${item.path}:${item.section}`).sort(),
-    expected.sort(),
+    [
+      ...new Set(
+        report.consumers
+          .filter((item) => !item.importer)
+          .map((item) =>
+            lock.format === 'npm'
+              ? `${item.path}:${item.section}`
+              : `${item.name}@${item.version}:${item.section}`,
+          ),
+      ),
+    ].sort(),
+    [...new Set(expected)].sort(),
   );
   assert(report.consumers.every((item) => item.installed.matchesLockedVersion));
   assert.equal(
@@ -189,10 +300,7 @@ test('lockfile escape paths are refused before resolving packages outside the wo
     installed: false,
     consumerPath: '../outside',
   });
-  const report = await reviewDeepmerge(directory);
-  assert.equal(report.coverage.installedResolutions, 'partial');
-  assert.match(report.consumers[0].error, /escapes the workspace/);
-  assert.equal(report.boundedBehavior.length, 0);
+  await assert.rejects(reviewDeepmerge(directory), /escaped tooling lock path/);
 });
 
 test('live verification requests all fixed primary sources and exact npm bulk input', async () => {
