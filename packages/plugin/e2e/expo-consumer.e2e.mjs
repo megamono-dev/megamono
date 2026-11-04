@@ -475,6 +475,7 @@ console.log('SDK-owned Metro defaults and isolated React versions verified.');
   });
   let generatedExportTarget;
   let generatedExportIsCommand;
+  let generatedExportArguments;
   let generatedProject;
   let generatedMetro;
   await check('generate-mobile-and-preserve-web', async () => {
@@ -571,6 +572,20 @@ console.log('SDK-owned Metro defaults and isolated React versions verified.');
     generatedExportTarget = target[0];
     generatedExportIsCommand =
       (target[1].command ?? target[1].options?.command) === 'expo export';
+    const existingArgs = target[1].options?.args;
+    assert(
+      existingArgs === undefined ||
+        typeof existingArgs === 'string' ||
+        (Array.isArray(existingArgs) &&
+          existingArgs.every((value) => typeof value === 'string')),
+      'The generated Expo export arguments must retain their supported string/array shape.',
+    );
+    generatedExportArguments = [
+      Array.isArray(existingArgs) ? existingArgs.join(' ') : existingArgs,
+      '--platform all --source-maps --no-bytecode --max-workers 1',
+    ]
+      .filter(Boolean)
+      .join(' ');
     assert(
       target[1].dependsOn.some(
         (dependency) =>
@@ -596,7 +611,7 @@ console.log('SDK-owned Metro defaults and isolated React versions verified.');
       `fixture-generated:${generatedExportTarget}`,
       '--skip-nx-cache',
       ...(generatedExportIsCommand
-        ? ['--args=--platform all --source-maps --no-bytecode --max-workers 1']
+        ? [`--args=${generatedExportArguments}`]
         : ['--platform=all', '--sourceMaps', '--maxWorkers=1']),
       '--output-style=static',
     );
