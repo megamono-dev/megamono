@@ -179,11 +179,10 @@ async function main() {
     }
     const matrix = (extraEnvironment) =>
       execFileSync(
-        'npm',
+        'pnpm',
         [
           'exec',
           'nx',
-          '--',
           'run',
           'create-megamono:e2e-selection-matrix-local-registry',
           '--excludeTaskDependencies',
@@ -205,7 +204,7 @@ async function main() {
     // Every next release is evaluated using the exact packages from public npm.
     // Stable promotion already requires that successful prerelease evaluation.
     if (channel === 'next') {
-      execFileSync('npm', ['run', 'release:qualify'], {
+      execFileSync('pnpm', ['run', 'release:qualify'], {
         cwd: root,
         stdio: 'inherit',
         env: {

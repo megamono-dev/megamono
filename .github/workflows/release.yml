@@ -34,19 +34,23 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.9
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          cache: pnpm
           registry-url: https://registry.npmjs.org
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - run: python -m pip install 'git-filter-repo>=2.47,<3'
-      - name: Use the repository npm version
+      - name: Use the npm consumer and publishing CLI
         shell: bash
-        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
-      - run: npm ci
+        run: npm install --global npm@11.21.1
+      - run: pnpm install --frozen-lockfile
       - name: Require an OIDC-capable npm CLI
         run: |
           npm_version="$(npm --version)"
@@ -67,12 +71,12 @@ jobs:
             exit 1
           fi
           npm whoami --registry=https://registry.npmjs.org
-      - run: npm run release:check
-      - run: npm run release:test
+      - run: pnpm run release:check
+      - run: pnpm run release:test
       - name: Verify publishing environment protections
         env:
           GH_TOKEN: ${{ github.token }}
-        run: npm run release:check-publishing
+        run: pnpm run release:check-publishing
       - name: Verify tested next versions before stable promotion
         if: inputs.channel == 'latest'
         run: node tools/check-next-promotion.mjs
@@ -92,14 +96,14 @@ jobs:
           args=(release version "$SPECIFIER" --groups=megamono,create-megamono --dry-run)
           if [ -n "$PREID" ]; then args+=(--preid "$PREID"); fi
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
-          npm exec nx -- "${args[@]}"
+          pnpm exec nx "${args[@]}"
       - name: Qualify release packages
         shell: bash
         env:
           MEGAMONO_QUALIFY_PHASE: ${{ inputs.channel == 'next' && 'checks' || 'all' }}
         run: |
           mkdir -p tmp/release-qualification
-          npm run release:qualify 2>&1 | tee tmp/release-qualification/qualification.log
+          pnpm run release:qualify 2>&1 | tee tmp/release-qualification/qualification.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -131,10 +135,10 @@ jobs:
           args=(release version "$SPECIFIER" --groups=megamono,create-megamono --git-commit=false --git-tag=false)
           if [ -n "$PREID" ]; then args+=(--preid "$PREID"); fi
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
-          npm exec nx -- "${args[@]}"
+          pnpm exec nx "${args[@]}"
           node tools/sync-release-pins.mjs
-          npm exec nx -- run-many -t build
-          npm run packages:check-exports
+          pnpm exec nx run-many -t build
+          pnpm run packages:check-exports
           node tools/commit-release.mjs
           mkdir -p tmp/release-state
           git bundle create tmp/release-state/release.bundle --all
@@ -155,7 +159,7 @@ jobs:
           node tools/write-build-info.mjs
           args=(release publish --groups=megamono,create-megamono --tag "$DIST_TAG" --access public)
           if [ "$FIRST_RELEASE" = "true" ]; then args+=(--first-release); fi
-          npm exec nx -- "${args[@]}"
+          pnpm exec nx "${args[@]}"
       - name: Read released versions
         id: versions
         run: |
@@ -170,7 +174,7 @@ jobs:
           RELEASE_CHANNEL: ${{ inputs.channel }}
         run: |
           mkdir -p tmp/release-qualification
-          npm run release:verify-published 2>&1 | tee tmp/release-qualification/published-consumers.log
+          pnpm run release:verify-published 2>&1 | tee tmp/release-qualification/published-consumers.log
       - name: Create GitHub release
         env:
           CHANNEL: ${{ steps.release.outputs.channel }}

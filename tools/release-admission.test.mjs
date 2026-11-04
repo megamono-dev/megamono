@@ -21,9 +21,9 @@ function qualify(t, refusedCommand, phase = 'checks') {
   const bin = join(directory, 'bin');
   const log = join(directory, 'commands.jsonl');
   mkdirSync(bin);
-  const npm = join(bin, 'npm');
+  const pnpm = join(bin, 'pnpm');
   writeFileSync(
-    npm,
+    pnpm,
     `#!${process.execPath}
 const fs = require('node:fs');
 const args = process.argv.slice(2);
@@ -31,7 +31,7 @@ fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(args) + '\\n');
 if (args.join(' ') === ${JSON.stringify(refusedCommand)}) process.exit(42);
 `,
   );
-  chmodSync(npm, 0o755);
+  chmodSync(pnpm, 0o755);
   const result = spawnSync(process.execPath, [runner], {
     encoding: 'utf8',
     env: {
@@ -76,7 +76,7 @@ test('an unignored advisory prevents builds and release qualification', (t) => {
 
 test('a failed packed Expo qualification prevents subsequent release consumers', (t) => {
   const refused =
-    'exec nx -- run @megamono/plugin:e2e-expo-consumer --skip-nx-cache --output-style=stream';
+    'exec nx run @megamono/plugin:e2e-expo-consumer --skip-nx-cache --output-style=stream';
   const { result, commands } = qualify(t, refused, 'consumers');
   assert.notEqual(result.status, 0);
   assert.equal(commands.at(-1).join(' '), refused);

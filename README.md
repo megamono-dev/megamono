@@ -35,24 +35,26 @@ the Java launcher support Windows paths as well, with cross-host CI qualificatio
 
 ## Development
 
-Use Node 24.22.1 (`nvm use`) and npm 11.21.1 to maintain this repository. CI pins npm explicitly
-because npm 10 does not interpret this lockfile consistently. Consumer fixtures
-still exercise the supported Node and package-manager ranges.
+Use Node 24.22.1 (`nvm use`) and pnpm 11.28.9 to maintain this repository.
+CI uses the committed pnpm lockfile. pnpm 11 requires Node 22.13 or newer;
+the repository authoring baseline remains Node 24. Isolated consumer fixtures
+still exercise the supported Node and package-manager ranges, including npm
+and Node 20/22, after building their prerequisites on Node 24.
 
 Install dependencies and run tasks through the workspace Nx CLI:
 
 ```bash
 nvm use
-npm install --global npm@11.21.1
-npm ci
-npm exec nx -- run-many -t build
-npm exec nx -- run-many -t test
-npm exec nx -- run-many -t lint
+npm install --global pnpm@11.28.9
+pnpm install --frozen-lockfile
+pnpm exec nx run-many -t build
+pnpm exec nx run-many -t test
+pnpm exec nx run-many -t lint
 ```
 
 Native dependency install scripts are approved by exact version in the root
-`package.json` `allowScripts` field. After a dependency update, use
-`npm install-scripts ls` to review any newly blocked scripts.
+`pnpm-workspace.yaml` `allowBuilds` field. After a dependency update, use
+`pnpm ignored-builds` to review blocked dependency scripts.
 
 Nx 23.3.1 pins Undici 7.29.0. The scoped `nx` override selects patched Undici
 7.30.1; recheck the upstream pin before removing this override. New workspace
@@ -65,25 +67,25 @@ plugin receive guarded compatibility patches for the removed matching APIs and
 glob's named ESM export. `tools/minimatch-consumers.provenance.json` records exact
 owner versions, tarball integrities, manifests, and original/patched file hashes.
 All inputs are checked before any write. ESLint and SWC CLI have exact direct
-pins so npm can enforce the matching version-qualified overrides.
+pins so pnpm can enforce the matching version-qualified overrides.
 
-`npm run tooling:test` covers project and file selection, release-tag strategies,
+`pnpm run tooling:test` covers project and file selection, release-tag strategies,
 ACL ordering, watch/issue filters, and actual Jest, Vitest, and Rollup consumers.
 The Rollup test engine is pinned to 4.67.4. Recheck these overrides and patches
 when upgrading the owning tools. They apply only to this repository's toolchain;
 Megamono does not emit them into adopted workspaces or narrow its published
-Node 18 adoption range. Use the committed lockfile with `npm ci`; installed
+Node 18 adoption range. Use the committed lockfile with `pnpm install --frozen-lockfile`; installed
 resolutions are verified so stale nested optional dependencies cannot silently
 bypass the scoped overrides.
 
-The repository's `npm ci` postinstall applies a reviewed, hash-guarded patch to
+The repository's `pnpm install` postinstall applies a reviewed, hash-guarded patch to
 Magicast 0.5.5: its embedded source-map-js 1.2.1 implementation is removed and
 replaced with the separately installed, pinned 1.2.2 dependency. This affects
 development coverage tooling. The provenance and exact artifact hashes live in
 `tools/magicast-bundle.provenance.json`; an unknown artifact or dependency version
 fails installation rather than silently skipping either patch set. After an install
-with lifecycle scripts disabled, run `npm run postinstall` explicitly.
-`npm run tooling:check` verifies both installed patch sets. The Magicast fixtures
+with lifecycle scripts disabled, run `pnpm run postinstall` explicitly.
+`pnpm run tooling:check` verifies both installed patch sets. The Magicast fixtures
 qualify parse/edit/generate, source maps, and Vitest coverage threshold updates.
 The tests use the original immutable npm tarball from the install cache; when it
 is unavailable, their error gives an explicit prefetch command and
@@ -93,7 +95,7 @@ Magicast; these local repairs are not upstream releases or audit exceptions.
 Inspect the project graph with:
 
 ```bash
-npm exec nx -- graph
+pnpm exec nx graph
 ```
 
 ## Compatibility
@@ -116,8 +118,8 @@ the opener plugin on the exact matching npm version, following
 Build and publish every Megamono package to yalc, then run the local CLI from this checkout:
 
 ```bash
-npm run yalc:publish
-npm exec -- create-megamono <name> \
+pnpm run yalc:publish
+pnpm exec create-megamono <name> \
   --directory=../<name> \
   --local-packages=yalc
 ```
@@ -186,10 +188,14 @@ A bare type keeps the quick default name (`web` creates `apps/web`). A named
 descriptor creates another instance (`web:admin` creates `apps/admin`), so any
 application type can be repeated without adding one-off plural flags.
 
-Install both global development commands from their yalc artifacts:
+Install both global development commands from their yalc artifacts. The Root
+build uses pnpm; this distribution-consumer check intentionally installs the
+explicit CLI artifacts and optional hosted peer together with npm. pnpm 11
+global installs would resolve the bootstrap CLI dependency from the registry
+instead of reusing the local artifact:
 
 ```bash
-npm run yalc:install-clis
+pnpm run yalc:install-clis
 command -v create-megamono
 megamono --version
 ```
@@ -229,8 +235,8 @@ The fixed `megamono` release group contains the nine `@megamono/*` packages. `cr
 
 Create protected GitHub environments named `npm-next` and `npm-latest`. Permit `main` and `release/*` for `npm-next`; permit only `main` and require reviewers for `npm-latest`. Configure each npm package's trusted publisher for organization `megamono-dev`, repository `megamono`, and workflow `release.yml`. Leave the npm publisher's environment field unset so the one publisher can serve both protected GitHub environments.
 
-Run `npm run release:check` and `npm run release:test` to verify registry, public access, repository metadata, MIT licensing, npm listing metadata, package documentation, release groups, channel/ref guards, and stable-promotion behavior locally. Packed-package validation also requires each tarball to include its license and README. Run
-`npm run release:check-publishing` to verify the live GitHub visibility and
+Run `pnpm run release:check` and `pnpm run release:test` to verify registry, public access, repository metadata, MIT licensing, npm listing metadata, package documentation, release groups, channel/ref guards, and stable-promotion behavior locally. Packed-package validation also requires each tarball to include its license and README. Run
+`pnpm run release:check-publishing` to verify the live GitHub visibility and
 environment protections against `tools/publishing-policy.json`. The release
 workflow runs this check before versioning.
 
@@ -279,20 +285,20 @@ requires that completed prerelease and its matching source revision. Stable
 releases retain full pre-publication qualification and check published artifacts
 plus representative registry consumers afterward.
 
-`npm run release:qualify` and the manual `Release qualification` workflow still
+`pnpm run release:qualify` and the manual `Release qualification` workflow still
 run the full pre-publication suite using isolated local registries. They do not
 require packages to exist on public npm. To repeat public consumer verification
 from the exact release checkout, run:
 
 ```sh
-RELEASE_CHANNEL=next npm run release:verify-published
+RELEASE_CHANNEL=next pnpm run release:verify-published
 ```
 
 Qualification first checks both installed patch sets, runs the tooling
-consumer fixtures, and executes `npm run security:audit` across all dependency
+consumer fixtures, and executes `pnpm run security:audit` across all dependency
 classes at the low-severity threshold. An advisory or registry failure stops
 admission before builds or publication. The current low-severity deepmerge
-finding therefore remains a release blocker. `npm run tooling:review-minimatch`
+finding therefore remains a release blocker. `pnpm run tooling:review-minimatch`
 prints actual installed consumer resolutions and bounded legacy API evidence;
 it is an inventory, not an audit exception or release approval. See the
 [tooling dependency audit](docs/audits/tooling-dependencies-20261103.md) for scope,

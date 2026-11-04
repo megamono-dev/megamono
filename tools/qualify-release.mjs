@@ -2,25 +2,24 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const npm = (args, env = {}) =>
-  execFileSync('npm', args, {
+const pnpm = (args, env = {}) =>
+  execFileSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', args, {
     cwd: root,
     stdio: 'inherit',
     env: { ...process.env, ...env },
   });
-const nx = (...args) =>
-  npm(['exec', 'nx', '--', ...args, '--output-style=stream']);
+const nx = (...args) => pnpm(['exec', 'nx', ...args, '--output-style=stream']);
 
 const phase = process.env.MEGAMONO_QUALIFY_PHASE ?? 'all';
 if (!['all', 'checks', 'consumers'].includes(phase))
   throw new Error('MEGAMONO_QUALIFY_PHASE must be all, checks, or consumers.');
 
 if (phase !== 'consumers') {
-  npm(['run', 'tooling:check']);
-  npm(['run', 'tooling:test']);
-  npm(['run', 'security:audit']);
-  npm(['run', 'release:check']);
-  npm(['run', 'release:test']);
+  pnpm(['run', 'tooling:check']);
+  pnpm(['run', 'tooling:test']);
+  pnpm(['run', 'security:audit']);
+  pnpm(['run', 'release:check']);
+  pnpm(['run', 'release:test']);
   // Generators delegate to other packed workspace packages at runtime. Finish
   // every build before tests load those packages from a clean checkout.
   nx('run-many', '-t', 'build');
@@ -54,11 +53,10 @@ for (const target of [
 ])
   nx('run', target, '--skip-nx-cache');
 
-npm(
+pnpm(
   [
     'exec',
     'nx',
-    '--',
     'run',
     'create-megamono:e2e-selection-matrix-local-registry',
     '--skip-nx-cache',
@@ -69,4 +67,4 @@ npm(
     MEGAMONO_MATRIX_VERIFY: 'build',
   },
 );
-npm(['run', 'packages:check-exports']);
+pnpm(['run', 'packages:check-exports']);

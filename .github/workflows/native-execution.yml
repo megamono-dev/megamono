@@ -8,7 +8,9 @@ on:
         'packages/plugin/e2e/android.e2e.mjs',
         'packages/plugin/package.json',
         '.github/workflows/native-execution.yml',
-        'package-lock.json',
+        'package.json',
+        'pnpm-lock.yaml',
+        'pnpm-workspace.yaml',
       ]
   workflow_dispatch:
 permissions:
@@ -26,10 +28,13 @@ jobs:
       NX_ISOLATE_PLUGINS: 'false'
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.9
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -38,11 +43,11 @@ jobs:
         with:
           packages: platform-tools
       - run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
-      - name: Use the repository npm version
+      - name: Use the npm consumer and publishing CLI
         shell: bash
-        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
-      - run: npm ci
-      - run: npm exec nx -- run @megamono/plugin:e2e-android
+        run: npm install --global npm@11.21.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec nx run @megamono/plugin:e2e-android
   native:
     strategy:
       fail-fast: false
@@ -51,13 +56,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.9
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
       - run: rustup component add clippy
-      - name: Use the repository npm version
+      - name: Use the npm consumer and publishing CLI
         shell: bash
-        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
-      - run: npm ci
-      - run: npm exec nx -- run nx-cargo:e2e-native-execution
+        run: npm install --global npm@11.21.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec nx run nx-cargo:e2e-native-execution
