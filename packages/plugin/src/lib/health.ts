@@ -8,6 +8,11 @@ import { readJsonFile, type ProjectGraph } from '@nx/devkit';
 import { valid as validVersion } from 'semver';
 import { repositoryOwnedGraph } from './repository-graph';
 import { renderPrismaFindings } from './render-prisma-health';
+import {
+  expoReadinessFindings,
+  inspectExpoProjects,
+  type ExpoProjectInspection,
+} from './expo-readiness';
 import type { MegamonoConfig } from './config';
 import type { RepositoryDocument } from './docs';
 import { inspectManagedSkills } from './managed-skills';
@@ -62,6 +67,9 @@ export interface RepositoryHealthReport {
     readonly passed: boolean | null;
   };
   readonly reductions?: readonly string[];
+  readonly platforms?: {
+    readonly expo: readonly ExpoProjectInspection[];
+  };
   readonly findings: readonly (HealthFinding & {
     readonly severity: 'warning';
     readonly category: 'adoption-debt' | HealthCheck;
@@ -1643,6 +1651,9 @@ export async function runRepositoryHealth(options: {
         options.config,
       )
     : [];
+  const expo = shouldRun('spec-drift')
+    ? inspectExpoProjects(options.workspaceRoot, options.graph)
+    : [];
   const findings = (
     await Promise.all([
       shouldRun('dependency-alignment')
@@ -1670,6 +1681,7 @@ export async function runRepositoryHealth(options: {
               options.config,
             ),
             ...databaseDrift,
+            ...expoReadinessFindings(expo),
           ]
         : [],
       shouldRun('stale-plans')
@@ -1704,6 +1716,7 @@ export async function runRepositoryHealth(options: {
     schemaVersion: 1,
     purpose: 'advisory',
     readiness: 'not-assessed',
+    ...(expo.length ? { platforms: { expo } } : {}),
     coverage: Object.fromEntries(
       HEALTH_CHECKS.map((check) => [
         check,
