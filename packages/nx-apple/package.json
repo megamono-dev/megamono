@@ -1,6 +1,6 @@
 {
   "name": "@megamono/nx-apple",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "license": "MIT",
   "description": "Nx plugin for Swift packages and Xcode projects: dependency graphs, native build and test targets, and SwiftUI application generation.",
   "keywords": [

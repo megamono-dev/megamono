@@ -1,6 +1,6 @@
 {
   "name": "@megamono/nx-cloudflare",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "license": "MIT",
   "description": "Nx plugin for Cloudflare Workers: generate applications, discover Wrangler projects and binding dependencies, and run development and deployment targets.",
   "keywords": [

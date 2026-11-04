@@ -248,7 +248,7 @@ importers:
         specifier: 8.7.5
         version: 8.7.5(@types/node@24.19.2)
       '@megamono/cli':
-        specifier: 0.1.0-next.0
+        specifier: 0.1.0-next.1
         version: link:../cli
       tslib:
         specifier: ^2.8.1
@@ -302,7 +302,7 @@ importers:
   packages/nx-phpnative:
     dependencies:
       '@megamono/nx-laravel':
-        specifier: 0.1.0-next.0
+        specifier: 0.1.0-next.1
         version: link:../nx-laravel
       tslib:
         specifier: ^2.8.1

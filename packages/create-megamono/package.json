@@ -1,6 +1,6 @@
 {
   "name": "create-megamono",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "license": "MIT",
   "description": "Create a new Nx monorepo with Megamono project generators, documentation, project boundaries, and CI conventions.",
   "keywords": [
@@ -131,7 +131,7 @@
     ]
   },
   "dependencies": {
-    "@megamono/cli": "0.1.0-next.0",
+    "@megamono/cli": "0.1.0-next.1",
     "@inquirer/prompts": "8.7.5",
     "tslib": "^2.8.1"
   },

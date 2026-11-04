@@ -1,6 +1,6 @@
 {
   "name": "@megamono/nx-cargo",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "license": "MIT",
   "description": "Nx plugin for Rust and Cargo workspaces: dependency graphs, build and test targets, Clippy linting, and Tauri integration.",
   "keywords": [
