@@ -79,7 +79,7 @@ MIT licensed. See [LICENSE](./LICENSE).
 <details>
 <summary>Configuration, execution details, and maintainer qualification</summary>
 
-Nx 18–23 project inference and dependency edges for Cargo workspaces and standalone Rust packages.
+Nx 18–24 project inference and dependency edges for Cargo workspaces and standalone Rust packages.
 
 ```json
 {

@@ -479,7 +479,7 @@ export function assertWorkspaceInitPreflight(
     'Nx',
     workspaceDependencyVersion(tree, 'nx'),
     { major: 17, minor: 0, patch: 0 },
-    { major: 24, minor: 0, patch: 0 },
+    { major: 25, minor: 0, patch: 0 },
   );
   requireVersionRange(
     'TypeScript',

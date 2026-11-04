@@ -1,7 +1,28 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
-import { assessDependencyRequirements } from './dependency-compatibility';
+import {
+  assessDependencyRequirements,
+  workspaceInitDependencyRequirements,
+} from './dependency-compatibility';
 
 describe('dependency compatibility', () => {
+  it.each([
+    ['24.0.4', 'retain'],
+    ['25.0.0', 'conflict'],
+  ])('assesses the Nx %s adoption boundary as %s', (nx, action) => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write(
+      'package.json',
+      JSON.stringify({ devDependencies: { nx, typescript: '6.0.3' } }),
+    );
+    const assessed = assessDependencyRequirements(
+      tree,
+      workspaceInitDependencyRequirements(new Set()),
+    );
+    expect(
+      assessed.find((dependency) => dependency.name === 'nx')?.action,
+    ).toBe(action);
+  });
+
   it('distinguishes compatible retention, additions, and conflicts', () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write(

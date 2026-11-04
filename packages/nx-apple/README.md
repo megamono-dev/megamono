@@ -79,7 +79,7 @@ MIT licensed. See [LICENSE](./LICENSE).
 <details>
 <summary>Configuration, execution details, and maintainer qualification</summary>
 
-Nx 18–23 project inference and dependency edges for Swift packages, Xcode projects, and Xcode workspaces.
+Nx 18–24 project inference and dependency edges for Swift packages, Xcode projects, and Xcode workspaces.
 
 ```json
 {

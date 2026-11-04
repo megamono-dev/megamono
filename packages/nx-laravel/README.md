@@ -93,7 +93,7 @@ MIT licensed. See [LICENSE](./LICENSE).
 <details>
 <summary>Configuration, execution details, and maintainer qualification</summary>
 
-Initial Laravel/Composer inference and staged application generation for Nx 22/23 and Node 22/24. Composer and PHP remain application-owned. Laravel 13 is the new-app default (PHP 8.3+); `--laravelVersion=^12.0` selects Laravel 12.
+Initial Laravel/Composer inference and staged application generation for Nx 22–24 and Node 22/24. Composer and PHP remain application-owned. Laravel 13 is the new-app default (PHP 8.3+); `--laravelVersion=^12.0` selects Laravel 12.
 
 ### Generate applications
 

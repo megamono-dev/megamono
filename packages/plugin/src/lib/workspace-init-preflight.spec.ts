@@ -241,6 +241,7 @@ describe('workspace init preflight', () => {
     ['21.6.11', '5.9.3'],
     ['22.2.3', '5.9.3'],
     ['23.1.1', '6.0.3'],
+    ['24.0.4', '6.0.3'],
   ])(
     'accepts the Nx %s and TypeScript %s adoption anchor',
     (nx, typescript) => {
@@ -262,7 +263,7 @@ describe('workspace init preflight', () => {
 
   it.each([
     ['Nx', '16.10.0', '6.0.3'],
-    ['Nx', '24.0.0', '6.0.3'],
+    ['Nx', '25.0.0', '6.0.3'],
     ['TypeScript', '23.1.1', '5.1.6'],
     ['TypeScript', '23.1.1', '7.0.0'],
   ])('refuses %s outside the adoption range', (label, nx, typescript) => {

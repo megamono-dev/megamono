@@ -94,8 +94,8 @@
     "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "@nx/devkit": ">=18 <24",
-    "nx": ">=18 <24",
+    "@nx/devkit": ">=18 <25",
+    "nx": ">=18 <25",
     "wrangler": ">=4.105 <5"
   },
   "peerDependenciesMeta": {

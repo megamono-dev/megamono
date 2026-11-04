@@ -146,7 +146,7 @@ The initial scope is planning, Composer scaffolding and Nx integration, not sign
 
 ### Maintainer qualification
 
-From the Megamono source workspace, `npm exec nx -- run nx-phpnative:e2e-php-consumer` builds and packs both plugins, installs them into a disposable consumer, repeats installation with `npm ci`, and tests real Nx generation and graph inference. It requires registry access but no PHP installation. `MEGAMONO_TEST_NX_VERSION=22.2.3` selects the Nx 22 fixture instead of 23.1.1.
+From the Megamono source workspace, `npm exec nx -- run nx-phpnative:e2e-php-consumer` builds and packs both plugins, installs them into a disposable consumer, repeats installation with `npm ci`, and tests real Nx generation and graph inference. It requires registry access but no PHP installation. The default fixture uses Nx 23.3.1; set `MEGAMONO_TEST_NX_VERSION=22.2.3` or `MEGAMONO_TEST_NX_VERSION=24.0.4` to select the other supported stable anchors. The compatibility workflow runs all three.
 
 The optional `node packages/nx-phpnative/e2e/consumer.mjs --composer --resolve` mode additionally downloads real Laravel skeletons and resolves desktop/mobile Composer dependencies without installing them or running scripts. Set `MEGAMONO_TEST_PHP` to an explicit PHP 8.4+ executable and `MEGAMONO_TEST_COMPOSER` to the Composer PHP executable/PHAR path. It does not change Herd's global PHP selection. The fixture deletes only its own temporary workspace when complete.
 

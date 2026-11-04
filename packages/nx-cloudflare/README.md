@@ -76,7 +76,7 @@ MIT licensed. See [LICENSE](./LICENSE).
 <details>
 <summary>Configuration, execution details, and maintainer qualification</summary>
 
-Wrangler-aware project, target, metadata, and dependency inference for Nx 18–23 workspaces.
+Wrangler-aware project, target, metadata, and dependency inference for Nx 18–24 workspaces.
 
 This package is published on npm. It is a development-time Nx plugin and does not add a runtime dependency to Worker applications.
 

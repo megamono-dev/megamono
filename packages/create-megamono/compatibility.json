@@ -30,16 +30,18 @@
     "npm": ">=9 <12",
     "yarn": ">=1.22 <5",
     "bun": ">=1.1 <2",
-    "nx": ">=17 <24",
+    "nx": ">=17 <25",
     "typescript": ">=5.2 <7"
   },
   "packageCompatibility": {
-    "@megamono/plugin": { "nx": ">=17 <24" },
-    "@megamono/nx-apple": { "nx": ">=18 <24" },
-    "@megamono/nx-cargo": { "nx": ">=18 <24" },
-    "@megamono/nx-cloudflare": { "nx": ">=18 <24" },
-    "@megamono/nx-extension": { "nx": ">=18 <24" },
-    "@megamono/nx-render": { "nx": ">=18 <24" }
+    "@megamono/plugin": { "nx": ">=17 <25" },
+    "@megamono/nx-apple": { "nx": ">=18 <25" },
+    "@megamono/nx-cargo": { "nx": ">=18 <25" },
+    "@megamono/nx-cloudflare": { "nx": ">=18 <25" },
+    "@megamono/nx-extension": { "nx": ">=18 <25" },
+    "@megamono/nx-render": { "nx": ">=18 <25" },
+    "@megamono/nx-laravel": { "nx": ">=22 <25" },
+    "@megamono/nx-phpnative": { "nx": ">=22 <25" }
   },
   "playstackIntegration": {
     "node": ">=20",
@@ -53,7 +55,8 @@
       { "nx": "20.0.1", "typescript": "5.6.2", "node": "20" },
       { "nx": "21.6.11", "typescript": "5.9.3", "node": "22" },
       { "nx": "22.2.3", "typescript": "5.9.3", "node": "22" },
-      { "nx": "23.3.1", "typescript": "6.0.3", "node": "24" }
+      { "nx": "23.3.1", "typescript": "6.0.3", "node": "24" },
+      { "nx": "24.0.4", "typescript": "6.0.3", "node": "24" }
     ],
     "future": { "nx": "next", "typescript": "next", "node": "24" }
   },

@@ -95,8 +95,8 @@ export function workspaceInitDependencyRequirements(
   return [
     {
       name: 'nx',
-      range: '>=17 <24',
-      reason: 'Megamono core adoption supports Nx 17 through 23.',
+      range: '>=17 <25',
+      reason: 'Megamono core adoption supports Nx 17 through 24.',
     },
     {
       name: 'typescript',

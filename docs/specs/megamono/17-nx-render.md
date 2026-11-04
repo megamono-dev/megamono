@@ -18,7 +18,7 @@ external_references: []
 
 ## Compatibility and authority
 
-The package supports Nx 18–23 and Node 18.18–24. It reads `render.yaml`, including direct services/databases and Render project/environment groups. A Procfile by itself remains partial deployment evidence in the core workspace survey; the plugin never invents dashboard-owned services or writes a Blueprint.
+The package supports Nx 18–24 and Node 18.18–24. It reads `render.yaml`, including direct services/databases and Render project/environment groups. A Procfile by itself remains partial deployment evidence in the core workspace survey; the plugin never invents dashboard-owned services or writes a Blueprint.
 
 Every service must either declare a safe workspace-relative `rootDir` or have an explicit `serviceProjects` mapping. A root-level service without that mapping is ambiguous and is not attached to a guessed Nx project.
 

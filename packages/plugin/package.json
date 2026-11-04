@@ -408,13 +408,13 @@
     "zod": "^4.6.7"
   },
   "peerDependencies": {
-    "@nx/devkit": ">=17 <24",
-    "@nx/expo": ">=17 <24",
-    "@nx/js": ">=17 <24",
-    "@nx/nest": ">=17 <24",
-    "@nx/next": ">=17 <24",
+    "@nx/devkit": ">=17 <25",
+    "@nx/expo": ">=17 <25",
+    "@nx/js": ">=17 <25",
+    "@nx/nest": ">=17 <25",
+    "@nx/next": ">=17 <25",
     "eslint": ">=8 <11",
-    "nx": ">=17 <24",
+    "nx": ">=17 <25",
     "typescript": ">=5.2 <7"
   },
   "peerDependenciesMeta": {

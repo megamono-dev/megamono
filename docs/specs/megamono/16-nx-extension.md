@@ -18,7 +18,7 @@ external_references: [playstack:26-extension]
 
 ## Compatibility
 
-The package supports Nx 18–23 inference and declares the same Node 18.18–24 host range as the other inference plugins. Generated applications pin WXT 0.21.4, which requires Node 22 or newer; generation must fail before mutation when the active Node runtime is older. Existing hand-authored WXT projects may still be discovered on an otherwise compatible legacy workspace.
+The package supports Nx 18–24 inference and declares the same Node 18.18–24 host range as the other inference plugins. Generated applications pin WXT 0.21.4, which requires Node 22 or newer; generation must fail before mutation when the active Node runtime is older. Existing hand-authored WXT projects may still be discovered on an otherwise compatible legacy workspace.
 
 ## Inference
 

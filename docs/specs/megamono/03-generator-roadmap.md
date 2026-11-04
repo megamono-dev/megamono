@@ -101,7 +101,7 @@ Rust and Tauri.
 - `createNodes` runs `cargo metadata --format-version 1 --no-deps` once per Cargo workspace and creates one Nx project per workspace package; a virtual workspace root is not a project.
 - `createDependencies` maps workspace members and dependencies with a local `path` to static Nx edges, including target-specific and development dependencies.
 - Targets: `cargo build/test/clippy`, `tauri build`.
-- Prior art from `@monodon/rust` may be reused when license-compatible, but the accepted public contract is this package and the Nx 18–23 API bridge in `spec-megamono-0000`.
+- Prior art from `@monodon/rust` may be reused when license-compatible, but the accepted public contract is this package and the Nx 18–24 API bridge in `spec-megamono-0000`.
 - Validation surface: four Tauri surfaces (Springbar, Prismark, Xtension, Promptvisor components).
 
 Cargo target options include `package`, `target`, `features`, `allFeatures`, `noDefaultFeatures`, `profile`, and `targetDir`. Inferred commands always pass `--package` so one Nx task does not accidentally rebuild the whole Cargo workspace.
@@ -215,7 +215,7 @@ The generator should emit the Chrome and Firefox targets, and **say plainly that
 
 OpenGraphs (shipping, 200+ users), Timespans, and Basemarks. Horizens is not a committed v1 consumer.
 
-**Implemented public-validation package.** The plugin discovers hand-authored `wxt.config.*` projects on Nx 18–23 and the generator creates WXT 0.21.4 projects through `megamono add app extension`. WXT 0.21 application generation requires Node 22 or newer even though adoption-time inference remains available on the package's wider Node range. A packed local-registry fixture gates release participation.
+**Implemented public-validation package.** The plugin discovers hand-authored `wxt.config.*` projects on Nx 18–24 and the generator creates WXT 0.21.4 projects through `megamono add app extension`. WXT 0.21 application generation requires Node 22 or newer even though adoption-time inference remains available on the package's wider Node range. A packed local-registry fixture gates release participation.
 
 ## Implemented public-validation package — `@megamono/nx-cloudflare`
 
