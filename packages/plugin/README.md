@@ -118,10 +118,15 @@ remain unchanged: add the Doctor target to workflows that do not reach a guarded
 build/export target.
 
 New mobile apps declare their own SDK-compatible React, React DOM, native
-runtime, Expo modules and test/build tools. The maintained Nx Expo generator
-selects the SDK lane; existing root and web dependency declarations retain their
-versions and ownership. Ambiguous SDK ranges, incompatible native runtimes, or
-conflicting Expo inference policies require explicit configuration review.
+runtime, Expo modules and test/build tools. SDK requirements come from matching
+installed Expo metadata or verified public SDK snapshots; Nx supplies the
+maintained project scaffold. Existing root and web dependency declarations
+retain their versions and ownership. Ambiguous SDK ranges, incompatible native
+runtimes, or conflicting Expo inference policies require explicit review.
+Without an existing workspace SDK policy, generation selects the reviewed
+Expo 57.0.31 snapshot. This pins the SDK lane instead of following an unbounded
+registry tag. Each Expo SDK and its tools have their own Node requirements;
+the plugin's core Node peer range does not extend those requirements.
 
 New Metro configuration extends `expo/metro-config`, retains its monorepo
 defaults, and resolves React entrypoints from the mobile app so hoisted native
@@ -155,11 +160,13 @@ React/React Native compatibility. Static inspection never executes project
 configuration and always reports validation as `not-assessed`. An import or a
 configured target is not proof of a passing Doctor, bundle, native or cloud build.
 
-The packed Expo consumer regression lane covers adoption and new application
-generation with SDK 54/Nx 23.3.1 and split mobile/web React versions. It runs
-actual Doctor and iOS/Android JavaScript exports; other SDKs, older Nx target
-behavior and native/cloud builds require their own qualification. Unit tests of
-SDK selection do not establish bundle compatibility for every supported lane.
+Packed Expo regression lanes cover SDK 54/Nx 23.3.1 adoption and generation,
+and default SDK 57.0.31 generation with the emitted Nx 23.2.1 scaffold. Both run
+on Node 24.22.1/npm 11 with split mobile/web React versions. They execute
+Doctor, web/iOS/Android JavaScript exports, bundle isolation checks, TypeScript
+and the generated unit test. Other SDKs, older Nx target behavior and native/cloud
+builds require their own qualification. SDK selection tests do not establish
+bundle compatibility for every snapshot.
 
 Strict package-source profiles also reject root `.yalc`/`yalc.lock` state even
 when ignored. The diagnostic distinguishes active manifest/configuration

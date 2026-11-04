@@ -148,5 +148,195 @@
   },
   "externalTools": {
     "git-filter-repo": ">=2.47 <3"
+  },
+  "expoSdks": {
+    "schemaVersion": 1,
+    "defaultVersion": "57.0.31",
+    "snapshots": {
+      "53": {
+        "version": "53.0.27",
+        "source": {
+          "metadata": "https://registry.npmjs.org/expo/53.0.27",
+          "tarball": "https://registry.npmjs.org/expo/-/expo-53.0.27.tgz",
+          "integrity": "sha512-iQwe2uWLb88opUY4vBYEW1d2GUq3lsa43gsMBEdDV+6pw0Oek93l/4nDLe0ODDdrBRjIJm/rdhKqJC/ehHCUqw==",
+          "tarballSha256": "cd0c48683ab8cd420a6c2a70c311eb8a2f89fcdc7da67ece11e80e59ffa7e135",
+          "manifestSha256": "94c5f1cdc2819bca05c3e92c30028c69ec70dac8c0075cd9b821b479de8247fc",
+          "bundledNativeModulesSha256": "cd5811c8aa891a960fd694333a20db973deca0aed9e76f90fdbfd4d59dd2c583"
+        },
+        "requirements": {
+          "@babel/runtime": "^7.20.0",
+          "@expo/cli": "0.24.24",
+          "@expo/metro-config": "0.20.18",
+          "@expo/metro-runtime": "~5.0.5",
+          "@expo/vector-icons": "^14.1.0",
+          "@types/react": "~19.0.10",
+          "babel-preset-expo": "~13.2.5",
+          "expo-font": "~13.3.2",
+          "expo-splash-screen": "~0.30.10",
+          "expo-status-bar": "~2.2.3",
+          "expo-system-ui": "~5.0.11",
+          "jest-expo": "~53.0.14",
+          "react": "19.0.0",
+          "react-dom": "19.0.0",
+          "react-native": "0.79.6",
+          "react-native-svg": "15.11.2",
+          "react-native-web": "~0.20.0"
+        },
+        "requirementsSha256": "b207ca4b94a146d2d6c5d92d5d80a11adc515acac954a60306da8a4db11f801e",
+        "reactNativePeerReact": {
+          "range": "^19.0.0",
+          "metadata": "https://registry.npmjs.org/react-native/0.79.6",
+          "metadataSha256": "673aed7495b964cb12551e5e51f537354e651be57078543a7d10f537c42530bf"
+        }
+      },
+      "54": {
+        "version": "54.0.38",
+        "source": {
+          "metadata": "https://registry.npmjs.org/expo/54.0.38",
+          "tarball": "https://registry.npmjs.org/expo/-/expo-54.0.38.tgz",
+          "integrity": "sha512-W8ZpBjx6nKRbZ0xyE1klb8KSdHRCRgPDm4HHNL+p9AHbNQJD845gB9jcXfO9SRWsvkGtE52QsWoYQZpQEV9YVw==",
+          "tarballSha256": "0450bbffe9208f3150a90f860a60be0ea9ef54b453b28517b0ef5c52717a6968",
+          "manifestSha256": "4ab5f534c845500479d987dda2e863b662ff0f0612116302abb4b07e969cdc50",
+          "bundledNativeModulesSha256": "e6fffb5b6bda9aadfb7ba69bf91c6814bd54ccc60d0760ba38855d20a4a8ec74"
+        },
+        "requirements": {
+          "@babel/runtime": "^7.20.0",
+          "@expo/cli": "54.0.28",
+          "@expo/metro": "~54.2.0",
+          "@expo/metro-config": "54.0.17",
+          "@expo/metro-runtime": "~6.1.2",
+          "@expo/vector-icons": "^15.0.3",
+          "@types/react": "~19.1.10",
+          "babel-preset-expo": "~54.0.12",
+          "expo-font": "~14.0.12",
+          "expo-splash-screen": "~31.0.13",
+          "expo-status-bar": "~3.0.9",
+          "expo-system-ui": "~6.0.9",
+          "jest-expo": "~54.0.18",
+          "react": "19.1.0",
+          "react-dom": "19.1.0",
+          "react-native": "0.81.5",
+          "react-native-svg": "15.12.1",
+          "react-native-web": "~0.21.0"
+        },
+        "requirementsSha256": "58e1d207b1c2547608914fe7fdc5e6edaae5e756a8879ef42d51201dc6e30933",
+        "reactNativePeerReact": {
+          "range": "^19.1.0",
+          "metadata": "https://registry.npmjs.org/react-native/0.81.5",
+          "metadataSha256": "eee1c610431cb7b5ac0c86e19dbe1b83e4e69f5d2c9a4cce8ca28928ea304cde"
+        }
+      },
+      "55": {
+        "version": "55.0.32",
+        "source": {
+          "metadata": "https://registry.npmjs.org/expo/55.0.32",
+          "tarball": "https://registry.npmjs.org/expo/-/expo-55.0.32.tgz",
+          "integrity": "sha512-w0Y4tstI6+s67Icsrw8/EHnqLPJEtYAikQq2UlWLN0cSEWmQOD5KuxSwmJmNf+4m5aUuWKExwr4B9pw8vLnpHQ==",
+          "tarballSha256": "b8a48a76570e00ff33f960e42ae79cb52ef5cf21e446977c90003651953389e5",
+          "manifestSha256": "e0a4faff3c78d276b2dbaf9af7173870e149df158cc1d517f5f1a2a3176af17a",
+          "bundledNativeModulesSha256": "d91e1b751903d0c1dbfb06eb0784e34cfc68206ba8499cb928c65fa2332b83a3"
+        },
+        "requirements": {
+          "@babel/runtime": "^7.20.0",
+          "@expo/cli": "55.0.37",
+          "@expo/metro": "~55.1.2",
+          "@expo/metro-config": "55.0.27",
+          "@expo/metro-runtime": "~55.0.12",
+          "@expo/vector-icons": "^15.0.2",
+          "@types/react": "~19.2.0",
+          "babel-preset-expo": "~55.0.25",
+          "expo-font": "~55.0.8",
+          "expo-splash-screen": "~55.0.25",
+          "expo-status-bar": "~55.0.6",
+          "expo-system-ui": "~55.0.22",
+          "jest-expo": "~55.0.22",
+          "react": "19.2.0",
+          "react-dom": "19.2.0",
+          "react-native": "0.83.10",
+          "react-native-svg": "15.15.3",
+          "react-native-web": "~0.21.0"
+        },
+        "requirementsSha256": "491a744d8e1987bfb27d3df54ccea9547c0e09726962e0331a72d034f3832186",
+        "reactNativePeerReact": {
+          "range": "^19.2.0",
+          "metadata": "https://registry.npmjs.org/react-native/0.83.10",
+          "metadataSha256": "ea8c82da6412265cc6ced637bd2e3667c6d67e4995ca72a3c7b433a312b66dad"
+        }
+      },
+      "56": {
+        "version": "56.0.24",
+        "source": {
+          "metadata": "https://registry.npmjs.org/expo/56.0.24",
+          "tarball": "https://registry.npmjs.org/expo/-/expo-56.0.24.tgz",
+          "integrity": "sha512-uy2pMBnehPKFLWOOIG34/9pWKs5xvwDO4zKyAX2gMH9hKm7LK3zMh0D60bX9XR9OqY6ZHBah8wFFHjfWpa+BsQ==",
+          "tarballSha256": "bd3c8ae421659d60447e715d0a2b3ed74015d86644e6b607d1db1e0e29433143",
+          "manifestSha256": "60d69d830194719f4b5c22feaee739764874b4650b6c87bcd79685a71bd56d71",
+          "bundledNativeModulesSha256": "d90580bed966678197006202ae6a7e79958eb36de012c1adc594e15b1a75a2fa"
+        },
+        "requirements": {
+          "@babel/runtime": "^7.20.0",
+          "@expo/cli": "^56.1.27",
+          "@expo/metro": "~56.0.2",
+          "@expo/metro-config": "~56.0.20",
+          "@expo/metro-runtime": "~56.0.21",
+          "@expo/vector-icons": "^15.0.2",
+          "@types/react": "~19.2.0",
+          "babel-preset-expo": "~56.0.21",
+          "expo-font": "~56.0.7",
+          "expo-splash-screen": "~56.0.16",
+          "expo-status-bar": "~56.0.4",
+          "expo-system-ui": "~56.0.5",
+          "jest-expo": "~56.0.6",
+          "react": "19.2.3",
+          "react-dom": "19.2.3",
+          "react-native": "0.85.3",
+          "react-native-svg": "15.15.4",
+          "react-native-web": "~0.21.0"
+        },
+        "requirementsSha256": "dd2bd4fa4d24e0ad31994b2ddaa53b8fe519b48d32589957832aeb456bbd79e4",
+        "reactNativePeerReact": {
+          "range": "^19.2.3",
+          "metadata": "https://registry.npmjs.org/react-native/0.85.3",
+          "metadataSha256": "3280459821dc01ea592451b36723e896f6f3c45a8002c8d64da742f2e72aa1ab"
+        }
+      },
+      "57": {
+        "version": "57.0.31",
+        "source": {
+          "metadata": "https://registry.npmjs.org/expo/57.0.31",
+          "tarball": "https://registry.npmjs.org/expo/-/expo-57.0.31.tgz",
+          "integrity": "sha512-+9AJvHZMLIY/Tv6r5Tpu84vWfI75FBTnineYqjjlHAU138IPg2gYQKn9FQFetCB9YScwyc7STk7WGHSCHAdTiQ==",
+          "tarballSha256": "4d82554204b0edf95888bb3981a079bc3845d03375a9c2712afbdbe37a8ac27b",
+          "manifestSha256": "114d85c52bbdf10f1a0ad79ace2b41e55056d51621c9e66c7e94da099e3e3f04",
+          "bundledNativeModulesSha256": "b662f0567845c33cd708859304fa11dc4e397b49977e3f5b1ba82e2ebf47bf44"
+        },
+        "requirements": {
+          "@babel/runtime": "^7.20.0",
+          "@expo/cli": "^57.0.32",
+          "@expo/metro": "~56.0.2",
+          "@expo/metro-config": "~57.0.13",
+          "@expo/metro-runtime": "~57.0.17",
+          "@expo/vector-icons": "^15.0.2",
+          "@types/react": "~19.2.0",
+          "babel-preset-expo": "~57.0.16",
+          "expo-font": "~57.0.4",
+          "expo-splash-screen": "~57.0.10",
+          "expo-status-bar": "~57.0.1",
+          "expo-system-ui": "~57.0.4",
+          "jest-expo": "~57.0.6",
+          "react": "19.2.3",
+          "react-dom": "19.2.3",
+          "react-native": "0.86.3",
+          "react-native-svg": "15.15.4",
+          "react-native-web": "~0.21.0"
+        },
+        "requirementsSha256": "a09e7d6c2b400120061e94764c9cc5045fe89ba1357d7497d6e99b89a9191b41",
+        "reactNativePeerReact": {
+          "range": "^19.2.3",
+          "metadata": "https://registry.npmjs.org/react-native/0.86.3",
+          "metadataSha256": "2731073da9a29419aef882360abdcb45c48b31db2a53e289c4b0fb1e8f6b375d"
+        }
+      }
+    }
   }
 }

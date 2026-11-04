@@ -1,7 +1,12 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { describe, expect, it } from 'vitest';
 import { appGenerator, AppGeneratorError } from './app';
-import { readJson, readProjectConfiguration, updateJson } from '@nx/devkit';
+import {
+  addProjectConfiguration,
+  readJson,
+  readProjectConfiguration,
+  updateJson,
+} from '@nx/devkit';
 import { parse } from 'yaml';
 import { runInNewContext } from 'node:vm';
 import * as nodePath from 'node:path';
@@ -36,6 +41,63 @@ function snapshot(tree: ReturnType<typeof workspace>): string {
 }
 
 describe('app generator', () => {
+  it('uses an existing app-owned SDK without requiring a Root Expo declaration', async () => {
+    const tree = workspace();
+    updateJson(tree, 'package.json', (manifest) => ({
+      ...manifest,
+      dependencies: { react: '19.3.1', 'react-dom': '19.3.1' },
+    }));
+    tree.write(
+      'apps/existing/package.json',
+      '{"name":"@fixture/existing","dependencies":{"expo":"~54.0.38"}}',
+    );
+    addProjectConfiguration(tree, 'existing', {
+      root: 'apps/existing',
+      projectType: 'application',
+    });
+    await appGenerator(tree, {
+      type: 'mobile',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    expect(readJson(tree, 'package.json').dependencies.expo).toBeUndefined();
+    expect(
+      readJson(tree, 'apps/mobile/package.json').dependencies,
+    ).toMatchObject({
+      expo: '~54.0.38',
+      react: '19.1.0',
+      'react-native': '0.81.5',
+    });
+    expect(readJson(tree, 'apps/existing/package.json').dependencies.expo).toBe(
+      '~54.0.38',
+    );
+  });
+
+  it('refuses conflicting workspace SDK owners before writes', async () => {
+    const tree = workspace();
+    for (const version of ['54.0.38', '55.0.32']) {
+      const name = `sdk-${version.split('.')[0]}`;
+      tree.write(
+        `apps/${name}/package.json`,
+        JSON.stringify({ name, dependencies: { expo: version } }),
+      );
+      addProjectConfiguration(tree, name, {
+        root: `apps/${name}`,
+        projectType: 'application',
+      });
+    }
+    const before = snapshot(tree);
+    await expect(
+      appGenerator(tree, {
+        type: 'mobile',
+        yes: true,
+        interactive: false,
+        skipInstall: true,
+      }),
+    ).rejects.toMatchObject({ diagnosticCode: 'app-compatibility' });
+    expect(snapshot(tree)).toBe(before);
+  });
   it('keeps desktop Rust and JavaScript versions compatible after Cargo resolution', async () => {
     const tree = workspace();
     await appGenerator(tree, {
@@ -120,6 +182,7 @@ describe('app generator', () => {
       react: '19.3.1',
       'react-dom': '19.3.1',
       expo: '~54.0.38',
+      'react-native': '>=0.81.0 <0.82',
     };
     updateJson(tree, 'package.json', (value) => ({
       ...value,
@@ -157,6 +220,10 @@ describe('app generator', () => {
       react: '19.1.0',
       'react-dom': '19.1.0',
       'react-native': '0.81.5',
+    });
+    expect(readJson(tree, 'apps/mobile/app.json').expo).toMatchObject({
+      newArchEnabled: true,
+      android: { edgeToEdgeEnabled: true },
     });
     expect(
       readJson(tree, 'apps/mobile/package.json').devDependencies[
@@ -324,16 +391,22 @@ describe('app generator', () => {
     ).toBeUndefined();
     const app = readJson(tree, 'apps/mobile/package.json');
     expect(app.dependencies).toMatchObject({
-      expo: '~56.0.0',
-      react: '19.2.0',
-      'react-dom': '19.2.0',
-      'react-native': '0.85.3',
+      expo: '57.0.31',
+      react: '19.2.3',
+      'react-dom': '19.2.3',
+      'react-native': '0.86.3',
     });
-    expect(app.devDependencies['react-test-renderer']).toBe('19.2.0');
-    expect(app.devDependencies['jest-expo']).toBe('~56.0.4');
-    expect(app.devDependencies['babel-preset-expo']).toBe('~56.0.14');
+    expect(app.devDependencies['react-test-renderer']).toBe('19.2.3');
+    expect(app.devDependencies['jest-expo']).toBe('~57.0.6');
+    expect(app.devDependencies['babel-preset-expo']).toBe('~57.0.16');
     expect(app.devDependencies['@types/react']).toBe('~19.2.0');
-    expect(app.dependencies['expo-splash-screen']).toBe('~56.0.10');
+    expect(app.dependencies['expo-splash-screen']).toBe('~57.0.10');
+    expect(
+      readJson(tree, 'apps/mobile/app.json').expo.android.edgeToEdgeEnabled,
+    ).toBeUndefined();
+    expect(
+      readJson(tree, 'apps/mobile/app.json').expo.newArchEnabled,
+    ).toBeUndefined();
     expect(Object.values(app.dependencies)).not.toContain('*');
     expect(app.devDependencies['@testing-library/react-native']).toBe(
       '~13.2.0',
@@ -364,19 +437,19 @@ describe('app generator', () => {
     expect(root.devDependencies['@expo/cli']).toBeUndefined();
     const app = readJson(tree, 'apps/mobile/package.json');
     expect(app.dependencies).toMatchObject({
-      expo: '~56.0.0',
-      react: '19.2.0',
-      'react-native': '0.85.3',
-      'expo-splash-screen': '~56.0.10',
+      expo: '57.0.31',
+      react: '19.2.3',
+      'react-native': '0.86.3',
+      'expo-splash-screen': '~57.0.10',
     });
     expect(app.devDependencies).toMatchObject({
-      'babel-preset-expo': '~56.0.14',
+      'babel-preset-expo': '~57.0.16',
       '@types/react': '~19.2.0',
-      '@expo/cli': '~56.1.14',
+      '@expo/cli': '^57.0.32',
     });
   });
 
-  it.each(['latest', 'file:../expo', '*', '>=0', '>=54 <57', '^57.0.0'])(
+  it.each(['latest', 'file:../expo', '*', '>=0', '>=54 <57', '^59.0.0'])(
     'refuses an ambiguous or conflicting existing Expo declaration without keeping probe writes: %s',
     async (expo) => {
       const tree = workspace();

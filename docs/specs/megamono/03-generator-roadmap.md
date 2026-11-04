@@ -120,22 +120,30 @@ npm exec nx g @megamono/plugin:app --type=web --name=web --interactive=false --y
 
 V1 supports `web`, `site`, `api`, `worker`, `mobile`, `desktop`, `apple`, and `extension`. It reads `megamono.json`, derives a conventional name and root when omitted interactively, and composes the maintained ecosystem generator with Megamono-owned post-processing. Web and site use the Pages Router, `src/`, ESLint, Playwright, and the selected Chakra, Emotion, Tailwind, Panda, StyleX, CSS Modules, or inline billboard renderer. Chakra remains the suggested greenfield answer, not an enforced convention. API uses Nest plus a feature library rather than retaining substantive code in the application composition root. Mobile composes Expo and receives `platform:mobile`; Worker, Apple, desktop, and browser extension surfaces delegate to the corresponding Megamono language plugin or scaffold adapter. Every project receives the accepted `platform`, `scope`, `type`, and `visibility` tags.
 
-Mobile generation selects SDK requirements through the public maintained Nx
-Expo initializer without retaining probe writes or running its install callback.
-The new app owns SDK-compatible runtime, React singleton, and test/build tool
-declarations; existing root dependencies and sibling web versions retain their
-sections and ranges. Unbounded or conflicting SDK/native requirements are
-preflight conflicts rather than implicit upgrades. New configuration extends
-Expo's Metro defaults, with app-local React resolution for hoisted native
-libraries; adding a mobile app does not migrate other apps' Metro configuration.
+Mobile generation reads SDK requirements from matching installed Expo metadata
+or verified public SDK snapshots; selection does not execute an initializer,
+install packages, or fetch metadata. The default SDK is pinned to the reviewed
+Expo 57.0.31 snapshot. Existing Root or coherent project-owned SDK declarations
+guide selection rather than silently upgrading callers. Nx supplies the maintained
+application scaffold. The new app owns SDK-compatible runtime, React singleton,
+and test/build tool declarations; existing Root dependencies and sibling web
+versions retain their sections and ranges. Unbounded or conflicting SDK/native
+requirements are preflight conflicts. New configuration extends Expo's Metro
+defaults, with app-local React resolution for hoisted native libraries; adding a
+mobile app does not migrate other apps' Metro configuration.
+SDK and tooling Node requirements are independent of the core plugin peer range;
+the default SDK's runtime qualification is bounded to the tested toolchain.
 
 On Nx 18 and newer, mobile generation uses maintained Expo inference without
 legacy manifest-mutating `sync-deps` prerequisites. It reuses an equivalent
 unscoped policy or adds a registration with exact filenames for the new app.
 Different existing target policies require review instead of guessing scope
 matching. Doctor prerequisites retain configured target aliases and dependency
-export ordering. Older Nx behavior requires separate qualification; the current
-Nx 23.3.1/SDK 54 packed regression lane does not establish its compatibility.
+export ordering. Packed regression lanes qualify SDK 54/Nx 23.3.1 and default
+SDK 57.0.31/emitted Nx 23.2.1 on Node 24.22.1/npm 11 with split web/mobile
+React. They run Doctor, web/iOS/Android JavaScript exports and bundle isolation,
+TypeScript and the generated unit test. Other SDKs, older Nx behavior and native
+or cloud builds require separate qualification.
 
 The generator inventories project names, roots, targets, ports, and required plugins before mutation. An equivalent existing project is a no-op; an occupied name or root with a different contract is a preflight conflict. The default project basename equals the app type, `--name` supports additional instances, and explicit `--directory` and `--port` values must be unique and workspace-safe. Automatic ports use the stable registry in `megamono.json`, so generation order does not change an existing assignment.
 
