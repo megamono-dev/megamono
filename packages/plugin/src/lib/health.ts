@@ -192,21 +192,32 @@ const executeFile = promisify(execFile);
 async function gitOutput(
   workspaceRoot: string,
   args: readonly string[],
-): Promise<{ readonly stdout: string; readonly code: number }> {
+): Promise<{
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly code: number;
+}> {
   try {
     const result = await executeFile('git', [...args], {
       cwd: workspaceRoot,
       encoding: 'utf8',
     });
-    return { stdout: result.stdout.trim(), code: 0 };
+    return {
+      stdout: result.stdout.trim(),
+      stderr: result.stderr.trim(),
+      code: 0,
+    };
   } catch (error) {
     const failure = error as {
       readonly code?: unknown;
       readonly stdout?: unknown;
+      readonly stderr?: unknown;
     };
     return {
       stdout: typeof failure.stdout === 'string' ? failure.stdout.trim() : '',
-      code: typeof failure.code === 'number' ? failure.code : 1,
+      stderr: typeof failure.stderr === 'string' ? failure.stderr.trim() : '',
+      // A spawn failure is not Git's ordinary negative-result exit status.
+      code: typeof failure.code === 'number' ? failure.code : -1,
     };
   }
 }
@@ -234,15 +245,15 @@ async function resolveHealthBranch(
       'check-ref-format',
       reference,
     ]);
-    if (format.code === 1) continue;
-    if (format.code !== 0)
+    if (format.code === 1 && !format.stderr) continue;
+    if (format.code !== 0 || format.stderr)
       throw new Error('Git branch comparison is unavailable');
     const symbolic = await gitOutput(workspaceRoot, [
       'symbolic-ref',
       '--quiet',
       reference,
     ]);
-    if (symbolic.code !== 0 && symbolic.code !== 1)
+    if (symbolic.stderr || (symbolic.code !== 0 && symbolic.code !== 1))
       throw new Error('Git branch comparison is unavailable');
     const canonical = symbolic.code === 0 ? symbolic.stdout : reference;
     if (
@@ -258,6 +269,7 @@ async function resolveHealthBranch(
     ]);
     if (
       resolved.code === 0 &&
+      !resolved.stderr &&
       /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(resolved.stdout)
     )
       return {
@@ -265,7 +277,7 @@ async function resolveHealthBranch(
         commit: resolved.stdout,
         name: healthBranchName(canonical),
       };
-    if (resolved.code !== 1)
+    if (resolved.code !== 1 || resolved.stderr)
       throw new Error('Git branch comparison is unavailable');
   }
   return undefined;
@@ -334,9 +346,14 @@ async function healthIntegrationBase(
     '--quiet',
     'refs/remotes/origin/HEAD',
   ]);
-  if (remote.code === 0 && remote.stdout.startsWith('refs/remotes/origin/'))
+  if (
+    remote.code === 0 &&
+    !remote.stderr &&
+    remote.stdout.startsWith('refs/remotes/origin/')
+  )
     return resolveHealthBranch(workspaceRoot, [remote.stdout]);
-  if (remote.code !== 1) throw new Error('Git default branch is unavailable');
+  if (remote.code !== 1 || remote.stderr)
+    throw new Error('Git default branch is unavailable');
   return resolveHealthBranch(workspaceRoot, [
     'refs/heads/main',
     'refs/remotes/origin/main',
@@ -421,10 +438,15 @@ export async function collectHealthGitState(
       resolved.commit,
       base.commit,
     ]);
-    if (merged.code === 0) branches[branch] = 'merged';
+    // Older Git can emit a missing-object error but still exit 1. Only a clean
+    // negative comparison establishes unmerged ancestry; diagnostics mean that
+    // the history could not be assessed, regardless of the numeric exit code.
+    if (merged.code === 0 && !merged.stderr) branches[branch] = 'merged';
     else if (
       merged.code === 1 &&
+      !merged.stderr &&
       shallow.code === 0 &&
+      !shallow.stderr &&
       shallow.stdout === 'false'
     )
       branches[branch] = 'active';

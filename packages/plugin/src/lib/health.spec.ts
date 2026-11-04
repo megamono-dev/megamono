@@ -1124,6 +1124,13 @@ describe('repository health', () => {
           intermediate.slice(2),
         ),
       );
+      // Git versions differ here: Debian Git 2.39 exits 1 with a missing-object
+      // diagnostic, while newer versions can exit with a different error code.
+      // Verify that this fixture really caused an error, not a clean negative
+      // ancestor result, before checking Megamono's classification.
+      await expect(
+        git(['merge-base', '--is-ancestor', 'feature/current', 'main']),
+      ).rejects.toMatchObject({ stderr: expect.stringMatching(/\S/) });
       const state = await collectHealthGitState(root, [plan]);
       expect(state.branches['feature/current']).toBeUndefined();
       expect(state.branchComparisonIssue).toBe('git-ancestry-unavailable');
