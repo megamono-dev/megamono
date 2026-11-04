@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { createRequire } from 'node:module';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import type { ProjectGraph } from '@nx/devkit';
+import { readJsonFile, type ProjectGraph } from '@nx/devkit';
 import { valid as validVersion } from 'semver';
 import { repositoryOwnedGraph } from './repository-graph';
 import { renderPrismaFindings } from './render-prisma-health';
@@ -83,6 +84,9 @@ export class HealthGraphError extends Error {
 
 export interface HealthGitState {
   readonly available: boolean;
+  readonly integrationBase?: string;
+  readonly branchComparisonIssue?:
+    'integration-base-unavailable' | 'git-ancestry-unavailable';
   readonly branches: Readonly<Record<string, 'active' | 'merged' | 'missing'>>;
   readonly lastChanged: Readonly<Record<string, string>>;
 }
@@ -199,6 +203,140 @@ async function gitOutput(
   }
 }
 
+interface HealthBranch {
+  readonly reference: string;
+  readonly commit: string;
+  readonly name: string;
+}
+
+function healthBranchName(reference: string): string {
+  return reference.startsWith('refs/heads/')
+    ? reference.slice('refs/heads/'.length)
+    : reference.slice('refs/remotes/'.length).split('/').slice(1).join('/');
+}
+
+async function resolveHealthBranch(
+  workspaceRoot: string,
+  references: readonly string[],
+): Promise<HealthBranch | undefined> {
+  for (const reference of references) {
+    // rev-parse accepts expressions such as refs/heads/main~1. Only a literal
+    // branch ref may select integration; validation must precede parsing.
+    const format = await gitOutput(workspaceRoot, [
+      'check-ref-format',
+      reference,
+    ]);
+    if (format.code === 1) continue;
+    if (format.code !== 0)
+      throw new Error('Git branch comparison is unavailable');
+    const symbolic = await gitOutput(workspaceRoot, [
+      'symbolic-ref',
+      '--quiet',
+      reference,
+    ]);
+    if (symbolic.code !== 0 && symbolic.code !== 1)
+      throw new Error('Git branch comparison is unavailable');
+    const canonical = symbolic.code === 0 ? symbolic.stdout : reference;
+    if (
+      !canonical.startsWith('refs/heads/') &&
+      !canonical.startsWith('refs/remotes/')
+    )
+      throw new Error('Git integration reference is not a branch');
+    const resolved = await gitOutput(workspaceRoot, [
+      'rev-parse',
+      '--verify',
+      '--quiet',
+      `${canonical}^{commit}`,
+    ]);
+    if (
+      resolved.code === 0 &&
+      /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(resolved.stdout)
+    )
+      return {
+        reference: canonical,
+        commit: resolved.stdout,
+        name: healthBranchName(canonical),
+      };
+    if (resolved.code !== 1)
+      throw new Error('Git branch comparison is unavailable');
+  }
+  return undefined;
+}
+
+async function healthIntegrationBase(
+  workspaceRoot: string,
+): Promise<HealthBranch | undefined> {
+  let nx: {
+    defaultBase?: unknown;
+    affected?: { defaultBase?: unknown };
+    extends?: unknown;
+  };
+  try {
+    nx = readJsonFile(join(workspaceRoot, 'nx.json'));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+      throw new HealthConfigurationError(
+        'Unable to read the integration branch from nx.json.',
+      );
+    nx = {};
+  }
+  if (nx.extends !== undefined) {
+    if (typeof nx.extends !== 'string' || !nx.extends)
+      throw new HealthConfigurationError(
+        'nx.json extends must name a readable Nx preset.',
+      );
+    try {
+      // Match Nx's preset-then-root overlay without importing private Nx APIs.
+      // Resolution is local JSON only, including Nx's standalone installation.
+      const preset = createRequire(join(workspaceRoot, 'nx.json')).resolve(
+        nx.extends,
+        {
+          paths: [join(workspaceRoot, '.nx', 'installation'), workspaceRoot],
+        },
+      );
+      nx = { ...readJsonFile(preset), ...nx };
+    } catch {
+      throw new HealthConfigurationError(
+        'Unable to read the integration branch from the extended Nx preset.',
+      );
+    }
+  }
+  // affected.defaultBase is Nx's supported older configuration, not a second
+  // Megamono setting. An explicit missing branch must not select another base.
+  const configured = nx.defaultBase ?? nx.affected?.defaultBase;
+  if (configured !== undefined) {
+    if (typeof configured !== 'string' || !configured.trim())
+      throw new HealthConfigurationError(
+        'nx.json defaultBase must name an integration branch.',
+      );
+    return resolveHealthBranch(
+      workspaceRoot,
+      configured.startsWith('refs/heads/') ||
+        configured.startsWith('refs/remotes/')
+        ? [configured]
+        : [
+            `refs/heads/${configured}`,
+            `refs/remotes/${configured}`,
+            `refs/remotes/origin/${configured}`,
+          ],
+    );
+  }
+  const remote = await gitOutput(workspaceRoot, [
+    'symbolic-ref',
+    '--quiet',
+    'refs/remotes/origin/HEAD',
+  ]);
+  if (remote.code === 0 && remote.stdout.startsWith('refs/remotes/origin/'))
+    return resolveHealthBranch(workspaceRoot, [remote.stdout]);
+  if (remote.code !== 1) throw new Error('Git default branch is unavailable');
+  return resolveHealthBranch(workspaceRoot, [
+    'refs/heads/main',
+    'refs/remotes/origin/main',
+    'refs/heads/master',
+    'refs/remotes/origin/master',
+  ]);
+}
+
 export async function collectHealthGitState(
   workspaceRoot: string,
   documents: readonly RepositoryDocument[],
@@ -215,6 +353,23 @@ export async function collectHealthGitState(
   const plans = documents.filter(
     ({ archived, data }) => data.type === 'plan' && !archived,
   );
+  let base: HealthBranch | undefined;
+  let branchComparisonIssue: HealthGitState['branchComparisonIssue'];
+  const shallow = await gitOutput(workspaceRoot, [
+    'rev-parse',
+    '--is-shallow-repository',
+  ]);
+  if (plans.some((plan) => plan.data.branch)) {
+    try {
+      base = await healthIntegrationBase(workspaceRoot);
+      if (!base) branchComparisonIssue = 'integration-base-unavailable';
+      else if (shallow.code !== 0 || shallow.stdout !== 'false')
+        branchComparisonIssue = 'git-ancestry-unavailable';
+    } catch (error) {
+      if (error instanceof HealthConfigurationError) throw error;
+      branchComparisonIssue = 'git-ancestry-unavailable';
+    }
+  }
   for (const plan of plans) {
     const path = relative(workspaceRoot, plan.absolutePath);
     if (path && !path.startsWith('..')) {
@@ -231,35 +386,49 @@ export async function collectHealthGitState(
     }
     const branch = plan.data.branch;
     if (!branch || branches[branch]) continue;
-    let reference: string | undefined;
-    for (const candidate of [
-      `refs/heads/${branch}`,
-      `refs/remotes/origin/${branch}`,
-    ]) {
-      const resolved = await gitOutput(workspaceRoot, [
-        'rev-parse',
-        '--verify',
-        '--quiet',
-        candidate,
+    let resolved: HealthBranch | undefined;
+    try {
+      resolved = await resolveHealthBranch(workspaceRoot, [
+        `refs/heads/${branch}`,
+        `refs/remotes/origin/${branch}`,
       ]);
-      if (resolved.code === 0) {
-        reference = candidate;
-        break;
-      }
+    } catch {
+      branchComparisonIssue = 'git-ancestry-unavailable';
+      continue;
     }
-    if (!reference) {
+    if (!resolved) {
       branches[branch] = 'missing';
+      continue;
+    }
+    if (!base) continue;
+    // The integration branch itself is not a completed feature, including
+    // local and remote representations of the selected branch.
+    if (resolved.name === base.name) {
+      branches[branch] = 'active';
       continue;
     }
     const merged = await gitOutput(workspaceRoot, [
       'merge-base',
       '--is-ancestor',
-      reference,
-      'HEAD',
+      resolved.commit,
+      base.commit,
     ]);
-    branches[branch] = merged.code === 0 ? 'merged' : 'active';
+    if (merged.code === 0) branches[branch] = 'merged';
+    else if (
+      merged.code === 1 &&
+      shallow.code === 0 &&
+      shallow.stdout === 'false'
+    )
+      branches[branch] = 'active';
+    else branchComparisonIssue = 'git-ancestry-unavailable';
   }
-  return { available: true, branches, lastChanged };
+  return {
+    available: true,
+    branches,
+    lastChanged,
+    ...(base ? { integrationBase: base.reference } : {}),
+    ...(branchComparisonIssue ? { branchComparisonIssue } : {}),
+  };
 }
 
 async function readJson<T>(path: string): Promise<T | undefined> {
@@ -1202,7 +1371,13 @@ async function stalePlanFindings(
         state: `branch-${branchState}`,
         confidence: 'complete',
         summary: `Plan ${document.data.id} references ${branchState} branch ${branch}.`,
-        evidence: [document.relativePath, `branch: ${branch}`],
+        evidence: [
+          document.relativePath,
+          `branch: ${branch}`,
+          ...(git.integrationBase
+            ? [`integration base: ${git.integrationBase}`]
+            : []),
+        ],
         recommendation: 'Complete or abort the plan and archive it.',
       });
     }
@@ -1546,7 +1721,12 @@ export async function runRepositoryHealth(options: {
                   }
                 : check === 'stale-plans' && !gitState.available
                   ? { status: 'partial', reason: 'git-history-unavailable' }
-                  : { status: 'completed' },
+                  : check === 'stale-plans' && gitState.branchComparisonIssue
+                    ? {
+                        status: 'partial',
+                        reason: gitState.branchComparisonIssue,
+                      }
+                    : { status: 'completed' },
       ]),
     ) as RepositoryHealthReport['coverage'],
     ...(!docsEnabled

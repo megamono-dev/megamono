@@ -791,6 +791,20 @@ npm exec nx -- run megamono-docs:health
 
 Health checks cover npm, Expo SDK, SwiftPM, and Cargo dependency alignment,
 spec drift, stale plans, orphaned libraries, and integration-template drift.
+Plan merge status uses a resolved integration branch, never the current `HEAD`.
+An explicit Nx `defaultBase` (or Nx's older `affected.defaultBase`) selects that
+branch, including the Nx preset/root overlay; otherwise health uses locally available
+`origin/HEAD`, then conventional
+`main`/`master` refs. It does not fetch or guess from the checkout. An explicit
+missing base does not silently fall back. A plan naming the integration branch
+itself remains active. Checked-out or detached feature branches are reported
+merged only when their commit is actually an ancestor of the integration tip.
+Symbolic branch aliases are resolved to their actual target before comparison.
+Merged-branch findings include the selected base ref as evidence. Unavailable
+base/history or ancestry errors produce partial stale-plan coverage, while
+reliable timestamps and missing-branch observations remain available. Shallow
+history cannot establish a complete unmerged classification.
+
 For Render-inferred services that depend on a registered Prisma project, health
 also checks for build-time client generation and a schema/config-specific
 `prisma migrate deploy` pre-deploy step. Dependency traversal includes shared

@@ -97,6 +97,25 @@ Reports only. Never edits a spec (`spec-megamono-0005`, "Skills report, never au
 
 `docs/plans/` is ephemeral by design. Flags plans untouched past a threshold, plans whose referenced branch is merged or deleted, and plans superseded by a later plan on the same topic.
 
+Merged means the plan branch's resolved commit is an ancestor of the resolved
+integration tip. Resolve the integration branch once per run from explicit Nx
+`defaultBase` (including its supported older `affected.defaultBase` setting),
+applying the preset/root overlay from `nx.json extends`; otherwise locally
+available `origin/HEAD`, then conventional `main`/`master` refs.
+An explicit unavailable branch refuses comparison instead of selecting another
+base. Accept actual branch refs, not `HEAD`-relative revision expressions. Never
+use current `HEAD` implicitly: checked-out and detached feature work must not
+prove its own integration. The integration branch itself is active, including
+local/remote representations of the same branch. Canonicalize symbolic aliases
+to their actual branch target before comparison. Capture commit IDs so refs
+moving during collection cannot retarget an in-progress comparison.
+
+Include the selected base ref in merged-branch evidence. Missing base, incomplete
+history and ancestry failures omit unsupported classifications and mark
+stale-plan coverage partial; they must not become confident merged/active claims.
+Reliable timestamps and actual missing refs remain usable. This check performs
+no fetch, checkout, branch update or network discovery.
+
 Plans are the one artifact safe to auto-update, so this check may propose closure directly.
 
 ### 4. Orphaned libraries
