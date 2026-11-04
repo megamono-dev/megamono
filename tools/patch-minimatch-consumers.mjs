@@ -6,14 +6,15 @@ import {
   lstatSync,
   openSync,
   readFileSync,
-  realpathSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { createToolingLayout, verifyToolingLock } from './tooling-lock.mjs';
 
 const toolDirectory = dirname(fileURLToPath(import.meta.url));
 export const provenance = JSON.parse(
@@ -23,39 +24,6 @@ export const provenance = JSON.parse(
   ),
 );
 const hash = (value) => createHash('sha256').update(value).digest('hex');
-
-function inside(parent, candidate) {
-  const path = relative(parent, candidate);
-  return (
-    path !== '' &&
-    path !== '..' &&
-    !path.startsWith(`..${sep}`) &&
-    !isAbsolute(path)
-  );
-}
-
-function confined(parent, candidate, directory = false) {
-  const absolute = resolve(candidate);
-  if (!inside(parent, absolute)) {
-    throw new Error(`Refusing a tooling path outside ${parent}: ${candidate}`);
-  }
-  let current = parent;
-  for (const segment of relative(parent, absolute).split(sep)) {
-    current = join(current, segment);
-    if (lstatSync(current).isSymbolicLink()) {
-      throw new Error(`Refusing a symlinked tooling path: ${current}`);
-    }
-  }
-  const actual = realpathSync(absolute);
-  const stat = lstatSync(actual);
-  if (
-    !inside(parent, actual) ||
-    (directory ? !stat.isDirectory() : !stat.isFile())
-  ) {
-    throw new Error(`Refusing an unexpected tooling artifact: ${candidate}`);
-  }
-  return actual;
-}
 
 function verifyManifest(path, expected) {
   const bytes = readFileSync(path);
@@ -67,19 +35,6 @@ function verifyManifest(path, expected) {
   ) {
     throw new Error(
       `Unreviewed ${expected.name}@${manifest.version} manifest at ${path}; expected ${expected.version} and recorded SHA256.`,
-    );
-  }
-}
-
-function verifyLock(root, lock, manifestPath, expected) {
-  const key = relative(root, dirname(manifestPath)).replaceAll('\\', '/');
-  const entry = lock.packages?.[key];
-  if (
-    entry?.version !== expected.version ||
-    entry?.integrity !== expected.tarballIntegrity
-  ) {
-    throw new Error(
-      `Unreviewed locked ${expected.name}@${expected.version} integrity at ${key}.`,
     );
   }
 }
@@ -102,44 +57,38 @@ function transform(source, file) {
 
 /** Repository-local, byte-guarded migrations. No downloads, installs, or network. */
 export function patchMinimatchConsumers(workspaceRoot, { check = false } = {}) {
-  const root = realpathSync(workspaceRoot);
-  const nodeModules = confined(root, join(root, 'node_modules'), true);
-  const lock = JSON.parse(
-    readFileSync(confined(root, join(root, 'package-lock.json')), 'utf8'),
-  );
+  const layout = createToolingLayout(workspaceRoot);
+  const { lock } = layout;
   const plans = [];
+  let reviewedFiles = 0;
 
   // Validate every package, resolution, and file before staging any writes.
   for (const expected of provenance.packages) {
-    const packageRoot = confined(
-      nodeModules,
-      join(nodeModules, expected.name),
-      true,
-    );
-    const manifestPath = confined(
-      packageRoot,
-      join(packageRoot, 'package.json'),
-    );
-    verifyManifest(manifestPath, expected);
-    verifyLock(root, lock, manifestPath, expected);
-    const dependency = provenance.dependencies[expected.requiredDependency];
-    const require = createRequire(manifestPath);
-    const dependencyManifest = confined(
-      nodeModules,
-      require.resolve(`${dependency.name}/package.json`),
-    );
-    verifyManifest(dependencyManifest, dependency);
-    verifyLock(root, lock, dependencyManifest, dependency);
-
-    for (const file of expected.files) {
-      const path = confined(packageRoot, join(packageRoot, file.path));
-      const source = readFileSync(path, 'utf8');
-      const digest = hash(source);
-      if (digest === file.patchedSha256) continue;
-      if (digest !== file.originalSha256) {
-        throw new Error(`Unrecognized ${expected.name}/${file.path} SHA256.`);
+    const packageRoots = layout.packageRoots(expected.name);
+    if (!packageRoots.length)
+      throw new Error(`Missing reviewed tooling package ${expected.name}.`);
+    for (const packageRoot of packageRoots) {
+      const manifestPath = layout.artifact(join(packageRoot, 'package.json'));
+      verifyManifest(manifestPath, expected);
+      verifyToolingLock(lock, manifestPath, expected);
+      const dependency = provenance.dependencies[expected.requiredDependency];
+      const require = createRequire(manifestPath);
+      const dependencyManifest = layout.artifact(
+        require.resolve(`${dependency.name}/package.json`),
+      );
+      verifyManifest(dependencyManifest, dependency);
+      verifyToolingLock(lock, dependencyManifest, dependency);
+      reviewedFiles += expected.files.length;
+      for (const file of expected.files) {
+        const path = layout.artifact(join(packageRoot, file.path));
+        const source = readFileSync(path, 'utf8');
+        const digest = hash(source);
+        if (digest === file.patchedSha256) continue;
+        if (digest !== file.originalSha256) {
+          throw new Error(`Unrecognized ${expected.name}/${file.path} SHA256.`);
+        }
+        plans.push({ path, source, patched: transform(source, file) });
       }
-      plans.push({ path, source, patched: transform(source, file) });
     }
   }
 
@@ -166,9 +115,7 @@ export function patchMinimatchConsumers(workspaceRoot, { check = false } = {}) {
     }
     // Recheck all destinations before the first atomic file replacement.
     for (const plan of staged) {
-      if (
-        readFileSync(confined(nodeModules, plan.path), 'utf8') !== plan.source
-      ) {
+      if (readFileSync(layout.artifact(plan.path), 'utf8') !== plan.source) {
         throw new Error(`Tooling artifact changed while staging: ${plan.path}`);
       }
     }
@@ -179,10 +126,7 @@ export function patchMinimatchConsumers(workspaceRoot, { check = false } = {}) {
   return {
     status: plans.length > 0 ? 'patched' : 'verified',
     changedFiles: plans.length,
-    reviewedFiles: provenance.packages.reduce(
-      (total, expected) => total + expected.files.length,
-      0,
-    ),
+    reviewedFiles,
   };
 }
 

@@ -3,9 +3,12 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
+  cpSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -19,9 +22,10 @@ import {
   patchMinimatchConsumers,
   provenance,
 } from './patch-minimatch-consumers.mjs';
+import { stringify } from 'yaml';
+import { createToolingLayout } from './tooling-lock.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(import.meta.url);
 const temporaryRoot = mkdtempSync(join(tmpdir(), 'megamono-minimatch-patch-'));
 const originals = new Map();
 const dependencies = new Map();
@@ -86,7 +90,9 @@ before(() => {
     originals.set(expected.name, directory);
   }
   // These reviewed dependencies already exist through the qualified glob14 path.
-  const reporterRequire = createRequire(require.resolve('@jest/reporters'));
+  const reporterRoots = createToolingLayout(root).packageRoots('@jest/reporters');
+  assert(reporterRoots.length, 'The qualified Jest reporter must be installed.');
+  const reporterRequire = createRequire(join(reporterRoots[0], 'package.json'));
   const globRequire = createRequire(reporterRequire.resolve('glob'));
   for (const dependency of Object.values(provenance.dependencies)) {
     const resolver = dependency.name === 'glob' ? reporterRequire : globRequire;
@@ -140,6 +146,156 @@ function fixture() {
   write(join(directory, 'package-lock.json'), JSON.stringify(lock));
   return directory;
 }
+
+function pnpmFixture() {
+  const directory = fixture();
+  const all = [
+    ...provenance.packages,
+    ...Object.values(provenance.dependencies),
+  ];
+  const packageRoots = new Map();
+  for (const expected of all) {
+    const target = join(
+      directory,
+      'node_modules/.pnpm',
+      `${expected.name.replace('/', '+')}@${expected.version}`,
+      'node_modules',
+      expected.name,
+    );
+    mkdirSync(dirname(target), { recursive: true });
+    renameSync(join(directory, 'node_modules', expected.name), target);
+    symlinkSync(target, join(directory, 'node_modules', expected.name), 'dir');
+    packageRoots.set(expected.name, target);
+  }
+  const snapshots = Object.fromEntries(
+    all.map((expected) => [`${expected.name}@${expected.version}`, {}]),
+  );
+  for (const expected of provenance.packages) {
+    const source = packageRoots.get(expected.name);
+    const duplicate = join(
+      directory,
+      'node_modules/.pnpm',
+      `${expected.name.replace('/', '+')}@${expected.version}_peer@1`,
+      'node_modules',
+      expected.name,
+    );
+    cpSync(source, duplicate, { recursive: true });
+    for (const target of [source, duplicate]) {
+      const dependency = provenance.dependencies[expected.requiredDependency];
+      symlinkSync(
+        packageRoots.get(dependency.name),
+        join(
+          target,
+          '..',
+          ...Array(expected.name.startsWith('@') ? 1 : 0).fill('..'),
+          dependency.name,
+        ),
+        'dir',
+      );
+    }
+    snapshots[`${expected.name}@${expected.version}(peer@1)`] = {};
+  }
+  rmSync(join(directory, 'package-lock.json'));
+  write(
+    join(directory, 'pnpm-lock.yaml'),
+    stringify({
+      lockfileVersion: '9.0',
+      packages: Object.fromEntries(
+        all.map((expected) => [
+          `${expected.name}@${expected.version}`,
+          { resolution: { integrity: expected.tarballIntegrity } },
+        ]),
+      ),
+      snapshots,
+    }),
+  );
+  return directory;
+}
+
+function pnpmFiles(directory) {
+  const layout = createToolingLayout(directory);
+  return provenance.packages.flatMap((expected) =>
+    layout.packageRoots(expected.name).flatMap((root) =>
+      expected.files.map((file) => ({
+        ...file,
+        path: join(root, file.path),
+      })),
+    ),
+  );
+}
+
+test('pnpm patches every reviewed physical copy and leaves store hardlinks unchanged', () => {
+  const directory = pnpmFixture();
+  const paths = pnpmFiles(directory);
+  const store = join(directory, 'simulated-global-store-file.js');
+  linkSync(paths[0].path, store);
+  assert.deepEqual(patchMinimatchConsumers(directory), {
+    status: 'patched',
+    changedFiles: 16,
+    reviewedFiles: 16,
+  });
+  for (const file of paths)
+    assert.equal(hash(readFileSync(file.path)), file.patchedSha256);
+  assert.equal(hash(readFileSync(store)), paths[0].originalSha256);
+  assert.equal(
+    patchMinimatchConsumers(directory, { check: true }).status,
+    'verified',
+  );
+});
+
+test('an unreviewed late pnpm copy fails before any minimatch consumer changes', () => {
+  const directory = pnpmFixture();
+  const paths = pnpmFiles(directory);
+  writeFileSync(paths.at(-1).path, 'unknown consumer bytes');
+  const before = paths.map((file) => readFileSync(file.path, 'utf8'));
+  assert.throws(
+    () => patchMinimatchConsumers(directory),
+    /Unrecognized .*SHA256/,
+  );
+  assert.deepEqual(
+    paths.map((file) => readFileSync(file.path, 'utf8')),
+    before,
+  );
+});
+
+test('pnpm owner versions, dependency versions and integrity must retain reviewed provenance', () => {
+  for (const variation of ['owner', 'dependency', 'integrity']) {
+    const directory = pnpmFixture();
+    const layout = createToolingLayout(directory);
+    const paths = pnpmFiles(directory);
+    if (variation === 'integrity') {
+      const lockPath = join(directory, 'pnpm-lock.yaml');
+      writeFileSync(
+        lockPath,
+        readFileSync(lockPath, 'utf8').replace(
+          provenance.packages[0].tarballIntegrity,
+          'sha512-changed',
+        ),
+      );
+    } else {
+      const packageName =
+        variation === 'owner' ? provenance.packages.at(-1).name : 'minimatch';
+      const manifestPath = join(
+        layout.packageRoots(packageName).at(-1),
+        'package.json',
+      );
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      writeFileSync(
+        manifestPath,
+        JSON.stringify({ ...manifest, version: '99.0.0' }),
+      );
+    }
+    const before = paths.map((file) => readFileSync(file.path, 'utf8'));
+    assert.throws(
+      () => patchMinimatchConsumers(directory),
+      /Unreviewed .*manifest|Unreviewed locked/,
+    );
+    assert.deepEqual(
+      paths.map((file) => readFileSync(file.path, 'utf8')),
+      before,
+    );
+  }
+});
 
 function files(directory) {
   return provenance.packages.flatMap((expected) =>

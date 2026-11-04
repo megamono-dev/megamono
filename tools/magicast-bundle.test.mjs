@@ -9,6 +9,8 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  renameSync,
+  linkSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -18,6 +20,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { after, before, test } from 'node:test';
 import { patchMagicastBundle, provenance } from './patch-magicast-bundle.mjs';
+import { stringify } from 'yaml';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const workspaceRequire = createRequire(join(root, 'package.json'));
@@ -82,8 +85,129 @@ function fixture() {
     { recursive: true },
   );
   linkDependencies(directory, 'magicast');
+  writeFileSync(
+    join(directory, 'package-lock.json'),
+    JSON.stringify({
+      lockfileVersion: 3,
+      packages: {
+        'node_modules/magicast': {
+          version: provenance.version,
+          integrity: provenance.tarballIntegrity,
+        },
+        'node_modules/source-map-js': {
+          version: provenance.externalVersion,
+          integrity: provenance.externalTarballIntegrity,
+        },
+      },
+    }),
+  );
   return directory;
 }
+
+function pnpmFixture() {
+  const directory = fixture();
+  const packages = [
+    {
+      name: provenance.package,
+      version: provenance.version,
+      integrity: provenance.tarballIntegrity,
+    },
+    {
+      name: provenance.externalPackage,
+      version: provenance.externalVersion,
+      integrity: provenance.externalTarballIntegrity,
+    },
+  ];
+  const roots = [];
+  for (const entry of packages) {
+    const target = join(
+      directory,
+      'node_modules/.pnpm',
+      `${entry.name}@${entry.version}`,
+      'node_modules',
+      entry.name,
+    );
+    mkdirSync(dirname(target), { recursive: true });
+    renameSync(join(directory, 'node_modules', entry.name), target);
+    symlinkSync(target, join(directory, 'node_modules', entry.name), 'dir');
+    if (entry.name === provenance.package) roots.push(target);
+  }
+  const duplicate = join(
+    directory,
+    'node_modules/.pnpm',
+    `magicast@${provenance.version}_peer@1`,
+    'node_modules/magicast',
+  );
+  cpSync(roots[0], duplicate, { recursive: true });
+  roots.push(duplicate);
+  const external = join(
+    directory,
+    'node_modules/.pnpm',
+    `source-map-js@${provenance.externalVersion}`,
+    'node_modules/source-map-js',
+  );
+  for (const path of roots)
+    symlinkSync(external, join(dirname(path), 'source-map-js'), 'dir');
+  rmSync(join(directory, 'package-lock.json'));
+  writeFileSync(
+    join(directory, 'pnpm-lock.yaml'),
+    stringify({
+      lockfileVersion: '9.0',
+      packages: Object.fromEntries(
+        packages.map((entry) => [
+          `${entry.name}@${entry.version}`,
+          { resolution: { integrity: entry.integrity } },
+        ]),
+      ),
+      snapshots: {
+        [`magicast@${provenance.version}`]: {},
+        [`magicast@${provenance.version}(peer@1)`]: {},
+        [`source-map-js@${provenance.externalVersion}`]: {},
+      },
+    }),
+  );
+  return {
+    directory,
+    bundles: roots.map((path) => join(path, provenance.bundle)),
+  };
+}
+
+test('pnpm managed copies all migrate atomically without mutating a shared store hardlink', () => {
+  const { directory, bundles } = pnpmFixture();
+  const storeFile = join(directory, 'simulated-global-store-file.js');
+  linkSync(bundles[0], storeFile);
+  assert.equal(patchMagicastBundle(directory).status, 'patched');
+  for (const file of bundles)
+    assert.equal(hash(readFileSync(file)), provenance.patchedSha256);
+  assert.equal(hash(readFileSync(storeFile)), provenance.originalSha256);
+  assert.equal(
+    patchMagicastBundle(directory, { check: true }).status,
+    'verified',
+  );
+});
+
+test('an unknown late pnpm copy or lock integrity fails before any Magicast copy is changed', () => {
+  for (const variation of ['bytes', 'integrity']) {
+    const { directory, bundles } = pnpmFixture();
+    if (variation === 'bytes') writeFileSync(bundles[1], 'unreviewed bundle');
+    else {
+      const lock = readFileSync(join(directory, 'pnpm-lock.yaml'), 'utf8');
+      writeFileSync(
+        join(directory, 'pnpm-lock.yaml'),
+        lock.replace(provenance.tarballIntegrity, 'sha512-unreviewed'),
+      );
+    }
+    const before = bundles.map((file) => readFileSync(file, 'utf8'));
+    assert.throws(
+      () => patchMagicastBundle(directory),
+      /Unrecognized Magicast|Unreviewed locked/,
+    );
+    assert.deepEqual(
+      bundles.map((file) => readFileSync(file, 'utf8')),
+      before,
+    );
+  }
+});
 
 before(() => {
   let tarball = process.env.MEGAMONO_MAGICAST_TARBALL;
@@ -217,7 +341,7 @@ test('symlinked artifacts outside the fixture cannot be modified or trusted', ()
     symlinkSync(packageRoot(name), target, 'dir');
     assert.throws(
       () => patchMagicastBundle(directory),
-      /external or symlinked tooling artifact/,
+      /external or symlinked tooling path|tooling path outside/,
     );
   }
 });

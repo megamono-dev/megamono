@@ -6,7 +6,6 @@ import {
   lstatSync,
   openSync,
   readFileSync,
-  realpathSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -14,6 +13,8 @@ import {
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { createToolingLayout, verifyToolingLock } from './tooling-lock.mjs';
 
 const toolDirectory = dirname(fileURLToPath(import.meta.url));
 export const provenance = JSON.parse(
@@ -44,28 +45,8 @@ function inside(parent, candidate) {
   );
 }
 
-function installedFile(nodeModules, path) {
-  const file = realpathSync(path);
-  if (!inside(nodeModules, file) || lstatSync(path).isSymbolicLink()) {
-    throw new Error(
-      `Refusing an external or symlinked tooling artifact: ${path}`,
-    );
-  }
-  return file;
-}
-
-/** Version- and byte-guarded externalization; no package resolution or network mutation. */
-export function patchMagicastBundle(workspaceRoot, { check = false } = {}) {
-  const root = realpathSync(workspaceRoot);
-  const nodeModules = realpathSync(join(root, 'node_modules'));
-  if (!inside(root, nodeModules)) {
-    throw new Error('Refusing node_modules outside the selected workspace.');
-  }
-  const packageRoot = installedFile(nodeModules, join(nodeModules, 'magicast'));
-  const manifestPath = installedFile(
-    nodeModules,
-    join(packageRoot, 'package.json'),
-  );
+function planMagicastBundle(layout, packageRoot) {
+  const manifestPath = layout.artifact(join(packageRoot, 'package.json'));
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   if (
     manifest.name !== provenance.package ||
@@ -75,9 +56,13 @@ export function patchMagicastBundle(workspaceRoot, { check = false } = {}) {
       `Expected ${provenance.package}@${provenance.version}; review the patch before upgrading.`,
     );
   }
+  verifyToolingLock(layout.lock, manifestPath, {
+    name: provenance.package,
+    version: provenance.version,
+    tarballIntegrity: provenance.tarballIntegrity,
+  });
   const require = createRequire(manifestPath);
-  const externalManifest = installedFile(
-    nodeModules,
+  const externalManifest = layout.artifact(
     require.resolve(`${provenance.externalPackage}/package.json`),
   );
   const external = JSON.parse(readFileSync(externalManifest, 'utf8'));
@@ -90,10 +75,12 @@ export function patchMagicastBundle(workspaceRoot, { check = false } = {}) {
     );
   }
 
-  const bundlePath = installedFile(
-    nodeModules,
-    join(packageRoot, provenance.bundle),
-  );
+  verifyToolingLock(layout.lock, externalManifest, {
+    name: provenance.externalPackage,
+    version: provenance.externalVersion,
+    tarballIntegrity: provenance.externalTarballIntegrity,
+  });
+  const bundlePath = layout.artifact(join(packageRoot, provenance.bundle));
   if (!inside(packageRoot, bundlePath)) {
     throw new Error(
       'Refusing a bundle outside the installed Magicast package.',
@@ -101,19 +88,12 @@ export function patchMagicastBundle(workspaceRoot, { check = false } = {}) {
   }
   const source = readFileSync(bundlePath, 'utf8');
   const digest = sha256(source);
-  if (digest === provenance.patchedSha256)
-    return { status: 'verified', bundlePath };
+  if (digest === provenance.patchedSha256) return undefined;
   if (digest !== provenance.originalSha256) {
     throw new Error(
       `Unrecognized Magicast bundle SHA256 ${digest}; no files changed.`,
     );
   }
-  if (check) {
-    throw new Error(
-      'Magicast still contains the embedded source-map-js copy; run the patch script.',
-    );
-  }
-
   const start = source.indexOf(embeddedStart);
   const end = source.indexOf(embeddedEnd, start);
   if (
@@ -136,21 +116,49 @@ export function patchMagicastBundle(workspaceRoot, { check = false } = {}) {
       'Magicast transformation did not produce the reviewed artifact; no files changed.',
     );
   }
-  const temporaryPath = `${bundlePath}.megamono-${process.pid}.tmp`;
-  let descriptor;
-  let created = false;
+  return { path: bundlePath, source, patched };
+}
+
+/** Version-, integrity-, and byte-guarded migration of every physical copy. */
+export function patchMagicastBundle(workspaceRoot, { check = false } = {}) {
+  const layout = createToolingLayout(workspaceRoot);
+  const roots = layout.packageRoots(provenance.package);
+  if (!roots.length)
+    throw new Error('Missing reviewed Magicast tooling package.');
+  const plans = roots
+    .map((root) => planMagicastBundle(layout, root))
+    .filter(Boolean);
+  if (check && plans.length)
+    throw new Error(
+      'Magicast still contains the embedded source-map-js copy; run the patch script.',
+    );
+  const staged = [];
   try {
-    descriptor = openSync(temporaryPath, 'wx', lstatSync(bundlePath).mode);
-    created = true;
-    writeFileSync(descriptor, patched);
-    closeSync(descriptor);
-    descriptor = undefined;
-    renameSync(temporaryPath, bundlePath);
+    for (const plan of plans) {
+      const temporaryPath = `${plan.path}.megamono-${process.pid}.tmp`;
+      const descriptor = openSync(
+        temporaryPath,
+        'wx',
+        lstatSync(plan.path).mode,
+      );
+      staged.push({ ...plan, temporaryPath });
+      try {
+        writeFileSync(descriptor, plan.patched);
+      } finally {
+        closeSync(descriptor);
+      }
+    }
+    for (const plan of staged)
+      if (readFileSync(layout.artifact(plan.path), 'utf8') !== plan.source)
+        throw new Error(`Tooling artifact changed while staging: ${plan.path}`);
+    for (const plan of staged) renameSync(plan.temporaryPath, plan.path);
   } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
-    if (created) rmSync(temporaryPath, { force: true });
+    for (const plan of staged) rmSync(plan.temporaryPath, { force: true });
   }
-  return { status: 'patched', bundlePath };
+  return {
+    status: plans.length ? 'patched' : 'verified',
+    bundlePath: join(roots[0], provenance.bundle),
+  };
 }
 
 if (
