@@ -196,5 +196,7 @@ jobs:
         if: always()
         with:
           name: expo-consumer-qualification
-          path: tmp/expo-consumer/
+          path: |
+            tmp/expo-consumer/
+            tmp/expo-default-consumer/
           if-no-files-found: ignore

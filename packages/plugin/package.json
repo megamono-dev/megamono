@@ -401,6 +401,20 @@
           "command": "node packages/plugin/e2e/expo-consumer.e2e.mjs",
           "cwd": "."
         }
+      },
+      "e2e-expo-default-consumer": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "outputs": [
+          "{workspaceRoot}/tmp/expo-default-consumer"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/expo-default-consumer.e2e.mjs",
+          "cwd": "."
+        }
       }
     },
     "tags": [
