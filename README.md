@@ -58,6 +58,13 @@ Nx 23.3.1 pins Undici 7.29.0. The scoped `nx` override selects patched Undici
 7.30.1; recheck the upstream pin before removing this override. New workspace
 scaffolds stay on Nx 23.2.1 until a newer release includes the patched dependency.
 
+Version-qualified overrides move Jest 30.5.2's reporters/config/runtime and
+test-exclude 7.0.2 to glob 14.0.3. Their ordinary project discovery, extension
+diagnostics, include/exclude rules, and coverage thresholds are exercised by
+`npm run tooling:test`. Rollup's older glob implementation is preserved. Recheck
+these overrides and fixtures when upgrading the owning consumers; this is a
+qualified migration for those consumers, not a blanket glob or minimatch update.
+
 Inspect the project graph with:
 
 ```bash
