@@ -3,6 +3,10 @@ import { isAbsolute, resolve } from 'node:path';
 import { z } from 'zod';
 import { PACKAGE_MANAGERS } from './package-manager';
 import { WEB_STYLING_OPTIONS } from './web-styling';
+import {
+  boundaryAllowanceSchema,
+  warningBaselineSchema,
+} from './dependency-policy-contract';
 
 export const BUILT_IN_TOPICS = [
   'agents',
@@ -72,6 +76,7 @@ export const DATABASE_ADAPTERS = ['prisma', 'drizzle'] as const;
 export type DatabaseAdapter = (typeof DATABASE_ADAPTERS)[number];
 
 export const MEGAMONO_CONFIG_VERSION = 1 as const;
+export const SUPPORTED_MEGAMONO_CONFIG_VERSIONS = [1, 2] as const;
 
 export function assertSupportedMegamonoConfigVersion(
   value: unknown,
@@ -85,12 +90,17 @@ export function assertSupportedMegamonoConfigVersion(
     return;
   }
   const version = (value as { readonly version?: unknown }).version;
-  if (version === MEGAMONO_CONFIG_VERSION) return;
+  if (
+    SUPPORTED_MEGAMONO_CONFIG_VERSIONS.some(
+      (supported) => version === supported,
+    )
+  )
+    return;
 
   const renderedVersion = JSON.stringify(version) ?? String(version);
   throw new Error(
     `Unsupported Megamono configuration version ${renderedVersion} at ${configPath}. ` +
-      `This @megamono/plugin release supports version ${MEGAMONO_CONFIG_VERSION}. ` +
+      `This @megamono/plugin release supports versions 1 and 2. ` +
       `Install a plugin release that supports version ${renderedVersion}, run that release's documented configuration migration, then retry.`,
   );
 }
@@ -149,9 +159,26 @@ const conventionsSchema = z
     rules: z
       .partialRecord(z.enum(CONVENTION_RULES), ruleOverrideSchema)
       .default({}),
+    boundaryAllowances: z.array(boundaryAllowanceSchema).optional(),
   })
   .strict()
   .superRefine((value, context) => {
+    const allowances = new Set<string>();
+    for (const [index, entry] of (value.boundaryAllowances ?? []).entries()) {
+      const key = JSON.stringify([
+        entry.source,
+        entry.target,
+        entry.constraint,
+      ]);
+      if (allowances.has(key))
+        context.addIssue({
+          code: 'custom',
+          path: ['boundaryAllowances', index],
+          message:
+            'Boundary allowances must be unique by source, target, and constraint.',
+        });
+      allowances.add(key);
+    }
     for (const [rule, override] of Object.entries(value.rules)) {
       if (
         override?.severity === 'off' &&
@@ -170,6 +197,7 @@ const conventionsSchema = z
 
 const adoptionSchema = z
   .object({
+    warningBaseline: warningBaselineSchema.optional(),
     modules: z
       .array(z.enum(ADOPTION_MODULES))
       .refine((modules) => new Set(modules).size === modules.length, {
@@ -286,7 +314,7 @@ const legacyPrismaSchema = z
 export const megamonoConfigSchema = z
   .object({
     $schema: z.string().optional(),
-    version: z.literal(MEGAMONO_CONFIG_VERSION),
+    version: z.union([z.literal(1), z.literal(2)]),
     conventions: conventionsSchema,
     scaffolding: z
       .object({
@@ -479,6 +507,32 @@ export const megamonoConfigSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.version === 1) {
+      if (value.conventions.boundaryAllowances !== undefined)
+        context.addIssue({
+          code: 'custom',
+          path: ['conventions', 'boundaryAllowances'],
+          message:
+            'Boundary allowances require configuration version 2. Use the reviewed adoption-policy migration.',
+        });
+      if (value.adoption.warningBaseline !== undefined)
+        context.addIssue({
+          code: 'custom',
+          path: ['adoption', 'warningBaseline'],
+          message:
+            'Identity warning baselines require configuration version 2. Use the reviewed adoption-policy migration.',
+        });
+    }
+    if (value.adoption.warningBaseline) {
+      const rules = new Set<string>(value.adoption.warningBaseline.rules);
+      for (const [index, ratchet] of value.adoption.ratchets.entries())
+        if (rules.has(ratchet.rule))
+          context.addIssue({
+            code: 'custom',
+            path: ['adoption', 'ratchets', index],
+            message: 'A rule cannot use count and identity baselines together.',
+          });
+    }
     if (value.prisma && Object.keys(value.databases).length > 0) {
       context.addIssue({
         code: 'custom',
