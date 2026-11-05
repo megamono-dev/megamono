@@ -7,6 +7,16 @@ import type { Diagnostic } from './diagnostics';
 import { isTauriProject } from './tauri-platform';
 import { repositoryOwnedGraph } from './repository-graph';
 import { checkNextPagesBoundary } from './next-pages-boundary';
+import {
+  allowedTypeDependencies,
+  matchingBoundaryAllowance,
+  validateBoundaryAllowances,
+} from './boundary-policy';
+import {
+  classifyDependency,
+  type BoundaryAllowance,
+  type DependencyFindingIdentity,
+} from './dependency-policy-contract';
 
 const typeTags = [
   'type:app',
@@ -171,14 +181,6 @@ function validateTagCardinality(
   }
 }
 
-const allowedTypeDependencies: Readonly<Record<string, readonly string[]>> = {
-  app: ['app', 'feature', 'ui', 'data', 'util'],
-  feature: ['ui', 'data', 'util'],
-  ui: ['util'],
-  data: ['util'],
-  util: ['util'],
-};
-
 function validateDependencies(
   workspaceRoot: string,
   graph: ProjectGraph,
@@ -226,6 +228,21 @@ function validateDependencies(
         target.type === 'app' &&
         !targetTags.includes('role:e2e');
 
+      const classification = classifyDependency(
+        source,
+        target,
+        dependency.type,
+      );
+      const identity = (constraint: DependencyFindingIdentity['constraint']) =>
+        classification
+          ? {
+              rule: 'module-boundaries' as const,
+              constraint,
+              source: sourceName,
+              target: dependency.target,
+              classification,
+            }
+          : undefined;
       if (
         sourceScope &&
         targetScope &&
@@ -234,26 +251,28 @@ function validateDependencies(
           (sourceScope !== 'shared' && targetScope === 'shared')
         )
       ) {
-        diagnostics.push(
-          projectDiagnostic(
+        diagnostics.push({
+          ...projectDiagnostic(
             'module-boundaries',
             sourceName,
             `${sourceName} (${sourceScope}) may not depend on ${dependency.target} (${targetScope}).`,
           ),
-        );
+          identity: identity('module-boundaries:scope-direction'),
+        });
       }
       if (
         sourceType &&
         targetType &&
         !allowedTypeDependencies[sourceType]?.includes(targetType)
       ) {
-        diagnostics.push(
-          projectDiagnostic(
+        diagnostics.push({
+          ...projectDiagnostic(
             'module-boundaries',
             sourceName,
             `type:${sourceType} may not depend on type:${targetType} (${dependency.target}).`,
           ),
-        );
+          identity: identity('module-boundaries:type-direction'),
+        });
       }
       if (
         targetPlatform &&
@@ -445,13 +464,13 @@ async function validateManifests(
   }
 }
 
-export async function checkWorkspaceStructure(
+export async function analyzeWorkspaceStructure(
   workspaceRoot: string,
   graph: ProjectGraph,
   config: MegamonoConfig,
   acceptedDecisionIds: ReadonlySet<string> = new Set(),
   enabledRules?: ReadonlySet<string>,
-): Promise<readonly Diagnostic[]> {
+): Promise<StructuralAnalysis> {
   graph = repositoryOwnedGraph(graph);
   const diagnostics: Diagnostic[] = [];
   validateTagCardinality(graph, diagnostics);
@@ -480,7 +499,7 @@ export async function checkWorkspaceStructure(
       { severity: 'off' | 'warning' | 'error'; decision?: string } | undefined
     >
   >;
-  return diagnostics
+  const rawDiagnostics = diagnostics
     .filter(
       (diagnostic) =>
         diagnostic.code === 'rule-override-decision' ||
@@ -500,4 +519,47 @@ export async function checkWorkspaceStructure(
       }
       return diagnostic;
     });
+  const policy = validateBoundaryAllowances(workspaceRoot, graph, config);
+  const allowed: StructuralAnalysis['allowed'][number][] = [];
+  const effective = rawDiagnostics.filter((diagnostic) => {
+    const allowance =
+      diagnostic.identity &&
+      matchingBoundaryAllowance(diagnostic.identity, policy.valid);
+    if (!allowance) return true;
+    allowed.push({ diagnostic, allowance });
+    return false;
+  });
+  return {
+    diagnostics: [...effective, ...policy.diagnostics],
+    rawDiagnostics: [...rawDiagnostics, ...policy.diagnostics],
+    allowed,
+  };
+}
+
+export interface StructuralAnalysis {
+  readonly diagnostics: readonly Diagnostic[];
+  readonly rawDiagnostics: readonly Diagnostic[];
+  readonly allowed: readonly {
+    readonly diagnostic: Diagnostic;
+    readonly allowance: BoundaryAllowance;
+  }[];
+}
+
+/** Existing callers receive the effective diagnostics as before. */
+export async function checkWorkspaceStructure(
+  workspaceRoot: string,
+  graph: ProjectGraph,
+  config: MegamonoConfig,
+  acceptedDecisionIds: ReadonlySet<string> = new Set(),
+  enabledRules?: ReadonlySet<string>,
+): Promise<readonly Diagnostic[]> {
+  return (
+    await analyzeWorkspaceStructure(
+      workspaceRoot,
+      graph,
+      config,
+      acceptedDecisionIds,
+      enabledRules,
+    )
+  ).diagnostics;
 }

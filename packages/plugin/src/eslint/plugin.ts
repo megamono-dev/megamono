@@ -4,6 +4,7 @@ import { docsVisibilityBoundary } from './rules/docs-visibility-boundary';
 import { noBareJsxStrings } from './rules/no-bare-jsx-strings';
 import { noDeepRelativeImports } from './rules/no-deep-relative-imports';
 import { platformBoundary } from './rules/platform-boundary';
+import { withBoundaryAllowances } from './reviewed-boundaries';
 
 type RuleSeverity = Linter.RuleSeverity | 'off' | 'warn' | 'error';
 
@@ -26,6 +27,7 @@ const rules = {
 export const megamonoEslintPlugin = {
   meta: { name: '@megamono/plugin', version: '0.0.1' },
   rules,
+  withBoundaryAllowances,
   createConfig(config: Pick<MegamonoConfig, 'conventions'>): Linter.Config {
     return {
       name: '@megamono/plugin/recommended',
