@@ -217,6 +217,14 @@ function validateDependencies(
       const targetType = tagValue(targetTags, 'type:');
       const targetScope = tagValue(targetTags, 'scope:');
       const targetPlatform = tagValue(targetTags, 'platform:');
+      // An explicitly identified e2e project schedules the applications it
+      // tests through implicit edges. This is only a platform exemption for
+      // this edge; imports and every other dependency constraint still apply.
+      const testOrchestration =
+        (source.type === 'e2e' || sourceTags.includes('role:e2e')) &&
+        dependency.type === 'implicit' &&
+        target.type === 'app' &&
+        !targetTags.includes('role:e2e');
 
       if (
         sourceScope &&
@@ -250,6 +258,7 @@ function validateDependencies(
       if (
         targetPlatform &&
         sourcePlatform !== targetPlatform &&
+        !testOrchestration &&
         !(nextPages && targetPlatform === 'node') &&
         !(tauri && ['rust', 'web', 'node'].includes(targetPlatform))
       ) {

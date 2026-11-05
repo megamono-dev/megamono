@@ -12,6 +12,7 @@ import { platformBoundary } from './rules/platform-boundary';
 
 const root = mkdtempSync(join(tmpdir(), 'megamono-eslint-'));
 const webRoot = join(root, 'apps/web');
+const e2eRoot = join(root, 'apps/browser-e2e');
 const internalDocsRoot = join(root, 'apps/internal-docs');
 const publicDocsRoot = join(root, 'apps/public-docs');
 const nodeRoot = join(root, 'packages/node-data');
@@ -28,6 +29,7 @@ writeFileSync(
 );
 for (const directory of [
   webRoot,
+  e2eRoot,
   internalDocsRoot,
   publicDocsRoot,
   nodeRoot,
@@ -40,6 +42,20 @@ writeFileSync(
   JSON.stringify({
     nx: {
       tags: ['platform:web', 'scope:site', 'type:app', 'visibility:public'],
+    },
+  }),
+);
+writeFileSync(
+  join(e2eRoot, 'package.json'),
+  JSON.stringify({
+    nx: {
+      tags: [
+        'platform:node',
+        'scope:site',
+        'type:app',
+        'visibility:internal',
+        'role:e2e',
+      ],
     },
   }),
 );
@@ -204,6 +220,18 @@ tester.run('platform-boundary', platformBoundary, {
     },
   ],
   invalid: [
+    {
+      filename: join(e2eRoot, 'src/flow.spec.js'),
+      code: "import { page } from '../../web/src/page.js';",
+      options: workspaceOption,
+      errors: [{ messageId: 'projectPlatform' }],
+    },
+    {
+      filename: join(e2eRoot, 'src/flow.spec.js'),
+      code: "const page = import('../../web/src/page.js');",
+      options: workspaceOption,
+      errors: [{ messageId: 'projectPlatform' }],
+    },
     {
       filename: join(webRoot, 'src/page.js'),
       code: "/** @jest-environment node */\nimport fs from 'node:fs';",

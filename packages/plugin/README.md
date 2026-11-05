@@ -182,6 +182,14 @@ ejected targets remain consumer-owned: set `cache: false` on those targets befor
 relying on a successful check. A cache hit from an older target is not fresh
 governance evidence.
 
+An explicitly identified e2e project (`role:e2e`, or Nx's legacy `e2e` project
+kind) may schedule an application through an implicit graph edge without a
+platform mismatch. The target must be an application rather than another e2e
+project. This exempts only that edge's platform comparison: scope, type and
+Playstack-direction constraints still apply. Static/dynamic imports remain
+subject to platform checks, including when the same projects also have an
+implicit scheduling edge. Naming a project `*-e2e` alone grants no exemption.
+
 When `adoption.ratchets` is nonempty, `check` enforces each `initialCount` as a
 structural-warning ceiling. Unlisted structural categories have a zero budget;
 errors always fail independently of budgets. After fixing debt, lower the count
