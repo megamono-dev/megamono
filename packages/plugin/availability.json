@@ -166,6 +166,12 @@
     "playstack-queues": {
       "status": "reserved",
       "gate": "Playstack queue generation is reserved for a later wave."
+    },
+    "adoption-policy": {
+      "status": "available",
+      "factory": "./dist/generators/adoption-policy/adoption-policy",
+      "schema": "./dist/generators/adoption-policy/schema.json",
+      "description": "Report or apply a reviewed exact adoption policy"
     }
   },
   "executors": {

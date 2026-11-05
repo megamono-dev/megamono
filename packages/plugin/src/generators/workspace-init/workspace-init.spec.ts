@@ -815,9 +815,9 @@ describe('workspace-init generator', () => {
   });
 
   it('routes unknown configuration versions to migration guidance', async () => {
-    tree.write('megamono.json', JSON.stringify({ version: 2 }));
+    tree.write('megamono.json', JSON.stringify({ version: 3 }));
     await expect(workspaceInitGenerator(tree, options)).rejects.toThrow(
-      /Unsupported Megamono configuration version 2.*configuration migration/s,
+      /Unsupported Megamono configuration version 3.*configuration migration/s,
     );
   });
 
@@ -1150,6 +1150,110 @@ export default [
 
     expect(readJson(tree, 'megamono.json').conventions.rules).toEqual({});
     expect(readJson(tree, 'megamono.json').adoption.ratchets).toEqual([]);
+  });
+
+  it('adds lint to an explicit v2 config without capturing debt or promoting severity', async () => {
+    tree.write(
+      'megamono.json',
+      JSON.stringify({ ...DEFAULT_MEGAMONO_CONFIG, version: 2 }),
+    );
+    addProjectConfiguration(tree, 'web', {
+      root: 'apps/web',
+      projectType: 'application',
+      targets: {},
+    });
+    await workspaceInitGenerator(tree, {
+      only: 'lint',
+      yes: true,
+      defaultPlatform: 'web',
+    });
+    const config = readJson(tree, 'megamono.json');
+    expect(config.version).toBe(2);
+    expect(config.adoption.ratchets).toEqual([]);
+    expect(config.adoption.warningBaseline).toBeUndefined();
+    expect(config.conventions.boundaryAllowances).toBeUndefined();
+    expect(config.conventions.rules).toEqual({});
+    expect(tree.read('eslint.config.mjs', 'utf8')).toContain(
+      'megamonoPlugin.withBoundaryAllowances(',
+    );
+  });
+
+  it('preserves every reviewed v2 policy and nonstructural ratchet on repeated init', async () => {
+    const classification = {
+      dependencyKind: 'implicit',
+      source: { kind: 'lib', tags: ['scope:shared', 'type:util'] },
+      target: { kind: 'lib', tags: ['scope:billing', 'type:ui'] },
+    };
+    const allowance = {
+      source: 'legacy',
+      target: 'ui',
+      constraint: 'module-boundaries:type-direction',
+      classification,
+      rationale: 'Reviewed composition edge',
+      decision: 'decision-20261105-composition',
+    };
+    const baseline = {
+      identityVersion: 1,
+      rules: ['module-boundaries'],
+      entries: [
+        {
+          identity: {
+            rule: 'module-boundaries',
+            constraint: 'module-boundaries:scope-direction',
+            source: 'legacy',
+            target: 'ui',
+            classification,
+          },
+          reason: 'Scoped migration debt',
+          reviewReference: 'review:27',
+          revision: 'a'.repeat(40),
+        },
+      ],
+    };
+    const ratchets = [
+      { rule: 'no-bare-jsx-strings', initialCount: 7, targetSeverity: 'error' },
+    ];
+    tree.write(
+      'megamono.json',
+      JSON.stringify({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        version: 2,
+        conventions: {
+          ...DEFAULT_MEGAMONO_CONFIG.conventions,
+          boundaryAllowances: [allowance],
+          rules: { 'module-boundaries': { severity: 'warning' } },
+        },
+        adoption: {
+          ...DEFAULT_MEGAMONO_CONFIG.adoption,
+          warningBaseline: baseline,
+          ratchets,
+        },
+      }),
+    );
+    addProjectConfiguration(tree, 'legacy', {
+      root: 'libs/legacy',
+      projectType: 'library',
+      tags: classification.source.tags,
+      targets: {},
+    });
+    addProjectConfiguration(tree, 'ui', {
+      root: 'libs/ui',
+      projectType: 'library',
+      tags: classification.target.tags,
+      targets: {},
+    });
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+    const first = tree.read('eslint.config.mjs', 'utf8');
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+    const config = readJson(tree, 'megamono.json');
+    expect(config.adoption.ratchets).toEqual(ratchets);
+    expect(config.adoption.warningBaseline).toEqual(baseline);
+    expect(config.conventions.boundaryAllowances).toEqual([allowance]);
+    expect(config.conventions.rules).toEqual({
+      'module-boundaries': { severity: 'warning' },
+    });
+    expect(tree.read('eslint.config.mjs', 'utf8')).toBe(first);
+    expect((first?.match(/withBoundaryAllowances/g) ?? []).length).toBe(1);
   });
 
   it('seeds explicitly selected repository-owned Node pin files', async () => {

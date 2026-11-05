@@ -2,6 +2,8 @@ import { designHandoffFiles } from '../../lib/docs-design';
 import {
   prependEslintFlatConfig,
   locateEslintFlatConfig,
+  wrapEslintBoundaryAllowances,
+  hasBoundaryAllowanceEslintActivation,
 } from '../../lib/eslint-flat-config';
 import {
   addDependenciesToPackageJson,
@@ -1061,7 +1063,7 @@ interface EslintWiringResult {
   readonly rules: boolean;
 }
 
-function wireEslintConfig(tree: Tree): EslintWiringResult {
+function wireEslintConfig(tree: Tree, policyVersion = 1): EslintWiringResult {
   const path = 'eslint.config.mjs';
   let current = tree.read(path, 'utf8') ?? 'export default [\n];\n';
   if (!tree.exists(path)) tree.write(path, current);
@@ -1162,6 +1164,15 @@ function wireEslintConfig(tree: Tree): EslintWiringResult {
   };
   const imports = ensureImports();
   const rules = ensureRules();
+  if (policyVersion === 2) {
+    const wrapped = wrapEslintBoundaryAllowances(tree.read(path, 'utf8') ?? '');
+    if (wrapped === undefined || !hasBoundaryAllowanceEslintActivation(wrapped))
+      throw new WorkspaceInitError(
+        'conflict',
+        'Version 2 requires canonical Megamono ESLint imports, createConfig entry, and boundary policy wrapper. Review customized or ejected wiring before adoption.',
+      );
+    if (wrapped !== tree.read(path, 'utf8')) tree.write(path, wrapped);
+  }
   return { imports, rules };
 }
 
@@ -1169,9 +1180,22 @@ function delimiterCount(source: string, delimiter: string): number {
   return source.split(delimiter).length - 1;
 }
 
-function preflightEslintConfig(tree: Tree): void {
+function preflightEslintConfig(tree: Tree, policyVersion = 1): void {
   const current = tree.read('eslint.config.mjs', 'utf8');
   if (!current) return;
+  if (
+    policyVersion === 2 &&
+    (current.includes(ESLINT_RULES_START) ||
+      artifactIsEjected(tree, 'lint.eslint-rules') ||
+      artifactIsEjected(tree, 'lint.eslint-imports'))
+  ) {
+    const wrapped = wrapEslintBoundaryAllowances(current);
+    if (wrapped === undefined || !hasBoundaryAllowanceEslintActivation(wrapped))
+      throw new WorkspaceInitError(
+        'conflict',
+        'Version 2 requires canonical Megamono ESLint imports and createConfig wiring; customized policy activation must be reviewed before initialization.',
+      );
+  }
   for (const [id, start, end] of [
     ['lint.eslint-imports', ESLINT_IMPORTS_START, ESLINT_IMPORTS_END],
     ['lint.eslint-rules', ESLINT_RULES_START, ESLINT_RULES_END],
@@ -1550,7 +1574,7 @@ export async function workspaceInitGenerator(
     throw new WorkspaceInitError('conflict', adoptionPlan.conflicts.join(' '));
   }
   if (requestedModules.includes('lint') && lintCanWire)
-    preflightEslintConfig(tree);
+    preflightEslintConfig(tree, existingConfig?.version);
   logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
   const inferenceNames =
     requestedModules.includes('inference') &&
@@ -1754,6 +1778,7 @@ export async function workspaceInitGenerator(
   if (
     modules.has('lint') &&
     !options.bootstrap &&
+    existingConfig?.version !== 2 &&
     !existingConfig?.adoption.modules.includes('lint')
   ) {
     const graph =
@@ -2121,10 +2146,13 @@ export async function workspaceInitGenerator(
       ...(existingConfig?.adoption ?? DEFAULT_MEGAMONO_CONFIG.adoption),
       modules: parseWorkspaceInitModules([...adoptedModules]),
       reductions,
-      ratchets: ADOPTION_STRUCTURAL_RULES.flatMap((rule) => {
-        const ratchet = ratchets.get(rule);
-        return ratchet ? [ratchet] : [];
-      }),
+      ratchets:
+        existingConfig?.version === 2
+          ? existingConfig.adoption.ratchets
+          : ADOPTION_STRUCTURAL_RULES.flatMap((rule) => {
+              const ratchet = ratchets.get(rule);
+              return ratchet ? [ratchet] : [];
+            }),
       inference: modules.has('inference')
         ? inferenceSupported
           ? inference
@@ -2213,7 +2241,7 @@ export async function workspaceInitGenerator(
   await applyDocsAdoptionMap(tree, docsAdoptionEntries);
   const eslintWiring =
     modules.has('lint') && lintCanWire
-      ? wireEslintConfig(tree)
+      ? wireEslintConfig(tree, config.version)
       : { imports: false, rules: false };
   const docsLoaderTemplate = renderContentCollectionsConfig(docsRoot);
   const docsLoaderCanUpdate =
