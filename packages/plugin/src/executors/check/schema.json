@@ -20,6 +20,11 @@
       "type": "boolean",
       "default": false
     },
+    "json": {
+      "type": "boolean",
+      "default": false,
+      "description": "Emit raw, allowed, baselined, new, resolved and error findings as JSON without changing validation or policy."
+    },
     "ci": {
       "type": "boolean",
       "default": false,

@@ -5,8 +5,9 @@ import {
   megamonoConfigSchema,
   readMegamonoConfig,
 } from '../../lib/config';
-import { checkWorkspaceStructure } from '../../lib/structural-check';
+import { analyzeWorkspaceStructure } from '../../lib/structural-check';
 import type { Diagnostic } from '../../lib/diagnostics';
+import type { DependencyFindingIdentity } from '../../lib/dependency-policy-contract';
 import check from './check';
 
 vi.mock('../../lib/config', async (original) => ({
@@ -14,7 +15,7 @@ vi.mock('../../lib/config', async (original) => ({
   readMegamonoConfig: vi.fn(),
 }));
 vi.mock('../../lib/structural-check', () => ({
-  checkWorkspaceStructure: vi.fn(),
+  analyzeWorkspaceStructure: vi.fn(),
 }));
 vi.mock('../../lib/project-preflight', () => ({
   checkProjectPreflights: async () => [],
@@ -58,13 +59,16 @@ describe('public checker warning budgets', () => {
     });
     const before = JSON.stringify(config);
     vi.mocked(readMegamonoConfig).mockResolvedValue(config);
-    vi.mocked(checkWorkspaceStructure).mockResolvedValue(
-      Array.from({ length: count }, (): Diagnostic => ({
-        code,
-        severity,
-        message: 'fixture',
-      })),
-    );
+    const findings = Array.from({ length: count }, (): Diagnostic => ({
+      code,
+      severity,
+      message: 'fixture',
+    }));
+    vi.mocked(analyzeWorkspaceStructure).mockResolvedValue({
+      diagnostics: findings,
+      rawDiagnostics: findings,
+      allowed: [],
+    });
     expect(
       await check({}, {
         root: '/fixture',
@@ -86,5 +90,264 @@ describe('public checker warning budgets', () => {
         adoption: { ratchets: [ratchet, ratchet] },
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('public checker identity reports', () => {
+  const identity = (): DependencyFindingIdentity => ({
+    rule: 'module-boundaries',
+    constraint: 'module-boundaries:type-direction',
+    source: 'consumer',
+    target: 'provider',
+    classification: {
+      dependencyKind: 'static',
+      source: { kind: 'lib', tags: ['scope:shared', 'type:util'] },
+      target: { kind: 'lib', tags: ['scope:shared', 'type:feature'] },
+    },
+  });
+  const finding = (): Diagnostic => ({
+    severity: 'warning',
+    code: 'module-boundaries',
+    message: 'fixture',
+    path: 'consumer',
+    identity: identity(),
+  });
+  const policy = () =>
+    megamonoConfigSchema.parse({
+      ...DEFAULT_MEGAMONO_CONFIG,
+      version: 2,
+      adoption: {
+        modules: ['lint'],
+        warningBaseline: {
+          identityVersion: 1,
+          rules: ['module-boundaries'],
+          entries: [
+            {
+              identity: identity(),
+              reason: 'Reviewed debt',
+              reviewReference: 'review-123',
+              revision: 'b'.repeat(40),
+            },
+          ],
+        },
+      },
+    });
+  async function run(
+    config: ReturnType<typeof policy>,
+    analysis: Awaited<ReturnType<typeof analyzeWorkspaceStructure>>,
+  ) {
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    vi.mocked(readMegamonoConfig).mockResolvedValue(config);
+    vi.mocked(analyzeWorkspaceStructure).mockResolvedValue(analysis);
+    const before = JSON.stringify(config);
+    const result = await check({ json: true }, {
+      root: '/fixture',
+      projectGraph: { nodes: {}, dependencies: {} },
+    } as ExecutorContext);
+    expect(JSON.stringify(config)).toBe(before);
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledTimes(1);
+    return { result, report: JSON.parse(String(info.mock.calls[0][0])) };
+  }
+
+  it('reports raw warning severity and reviewed baseline evidence without changing policy', async () => {
+    const diagnostic = finding();
+    const { result, report } = await run(policy(), {
+      diagnostics: [diagnostic],
+      rawDiagnostics: [diagnostic],
+      allowed: [],
+    });
+    expect(result).toEqual({ success: true });
+    expect(report.raw).toEqual([diagnostic]);
+    expect(report.baselined).toEqual([
+      {
+        diagnostic,
+        entry: expect.objectContaining({
+          reviewReference: 'review-123',
+          revision: 'b'.repeat(40),
+        }),
+      },
+    ]);
+    expect(report.new).toEqual([]);
+    expect(report.resolved).toEqual([]);
+    expect(report.errors).toEqual([]);
+  });
+
+  it('assesses identity-governed rules even without the lint adoption module', async () => {
+    const config = policy();
+    config.adoption.modules = [];
+    const diagnostic = finding();
+    const { result } = await run(config, {
+      diagnostics: [diagnostic],
+      rawDiagnostics: [diagnostic],
+      allowed: [],
+    });
+    expect(result).toEqual({ success: true });
+    expect(vi.mocked(analyzeWorkspaceStructure).mock.calls.at(-1)?.[4]).toEqual(
+      new Set([
+        'megamono-dev-only',
+        'playstack-direction',
+        'module-boundaries',
+      ]),
+    );
+    expect(config.adoption.modules).toEqual([]);
+  });
+
+  it('fails same-count substitution and makes both new and resolved debt reviewable', async () => {
+    const diagnostic = {
+      ...finding(),
+      identity: { ...identity(), target: 'replacement' },
+    };
+    const { result, report } = await run(policy(), {
+      diagnostics: [diagnostic],
+      rawDiagnostics: [diagnostic],
+      allowed: [],
+    });
+    expect(result).toEqual({ success: false });
+    expect(report.new[0].identity.target).toBe('replacement');
+    expect(report.resolved[0].identity.target).toBe('provider');
+    expect(report.errors.map((entry: Diagnostic) => entry.code)).toEqual([
+      'adoption-baseline-new',
+      'adoption-baseline-resolved',
+    ]);
+  });
+
+  it('separates reviewed allowances from effective warnings and identity baseline consumption', async () => {
+    const config = policy();
+    if (!config.adoption.warningBaseline)
+      throw new Error('Fixture requires identity mode.');
+    config.adoption.warningBaseline = {
+      ...config.adoption.warningBaseline,
+      entries: [],
+    };
+    const diagnostic = finding();
+    const allowance = {
+      source: 'consumer',
+      target: 'provider',
+      constraint: identity().constraint,
+      classification: identity().classification,
+      rationale: 'Reviewed design',
+      decision: 'decision-20261105-reviewed-edge',
+    };
+    const { result, report } = await run(config, {
+      diagnostics: [],
+      rawDiagnostics: [diagnostic],
+      allowed: [{ diagnostic, allowance }],
+    });
+    expect(result).toEqual({ success: true });
+    expect(report.raw).toEqual([diagnostic]);
+    expect(report.allowed).toEqual([{ diagnostic, allowance }]);
+    expect(report.baselined).toEqual([]);
+    expect(report.new).toEqual([]);
+  });
+
+  it('retains errors and rejects unsupported identity warnings or zero-budget structural categories', async () => {
+    const error: Diagnostic = { ...finding(), severity: 'error' };
+    const unsupported: Diagnostic = {
+      severity: 'warning',
+      code: 'module-boundaries',
+      message: 'Missing metadata',
+    };
+    const other: Diagnostic = {
+      severity: 'warning',
+      code: 'platform-boundary',
+      message: 'Other warning',
+    };
+    const { result, report } = await run(policy(), {
+      diagnostics: [error, unsupported, other],
+      rawDiagnostics: [error, unsupported, other],
+      allowed: [],
+    });
+    expect(result).toEqual({ success: false });
+    expect(report.errors).toContainEqual(error);
+    expect(report.errors).toContainEqual(
+      expect.objectContaining({ code: 'adoption-baseline-unsupported' }),
+    );
+    expect(report.errors).toContainEqual(
+      expect.objectContaining({ code: 'adoption-ratchet-exceeded' }),
+    );
+    expect(report.baselined).toEqual([]);
+    expect(report.raw[0].severity).toBe('error');
+  });
+
+  it('requires reviewed baseline pruning when an exact allowance resolves the warning', async () => {
+    const config = policy();
+    const diagnostic = finding();
+    const allowance = {
+      source: 'consumer',
+      target: 'provider',
+      constraint: identity().constraint,
+      classification: identity().classification,
+      rationale: 'Reviewed design',
+      decision: 'decision-20261105-reviewed-edge',
+    };
+    config.conventions.boundaryAllowances = [allowance];
+    const { result, report } = await run(config, {
+      diagnostics: [],
+      rawDiagnostics: [diagnostic],
+      allowed: [{ diagnostic, allowance }],
+    });
+    expect(result).toEqual({ success: false });
+    expect(report.allowed).toEqual([{ diagnostic, allowance }]);
+    expect(report.baselined).toEqual([]);
+    expect(report.resolved).toEqual(config.adoption.warningBaseline?.entries);
+    expect(report.errors).toEqual([
+      expect.objectContaining({ code: 'adoption-baseline-resolved' }),
+    ]);
+  });
+
+  it('emits structured failure JSON when configuration cannot be read', async () => {
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    vi.mocked(readMegamonoConfig).mockRejectedValue(
+      new Error('Invalid reviewed policy'),
+    );
+    expect(
+      await check({ json: true }, { root: '/fixture' } as ExecutorContext),
+    ).toEqual({ success: false });
+    expect(JSON.parse(String(info.mock.calls[0][0]))).toMatchObject({
+      success: false,
+      raw: [],
+      allowed: [],
+      baselined: [],
+      new: [],
+      resolved: [],
+      errors: [{ severity: 'error', message: 'Invalid reviewed policy' }],
+    });
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('does not label accepted legacy count-budget warnings as new identities', async () => {
+    const config = megamonoConfigSchema.parse({
+      ...DEFAULT_MEGAMONO_CONFIG,
+      adoption: {
+        modules: ['lint'],
+        ratchets: [
+          {
+            rule: 'module-boundaries',
+            initialCount: 2,
+            targetSeverity: 'error',
+          },
+        ],
+      },
+    });
+    const diagnostic: Diagnostic = {
+      severity: 'warning',
+      code: 'module-boundaries',
+      message: 'Count-based legacy debt',
+    };
+    const { result, report } = await run(config, {
+      diagnostics: [diagnostic],
+      rawDiagnostics: [diagnostic],
+      allowed: [],
+    });
+    expect(result).toEqual({ success: true });
+    expect(report.raw).toEqual([diagnostic]);
+    expect(report.policy.ratchets).toEqual(config.adoption.ratchets);
+    expect(report.new).toEqual([]);
+    expect(report.baselined).toEqual([]);
   });
 });

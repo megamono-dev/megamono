@@ -14,6 +14,10 @@ import {
   type ExpoProjectInspection,
 } from './expo-readiness';
 import type { MegamonoConfig } from './config';
+import {
+  warningIdentityEvidence,
+  warningIdentityFingerprint,
+} from './identity-baseline';
 import type { RepositoryDocument } from './docs';
 import { inspectManagedSkills } from './managed-skills';
 import {
@@ -69,6 +73,15 @@ export interface RepositoryHealthReport {
   readonly reductions?: readonly string[];
   readonly platforms?: {
     readonly expo: readonly ExpoProjectInspection[];
+  };
+  readonly dependencyPolicy?: {
+    readonly assessment: 'not-assessed';
+    readonly warningBaseline?: NonNullable<
+      MegamonoConfig['adoption']['warningBaseline']
+    >;
+    readonly boundaryAllowances: NonNullable<
+      MegamonoConfig['conventions']['boundaryAllowances']
+    >;
   };
   readonly findings: readonly (HealthFinding & {
     readonly severity: 'warning';
@@ -1058,6 +1071,24 @@ function specDriftFindings(
     else documented.add(project);
   }
   const findings: HealthFinding[] = [];
+  for (const entry of config.adoption.warningBaseline?.entries ?? []) {
+    findings.push({
+      check: 'spec-drift',
+      fingerprint: `adoption-warning-baseline:${warningIdentityFingerprint(entry.identity)}`,
+      state: 'identity-baseline',
+      confidence: 'complete',
+      summary: `Reviewed ${entry.identity.constraint} warning debt: ${entry.identity.source} → ${entry.identity.target}.`,
+      evidence: [
+        'megamono.json',
+        ...warningIdentityEvidence(entry.identity),
+        `reason: ${entry.reason}`,
+        `review: ${entry.reviewReference}`,
+        `revision: ${entry.revision}`,
+      ],
+      recommendation:
+        'Run the structural checker to compare active identities. Explicitly review and prune resolved entries; the baseline is never updated automatically.',
+    });
+  }
   for (const ratchet of config.adoption.ratchets) {
     const override = config.conventions.rules[ratchet.rule];
     if (
@@ -1738,6 +1769,19 @@ export async function runRepositoryHealth(options: {
     schemaVersion: 1,
     purpose: 'advisory',
     readiness: 'not-assessed',
+    ...(options.config.adoption.warningBaseline !== undefined ||
+    options.config.conventions.boundaryAllowances !== undefined
+      ? {
+          dependencyPolicy: {
+            assessment: 'not-assessed' as const,
+            ...(options.config.adoption.warningBaseline
+              ? { warningBaseline: options.config.adoption.warningBaseline }
+              : {}),
+            boundaryAllowances:
+              options.config.conventions.boundaryAllowances ?? [],
+          },
+        }
+      : {}),
     ...(expo.length ? { platforms: { expo } } : {}),
     coverage: Object.fromEntries(
       HEALTH_CHECKS.map((check) => [
@@ -1775,7 +1819,10 @@ export async function runRepositoryHealth(options: {
       ...finding,
       severity: 'warning',
       category:
-        finding.state === 'adoption-ratchet' ? 'adoption-debt' : finding.check,
+        finding.state === 'adoption-ratchet' ||
+        finding.state === 'identity-baseline'
+          ? 'adoption-debt'
+          : finding.check,
     })),
     intentional: suppressed.intentional,
     summary: {

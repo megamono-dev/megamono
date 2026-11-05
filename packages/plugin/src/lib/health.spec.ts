@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { ProjectGraph } from '@nx/devkit';
-import { DEFAULT_MEGAMONO_CONFIG, type MegamonoConfig } from './config';
+import {
+  DEFAULT_MEGAMONO_CONFIG,
+  megamonoConfigSchema,
+  type MegamonoConfig,
+} from './config';
 import type { RepositoryDocument } from './docs';
 import {
   collectHealthGitState,
@@ -343,6 +347,91 @@ describe('repository health', () => {
           fingerprint.startsWith('adoption-ratchet:'),
         ),
       ).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('exposes identity debt review evidence and configured allowances without claiming validation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-health-identity-'));
+    try {
+      const classification = {
+        dependencyKind: 'static',
+        source: { kind: 'lib', tags: ['scope:shared', 'type:util'] },
+        target: { kind: 'lib', tags: ['scope:shared', 'type:feature'] },
+      };
+      const entry = {
+        identity: {
+          rule: 'module-boundaries',
+          constraint: 'module-boundaries:type-direction',
+          source: 'legacy-consumer',
+          target: 'provider',
+          classification,
+        },
+        reason: 'Reviewed legacy debt',
+        reviewReference: 'review-123',
+        revision: 'c'.repeat(40),
+      };
+      const allowance = {
+        source: 'approved-consumer',
+        target: 'provider',
+        constraint: 'module-boundaries:type-direction',
+        classification,
+        rationale: 'Approved architecture',
+        decision: 'decision-20261105-approved-edge',
+      };
+      const config = megamonoConfigSchema.parse({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        version: 2,
+        conventions: {
+          ...DEFAULT_MEGAMONO_CONFIG.conventions,
+          boundaryAllowances: [allowance],
+        },
+        adoption: {
+          warningBaseline: {
+            identityVersion: 1,
+            rules: ['module-boundaries'],
+            entries: [entry],
+          },
+        },
+      });
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph: projectGraph(),
+        config,
+        documents: [],
+        checks: ['spec-drift'],
+      });
+      expect(report.dependencyPolicy).toEqual({
+        assessment: 'not-assessed',
+        warningBaseline: config.adoption.warningBaseline,
+        boundaryAllowances: [allowance],
+      });
+      expect(report.findings).toContainEqual(
+        expect.objectContaining({
+          state: 'identity-baseline',
+          category: 'adoption-debt',
+          fingerprint: expect.stringMatching(
+            /^adoption-warning-baseline:[a-f0-9]{64}$/,
+          ),
+          evidence: expect.arrayContaining([
+            'review: review-123',
+            `revision: ${'c'.repeat(40)}`,
+            'source: legacy-consumer (lib; scope:shared, type:util)',
+          ]),
+        }),
+      );
+      expect(
+        report.findings.some(({ state }) => state === 'boundary-allowance'),
+      ).toBe(false);
+      const legacy = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph: projectGraph(),
+        config: DEFAULT_MEGAMONO_CONFIG,
+        documents: [],
+        checks: ['spec-drift'],
+      });
+      expect(legacy).not.toHaveProperty('dependencyPolicy');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
