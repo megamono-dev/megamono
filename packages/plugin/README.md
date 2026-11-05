@@ -50,20 +50,48 @@ coverage information. A generated health report does not certify a deployment.
 
 ## What you can add
 
-| Need                                           | Capability                                                     | Guide                                                                         |
-| ---------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Consistent applications and shared code        | Application and TypeScript library generators                  | [Generators](https://megamono.com/docs/generators)                            |
-| Repository rules that can be adopted gradually | Project tags, structural checks, ESLint rules, warning budgets | [Governance](https://megamono.com/docs/workflows/governance)                  |
-| Documentation people and agents can navigate   | Specs, plans, decisions, indexes, and lifecycle checks         | [Repository documentation](https://megamono.com/docs/workflows/documentation) |
-| Database projects and generated clients        | Prisma and Drizzle setup                                       | [Databases](https://megamono.com/docs/generators/database)                    |
-| Blog or changelog data                         | Content Collections libraries and document types               | [Content libraries](https://megamono.com/docs/generators/content-lib)         |
-| Existing product capabilities                  | Package-authored, optional Playstack integrations              | [Playstack](https://megamono.com/docs/workflows/playstack)                    |
+| Need                                           | Capability                                                                | Guide                                                                         |
+| ---------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Consistent applications and shared code        | Application and TypeScript library generators                             | [Generators](https://megamono.com/docs/generators)                            |
+| Repository rules that can be adopted gradually | Project tags, structural checks, ESLint rules, reviewed warning baselines | [Governance](https://megamono.com/docs/workflows/governance)                  |
+| Documentation people and agents can navigate   | Specs, plans, decisions, indexes, and lifecycle checks                    | [Repository documentation](https://megamono.com/docs/workflows/documentation) |
+| Database projects and generated clients        | Prisma and Drizzle setup                                                  | [Databases](https://megamono.com/docs/generators/database)                    |
+| Blog or changelog data                         | Content Collections libraries and document types                          | [Content libraries](https://megamono.com/docs/generators/content-lib)         |
+| Existing product capabilities                  | Package-authored, optional Playstack integrations                         | [Playstack](https://megamono.com/docs/workflows/playstack)                    |
 
 Choose modules through an adoption profile or `--only`; review the
 [workspace initialization options](https://megamono.com/docs/generators/workspace-init)
 before broadening adoption. Available generator names are recorded in
 [`availability.json`](./availability.json); reserved or gated features are not
 runnable generators.
+
+## Review exact adoption policies
+
+Configuration version 2 is an explicit opt-in; new workspaces and version 1
+retain their existing defaults. Start with a report, then review a separate policy
+file before applying it on a clean feature branch:
+
+```sh
+npm exec nx -- generate @megamono/plugin:adoption-policy --report=tmp/adoption-policy.json
+npm exec nx -- generate @megamono/plugin:adoption-policy --policyFile=.megamono/reviewed-policy.json --dry-run
+npm exec nx -- generate @megamono/plugin:adoption-policy --policyFile=.megamono/reviewed-policy.json --apply
+```
+
+The strict policy file uses `schemaVersion: 1`, optional `boundaryAllowances`
+and `warningBaseline` fields, and explicit `replaceLegacyRatchets: true` when
+replacing v1 counts. Allowances require an accepted decision for one exact
+source/target, type- or scope-direction constraint, and dependency classification.
+Warning entries require a complete reported identity, reason, `reviewReference`,
+and recorded Git `revision`; they record temporary debt rather than architectural
+permission. Review revisions must be verifiable ancestors of the current HEAD.
+
+New identities fail even if total warning counts decrease. Errors cannot consume
+warning entries, and resolved entries need reviewed pruning. Reports and repeated
+initialization never enroll or prune findings automatically. Apply preserves
+existing rule severities and unrelated settings, validates the complete candidate,
+and activates the canonical ESLint boundary wrapper once. Unsupported lint
+configuration or incomplete review data blocks apply without partial policy
+writes. No adopter's existing warnings are approved automatically.
 
 ## Working with platform boundaries
 
@@ -600,8 +628,8 @@ SHA-256 hashes of **all** emitted JavaScript. In your existing build callback,
 after checking `stats.hasErrors()` and completing writes:
 
 ```js
-const { createWebpackRuntimeEvidence } = require('@megamono/plugin/webpack');
-const { writeFile } = require('node:fs/promises');
+const { createWebpackRuntimeEvidence } = require("@megamono/plugin/webpack");
+const { writeFile } = require("node:fs/promises");
 const evidence = await createWebpackRuntimeEvidence({
   outputPath: absoluteBuildOutput,
   stats: stats.toJson({

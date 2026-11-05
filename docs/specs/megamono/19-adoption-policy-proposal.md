@@ -1,36 +1,33 @@
 ---
 id: "spec-megamono-0019"
 type: "spec"
-status: "draft"
+status: "accepted"
 visibility: "internal"
 projects: ["megamono"]
 topics: ["architecture", "migration", "lint", "ci"]
-summary: "Adoption policy proposal"
+summary: "Defines explicit v2 boundary allowances, reviewed warning identities, and the report/apply migration workflow."
 date: "2026-11-05"
 supersedes: null
 references: ["spec-megamono-0006", "spec-megamono-0014"]
 external_references: []
 ---
 
-# 19 — Adoption policy proposal
+# 19 — Reviewed adoption policy
 
 ## Intent
 
-**Draft for separate architecture review.** This proposes conditional follow-up work for exact boundary allowances and identity-based adoption baselines. It authorizes no existing finding, including the fourteen warnings reported by an adopter. Runtime, configuration, schemas, initialization, and count ratchets retain their current behavior until an implementation is separately approved.
+Configuration version 2 explicitly enables exact boundary allowances and reviewed warning identities. Version 1 and new-workspace defaults retain their existing behavior. The migration workflow never authorizes an adopter's existing findings merely because they were discovered.
 
-The narrow correction for an implicit `role:e2e` project testing an application is independent work. Correctly permitted edges are excluded before any proposed allowance or baseline evaluation.
+This contract separates architectural permission from temporary warning debt. Accepted decisions authorize exact allowances; baseline entries record a reason, review reference, and observed source revision. The independent implicit e2e scheduling correction is applied before policy evaluation.
 
-## Scope
+## Exact boundary allowances
 
-### Current contract and gaps
+Only two named constraints are eligible:
 
-Version 1 has rule-wide severity overrides and `initialCount` ratchets. Initialization captures counts on first lint adoption. The checker counts warnings in the structural rule set and configured categories; errors fail independently. Resolving one warning can therefore leave room for a different warning under the same count.
+- `module-boundaries:type-direction`
+- `module-boundaries:scope-direction`
 
-`Diagnostic` currently contains only `code`, `message`, and optional `path`. `module-boundaries` covers both scope and type checks. Stable identity requires new structured metadata; parsing message strings would make wording changes alter admission. The ESLint configuration delegates module boundaries to Nx and runs a separate source-level platform rule, so graph-only acceptance cannot establish source-level acceptance.
-
-### Conditional proposal 2: exact constraint allowances
-
-Introduce an opt-in, versioned configuration shape with `conventions.boundaryAllowances`. An illustrative future entry is:
+An allowance in `conventions.boundaryAllowances` requires exact existing project IDs, one named constraint, the complete classification snapshot, a nonblank rationale, and an accepted decision ID. For example:
 
 ```json
 {
@@ -39,66 +36,82 @@ Introduce an opt-in, versioned configuration shape with `conventions.boundaryAll
   "constraint": "module-boundaries:type-direction",
   "classification": {
     "dependencyKind": "static",
-    "source": { "kind": "lib", "tags": ["scope:shared", "type:ui"] },
-    "target": { "kind": "lib", "tags": ["scope:shared", "type:data"] }
+    "source": {
+      "kind": "lib",
+      "tags": ["platform:web", "scope:shared", "type:ui"]
+    },
+    "target": {
+      "kind": "lib",
+      "tags": ["platform:web", "scope:shared", "type:data"]
+    }
   },
-  "rationale": "The accepted composition boundary owns this view-model dependency.",
+  "rationale": "The accepted composition boundary owns this dependency.",
   "decision": "decision-20261105-ui-composition-boundary"
 }
 ```
 
-This is proposed syntax, unsupported by the current version 1 parser. Each entry requires exact, existing Nx project IDs, one eligible stable constraint ID, the canonical classification snapshot defined below, a nonblank rationale, and a valid accepted decision ID. Globs, regular expressions, project-name prefixes, self-edges, unknown fields, and wildcard constraints are invalid. Duplicate `(source, target, constraint)` entries fail even when their rationales or decisions differ.
+The example grants no real repository permission. Globs, prefixes, self-edges, unknown constraints/fields, and duplicate source/target/constraint entries are invalid. A type allowance leaves a scope violation on the same edge enforceable. Node built-ins, browser leaks, platform boundaries, tag validity, runtime package ownership, and Playstack direction remain outside this mechanism.
 
-Initially consider only `module-boundaries:type-direction` and `module-boundaries:scope-direction`. Approving a type exception leaves a scope violation on that same edge enforceable. Graph platform exceptions require a further explicit architecture review; source-level Node built-in/browser-leak checks, Megamono runtime ownership, Playstack direction, tag validity, and policy-validation errors remain outside this allowance mechanism.
+Decision authority is resolved independently of optional docs presentation and `--skipDocs`. Missing, malformed, proposed, archived, duplicated, or superseded decisions cannot authorize an allowance. Reviewers verify that the accepted decision actually covers the selected edge and constraint. An absent edge, changed classification, or no-longer-violated constraint produces an invalid/stale policy error requiring review.
 
-Resolve referenced accepted decisions independently of docs presentation, adopted modules, or `--skipDocs`. Missing, proposed, superseded, or archived decisions fail validation. Reviewers must verify that the accepted decision describes the exact edge and constraint being authorized; accepted status alone does not establish that rationale. Report every applied allowance with its rationale and decision; keep it visible to health. An absent edge or a constraint that no longer fails makes an allowance stale and requires reviewed removal. Changed classification requires renewed review rather than silently carrying authorization forward. The allowance pins the dependency kind as well as both project classifications: permission for an `implicit` edge never authorizes a `static` or `dynamic` runtime import.
+Source ESLint uses the canonical `megamonoPlugin.withBoundaryAllowances(megamonoConfig, [...])` export wrapper. It preserves/delegates the installed Nx rule's configured options and other constraints. An implicit-only permission cannot authorize static or dynamic imports. Unsupported configuration shapes fail migration rather than receiving a broad import allowlist.
 
-ESLint and structural checking must share the same constraint evaluation and decision validation. Nx's broad import `allow` patterns cannot implement this contract: they can bypass additional constraints. Where a source-level diagnostic cannot be matched exactly, preserve enforcement and report the unsupported policy capability. Ship the feature only after source/graph parity is qualified.
+## Warning identities
 
-### Conditional proposal 3: warning identities
+A version 2 `adoption.warningBaseline` has `identityVersion: 1`, explicit `rules: ["module-boundaries"]`, and reviewed `entries`. Every entry contains:
 
-For an eligible structural warning, use the canonical tuple:
+| Field             | Contract                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| `identity`        | Exact `rule`, named `constraint`, `source`, `target`, and `classification` from the report |
+| `reason`          | Nonblank explanation of the temporary debt                                                 |
+| `reviewReference` | Explicit review provenance                                                                 |
+| `revision`        | Recorded 40- or 64-character Git commit ID                                                 |
 
-```text
-(rule, constraint, source, target, classification)
+Classification includes dependency kind (`implicit`, `static`, or `dynamic`), both project graph kinds, and sorted type/scope/platform/role tags with duplicates preserved. Identity excludes wording, line numbers, absolute paths, and discovery order. A changed dependency kind creates a new identity even when projects and tags are unchanged.
+
+Only effective warnings with complete supported identities can consume the reviewed set. Errors remain errors and cannot consume warning entries. New, unsupported, duplicate, or ambiguous identities fail; resolving an entry requires reviewed pruning. A lower total count does not permit a replacement identity. An allowance removing an otherwise baselined warning also requires explicit pruning of the baseline.
+
+These policies activate their module-boundary checks even when the lint adoption module is absent. This does not adopt other modules or relax source checks. Baselines preserve warning diagnostics; they do not suppress repository-owned ESLint warnings or override a caller's warning ceiling.
+
+## Canonical report and migration workflow
+
+`@megamono/plugin:adoption-policy` reports JSON by default. It discovers supported identities and preserves error severity. Report fields are `rawFindings`, `allowed`, `baselined`, `new`, `resolved`, and `errors`; `new[].reason` distinguishes unreviewed, unsupported-identity, and duplicate-identity findings. Candidates include `baselineEligible`; discovery does not create policy entries, reasons, decisions, or review provenance.
+
+```sh
+npm exec nx -- generate @megamono/plugin:adoption-policy --report=tmp/adoption-policy.json
+npm exec nx -- generate @megamono/plugin:adoption-policy --policyFile=.megamono/reviewed-policy.json --dry-run
+npm exec nx -- generate @megamono/plugin:adoption-policy --policyFile=.megamono/reviewed-policy.json --apply
 ```
 
-`rule` and `constraint` are stable catalog IDs. `source` and `target` are exact project IDs; a catalog may explicitly permit `target: null` for a project-only finding. `classification` explicitly records `dependencyKind: "implicit" | "static" | "dynamic"`, derived from the Nx dependency type, as well as source/target project graph kinds and sorted type, scope, platform, and role tags, preserving duplicate tags. Additional runtime classification used by a constraint is included where applicable. An unknown or unresolved dependency kind is ineligible for matching. Messages, line numbers, discovery order, and absolute paths are excluded.
+The reviewed file is a strict JSON envelope:
 
-Define and version that catalog before enrollment. Findings without complete supported metadata are ineligible; they must be resolved or receive a separate reviewed design. Begin with graph type/scope warnings and review any expansion separately. Each enrolled identity records a reason, explicit review provenance, and the source revision observed. A shared baseline set may link an optional decision, without making an accepted architecture decision mandatory for each warning. This records reviewed temporary debt; architectural permission requires the separately accepted exact allowance.
+```json
+{
+  "schemaVersion": 1,
+  "replaceLegacyRatchets": true,
+  "boundaryAllowances": [],
+  "warningBaseline": {
+    "identityVersion": 1,
+    "rules": ["module-boundaries"],
+    "entries": []
+  }
+}
+```
 
-Identity-mode admission requires every current eligible warning identity to be present in the reviewed set. A new identity fails even when the total count decreases. Duplicate observations of one identity are deduplicated for admission and remain visible as evidence. Any error fails independently and cannot be enrolled, downgraded, or hidden by a baseline. Resolved identities become stale entries and fail until the same change includes reviewed pruning. Renames or classification changes are removal-plus-addition requiring review, rather than automatic identity updates.
+An empty reviewed set succeeds only when no applicable warnings remain. For real debt, copy individually reviewed identities into entries and supply their provenance fields. Counts cannot be converted losslessly. Migrating a v1 configuration with count ratchets requires explicit `replaceLegacyRatchets: true`; remaining unsupported/unreviewed debt still blocks migration. Omitting a policy field preserves its existing value; supplying it explicitly replaces that field, allowing reviewed pruning.
 
-### Migration and initialization
+The generator preserves rule severities, module adoption, and unrelated configuration. Apply validates the entire proposed configuration, current graph/classifications, decision authority, baseline matches, and review revisions before staging changes. Recorded review revisions must be verifiable ancestors of the workspace HEAD. Apply requires the normal clean feature-branch Git preflight; commit the reviewed file and account for generated report files before applying.
 
-Use an explicitly supported configuration version 2, with matching Zod and published JSON schemas. Version 1 retains its existing semantics. Current clients must continue rejecting unsupported versions with migration guidance. Acceptance of this draft does not itself change either schema.
+Active policy requires canonical ESLint imports and a real `createConfig(megamonoConfig)` array entry. Migration wraps that array once; arbitrary factories, modified imports, and unsupported exports fail before configuration writes. Architectural allowances also require an active module-boundary rule. Default report mode changes no configuration. Only an explicit report path writes a report, and existing unrelated files cannot be overwritten. Dry-run writes nothing, including report output. Invalid reviewed files or blocked candidates fail without partial policy writes.
 
-A future canonical migration generator should dry-run against a recorded revision, display raw findings, proposed exact entries, review provenance, relevant decision references, and the complete configuration diff. Counts cannot be converted losslessly into identities. Migration must require explicit selection, reasons, review provenance, and a recorded revision; allowances additionally require accepted decisions. Reject concurrent count/identity modes for one rule and block unsupported legacy debt rather than inventing identities or dropping it.
+## Initialization and reporting
 
-Fresh workspaces retain strict defaults and empty baselines. Existing-workspace initialization may produce review candidates, but applying modules, rerunning init, and ordinary checks must never enroll findings, expand an approved set, rewrite classifications, or prune resolved entries. A chosen warning mode with an empty reviewed set therefore fails on remaining debt. Migration and a changed default adoption contract need an explicit compatibility/release decision under spec 0006.
+Repeated version 2 initialization preserves allowances, identity entries, review provenance, severities, and all existing ratchets, including nonstructural categories. It never captures new counts, expands an identity set, or prunes resolved debt. Fresh workspaces remain version 1 with their existing strict defaults.
 
-## Failure behavior
+Check reports and health retain the exact identity, dependency kind, rationale/provenance, and policy status. Temporary baselines remain visible as debt; architectural allowances remain visible as permissions. Health remains advisory and reports unavailable coverage rather than implying that skipped checks passed.
 
-| Condition                                                         | Proposed outcome                                           |
-| ----------------------------------------------------------------- | ---------------------------------------------------------- |
-| Invalid schema, project, constraint, decision, or duplicate entry | Configuration error; apply no partial policy               |
-| Allowance matches type, but scope still violates policy           | Scope diagnostic remains                                   |
-| Allowance edge disappears, is reclassified, or becomes permitted  | Stale-policy error; reviewed removal or renewed decision   |
-| New warning replaces old warning with equal or lower total count  | New-identity error                                         |
-| Reviewed warning becomes an error                                 | Original error fails; baseline is inapplicable             |
-| Reviewed warning resolves                                         | Stale-baseline error until reviewed pruning                |
-| Missing identity metadata or ambiguous source resolution          | Explicit incomplete assessment; no enrollment or exemption |
+## Verification and architecture review
 
-Machine reports should distinguish raw, allowed, baselined, new, resolved/stale, and erroneous findings, retain identity, review provenance, recorded revision, and any applicable decision evidence, and state policy/identity versions. Human output should show the exact unmatched identity and proposed review action. Health must continue surfacing temporary adoption debt and applied architectural permissions.
+Regression coverage includes schema parity, unknown versions, exact decision lifecycle, stale/duplicate entries, implicit-to-static/dynamic changes, equal/lower-count replacements, errors presented to baselines, unsupported source activation, source/graph constraint parity, dry-run, normal Git preflight, no partial writes, and repeated-init preservation. Local qualification includes the full plugin suite and a clean packed pnpm consumer: fresh install, frozen reinstall with an unchanged lock, a build against public types, packaged generator/schema/ESLint APIs, exact allowance/staleness, and equal-count warning replacement. This is local qualification, rather than evidence about an adopter's deployment or Linux CI.
 
-## Acceptance criteria
-
-Implementation requires a separate accepted design and tests covering:
-
-- Schema parity, unknown versions/fields, exact project resolution, malformed/duplicate/stale entries, baseline review provenance/revision, and allowance decision lifecycle, including skipped docs presentation.
-- Type allowance with a simultaneous forbidden scope edge; neighboring edges remain blocked; source-level browser/Node safety errors remain blocked.
-- Graph and ESLint parity for relative and aliased imports and canonical dependency kinds; an implicit-only allowance never permits a static/dynamic import, and unsupported or ambiguous matching stays enforced.
-- Equal-count replacement, lower-count new identity, implicit→static/dynamic changes with identical projects/tags, reordered diagnostics, wording/line changes, other classification changes, duplicate observations, and errors presented to a warning baseline.
-- Dry-run migration, incomplete old counts, existing-config preservation, repeated initialization without expansion, and explicit reviewed pruning.
-
-Architecture review should first consider correcting inaccurate project roles/tags, extracting platform-neutral contracts, splitting shared UI/data responsibilities, restoring scope ownership, or removing an unintended dependency. Validate runtime and source boundaries independently. Choose an exact allowance only for an intentional accepted architecture; choose a warning identity only for individually reviewed migration debt. The adopter's fourteen warnings require that review before either mechanism could apply.
+Before accepting permission or debt, review project roles/tags, platform-neutral contract extraction, UI/data separation, scope ownership, and unintended dependencies. Source/runtime boundaries need their own evidence. No warnings from the adopter feedback are enrolled by this implementation.

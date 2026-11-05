@@ -20,6 +20,7 @@ references:
     spec-megamono-0009,
     spec-megamono-0011,
     spec-megamono-0015,
+    spec-megamono-0019,
   ]
 external_references: [playstack:45-cli]
 ---
@@ -334,11 +335,13 @@ An existing repository-contained `.tgz` with an exact semantic version in its fi
 
 ## Lint adoption
 
-Fresh `create-megamono` workspaces use the default severities from `spec-megamono-0006`. An existing workspace may adopt newly enabled structural rules at warning severity so the adoption commit does not fail on pre-existing violations.
+Fresh `create-megamono` workspaces use the default severities from `spec-megamono-0006`. A version 1 existing workspace may adopt newly enabled structural rules at warning severity so the adoption commit does not fail on pre-existing violations.
 
 Flat ESLint configuration receives the Megamono plugin wiring. A workspace using `.eslintrc*` keeps that configuration byte-for-byte and records an `eslint-rule-wiring` capability reduction with migration guidance; project tags, `megamono:check`, and other structural validation remain available. Init never performs an implicit ESLint flat-config migration.
 
 The adoption decision records the affected rules, initial counts, and the intended ratchet. The health report keeps the temporary warning overrides visible until each becomes an error or receives a separate accepted decision. Stylistic warnings remain warnings.
+
+Version 2 is explicit opt-in through the reviewed adoption-policy workflow in spec-megamono-0019. Init preserves its existing boundary allowances, warning identities, review provenance, rule severities, and all ratchets exactly. It does not capture new counts or automatically expand/prune identity sets. Canonical flat ESLint wiring is wrapped once for exact policy activation; unsupported customized wiring requires review. New-workspace defaults remain version 1.
 
 ## Health and external commands
 
