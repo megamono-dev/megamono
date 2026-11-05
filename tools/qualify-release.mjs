@@ -44,6 +44,7 @@ for (const target of [
   '@megamono/plugin:e2e-integration-consumer',
   '@megamono/plugin:e2e-prismark-consumer',
   '@megamono/plugin:e2e-governance',
+  '@megamono/plugin:e2e-adoption-policy-consumer',
   '@megamono/plugin:e2e-expo-consumer',
   '@megamono/plugin:e2e-expo-default-consumer',
   '@megamono/plugin:e2e-convert-local-registry',

@@ -415,6 +415,16 @@
           "command": "node packages/plugin/e2e/expo-default-consumer.e2e.mjs",
           "cwd": "."
         }
+      },
+      "e2e-adoption-policy-consumer": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/adoption-policy-consumer.e2e.mjs"
+        }
       }
     },
     "tags": [

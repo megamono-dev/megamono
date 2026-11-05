@@ -77,7 +77,7 @@ jobs:
       - run: python -m pip install 'git-filter-repo>=2.47,<3'
       - run: pnpm exec nx run megamono-docs:validate --output-style=static
       - run: pnpm exec nx affected -t lint test build --exclude=tag:platform:apple --output-style=static
-      - run: pnpm exec nx affected -t e2e-ephemeral-survey e2e-integration-consumer e2e-prismark-consumer e2e-php-consumer e2e-governance e2e-expo-consumer e2e-expo-default-consumer --exclude=tag:platform:apple --output-style=static
+      - run: pnpm exec nx affected -t e2e-ephemeral-survey e2e-integration-consumer e2e-prismark-consumer e2e-php-consumer e2e-governance e2e-adoption-policy-consumer e2e-expo-consumer e2e-expo-default-consumer --exclude=tag:platform:apple --output-style=static
       - uses: actions/upload-artifact@v4
         if: always()
         with:
