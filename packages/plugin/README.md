@@ -101,6 +101,42 @@ browser code still needs browser-safe entry points. Node packages can declare
 those entry points through explicit `browser` export conditions. App Router,
 hybrid-router, and custom route-format projects retain the aggregate boundary.
 
+Extension projects may opt into reviewed renderer/worker analysis through their
+own `package.json` ([schema](./schemas/extension-runtime.schema.json)):
+
+```json
+{
+  "megamono": {
+    "extension": {
+      "runtimeEntries": {
+        "version": 1,
+        "renderers": ["entrypoints/popup/index.html"],
+        "workers": ["entrypoints/background.ts"],
+        "rationale": "Reviewed renderer and background-worker separation.",
+        "decision": "decision-20261110-extension-renderers"
+      }
+    }
+  }
+}
+```
+
+Both arrays are required. Paths are project-relative, repository-owned and
+symlink-free; renderer HTML must bind literal local module sources. The author
+and accepted decision attest that the entry list is complete. Dynamic WXT
+configuration and hooks are not executed or automatically proven. WXT content
+scripts and dynamically discovered entries are not automatically classified as
+HTML renderers; unclassified production roots remain restricted. Missing,
+inactive, malformed, archived, duplicate or superseded decisions fail even with
+`--skipDocs`.
+
+Only observed static/dynamic imports reachable exclusively from renderers may
+consume a `platform:web` project. Worker-reachable helpers, unclassified
+production roots, unresolved imports and implicit edges remain restricted.
+Node built-ins, scope/type constraints and Playstack direction remain enforced.
+Checker JSON exposes the contract and applied uses in `extensionRuntime`;
+`complete` means source consistency under the attested roots, not runtime or
+deployment qualification. This introduces no blanket tooling/test glob exemption.
+
 Local workspace tooling is MIT licensed and works without a hosted account.
 Playstack and the hosted Megamono service are optional. Exact Node, Nx,
 TypeScript, and package-manager ranges are listed in the
@@ -914,6 +950,21 @@ npm exec nx -- run megamono-docs:health
 
 Health checks cover npm, Expo SDK, SwiftPM, and Cargo dependency alignment,
 spec drift, stale plans, orphaned libraries, and integration-template drift.
+The existing `dependency-alignment` family also reports undeclared static/dynamic
+workspace imports for named package projects; a root-hoisted dependency or path
+alias does not declare ownership in the importing package. Unnamed classic
+projects and installed/Yalc graph copies are excluded from this package check.
+
+For each application, health compares React, Chakra and Emotion installations
+across its static/dynamic project closure. Different real installation paths can
+produce an advisory even when versions match; symlinks to one installation are
+deduplicated, and separate application runtimes are not conflated. The optional
+`dependencyInspection` report resolves package entries without executing their
+JavaScript or falling back to ambient `NODE_PATH`. Missing or malformed evidence
+makes coverage partial. Installed Node resolution is not proof of browser bundle
+duplication, so `runtimeAssessment` remains `not-assessed`. These health findings
+do not change structural checker severity or warning budgets.
+
 Plan merge status uses a resolved integration branch, never the current `HEAD`.
 An explicit Nx `defaultBase` (or Nx's older `affected.defaultBase`) selects that
 branch, including the Nx preset/root overlay; otherwise health uses locally available
@@ -965,6 +1016,46 @@ from `content-collections/public-repo-docs`; unrestricted entry points remain
 available to internal applications.
 `workspace-init` reads their configured severities from `megamono.json`.
 
+`no-bare-jsx-strings` checks inline JSX literals; message-catalog expressions and
+localization calls are application-owned, and passing this rule does not establish
+translation completeness. It neither supplies `t()` nor installs an i18n package.
+Spec/test files and `__tests__` directories are skipped by default. Additional
+dev/story exclusions use gitignore-style patterns relative to the lint working
+directory; set `ignoreTests: false` to check tests too:
+
+```js
+{
+  rules: {
+    'megamono/no-bare-jsx-strings': ['warn', {
+      ignorePatterns: ['**/dev/**', '**/*.stories.tsx'],
+      ignoreTests: true,
+    }],
+  },
+}
+```
+
+React Hooks rules are explicit for existing React projects. Install
+`eslint-plugin-react-hooks` in the workspace and compose a project-local config:
+
+```js
+import baseConfig from '../../eslint.config.mjs';
+import megamonoPlugin from '@megamono/plugin/eslint';
+import reactHooks from 'eslint-plugin-react-hooks';
+
+export default megamonoPlugin.withReactConfig(reactHooks, [...baseConfig], {
+  files: ['src/**/*.{js,jsx,ts,tsx}'],
+});
+```
+
+`createReactConfig(reactHooks, { files })` returns one flat entry;
+`withReactConfig` appends the installed recommended preset, preserves existing
+configuration and reuses a single existing Hooks plugin instance. Conflicting
+instances fail for review. Later flat entries can override severities/options.
+Without `files`, the explicit API selects JSX/TSX files only. Fresh web/site and
+`platform:web`/`type:ui` library generators add project-scoped rules including
+`.ts` custom hooks and the qualified dependency when absent. Existing projects,
+non-React code and Expo lint configuration are not migrated automatically.
+
 Tauri applications with `src-tauri/Cargo.toml` and a Tauri configuration retain
 one Rust host platform tag. Surveys identify the hybrid composition. Aggregate
 Nx edges may reference Rust, web and Node libraries; source-level ESLint keeps
@@ -988,16 +1079,24 @@ npm exec nx -- generate @megamono/plugin:docs-audit <target> --project=<project>
 ```
 
 Record generators default to internal visibility, validate controlled topics before
-writing, and are no-ops when rerun with identical inputs.
+writing, and are no-ops when rerun with identical inputs. Help describes required
+versus inferred options. Documentation project namespaces may describe planned
+work; they are not limited to existing Nx projects. Topics come from the built-in
+vocabulary plus `megamono.json` `topics.extend`. Invalid lists, unknown topics and
+unresolved references fail before a new record is written.
 
-New workspaces use pinned Node 24, npm 11 by default (or a pinned pnpm, Yarn,
-or Bun selection), Nx 23.1, and TypeScript 6. Existing-workspace adoption
-preserves npm 9–11, pnpm 8–11, Yarn 1.22–4, or Bun 1.x on Node 18.18–24, Nx
-17–23, and TypeScript 5.2–6. Core survey and platform-neutral adoption are not
-restricted by host OS; individual platform capabilities retain their own
-gates. The optional Apple, Cargo, and Cloudflare inference plugins require Nx 18 or newer. See
-[`compatibility.json`](./compatibility.json) for the machine-readable contract
-and tested version anchors.
+New docs/content dependencies use `zod: ^4.6.5`, sharing the qualified Playstack
+validation floor. Existing declarations must fit wholly within that range;
+`>=4.1 <5` is broader and requires explicit review/update even if today's installed
+version is compatible. Adoption reports the conflict before writes and does not
+silently narrow an existing dependency declaration.
+
+New workspaces use qualified exact toolchain pins; existing-workspace adoption
+has a separate compatibility contract and preserves supported repository choices.
+Core survey and platform-neutral adoption are not restricted by host OS;
+individual platform capabilities retain their own gates. See
+[`compatibility.json`](./compatibility.json) for current ranges, scaffold pins and
+tested anchors rather than inferring platform SDK support from the core range.
 
 In CI and release profiles, package-source checks inspect dependency fields plus npm/Yarn
 `overrides` and `resolutions`, package-level pnpm overrides/catalogs, and
