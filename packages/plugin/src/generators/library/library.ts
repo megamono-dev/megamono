@@ -143,6 +143,39 @@ function configureLibraryTypes(
     });
 }
 
+/**
+ * When the workspace base config lets source import `./x.ts` (fresh
+ * create-megamono workspaces set rewriteRelativeImportExtensions), write the
+ * starter's relative re-exports that way. Bundlers that compile library source
+ * directly, including Next 16's Turbopack, cannot map `./x.js` to `./x.ts`;
+ * tsc still emits `./x.js`. Other workspaces keep Nx's specifiers.
+ */
+function useTypeScriptImportExtensions(tree: Tree, root: string): void {
+  const base = ['tsconfig.base.json', 'tsconfig.json'].find((path) =>
+    tree.exists(path),
+  );
+  const options = base
+    ? (readJson(tree, base).compilerOptions as
+        Record<string, unknown> | undefined)
+    : undefined;
+  if (
+    options?.rewriteRelativeImportExtensions !== true &&
+    options?.allowImportingTsExtensions !== true
+  )
+    return;
+  const index = `${root}/src/index.ts`;
+  const source = tree.read(index, 'utf8');
+  if (!source) return;
+  const updated = source.replace(
+    /(from\s+['"])(\.{1,2}\/[^'"]+?)(?:\.js)?(['"])/g,
+    (match, open: string, specifier: string, close: string) =>
+      tree.exists(`${root}/src/${specifier.replace(/^\.\//, '')}.ts`)
+        ? `${open}${specifier}.ts${close}`
+        : match,
+  );
+  if (updated !== source) tree.write(index, updated);
+}
+
 const lockfiles = [
   'pnpm-lock.yaml',
   'package-lock.json',
@@ -333,6 +366,7 @@ async function generateLibrary(
     });
   }
   const react = platform === 'web' && type === 'ui';
+  useTypeScriptImportExtensions(tree, root);
   configureLibraryTypes(
     tree,
     root,
@@ -404,7 +438,7 @@ async function generateLibrary(
     const implementation =
       exported &&
       tree.read(
-        `${root}/src/${exported.replace(/^\.\//, '').replace(/\.js$/, '')}.ts`,
+        `${root}/src/${exported.replace(/^\.\//, '').replace(/\.[jt]s$/, '')}.ts`,
         'utf8',
       );
     const helper =

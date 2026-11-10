@@ -1,3 +1,4 @@
+import { minVersion } from 'semver';
 import { designHandoffFiles } from '../../lib/docs-design';
 import {
   appendEslintFlatConfig,
@@ -15,6 +16,7 @@ import {
   logger,
   runTasksInSerial,
   updateProjectConfiguration,
+  readJson,
   updateJson,
   type GeneratorCallback,
   type ProjectGraph,
@@ -1219,6 +1221,36 @@ export const DECLARATION_MERGING_ESLINT_BLOCK = `  {
     },
   },`;
 
+/**
+ * Fresh workspaces only. Next 16's Turbopack cannot map a library's
+ * nodenext-style `./x.js` specifier to `./x.ts` source, so generated libraries
+ * import `./x.ts`; tsc rewrites it to `.js` in emitted JavaScript. Every
+ * project extends the base config, so apps that typecheck library source (Next
+ * build) accept the same specifiers. Requires TypeScript 5.7+.
+ */
+function enableTypeScriptImportExtensions(tree: Tree): void {
+  const path = tree.exists('tsconfig.base.json')
+    ? 'tsconfig.base.json'
+    : 'tsconfig.json';
+  if (!tree.exists(path)) return;
+  const manifest = readJson(tree, 'package.json');
+  const declared =
+    manifest.devDependencies?.typescript ?? manifest.dependencies?.typescript;
+  const version = typeof declared === 'string' ? minVersion(declared) : null;
+  if (!version || version.compare('5.7.0') < 0) return;
+  updateJson(tree, path, (value) =>
+    value.compilerOptions?.rewriteRelativeImportExtensions !== undefined
+      ? value
+      : {
+          ...value,
+          compilerOptions: {
+            ...value.compilerOptions,
+            rewriteRelativeImportExtensions: true,
+          },
+        },
+  );
+}
+
 function addDeclarationMergingDefaults(tree: Tree): void {
   const path = 'eslint.config.mjs';
   const source = tree.read(path, 'utf8');
@@ -2305,6 +2337,7 @@ export async function workspaceInitGenerator(
       : { imports: false, rules: false };
   if (options.bootstrap && modules.has('lint') && lintCanWire)
     addDeclarationMergingDefaults(tree);
+  if (options.bootstrap) enableTypeScriptImportExtensions(tree);
   const docsLoaderTemplate = renderContentCollectionsConfig(docsRoot);
   const docsLoaderCanUpdate =
     modules.has('docs') && docsContract.loaderMode === 'create'

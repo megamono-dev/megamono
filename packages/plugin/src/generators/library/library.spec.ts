@@ -341,6 +341,41 @@ describe('library generator', () => {
       expect(tree.exists('.verdaccio/config.yml')).toBe(false);
     },
   );
+  it('writes .ts relative re-exports only when the base config rewrites them', async () => {
+    for (const rewrite of [true, false]) {
+      const tree = workspace();
+      writeJson(tree, 'package.json', {
+        ...readJson(tree, 'package.json'),
+        workspaces: ['libs/*'],
+      });
+      tree.write('pnpm-workspace.yaml', 'packages:\n  - libs/*\n');
+      writeJson(tree, 'tsconfig.base.json', {
+        compilerOptions: {
+          composite: true,
+          module: 'nodenext',
+          moduleResolution: 'nodenext',
+          ...(rewrite ? { rewriteRelativeImportExtensions: true } : {}),
+        },
+      });
+      writeJson(tree, 'tsconfig.json', {
+        extends: './tsconfig.base.json',
+        files: [],
+        references: [],
+      });
+      await libraryGenerator(tree, {
+        name: 'core',
+        scope: 'fixture',
+        yes: true,
+        skipInstall: true,
+      });
+      expect(tree.read('libs/core/src/index.ts', 'utf8')).toBe(
+        `export * from './lib/fixture-core.${rewrite ? 'ts' : 'js'}';\n`,
+      );
+      expect(tree.read('libs/core/src/index.spec.ts', 'utf8')).toContain(
+        'fixtureCore',
+      );
+    }
+  });
   it('uses built exports in a TypeScript solution workspace', async () => {
     const tree = workspace();
     writeJson(tree, 'package.json', {

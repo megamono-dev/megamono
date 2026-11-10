@@ -287,6 +287,17 @@ Libraries receive a Vitest starter and separate production/spec TypeScript confi
 
 Without `--yes`, or with `--dry-run`, only the plan is displayed. `--skipInstall` writes dependency declarations but suppresses the deferred Nx install callback; run your usual workspace installation afterwards, retaining its package-manager/store settings. The equivalent direct invocation is `nx generate @megamono/plugin:library --name=client ...`. A compatible local `@nx/js` is required. A comma-separated `--name=core,ui,browser` adds several libraries with the same options as one change and one install. Library addition normally requires a clean working tree on a non-default branch; `--allowDirty` permits unrelated uncommitted work but still fails, writing nothing, when a file the generator would write (or, unless `--skipInstall`, a lockfile) has uncommitted changes.
 
+Bundlers that compile workspace library source directly, including Next 16's
+Turbopack, cannot map a nodenext-style `./lib/x.js` specifier to `./lib/x.ts`.
+New `create-megamono` workspaces on TypeScript 5.7+ therefore set
+`rewriteRelativeImportExtensions: true` in the base TypeScript config, and the
+library generator then writes relative re-exports as `./lib/x.ts`; `tsc` still
+emits `./lib/x.js` in JavaScript output, and declaration consumers resolve the
+`.d.ts`. Write new relative imports in workspace libraries with `.ts`/`.tsx`
+too. In other workspaces generated starters keep Nx's specifiers; opt in by
+adding the same base option (it also applies to applications that typecheck
+library source, such as `next build`).
+
 Libraries start with a single `.` export. To let a bundle import one feature
 without the rest of the barrel (and its dependencies), add a subpath export:
 

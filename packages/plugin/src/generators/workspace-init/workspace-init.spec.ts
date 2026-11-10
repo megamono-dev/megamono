@@ -51,6 +51,47 @@ describe('workspace-init generator', () => {
     tree = createTreeWithEmptyWorkspace();
   });
 
+  it('lets fresh TypeScript 5.7+ workspaces import .ts specifiers', async () => {
+    const setup = (tree: Tree, typescript: string) => {
+      tree.write(
+        'package.json',
+        JSON.stringify({
+          name: '@acme/source',
+          devDependencies: { typescript },
+        }),
+      );
+      tree.write(
+        'tsconfig.base.json',
+        JSON.stringify({ compilerOptions: { module: 'nodenext' } }),
+      );
+    };
+    setup(tree, '~6.0.3');
+    await workspaceInitGenerator(tree, {
+      only: 'lint',
+      yes: true,
+      bootstrap: true,
+    });
+    expect(readJson(tree, 'tsconfig.base.json').compilerOptions).toEqual({
+      module: 'nodenext',
+      rewriteRelativeImportExtensions: true,
+    });
+    for (const [typescript, bootstrap] of [
+      ['~5.6.3', true],
+      ['~6.0.3', false],
+    ] as const) {
+      const other = createTreeWithEmptyWorkspace();
+      setup(other, typescript);
+      await workspaceInitGenerator(other, {
+        only: 'lint',
+        yes: true,
+        bootstrap,
+      });
+      expect(
+        readJson(other, 'tsconfig.base.json').compilerOptions,
+      ).not.toHaveProperty('rewriteRelativeImportExtensions');
+    }
+  });
+
   it('allows single-extends declaration merging in fresh workspaces only', async () => {
     const root = `import nx from '@nx/eslint-plugin';
 
