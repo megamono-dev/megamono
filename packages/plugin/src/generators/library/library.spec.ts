@@ -335,6 +335,47 @@ describe('library generator', () => {
     expect(JSON.stringify(manifest.exports)).toContain('./dist/index.d.ts');
     expect(readJson(tree, 'nx.json').release).toBeUndefined();
   });
+  it('keeps publishable output flat and emits JavaScript despite inherited composite/noEmit defaults', async () => {
+    const tree = workspace();
+    writeJson(tree, 'tsconfig.base.json', {
+      compilerOptions: {
+        composite: true,
+        declaration: true,
+        noEmit: true,
+        emitDeclarationOnly: true,
+        module: 'nodenext',
+        target: 'es2022',
+      },
+    });
+    await libraryGenerator(tree, {
+      name: 'sdk',
+      scope: 'fixture',
+      publishable: true,
+      yes: true,
+      skipInstall: true,
+    });
+    expect(
+      readJson(tree, 'packages/sdk/tsconfig.lib.json').compilerOptions,
+    ).toMatchObject({
+      rootDir: 'src',
+      noEmit: false,
+      emitDeclarationOnly: false,
+    });
+    expect(
+      getProjects(tree).get('fixture-sdk')?.targets?.build?.options?.rootDir,
+    ).toBe('packages/sdk/src');
+    const output =
+      getProjects(tree).get('fixture-sdk')?.targets?.build?.options?.outputPath;
+    const prefix = output === 'packages/sdk/dist' ? './dist' : '.';
+    expect(readJson(tree, 'packages/sdk/package.json')).toMatchObject({
+      main: `${prefix}/index.js`,
+      types: `${prefix}/index.d.ts`,
+      exports: {
+        '.': { types: `${prefix}/index.d.ts`, default: `${prefix}/index.js` },
+      },
+    });
+    expect(readJson(tree, 'nx.json').release).toBeUndefined();
+  });
 
   it('preserves pnpm policy comments and permits caller-owned installation', async () => {
     const tree = workspace();

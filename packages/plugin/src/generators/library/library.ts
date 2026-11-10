@@ -57,11 +57,15 @@ function configureLibraryTypes(
   platform: string,
   react: boolean,
   tests: boolean,
+  publishable: boolean,
 ): void {
   updateJson(tree, `${root}/tsconfig.lib.json`, (config) => ({
     ...config,
     compilerOptions: {
       ...config.compilerOptions,
+      ...(publishable
+        ? { rootDir: 'src', noEmit: false, emitDeclarationOnly: false }
+        : {}),
       ...(platform === 'web'
         ? {
             lib: ['ES2022', 'DOM', 'DOM.Iterable'],
@@ -223,7 +227,14 @@ export async function libraryGenerator(
     });
   }
   const react = platform === 'web' && type === 'ui';
-  configureLibraryTypes(tree, root, platform, react, testRunner === 'vitest');
+  configureLibraryTypes(
+    tree,
+    root,
+    platform,
+    react,
+    testRunner === 'vitest',
+    options.publishable === true,
+  );
   const dependencyCallbacks: GeneratorCallback[] = [];
   if (react) {
     const version =
@@ -319,14 +330,39 @@ export async function libraryGenerator(
       },
     };
   }
+  if (
+    options.publishable &&
+    project.targets?.build?.executor === '@nx/js:tsc'
+  ) {
+    project.targets.build.options = {
+      ...project.targets.build.options,
+      rootDir: `${root}/src`,
+    };
+  }
   const output = project.targets?.build?.options?.outputPath as
     string | undefined;
   const publishFromSourceRoot = !output || output === `${root}/dist`;
+  const entryRoot = publishFromSourceRoot ? './dist' : '.';
   updateJson(tree, `${root}/package.json`, (value) => ({
     ...value,
     private: !options.publishable,
     ...(options.publishable
       ? {
+          main: `${entryRoot}/index.js`,
+          types: `${entryRoot}/index.d.ts`,
+          ...(typeof value.module === 'string'
+            ? { module: `${entryRoot}/index.js` }
+            : {}),
+          exports: {
+            './package.json': './package.json',
+            '.': {
+              types: `${entryRoot}/index.d.ts`,
+              ...(value.type === 'module'
+                ? { import: `${entryRoot}/index.js` }
+                : {}),
+              default: `${entryRoot}/index.js`,
+            },
+          },
           publishConfig: {
             ...value.publishConfig,
             access: options.access ?? 'restricted',
