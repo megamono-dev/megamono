@@ -92,6 +92,7 @@ try {
       nx: require('nx/package.json').version,
       '@nx/devkit': require('@nx/devkit/package.json').version,
       typescript: require('typescript/package.json').version,
+      '@megamono/plugin': 'file:./plugin.tgz',
     },
   });
   tree.write(
@@ -109,6 +110,12 @@ try {
     interactive: false,
     yes: true,
     skipInstall: true,
+  });
+  execFileSync('pnpm', ['pack', '--out', join(root, 'plugin.tgz')], {
+    cwd: join(workspace, 'packages/plugin'),
+    env,
+    stdio: 'pipe',
+    timeout: 120000,
   });
   for (const change of tree.listChanges()) {
     if (change.type === 'DELETE') continue;
@@ -144,6 +151,20 @@ try {
     consumerRequire('nx/package.json').bin.nx,
   );
   const typescript = consumerRequire.resolve('typescript/bin/tsc');
+  const hookProbe = join(root, 'apps/site/src/hooks-misuse.tsx');
+  writeFileSync(
+    hookProbe,
+    "import { useState } from 'react';\nexport function Misuse({active}: {active:boolean}) { if (active) useState(0); return null; }\n",
+  );
+  const eslint = resolve(
+    dirname(consumerRequire.resolve('eslint/package.json')),
+    consumerRequire('eslint/package.json').bin.eslint,
+  );
+  assert.throws(
+    () => run([eslint, 'src/hooks-misuse.tsx'], join(root, 'apps/site')),
+    (error) => /react-hooks\/rules-of-hooks/.test(error.stdout ?? ''),
+  );
+  rmSync(hookProbe);
   run([typescript, '-p', 'packages/theme/tsconfig.lib.json', '--noEmit']);
   const broken = join(root, 'packages/theme/src/source-error.ts');
   writeFileSync(broken, 'export const sourceError: string = 1;\n');
