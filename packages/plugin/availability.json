@@ -246,6 +246,12 @@
       "implementation": "./dist/executors/expo-doctor/expo-doctor",
       "schema": "./dist/executors/expo-doctor/schema.json",
       "description": "Run locally installed Expo Doctor for an application without installing tools"
+    },
+    "audit-production": {
+      "status": "available",
+      "implementation": "./dist/executors/audit-production/audit-production",
+      "schema": "./dist/executors/audit-production/schema.json",
+      "description": "Audit one project's production dependency closure against registry security advisories"
     }
   }
 }

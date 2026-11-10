@@ -41,6 +41,39 @@ function snapshot(tree: ReturnType<typeof workspace>): string {
 }
 
 describe('app generator', () => {
+  it('declares framework runtime packages where they are used and adds a production audit', async () => {
+    const tree = workspace();
+    await appGenerator(tree, {
+      type: 'api',
+      scope: 'acme',
+      port: 4302,
+      yes: true,
+      interactive: false,
+    });
+    const api = readJson(tree, 'apps/api/package.json');
+    for (const name of [
+      '@nestjs/common',
+      '@nestjs/core',
+      'reflect-metadata',
+      'rxjs',
+    ])
+      expect(api.dependencies).toHaveProperty(name);
+    expect(api.dependencies).not.toHaveProperty('axios');
+    expect(
+      readJson(tree, 'apps/api-e2e/package.json').devDependencies,
+    ).toHaveProperty('axios');
+    expect(
+      readJson(tree, 'packages/nest-home/package.json').dependencies,
+    ).toHaveProperty('@nestjs/common');
+    expect(readJson(tree, 'package.json').dependencies).toHaveProperty(
+      '@nestjs/core',
+    );
+    expect(readProjectConfiguration(tree, 'acme-api').targets?.audit).toEqual({
+      executor: '@megamono/plugin:audit-production',
+      cache: false,
+    });
+  });
+
   it('gives every generated project inferred, project-relative lint', async () => {
     const tree = workspace();
     await appGenerator(tree, {

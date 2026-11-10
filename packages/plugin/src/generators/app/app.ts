@@ -19,6 +19,7 @@ import {
   runTasksInSerial,
   updateJson,
   updateProjectConfiguration,
+  visitNotIgnoredFiles,
   workspaceRoot,
   writeJson,
   type GeneratorCallback,
@@ -2040,6 +2041,92 @@ function createDesktopApp(
   return [];
 }
 
+const SOURCE_FILE = /\.(?:[cm]?[jt]sx?)$/;
+
+/**
+ * Nx framework generators add runtime packages (Nest, axios, ...) only to the
+ * root manifest, which makes every application's production closure look the
+ * same. Declare each runtime package this run added at the root in the
+ * generated projects that import it (or the application when none does, for
+ * framework peers such as rxjs), so per-project audits and deploy pruning see
+ * real ownership. The root declaration stays: Nx plugins resolve framework
+ * packages from the workspace root.
+ */
+function declareGeneratedRuntimeDependencies(
+  tree: Tree,
+  before: ReadonlySet<string>,
+  existingProjects: ReadonlySet<string>,
+  application: string,
+): void {
+  const root = readJson<{ dependencies?: Record<string, string> }>(
+    tree,
+    'package.json',
+  ).dependencies;
+  const added = Object.entries(root ?? {}).filter(
+    // tslib is a TypeScript emit helper shared by every compiled project.
+    ([name]) => !before.has(name) && name !== 'tslib',
+  );
+  if (added.length === 0) return;
+  const projects = [...getProjects(tree)].filter(
+    ([name, project]) =>
+      !existingProjects.has(name) &&
+      tree.exists(`${project.root}/package.json`),
+  );
+  const sources = new Map<string, string>();
+  for (const [name, project] of projects) {
+    let text = '';
+    visitNotIgnoredFiles(tree, project.root, (path) => {
+      if (SOURCE_FILE.test(path) && !path.includes('/node_modules/'))
+        text += `${tree.read(path, 'utf8') ?? ''}\n`;
+    });
+    sources.set(name, text);
+  }
+  const imports = (text: string, dependency: string) => {
+    const escaped = dependency.replace(/[.*+?^$()|[\]\\/{}]/g, '\\$&');
+    return new RegExp(
+      `(?:from|import|require\\s*\\()\\s*\\(?\\s*['"]${escaped}(?:/[^'"]*)?['"]`,
+    ).test(text);
+  };
+  for (const [dependency, version] of added) {
+    const owners = projects.filter(([name]) =>
+      imports(sources.get(name) ?? '', dependency),
+    );
+    const targets = owners.length
+      ? owners
+      : projects.filter(([name]) => name === application);
+    for (const [name, project] of targets) {
+      const section = name.endsWith('-e2e')
+        ? 'devDependencies'
+        : 'dependencies';
+      updateJson(tree, `${project.root}/package.json`, (value) => {
+        if (
+          ['dependencies', 'devDependencies', 'peerDependencies'].some(
+            (field) => value[field]?.[dependency] !== undefined,
+          )
+        )
+          return value;
+        return {
+          ...value,
+          [section]: { ...(value[section] ?? {}), [dependency]: version },
+        };
+      });
+    }
+  }
+}
+
+/** pnpm workspaces: audit only this application's production closure. */
+function addProductionAuditTarget(tree: Tree, projectName: string): void {
+  const project = getProjects(tree).get(projectName);
+  if (!project || project.targets?.audit) return;
+  updateProjectConfiguration(tree, projectName, {
+    ...project,
+    targets: {
+      ...project.targets,
+      audit: { executor: '@megamono/plugin:audit-production', cache: false },
+    },
+  });
+}
+
 /** Inferred lint runs `eslint .`; keep WXT output and generated types out. */
 function ignoreExtensionBuildOutput(tree: Tree, root: string): void {
   const path = `${root}/eslint.config.mjs`;
@@ -2094,6 +2181,12 @@ export async function appGenerator(
 
   const restoreWorkspaceYaml = preserveWorkspaceYaml(tree);
   const existingProjects = new Set(getProjects(tree).keys());
+  const rootDependenciesBefore = new Set(
+    Object.keys(
+      readJson<{ dependencies?: Record<string, string> }>(tree, 'package.json')
+        .dependencies ?? {},
+    ),
+  );
   const callbacks =
     options.type === 'web' || options.type === 'site'
       ? await createWebApp(tree, options)
@@ -2106,6 +2199,14 @@ export async function appGenerator(
     if (options.type === 'extension' && inferred.includes(options.directory))
       ignoreExtensionBuildOutput(tree, options.directory);
   }
+  declareGeneratedRuntimeDependencies(
+    tree,
+    rootDependenciesBefore,
+    existingProjects,
+    options.projectName,
+  );
+  if (options.packageManager === 'pnpm')
+    addProductionAuditTarget(tree, options.projectName);
 
   if (!options.bootstrap) {
     updateJson(tree, 'megamono.json', (value: Record<string, unknown>) => ({

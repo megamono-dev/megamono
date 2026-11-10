@@ -379,6 +379,19 @@ generation-only fixture does not qualify the Android toolchain.
 
 Application and library generation preserve existing `pnpm-workspace.yaml` comments while applying real workspace/dependency-policy changes. Invalid YAML fails before the composed generator runs. Neither wrapper chooses a new pnpm store or changes `.npmrc`.
 
+Framework generators add runtime packages (Nest, `axios`, Next/React) to the
+root manifest. Application generation also declares each runtime package it
+added in the generated projects that import it (an e2e project gets it as a
+development dependency), or in the application itself for framework peers such
+as `rxjs`. The root declarations remain because Nx plugins resolve framework
+packages from the workspace root. In pnpm workspaces each generated application
+also gets an `audit` target (`@megamono/plugin:audit-production`): it lists the
+project's production closure with `pnpm list --prod --json --depth Infinity
+--filter <package>`, including workspace packages it depends on, and checks only
+those versions against the registry's bulk advisory endpoint, unlike
+`pnpm audit`, which ignores `--filter`. `auditLevel` (default `low`) sets the
+failing severity; `registry` selects the advisory registry.
+
 Use `megamono add app web --skipInstall --yes` (also available for `add library`) when installation must be controlled by the caller. This suppresses deferred generator callbacks, including dependency installation; declarations still change. Afterwards, run the workspace's established install command using its existing environment and store configuration. This does not bypass package-manager checks that happen before the Nx generator starts, and does not change the behavior of directly invoked third-party Nx generators.
 
 Web/site generation supports `--router=pages|app` (Pages Router remains the
