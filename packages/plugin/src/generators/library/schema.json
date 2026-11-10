@@ -4,8 +4,21 @@
   "title": "Add a TypeScript library",
   "type": "object",
   "properties": {
-    "name": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
-    "scope": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Library name, without its package scope."
+    },
+    "scope": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Architectural scope tag and project prefix. Also supplies the npm scope unless packageScope is provided; defaults to the workspace name."
+    },
+    "packageScope": {
+      "type": "string",
+      "pattern": "^@?[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Independent npm package scope, with or without @. Does not change the architectural scope."
+    },
     "platform": {
       "type": "string",
       "enum": ["neutral", "web", "node", "mobile", "worker"],
@@ -30,6 +43,12 @@
       "type": "boolean",
       "default": false,
       "description": "Write dependency declarations but do not run the deferred dependency installation."
+    },
+    "testRunner": {
+      "type": "string",
+      "enum": ["vitest", "none"],
+      "default": "vitest",
+      "description": "Generate a Node-hosted Vitest test target and separate spec config (requires Node 20.19+, 22.12+, or 24+), or explicitly opt out with none."
     },
     "dryRun": { "type": "boolean", "default": false },
     "planOnly": { "type": "boolean", "default": false },
