@@ -98,6 +98,34 @@ describe('library generator', () => {
       peerDependencies: { react: '^18.3.1' },
       devDependencies: { react: '^18.3.1', '@types/react': '^18.3.0' },
     });
+    expect(
+      readJson(tree, 'libs/ui/package.json').peerDependencies,
+    ).not.toHaveProperty('@chakra-ui/react');
+    const chakra = workspace();
+    writeJson(chakra, 'apps/site/package.json', {
+      name: '@fixture/site',
+      dependencies: { '@chakra-ui/react': '3.37.0', react: '19.3.1' },
+    });
+    writeJson(chakra, 'apps/site/project.json', {
+      name: 'fixture-site',
+      root: 'apps/site',
+    });
+    await libraryGenerator(chakra, {
+      name: 'ui',
+      scope: 'fixture',
+      platform: 'web',
+      type: 'ui',
+      yes: true,
+      skipInstall: true,
+    });
+    const singletons = {
+      '@chakra-ui/react': '3.37.0',
+      '@emotion/react': '11.14.0',
+    };
+    expect(readJson(chakra, 'libs/ui/package.json')).toMatchObject({
+      peerDependencies: singletons,
+      devDependencies: singletons,
+    });
     const plain = workspace();
     await libraryGenerator(plain, {
       name: 'helper',

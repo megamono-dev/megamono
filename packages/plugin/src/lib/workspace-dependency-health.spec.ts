@@ -101,6 +101,32 @@ function link(root: string, owner: string, name: string, location: string) {
 }
 
 describe('workspace dependency health', () => {
+  it('reports UI singletons a library declares as regular dependencies', () => {
+    const f = fixture();
+    f.project('ui', 'lib', {
+      name: '@fixture/ui',
+      dependencies: { '@chakra-ui/react': '3.37.0', react: '19.3.1' },
+      peerDependencies: { react: '19.3.1' },
+    });
+    f.project('site', 'app', {
+      name: '@fixture/site',
+      dependencies: { '@chakra-ui/react': '3.37.0' },
+    });
+    const findings = f
+      .inspect()
+      .findings.filter(
+        (finding) => finding.state === 'singleton-regular-dependency',
+      );
+    expect(findings).toEqual([
+      expect.objectContaining({
+        fingerprint: 'singleton-dependency:ui:@chakra-ui/react',
+        evidence: [
+          'libs/ui/package.json',
+          'dependencies.@chakra-ui/react: 3.37.0',
+        ],
+      }),
+    ]);
+  });
   it('reports undeclared named runtime edges with helpful ownership guidance, not root hoisting', () => {
     const f = fixture();
     f.project('site', 'app', { name: '@fixture/site' });

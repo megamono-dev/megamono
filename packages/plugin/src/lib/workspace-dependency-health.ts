@@ -201,6 +201,33 @@ export function inspectWorkspaceDependencies(
       });
     }
   }
+  // A library that bundles its own React/Chakra/Emotion copy splits provider
+  // context from the application's. Peers let the application own the copy.
+  for (const [project, node] of Object.entries(graph.nodes).sort(([a], [b]) =>
+    a.localeCompare(b),
+  )) {
+    const owner = owned.get(project);
+    if (node.type !== 'lib' || !owner?.manifest) continue;
+    for (const name of singletons) {
+      if (
+        typeof owner.manifest.dependencies?.[name] !== 'string' ||
+        typeof owner.manifest.peerDependencies?.[name] === 'string'
+      )
+        continue;
+      findings.push({
+        check: 'dependency-alignment',
+        fingerprint: `singleton-dependency:${project}:${name}`,
+        state: 'singleton-regular-dependency',
+        confidence: 'complete',
+        summary: `${project} declares ${name} as a regular dependency instead of a peer.`,
+        evidence: [
+          `${relative(root, owner.root).replaceAll('\\', '/')}/package.json`,
+          `dependencies.${name}: ${owner.manifest.dependencies[name]}`,
+        ],
+        recommendation: `Move ${name} to peerDependencies (and devDependencies for the library's own tests) so consuming applications provide one shared installation.`,
+      });
+    }
+  }
   const inspections: SingletonInspection[] = [];
   for (const [application, node] of Object.entries(graph.nodes).sort(
     ([a], [b]) => a.localeCompare(b),

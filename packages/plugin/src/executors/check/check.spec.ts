@@ -8,6 +8,7 @@ import {
 import { analyzeWorkspaceStructure } from '../../lib/structural-check';
 import type { Diagnostic } from '../../lib/diagnostics';
 import type { DependencyFindingIdentity } from '../../lib/dependency-policy-contract';
+import { inspectWorkspaceDependencies } from '../../lib/workspace-dependency-health';
 import check from './check';
 
 vi.mock('../../lib/config', async (original) => ({
@@ -28,6 +29,12 @@ vi.mock('../../lib/managed-artifacts', () => ({
 }));
 vi.mock('../../lib/package-sources', () => ({
   validatePackageSources: vi.fn(async () => []),
+}));
+vi.mock('../../lib/workspace-dependency-health', () => ({
+  inspectWorkspaceDependencies: vi.fn(() => ({
+    findings: [],
+    inspection: undefined,
+  })),
 }));
 
 afterEach(() => vi.restoreAllMocks());
@@ -400,5 +407,40 @@ describe('package-source exclusions', () => {
     expect(await check({ excludeProjects: ['api'] }, context)).toEqual({
       success: false,
     });
+  });
+
+  it('reports workspace dependency findings as non-failing warnings', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    vi.mocked(readMegamonoConfig).mockResolvedValue(
+      megamonoConfigSchema.parse(DEFAULT_MEGAMONO_CONFIG),
+    );
+    vi.mocked(analyzeWorkspaceStructure).mockResolvedValue({
+      diagnostics: [],
+      rawDiagnostics: [],
+      allowed: [],
+    });
+    vi.mocked(inspectWorkspaceDependencies).mockReturnValueOnce({
+      findings: [
+        {
+          check: 'dependency-alignment',
+          fingerprint: 'workspace-import:ui:@fixture/core',
+          state: 'undeclared-workspace-import',
+          confidence: 'complete',
+          summary:
+            'ui imports workspace package @fixture/core without declaring it.',
+          evidence: ['libs/ui/package.json', 'dependency kinds: static'],
+          recommendation: 'Declare @fixture/core.',
+        },
+      ],
+      inspection: undefined,
+    });
+    const context = {
+      root: '/fixture',
+      projectGraph: { nodes: {}, dependencies: {} },
+    } as unknown as ExecutorContext;
+    expect(await check({ skipDocs: true }, context)).toEqual({ success: true });
+    expect(warn).toHaveBeenCalledWith(
+      'WARNING workspace-dependencies libs/ui/package.json: ui imports workspace package @fixture/core without declaring it. Declare @fixture/core.',
+    );
   });
 });

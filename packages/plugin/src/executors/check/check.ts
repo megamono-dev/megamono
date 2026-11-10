@@ -13,6 +13,7 @@ import {
 import { validateRepositoryDocs } from '../../lib/docs';
 import { analyzeWorkspaceStructure } from '../../lib/structural-check';
 import { checkProjectPreflights } from '../../lib/project-preflight';
+import { inspectWorkspaceDependencies } from '../../lib/workspace-dependency-health';
 import { validateInstalledSkills } from '../../lib/managed-skills';
 import { validateManagedArtifactRegistry } from '../../lib/managed-artifacts';
 import { validatePackageSources } from '../../lib/package-sources';
@@ -67,6 +68,23 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
     diagnostics.push(...structure.diagnostics);
     rawDiagnostics.push(...structure.rawDiagnostics);
     add(await checkProjectPreflights(context.projectGraph));
+    // Advisory: reported as warnings outside structural rule budgets, so
+    // adopters see undeclared workspace imports and split UI singletons
+    // without a new failing rule.
+    add(
+      inspectWorkspaceDependencies(
+        context.root,
+        context.projectGraph,
+      ).findings.map((finding) => ({
+        severity: 'warning' as const,
+        code: 'workspace-dependencies',
+        ...(finding.evidence[0]?.endsWith('package.json')
+          ? { path: finding.evidence[0] }
+          : {}),
+        message:
+          `${finding.summary}${finding.state === 'multiple-installed-singletons' ? ` (${finding.evidence.join('; ')})` : ''} ${finding.recommendation ?? ''}`.trim(),
+      })),
+    );
     add(validateInstalledSkills(context.root));
     add(validateManagedArtifactRegistry(context.root));
     const excludedNames = [

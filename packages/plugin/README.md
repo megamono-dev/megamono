@@ -988,8 +988,18 @@ deduplicated, and separate application runtimes are not conflated. The optional
 `dependencyInspection` report resolves package entries without executing their
 JavaScript or falling back to ambient `NODE_PATH`. Missing or malformed evidence
 makes coverage partial. Installed Node resolution is not proof of browser bundle
-duplication, so `runtimeAssessment` remains `not-assessed`. These health findings
-do not change structural checker severity or warning budgets.
+duplication, so `runtimeAssessment` remains `not-assessed`. Health also reports a
+library that declares React, Chakra or Emotion in `dependencies` without a matching
+peer. These health findings do not change structural checker severity or warning
+budgets. `megamono:check` prints the same dependency findings as
+`workspace-dependencies` warnings; they never fail the check and are not counted
+by adoption ratchets or warning baselines.
+
+A `platform:web`/`type:ui` library generated in a workspace that already uses
+Chakra (recorded web styling, or a root/project manifest declaring
+`@chakra-ui/react`) declares `@chakra-ui/react` and `@emotion/react` as peers and
+development dependencies alongside React, matching the versions the workspace
+already uses.
 
 Plan merge status uses a resolved integration branch, never the current `HEAD`.
 An explicit Nx `defaultBase` (or Nx's older `affected.defaultBase`) selects that

@@ -52,6 +52,45 @@ function declared(manifest: Manifest, name: string): string | undefined {
 }
 
 const testExcludes = ['src/**/*.spec.*', 'src/**/*.test.*'];
+const CHAKRA_SINGLETONS = ['@chakra-ui/react', '@emotion/react'] as const;
+
+/**
+ * Chakra and Emotion versions the workspace already uses, from the root, any
+ * project manifest or the recorded web styling. Empty outside Chakra workspaces.
+ */
+function workspaceChakraVersions(
+  tree: Tree,
+  rootManifest: Manifest,
+  libraryRoot: string,
+): Record<string, string> {
+  const manifests = [rootManifest];
+  for (const project of getProjects(tree).values())
+    if (
+      project.root !== libraryRoot &&
+      tree.exists(`${project.root}/package.json`)
+    )
+      manifests.push(readJson<Manifest>(tree, `${project.root}/package.json`));
+  const chakraStyling =
+    (
+      readJson(tree, 'megamono.json') as {
+        scaffolding?: { web?: { styling?: string } };
+      }
+    ).scaffolding?.web?.styling === 'chakra';
+  if (
+    !chakraStyling &&
+    !manifests.some((value) => declared(value, '@chakra-ui/react'))
+  )
+    return {};
+  return Object.fromEntries(
+    CHAKRA_SINGLETONS.map((name) => [
+      name,
+      manifests
+        .map((value) => declared(value, name))
+        .find((range) => range && validRange(range)) ??
+        compatibility.scaffoldPackages[name],
+    ]),
+  );
+}
 
 function configureLibraryTypes(
   tree: Tree,
@@ -316,16 +355,21 @@ async function generateLibrary(
     const typesVersion =
       declared(manifest, '@types/react') ??
       `^${minVersion(validRange(version) ?? '19')?.major ?? 19}.0.0`;
+    // A UI library in a Chakra workspace renders under the application's
+    // ChakraProvider; its own Chakra/Emotion copy would split the React context.
+    const styling = workspaceChakraVersions(tree, manifest, root);
     updateJson(tree, `${root}/package.json`, (value) => ({
       ...value,
       peerDependencies: {
         ...value.peerDependencies,
         react: validRange(version) ? version : '>=18 <20',
+        ...styling,
       },
       devDependencies: {
         ...value.devDependencies,
         react: version,
         '@types/react': typesVersion,
+        ...styling,
       },
     }));
   }
