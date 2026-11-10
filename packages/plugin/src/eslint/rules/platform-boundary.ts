@@ -1,6 +1,7 @@
 import { builtinModules } from 'node:module';
-import { existsSync, realpathSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, readdirSync, realpathSync } from 'node:fs';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import ignore = require('ignore');
 import type { Rule } from 'eslint';
 import { findProjectMetadata, filePlatform } from '../project-metadata';
 import { nextPagesLintContext } from '../next-pages';
@@ -50,6 +51,37 @@ function importedValue(node: Rule.Node): string | undefined {
   return undefined;
 }
 
+interface PlatformBoundaryOptions {
+  readonly workspaceRoot?: string;
+  readonly docsRoot?: string;
+  readonly nodeFiles?: readonly string[];
+}
+
+/** Project-relative path, or undefined outside the project. */
+function projectRelative(root: string, filename: string): string | undefined {
+  const path = relative(root, resolve(filename)).replaceAll('\\', '/');
+  return !path || isAbsolute(path) || path === '..' || path.startsWith('../')
+    ? undefined
+    : path;
+}
+
+/**
+ * A Next.js App Router route handler (`app/**\/route.ts`) runs on the server
+ * in the Node.js runtime unless it opts into the Edge runtime.
+ */
+function isNextAppRouteHandler(root: string, filename: string): boolean {
+  const path = projectRelative(root, filename);
+  if (!path || !/^(?:src\/)?app\/(?:.+\/)?route\.[cm]?[jt]sx?$/.test(path))
+    return false;
+  try {
+    return readdirSync(root).some((entry) =>
+      /^next\.config\.(?:[cm]?js|ts|mts|cts)$/.test(entry),
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isNodeBuiltin(specifier: string): boolean {
   const normalized = specifier.replace(/^node:/, '');
   return (
@@ -69,6 +101,12 @@ export const platformBoundary: Rule.RuleModule = {
         properties: {
           workspaceRoot: { type: 'string' },
           docsRoot: { type: 'string' },
+          nodeFiles: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              "Gitignore-style paths relative to the linted file's project root that run only in Node (for example scripts/** for build tooling). Files that a Next.js page or extension runtime entry reaches keep their runtime platform.",
+          },
         },
         additionalProperties: false,
       },
@@ -83,16 +121,15 @@ export const platformBoundary: Rule.RuleModule = {
   },
   create(context) {
     const filename = context.filename;
-    const workspaceRoot =
-      (context.options[0] as { readonly workspaceRoot?: string } | undefined)
-        ?.workspaceRoot ?? context.cwd;
+    const options = (context.options[0] ?? {}) as PlatformBoundaryOptions;
+    const workspaceRoot = options.workspaceRoot ?? context.cwd;
     const sourceProject = findProjectMetadata(filename, workspaceRoot);
     const extension = extensionRuntimeLintContext(
       workspaceRoot,
       sourceProject,
       filename,
       context.sourceCode.text,
-      (context.options[0] as { docsRoot?: string } | undefined)?.docsRoot,
+      options.docsRoot,
     );
     const runtimeFilename = existsSync(filename)
       ? realpathSync(filename)
@@ -101,9 +138,23 @@ export const platformBoundary: Rule.RuleModule = {
     const next = nextPagesLintContext(workspaceRoot, sourceProject, filename);
     const currentEdge =
       next && nextPagesEdgeRuntime(filename, context.sourceCode.text);
+    const relativePath =
+      sourceProject && projectRelative(sourceProject.root, filename);
+    const appRouteHandler =
+      sourceProject?.tags.includes('platform:web') === true &&
+      isNextAppRouteHandler(sourceProject.root, filename) &&
+      !nextPagesEdgeRuntime(filename, context.sourceCode.text);
+    // Declared Node tooling, unless a Next.js page already reaches the file.
+    const nodeFile =
+      relativePath !== undefined &&
+      (options.nodeFiles?.length ?? 0) > 0 &&
+      ignore()
+        .add([...(options.nodeFiles ?? [])])
+        .ignores(relativePath) &&
+      !next?.analysis.browserFiles.has(resolve(filename));
     const sourcePlatform = currentEdge
       ? 'web'
-      : next?.serverOnly
+      : next?.serverOnly || appRouteHandler || nodeFile
         ? 'node'
         : filePlatform(sourceProject, filename);
     const nextImports = next?.page
@@ -113,9 +164,11 @@ export const platformBoundary: Rule.RuleModule = {
           !nextPagesEdgeRuntime(filename, context.sourceCode.text),
         )
       : undefined;
-    // A Jest Node/jsdom test runs in a Node process even when the application
-    // under test is a browser frontend. Require both a test filename and an
-    // explicit leading environment docblock; never infer this for production.
+    // A Jest or Vitest Node/jsdom/happy-dom test runs in a Node process even
+    // when the application under test is a browser frontend. Require both a
+    // test filename and an explicit leading environment comment (Jest reads
+    // docblocks; Vitest also reads `// @vitest-environment`); never infer this
+    // for production.
     const firstStatement =
       context.sourceCode.ast.body[0]?.range?.[0] ?? Infinity;
     const nodeHostedTest =
@@ -124,12 +177,15 @@ export const platformBoundary: Rule.RuleModule = {
         .getAllComments()
         .some(
           (comment) =>
-            comment.type === 'Block' &&
             comment.range !== undefined &&
             comment.range[0] < firstStatement &&
-            /(?:^|\n)\s*\*?\s*@jest-environment\s+(?:node|jsdom)\s*(?:\n|\*?\s*$)/.test(
-              comment.value,
-            ),
+            (comment.type === 'Block'
+              ? /(?:^|\n)\s*\*?\s*@(?:jest-environment\s+(?:node|jsdom)|vitest-environment\s+(?:node|jsdom|happy-dom))\s*(?:\n|\*?\s*$)/.test(
+                  comment.value,
+                )
+              : /^\s*@vitest-environment\s+(?:node|jsdom|happy-dom)\s*$/.test(
+                  comment.value,
+                )),
         );
     const inspect = (node: Rule.Node) => {
       if (
@@ -197,7 +253,7 @@ export const platformBoundary: Rule.RuleModule = {
         !targetProject ||
         !targetPlatform ||
         runtimePlatform === targetPlatform ||
-        (next &&
+        ((next || appRouteHandler || nodeFile) &&
           runtimePlatform === 'node' &&
           sourceProject.root === targetProject.root)
       ) {

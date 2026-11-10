@@ -1034,6 +1034,25 @@ directory; set `ignoreTests: false` to check tests too:
 }
 ```
 
+`platform-boundary` treats Next.js Pages Router API routes, `_document`,
+server-only data functions and helpers reached only from them, plus App Router
+route handlers (`app/**/route.ts` without `runtime = 'edge'`), as Node code.
+Spec/test files run under Node when they start with an explicit
+`@jest-environment node|jsdom` docblock or a `@vitest-environment
+node|jsdom|happy-dom` comment. Node-only tooling inside a browser project, such
+as a library's `scripts/`, is declared per project with gitignore-style
+`nodeFiles` paths relative to that project's root. Files a Next.js page reaches
+keep their browser platform, and extension runtime contracts still apply:
+
+```js
+{
+  files: ['**/*.ts'],
+  rules: {
+    'megamono/platform-boundary': ['error', { nodeFiles: ['scripts/**'] }],
+  },
+}
+```
+
 React Hooks rules are explicit for existing React projects. Install
 `eslint-plugin-react-hooks` in the workspace and compose a project-local config:
 
