@@ -1089,9 +1089,9 @@ describe('app generator', () => {
         expect(
           readProjectConfiguration(tree, 'fixture-extension').targets?.lint,
         ).toBeUndefined();
-        expect(
-          tree.read('apps/extension/eslint.config.mjs', 'utf8'),
-        ).toContain("ignores: ['**/.output/**', '**/.wxt/**']");
+        expect(tree.read('apps/extension/eslint.config.mjs', 'utf8')).toContain(
+          "ignores: ['**/.output/**', '**/.wxt/**']",
+        );
         expect(readJson(tree, 'nx.json').plugins).toContainEqual(
           expect.objectContaining({
             plugin: '@nx/eslint/plugin',

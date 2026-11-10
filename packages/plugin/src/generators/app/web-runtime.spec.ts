@@ -146,6 +146,60 @@ describe('Next.js runtime contract', () => {
       expect(proc.exitCode).toBe(7);
     },
   );
+  it.each([
+    [undefined, { ports: { site: 41001 } }, '41001'],
+    ['48123', { ports: { site: 41001 } }, '48123'],
+    [undefined, { ports: {} }, '45000'],
+    [undefined, undefined, '45000'],
+  ])(
+    'prefers PORT=%s, then megamono.json ports.site (%j)',
+    (port, config, expected) => {
+      const child = Object.assign(new EventEmitter(), { kill: vi.fn() });
+      const spawn = vi.fn(() => child);
+      const path = {
+        resolve: (base: string, part: string) =>
+          part === '..'
+            ? base.split('/').slice(0, -1).join('/') || '/'
+            : `${base === '/' ? '' : base}/${part}`,
+      };
+      const files: Record<string, string> = config
+        ? { '/workspace/megamono.json': JSON.stringify(config) }
+        : {};
+      const fs = {
+        existsSync: (file: string) => file in files,
+        readFileSync: (file: string) => files[file],
+      };
+      const req = Object.assign(
+        (name: string) =>
+          name === 'node:child_process'
+            ? { spawn }
+            : name === 'node:fs'
+              ? fs
+              : path,
+        { resolve: () => '/workspace/node_modules/next/dist/bin/next' },
+      );
+      runInNewContext(nextServerSource(45000, 'site'), {
+        require: req,
+        process: Object.assign(new EventEmitter(), {
+          env: port === undefined ? {} : { PORT: port },
+          argv: ['node', 'server.cjs', 'dev'],
+          execPath: '/node',
+        }),
+        __dirname: '/workspace/apps/site/scripts',
+        console,
+      });
+      expect(spawn).toHaveBeenCalledWith(
+        '/node',
+        [
+          '/workspace/node_modules/next/dist/bin/next',
+          'dev',
+          '--port',
+          expected,
+        ],
+        expect.objectContaining({ cwd: '/workspace/apps/site' }),
+      );
+    },
+  );
   it.each(['', '-1', '65536', '123x', ' 4000'])(
     'rejects invalid PORT=%s before spawning',
     (port) => {

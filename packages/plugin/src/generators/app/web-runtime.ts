@@ -85,13 +85,33 @@ export function prepareNextInference(tree: Tree, directory: string): boolean {
   return true;
 }
 
-export function nextServerSource(defaultPort: number): string {
+export function nextServerSource(
+  defaultPort: number,
+  portKey?: string,
+): string {
+  const configured = portKey
+    ? `
+// megamono.json ports.${portKey} wins over the port recorded at generation.
+function configuredPort() {
+  const { existsSync, readFileSync } = require('node:fs');
+  for (let directory = resolve(__dirname, '..'); ; ) {
+    const file = resolve(directory, 'megamono.json');
+    if (existsSync(file)) {
+      const value = JSON.parse(readFileSync(file, 'utf8')).ports?.[${JSON.stringify(portKey)}];
+      return Number.isInteger(value) ? String(value) : undefined;
+    }
+    const parent = resolve(directory, '..');
+    if (parent === directory) return undefined;
+    directory = parent;
+  }
+}`
+    : '';
   return `// Run directly or through Nx; resolution never depends on the invoking directory.
 const { spawn } = require('node:child_process');
 const { resolve } = require('node:path');
 const mode = process.argv[2];
-if (!['dev', 'start'].includes(mode)) throw new Error('Expected dev or start.');
-const port = process.env.PORT ?? '${defaultPort}';
+if (!['dev', 'start'].includes(mode)) throw new Error('Expected dev or start.');${configured}
+const port = process.env.PORT ?? ${portKey ? 'configuredPort() ?? ' : ''}'${defaultPort}';
 if (!/^\\d+$/.test(port) || Number(port) > 65535) throw new Error('PORT must be an integer from 0 to 65535.');
 const child = spawn(process.execPath, [require.resolve('next/dist/bin/next'), mode, '--port', port, ...process.argv.slice(3)], {
   cwd: resolve(__dirname, '..'), stdio: 'inherit', env: { ...process.env, NX_DAEMON: 'false' },
@@ -109,6 +129,7 @@ export function configureNextRuntime(
   directory: string,
   port: number,
   skipDependencyDeclarations = false,
+  portKey?: string,
 ): void {
   const project = getProjects(tree).get(projectName);
   if (!project) throw new Error(`Next.js did not generate ${projectName}.`);
@@ -153,7 +174,10 @@ export function configureNextRuntime(
         : {}),
     },
   });
-  tree.write(`${directory}/scripts/next-server.cjs`, nextServerSource(port));
+  tree.write(
+    `${directory}/scripts/next-server.cjs`,
+    nextServerSource(port, portKey),
+  );
   tree.write(
     `${directory}/next.config.js`,
     `//@ts-check\n\n/** @type {import('next').NextConfig} */\nconst nextConfig = {};\n\nmodule.exports = nextConfig;\n`,

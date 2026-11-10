@@ -352,8 +352,10 @@ and rerunning a matching project preserves application-owned theme/provider edit
 
 New Next.js apps on Nx 18+ use scoped inference and a plain `next.config.js`.
 The generated `serve`/development and `start` launchers accept injected `PORT`,
+then read the application's `ports.<name>` entry from `megamono.json` at startup,
 fall back to the planned application port, and resolve the app independently of
-the invoking directory. Process supervisors can run the Nx command from the
+the invoking directory (Nx from any workspace subdirectory, or
+`node scripts/next-server.cjs dev` from the application directory). Process supervisors can run the Nx command from the
 workspace root with `NX_DAEMON=false`; the launcher forwards shutdown signals.
 Explicitly disabled or ambiguous inference policy requires review.
 Nx 17 retains its legacy generator path.
