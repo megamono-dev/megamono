@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoLibraryEntrypoint",
+  "title": "Add a subpath export to a library",
+  "description": "Add a package subpath export (@scope/lib/feature) to an existing workspace library, and optionally declare the package free of module side effects after checking its sources.",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "description": "Name of the existing library project that owns the package.json.",
+      "$default": { "$source": "argv", "index": 0 }
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Subpath to export; consumers import @scope/lib/<name> from src/<name>/index.ts."
+    },
+    "sideEffects": {
+      "type": "boolean",
+      "description": "Set to false to declare \"sideEffects\": false after verifying that no production source file has a side-effect-only import. Omit to leave the manifest's current declaration unchanged."
+    },
+    "dryRun": {
+      "type": "boolean",
+      "default": false,
+      "description": "Print the planned manifest and source changes without writing."
+    }
+  },
+  "required": ["project"],
+  "additionalProperties": false
+}

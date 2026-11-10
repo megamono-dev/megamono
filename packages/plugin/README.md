@@ -287,6 +287,21 @@ Libraries receive a Vitest starter and separate production/spec TypeScript confi
 
 Without `--yes`, or with `--dry-run`, only the plan is displayed. `--skipInstall` writes dependency declarations but suppresses the deferred Nx install callback; run your usual workspace installation afterwards, retaining its package-manager/store settings. The equivalent direct invocation is `nx generate @megamono/plugin:library --name=client ...`. A compatible local `@nx/js` is required. A comma-separated `--name=core,ui,browser` adds several libraries with the same options as one change and one install. Library addition normally requires a clean working tree on a non-default branch; `--allowDirty` permits unrelated uncommitted work but still fails, writing nothing, when a file the generator would write (or, unless `--skipInstall`, a lockfile) has uncommitted changes.
 
+Libraries start with a single `.` export. To let a bundle import one feature
+without the rest of the barrel (and its dependencies), add a subpath export:
+
+```sh
+nx generate @megamono/plugin:library-entrypoint acme-browser --name=ranking
+```
+
+This adds `./ranking` beside `.`, mirroring every condition of the root export
+(source, `types`, built `dist` paths and custom source conditions), and seeds
+`src/ranking/index.ts` when it is missing. `--sideEffects=false` declares the
+package free of module side effects only after confirming that no production
+source has a side-effect-only import such as `import './theme.css'`; it does not
+monitor later edits, and bundle-size attribution remains the bundler's job.
+Nothing marks a library side-effect free by default.
+
 ### Application generation
 
 #### Native Android / Kotlin
