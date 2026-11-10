@@ -1051,6 +1051,7 @@ async function createWebApp(
       options.projectName,
       options.directory,
       options.port ?? 3000,
+      styling === 'chakra',
     );
   if (nextInference)
     scopeGeneratedLibraryInference(tree, options.directory, pluginsBefore);

@@ -849,6 +849,10 @@ describe('app generator', () => {
     expect(tree.read('apps/site/next.config.js', 'utf8')).not.toContain(
       'withNx',
     );
+    expect(tree.exists('apps/site/index.d.ts')).toBe(false);
+    expect(
+      readJson(tree, 'apps/site/tsconfig.json').compilerOptions.skipLibCheck,
+    ).toBe(true);
     expect(
       readProjectConfiguration(tree, 'fixture-site').targets?.build,
     ).toBeUndefined();

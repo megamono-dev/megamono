@@ -108,6 +108,7 @@ export function configureNextRuntime(
   projectName: string,
   directory: string,
   port: number,
+  skipDependencyDeclarations = false,
 ): void {
   const project = getProjects(tree).get(projectName);
   if (!project) throw new Error(`Next.js did not generate ${projectName}.`);
@@ -157,4 +158,16 @@ export function configureNextRuntime(
     `${directory}/next.config.js`,
     `//@ts-check\n\n/** @type {import('next').NextConfig} */\nconst nextConfig = {};\n\nmodule.exports = nextConfig;\n`,
   );
+  // Next owns image declarations; Nx's legacy SVG ambient module collides
+  // with next/image-types/global.d.ts when using the plain Next configuration.
+  tree.delete(`${directory}/index.d.ts`);
+  if (tree.exists(`${directory}/tsconfig.json`))
+    updateJson(tree, `${directory}/tsconfig.json`, (value) => ({
+      ...value,
+      compilerOptions: {
+        ...value.compilerOptions,
+        ...(skipDependencyDeclarations ? { skipLibCheck: true } : {}),
+      },
+      include: value.include?.filter((entry: string) => entry !== 'index.d.ts'),
+    }));
 }
