@@ -245,7 +245,11 @@ This profile targets Prisma/client 7.10.0 with the engine-free ESM generator. Ex
 
 `megamono add library client --scope=acme --publishable --access=public --yes` creates a buildable `packages/client` package. Publishable packages default to restricted registry access. Existing release groups/workflows remain unchanged: review enrollment and the generated README's build-output location before publishing. Existing paths are never moved or converted by this generator.
 
-Without `--yes`, or with `--dry-run`, only the plan is displayed. `--skipInstall` writes dependency declarations but suppresses the deferred Nx install callback; run your usual workspace installation afterwards, retaining its package-manager/store settings. The equivalent direct invocation is `nx generate @megamono/plugin:library --name=client ...`. A compatible local `@nx/js` is required. Generated libraries intentionally start without a test runner; add relevant tests before adopting them.
+Use `--packageScope=acme` to choose the npm namespace independently from the architectural `--scope`. For example, `--scope=acme-int --packageScope=acme` creates an `@acme/*` package with `scope:acme-int`. Supplying only `--scope` retains its previous package-and-boundary behavior.
+
+Libraries receive a Vitest starter and separate production/spec TypeScript configurations. Test errors do not enter production compilation. `--platform=web --type=ui` additionally supplies React JSX/DOM settings and React peer/development dependencies. The qualified Vitest toolchain requires Node 20.19+, 22.12+, or 24+; use `--testRunner=none` to opt out explicitly, including on an otherwise supported Node 18 workspace. Supported modern Nx workspaces receive scoped inference without migrating existing projects.
+
+Without `--yes`, or with `--dry-run`, only the plan is displayed. `--skipInstall` writes dependency declarations but suppresses the deferred Nx install callback; run your usual workspace installation afterwards, retaining its package-manager/store settings. The equivalent direct invocation is `nx generate @megamono/plugin:library --name=client ...`. A compatible local `@nx/js` is required.
 
 ### Application generation
 
@@ -294,6 +298,22 @@ client `providers.tsx`/billboard files. Chakra's system is constructed/imported
 within the client boundary, not passed as a serialized server prop. Router
 selection is not a migration command: a conflicting existing router is refused,
 and rerunning a matching project preserves application-owned theme/provider edits.
+
+New Next.js apps on Nx 18+ use scoped inference and a plain `next.config.js`.
+The generated `serve`/development and `start` launchers accept injected `PORT`,
+fall back to the planned application port, and resolve the app independently of
+the invoking directory. Process supervisors can run the Nx command from the
+workspace root with `NX_DAEMON=false`; the launcher forwards shutdown signals.
+Explicitly disabled or ambiguous inference policy requires review.
+Nx 17 retains its legacy generator path.
+
+The generated Chakra theme declares React, Chakra and Emotion as peers with
+matching development dependencies and uses bundler-oriented typechecking.
+The generated Chakra app and theme configs check application source and skip dependency declaration
+checking because Chakra 3.37 contains an incompatible `cornerShape` declaration.
+This workaround can be removed after the upstream declaration is corrected.
+It remains a web runtime adapter, rather than a neutral token library; portable
+tokens should live separately. Existing themes are preserved during app addition.
 
 Nx generators, executors, and ESLint rules for Megamono workspaces. The package
 implements versioned workspace configuration, documentation lifecycle tooling,
@@ -628,8 +648,8 @@ SHA-256 hashes of **all** emitted JavaScript. In your existing build callback,
 after checking `stats.hasErrors()` and completing writes:
 
 ```js
-const { createWebpackRuntimeEvidence } = require("@megamono/plugin/webpack");
-const { writeFile } = require("node:fs/promises");
+const { createWebpackRuntimeEvidence } = require('@megamono/plugin/webpack');
+const { writeFile } = require('node:fs/promises');
 const evidence = await createWebpackRuntimeEvidence({
   outputPath: absoluteBuildOutput,
   stats: stats.toJson({

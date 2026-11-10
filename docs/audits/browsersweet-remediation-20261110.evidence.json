@@ -1,0 +1,308 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-10T17:22:22.561342+00:00",
+  "repository": "megamono-dev/megamono",
+  "sourceRevision": "e41e2f6677aeb52829bdeee9c17ded89d09ffb1c",
+  "scope": "Local macOS source/scaffold remediation and isolated consumer qualification; no adopter edits, hosted CI, public npm/shared Yalc publication, Springbar service admission or production deployment.",
+  "sourceReport": {
+    "repository": "browsersweet-int",
+    "branch": "feat/extension",
+    "path": "docs/research/20261109-megamono-and-playstack-upstream-issues.md",
+    "sha256": "d916562d0f54a5b1736a93527e89512254e99242cfd7e1884989da24af914499",
+    "reviewedMegamonoVersion": "0.1.0-next.0"
+  },
+  "items": [
+    {
+      "id": "M1",
+      "status": "addressed",
+      "assessment": "Fresh creation exact-pins nx/@nx and verifies installed toolchain alignment before app generation."
+    },
+    {
+      "id": "M2",
+      "status": "open",
+      "assessment": "Resumable creation is outside this batch; existing staged recovery remains."
+    },
+    {
+      "id": "M3",
+      "status": "addressed",
+      "assessment": "Fresh workspace identity and source conditions are normalized consistently; unrelated strings are retained."
+    },
+    {
+      "id": "M4",
+      "status": "addressed",
+      "assessment": "Extension-local ignores exclude WXT generated output without rewriting root policy."
+    },
+    {
+      "id": "M5",
+      "status": "addressed",
+      "assessment": "Plugin and CLI resolve tracked/advertised default HEAD or explicit Git init policy, without guessing main or bypassing clean/default-branch checks."
+    },
+    {
+      "id": "M6",
+      "status": "not-reproduced",
+      "assessment": "skipInstall is forwarded to Nx; tests show unchanged lockfile through the deferred callback and settled async turn. The reported post-exit background write is not independently established."
+    },
+    {
+      "id": "M7",
+      "status": "open",
+      "assessment": "Batch generation or a reviewed automation mode remains separate work."
+    },
+    {
+      "id": "M8",
+      "status": "addressed",
+      "assessment": "Generic libraries get Vitest starter/tests configuration; web UI gets JSX/DOM settings and React peer/development dependencies. Node 18 callers can explicitly select testRunner=none."
+    },
+    {
+      "id": "M9",
+      "status": "addressed-with-workaround",
+      "assessment": "New Chakra themes use bundler resolution. New Chakra app/theme configs skip third-party declaration checks for the upstream cornerShape defect; own source errors still fail."
+    },
+    {
+      "id": "M10",
+      "status": "partially-addressed",
+      "assessment": "Library option descriptions were improved; docs-research/help/topic validation remains separate work."
+    },
+    {
+      "id": "M11",
+      "status": "open",
+      "assessment": "Zod baseline alignment remains. The Megamono declaration is broader, not narrower, than Playstack requirements."
+    },
+    {
+      "id": "M12",
+      "status": "addressed",
+      "assessment": "New Nx18+ Next apps use scoped inference and plain Next configuration; Nx17 keeps its legacy path. Existing applications are not migrated."
+    },
+    {
+      "id": "M13",
+      "status": "open",
+      "assessment": "No extension-to-web blanket exemption was added; renderer/worker-aware platform policy still needs design and qualification."
+    },
+    {
+      "id": "M14",
+      "status": "addressed",
+      "assessment": "packageScope can independently select the npm namespace, preserving legacy scope-only behavior."
+    },
+    {
+      "id": "M15",
+      "status": "open",
+      "assessment": "Runtime Chakra themes remain web/UI adapters. Portable token separation and reviewed UI composition policy remain."
+    },
+    {
+      "id": "M16",
+      "status": "open",
+      "assessment": "Tooling and test-context platform handling needs separate policy/source-level work."
+    },
+    {
+      "id": "M17",
+      "status": "partially-addressed",
+      "assessment": "New libraries and Next apps use scoped modern lint inference; no broad migration of existing projects or other generators was performed."
+    },
+    {
+      "id": "M18",
+      "status": "open",
+      "assessment": "Configurable localization-rule exclusions remain."
+    },
+    {
+      "id": "M19",
+      "status": "partially-addressed",
+      "assessment": "New theme singletons are peers with matching development dependencies; generic React UI declares React peers. Consumer resolution/context checks are added. A general installed-singleton checker is not implemented."
+    },
+    {
+      "id": "M20",
+      "status": "open",
+      "assessment": "Localization guidance/catalog integration remains."
+    },
+    {
+      "id": "M21",
+      "status": "open",
+      "assessment": "Undeclared workspace import diagnostics remain."
+    },
+    {
+      "id": "M22",
+      "status": "addressed",
+      "assessment": "Extension JSX, explicit WXT imports, disabled auto-import transforms, test configuration and upstream typecheck ordering are generated."
+    },
+    {
+      "id": "M23",
+      "status": "addressed",
+      "assessment": "Generic libraries and extension scaffolds separate production/test checking; theme production config excludes specs."
+    },
+    {
+      "id": "M24",
+      "status": "open",
+      "assessment": "No blanket sideEffects:false was introduced. Bundle attribution and reviewed entrypoint/subpath work remain."
+    },
+    {
+      "id": "M25",
+      "status": "open",
+      "assessment": "Declaration-merging lint policy remains configurable application/style work."
+    },
+    {
+      "id": "M26",
+      "status": "open",
+      "assessment": "React Hooks preset integration remains."
+    },
+    {
+      "id": "M27",
+      "status": "open",
+      "assessment": "Broader source-versus-built typecheck workflow remains; this batch preserves valid publishable output semantics."
+    },
+    {
+      "id": "M28",
+      "status": "open",
+      "assessment": "Per-application dependency ownership and closure audits remain."
+    },
+    {
+      "id": "M29",
+      "status": "open",
+      "assessment": "Unused build-approval cleanup remains."
+    },
+    {
+      "id": "M30",
+      "status": "addressed",
+      "assessment": "Fresh creation writes an exact qualified Node pin and matching engines range; existing adopted repositories are not repinned."
+    },
+    {
+      "id": "M31",
+      "status": "partially-addressed",
+      "assessment": "Generated Next launchers support PORT, stable application cwd and signal forwarding. Actual Springbar MCP setup/deployment admission is not claimed."
+    }
+  ],
+  "additionalFixes": [
+    "Publishable library JavaScript/declaration layout matches all package entrypoints in path-alias, composite path-alias and actual pnpm solution workspaces.",
+    "Legacy Nx SVG declarations are removed from newly generated plain-Next applications."
+  ],
+  "playstack": {
+    "modified": false,
+    "issues": [
+      "P1",
+      "P2",
+      "P3",
+      "P4",
+      "P5",
+      "P6",
+      "P7",
+      "P8"
+    ],
+    "note": "Playstack findings were assessed, but this implementation batch changes only Megamono."
+  },
+  "qualification": [
+    {
+      "id": "creator",
+      "status": "passed",
+      "command": "pnpm exec nx run create-megamono:test --args=\"src/lib/create-megamono.spec.ts src/cli.spec.ts\"",
+      "log": "megamono-bootstrap-tests-final.log",
+      "logSha256": "f6f09676624da7f65b67be9d8aae86b30d7f0b7fbb7edb07f76f61efcd0d8084",
+      "testsPassed": 94,
+      "testsSkipped": 0
+    },
+    {
+      "id": "cli",
+      "status": "passed",
+      "command": "pnpm exec nx run @megamono/cli:test --args=\"src/lib/git-default-branch.spec.ts src/lib/cli.spec.ts\"",
+      "log": "megamono-bootstrap-cli-tests.log",
+      "logSha256": "87521469237c1b58bddc3009bbd5920802fbf14c2ff95877db0db5ecd79a69f1",
+      "testsPassed": 103,
+      "testsSkipped": 0
+    },
+    {
+      "id": "plugin",
+      "status": "passed",
+      "command": "pnpm exec nx run @megamono/plugin:test --excludeTaskDependencies",
+      "log": "megamono-browsersweet-source-frozen-full-tests.log",
+      "logSha256": "0038a81d4e4a7c870dd43635daeb09e58d69f6a9ceac3b987f3cce22d0455e6d",
+      "testsPassed": 1024,
+      "testsSkipped": 1
+    },
+    {
+      "id": "builds",
+      "status": "passed",
+      "command": "pnpm exec nx run-many -t build -p @megamono/plugin @megamono/cli create-megamono nx-extension",
+      "log": "megamono-browsersweet-final-builds.log",
+      "logSha256": "84f49c584d1df4431dc602de34f44de12b5ade8f8dc9b956b5fac1fa17b4639a"
+    },
+    {
+      "id": "plugin-lint",
+      "status": "passed",
+      "command": "pnpm exec nx run @megamono/plugin:lint",
+      "log": "megamono-browsersweet-final-lint.log",
+      "logSha256": "aaaa4acb401c369189ffd7fe5d002537be81d47cfff51c3ba0dee30dd9ea224f"
+    },
+    {
+      "id": "extension",
+      "status": "passed",
+      "command": "pnpm exec nx run-many -t build test lint -p nx-extension",
+      "log": "megamono-extension-final-checks-20261110.log",
+      "logSha256": "3020994d000b41893d1ff82fa11431ec67a5f860b6ce87d1a8658903a31affb7",
+      "testsPassed": 32,
+      "testsSkipped": 0
+    },
+    {
+      "id": "extension-consumer",
+      "status": "passed",
+      "command": "pnpm exec nx run nx-extension:e2e-local-registry",
+      "log": "megamono-extension-final-consumer-20261110.log",
+      "logSha256": "2192d292f7f3b2039a902adcdf0855cd41ef6e0c70407041d76139431788e872"
+    },
+    {
+      "id": "library-artifacts",
+      "status": "passed",
+      "command": "pnpm exec nx run @megamono/plugin:e2e-library",
+      "log": "megamono-browsersweet-library-artifact-runtime.log",
+      "logSha256": "837831ea0ff13864e410e761502ac5779495006018b3a75105c3e25368b9e71f"
+    },
+    {
+      "id": "web-consumer",
+      "status": "passed",
+      "command": "pnpm exec nx run @megamono/plugin:e2e-web-scaffold",
+      "log": "megamono-final-web-scaffold-pass-20261110.log",
+      "logSha256": "e39d0706ea0a9b4e9d434a2c0f136b58962733f2339ad3b6a8af8de33da4755b"
+    },
+    {
+      "id": "release-policy",
+      "status": "passed",
+      "command": "pnpm run release:check",
+      "log": "megamono-browsersweet-release-check.log",
+      "logSha256": "766771db06c79c39f753bcd5e0aefa94122edfb13e3b0f707d4bda44c3b3fc34"
+    },
+    {
+      "id": "release-policy-tests",
+      "status": "passed",
+      "command": "pnpm run release:test",
+      "log": "megamono-browsersweet-release-tests.log",
+      "logSha256": "a47d0cf2cfb9b7fd1d18bf5b5d66e6011107a6c3d766cf0bbc983c2a62618820"
+    },
+    {
+      "id": "creator-lint",
+      "status": "passed",
+      "command": "pnpm exec nx run create-megamono:lint",
+      "log": "megamono-bootstrap-creator-lint-final.log",
+      "logSha256": "b5e03d46fbdf60db5f6e657472757f9e149cd212047637ce16b2b6778449b06c"
+    },
+    {
+      "id": "cli-lint",
+      "status": "passed",
+      "command": "pnpm exec nx run @megamono/cli:lint",
+      "log": "megamono-bootstrap-cli-lint.log",
+      "logSha256": "76a1cb50fb481ce1fea0a302d6e4c884f16a7f5d497bf00130058240221958e2"
+    }
+  ],
+  "limitations": [
+    "Existing adopter projects are not migrated automatically.",
+    "Browser Sweet delayed-lockfile mutation remains unconfirmed.",
+    "No broad platform exception, warning-budget increase or advisory exception was added.",
+    "The full Playstack UI integration/version matrix is not rerun by this batch."
+  ],
+  "runtime": {
+    "node": "24.22.1",
+    "pnpm": "11.28.9",
+    "platform": "darwin",
+    "publicPackageVersion": "0.1.0-next.1"
+  },
+  "qualificationNotes": [
+    "Initial focused tests used the installed Nx CLI directly after the old pnpm launcher failed; exact pinned pnpm was restored in a task-owned temporary directory for final checks and fresh web installation.",
+    "The generic library artifact check exercises path-alias, composite path-alias and actual pnpm solution workspaces and imports the extracted packages through public CJS/ESM entrypoints.",
+    "The extension consumer performs isolated local-registry installation, Chrome/Firefox builds/package/tests, JSX, test-error isolation and no-auto-import runtime probes.",
+    "The web consumer performs fresh/frozen pnpm installs, theme typechecking and an injected own-source error rejection, singleton resolution, inferred targets, production Next build, injected-port root/nested startup, and listener-closed shutdown checks."
+  ]
+}
