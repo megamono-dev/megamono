@@ -6,35 +6,72 @@
   "properties": {
     "target": {
       "type": "string",
-      "$default": { "$source": "argv", "index": 0 },
-      "x-prompt": "What target is being audited?"
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      },
+      "x-prompt": "What target is being audited?",
+      "description": "Required. Audited target identifier, used in the audit filename and document ID.",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
     },
     "project": {
       "type": "string",
-      "x-prompt": "Which project owns the audited target?"
+      "x-prompt": "Which project owns the audited target?",
+      "description": "Required. Documentation project namespace; may describe an existing or planned project and is normalized to a kebab-case identifier.",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
     },
     "spec": {
       "type": "string",
-      "x-prompt": "Which spec ID is the audit standard?"
+      "x-prompt": "Which spec ID is the audit standard?",
+      "description": "Required. Existing specification document ID used as the audit standard.",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
     },
-    "title": { "type": "string" },
+    "title": {
+      "type": "string",
+      "description": "Audit title; defaults to <target> audit.",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
+    },
     "topics": {
       "type": "array",
-      "items": { "type": "string" },
-      "default": ["testing"]
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": ["testing"],
+      "description": "Built-in topics or entries from megamono.json topics.extend. Unknown or duplicate topics are rejected before record creation.",
+      "uniqueItems": true
     },
     "references": {
       "type": "array",
-      "items": { "type": "string" },
-      "default": []
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": [],
+      "description": "Existing repository document IDs referenced by this record; duplicates are rejected.",
+      "uniqueItems": true
     },
     "externalReferences": {
       "type": "array",
-      "items": { "type": "string" },
-      "default": []
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": [],
+      "description": "External document references in namespace:identifier form; duplicates are rejected.",
+      "uniqueItems": true
     },
-    "date": { "type": "string", "format": "date" }
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Record date in YYYY-MM-DD format; defaults to the current UTC date."
+    }
   },
   "required": ["target", "project", "spec"],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "description": "Create an internal audit against an existing repository specification. Validate options before writing the record and refresh documentation indexes after generation."
 }

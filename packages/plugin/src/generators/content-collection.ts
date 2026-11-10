@@ -10,6 +10,7 @@ import { isSafeWorkspaceRelativePath } from '../lib/config';
 import { compatiblePlaystackPackageVersion } from '../lib/emissions';
 import { normalizeSlug, readDocsGeneratorConfig } from './docs-record';
 import { assertPlaystackWorkspaceCompatibility } from './playstack-workspace';
+import { GENERATED_ZOD_RANGE } from '../lib/dependency-compatibility';
 
 const contentCollectionVersion = 1;
 const contentCollectionsVersion = '0.15.3';
@@ -341,7 +342,7 @@ export function createContentCollection(
         },
         devDependencies: {
           '@content-collections/core': contentCollectionsVersion,
-          zod: '^4.1.12',
+          zod: GENERATED_ZOD_RANGE,
         },
         megamono: { contentCollection: collection.marker },
       },

@@ -2,11 +2,19 @@
   "$schema": "https://json-schema.org/schema",
   "$id": "DocsInit",
   "title": "Initialize Megamono repository documentation",
-  "description": "Adopt the shared docs, agents, and skills module primitives in an existing Nx workspace.",
+  "description": "Adopt repository documentation, agents and skills through the existing workspace initialization plan without replacing repository-owned configuration.",
   "type": "object",
   "properties": {
-    "docsRoot": { "type": "string", "default": "docs" },
-    "defaultScope": { "type": "string", "default": "shared" },
+    "docsRoot": {
+      "type": "string",
+      "default": "docs",
+      "description": "Workspace-relative directory for repository documentation."
+    },
+    "defaultScope": {
+      "type": "string",
+      "default": "shared",
+      "description": "Default architectural scope for projects that need a scope during focused documentation adoption."
+    },
     "survey": {
       "type": "boolean",
       "default": false,
@@ -15,7 +23,8 @@
     "format": {
       "type": "string",
       "enum": ["markdown", "json"],
-      "default": "markdown"
+      "default": "markdown",
+      "description": "Format for the read-only survey and initialization plan."
     },
     "yes": {
       "type": "boolean",

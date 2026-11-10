@@ -6,7 +6,12 @@ export interface DependencyRequirement {
   readonly range: string;
   readonly installIfMissing?: boolean;
   readonly reason: string;
+  /** Require every allowed version, rather than one overlap, to be supported. */
+  readonly requireFullRange?: boolean;
 }
+
+/** Shared docs/content floor is compatible with the qualified Playstack Zod peer. */
+export const GENERATED_ZOD_RANGE = '^4.6.5';
 
 export interface DependencyAssessment extends DependencyRequirement {
   readonly action: 'add' | 'retain' | 'conflict' | 'absent';
@@ -74,9 +79,13 @@ export function assessDependencyRequirements(
     const compatible =
       currentRange !== null &&
       requiredRange !== null &&
-      semver.intersects(currentRange, requiredRange, {
-        includePrerelease: true,
-      });
+      (requirement.requireFullRange ? semver.subset : semver.intersects)(
+        currentRange,
+        requiredRange,
+        {
+          includePrerelease: true,
+        },
+      );
     return {
       ...requirement,
       action: compatible ? 'retain' : 'conflict',
@@ -84,7 +93,7 @@ export function assessDependencyRequirements(
       section,
       message: compatible
         ? `Retain ${requirement.name}@${current} from ${section}; it satisfies ${requirement.range}.`
-        : `${requirement.name}@${current} from ${section} is incompatible with required ${requirement.range}: ${requirement.reason}`,
+        : `${requirement.name}@${current} from ${section} is incompatible with required ${requirement.range}: ${requirement.reason}${requirement.requireFullRange ? ' Every version admitted by the declaration must satisfy this range. Review and update the declaration explicitly before retrying.' : ''}`,
     };
   });
 }
@@ -122,9 +131,11 @@ export function workspaceInitDependencyRequirements(
           },
           {
             name: 'zod',
-            range: '>=4.1 <5',
+            range: GENERATED_ZOD_RANGE,
             installIfMissing: true,
-            reason: 'Generated repository document schemas use Zod 4.',
+            requireFullRange: true,
+            reason:
+              'Generated repository document schemas share the qualified Zod floor with Playstack validation.',
           },
         ]
       : []),
