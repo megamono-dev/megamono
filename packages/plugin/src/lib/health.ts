@@ -7,6 +7,10 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { readJsonFile, type ProjectGraph } from '@nx/devkit';
 import { valid as validVersion } from 'semver';
 import { repositoryOwnedGraph } from './repository-graph';
+import {
+  inspectWorkspaceDependencies,
+  type WorkspaceDependencyInspection,
+} from './workspace-dependency-health';
 import { renderPrismaFindings } from './render-prisma-health';
 import {
   expoReadinessFindings,
@@ -54,6 +58,7 @@ export interface HealthSuppressionResult {
 }
 
 export interface RepositoryHealthReport {
+  readonly dependencyInspection?: WorkspaceDependencyInspection;
   readonly schemaVersion: 1;
   readonly purpose: 'advisory';
   readonly readiness: 'not-assessed';
@@ -1707,6 +1712,9 @@ export async function runRepositoryHealth(options: {
   const expo = shouldRun('spec-drift')
     ? inspectExpoProjects(options.workspaceRoot, options.graph)
     : [];
+  const dependencyInspection = shouldRun('dependency-alignment')
+    ? inspectWorkspaceDependencies(options.workspaceRoot, options.graph)
+    : { findings: [], inspection: undefined };
   const findings = (
     await Promise.all([
       shouldRun('dependency-alignment')
@@ -1716,6 +1724,7 @@ export async function runRepositoryHealth(options: {
               options.graph,
             )),
             ...cloudflare.dependencyAlignment,
+            ...dependencyInspection.findings,
           ]
         : [],
       shouldRun('spec-drift')
@@ -1769,6 +1778,9 @@ export async function runRepositoryHealth(options: {
     schemaVersion: 1,
     purpose: 'advisory',
     readiness: 'not-assessed',
+    ...(dependencyInspection.inspection
+      ? { dependencyInspection: dependencyInspection.inspection }
+      : {}),
     ...(options.config.adoption.warningBaseline !== undefined ||
     options.config.conventions.boundaryAllowances !== undefined
       ? {
@@ -1798,14 +1810,20 @@ export async function runRepositoryHealth(options: {
                     reason:
                       'docs-not-adopted; only configuration and adoption-debt checks ran',
                   }
-                : check === 'stale-plans' && !gitState.available
-                  ? { status: 'partial', reason: 'git-history-unavailable' }
-                  : check === 'stale-plans' && gitState.branchComparisonIssue
-                    ? {
-                        status: 'partial',
-                        reason: gitState.branchComparisonIssue,
-                      }
-                    : { status: 'completed' },
+                : check === 'dependency-alignment' &&
+                    dependencyInspection.inspection?.limitations.length
+                  ? {
+                      status: 'partial',
+                      reason: 'dependency-resolution-incomplete',
+                    }
+                  : check === 'stale-plans' && !gitState.available
+                    ? { status: 'partial', reason: 'git-history-unavailable' }
+                    : check === 'stale-plans' && gitState.branchComparisonIssue
+                      ? {
+                          status: 'partial',
+                          reason: gitState.branchComparisonIssue,
+                        }
+                      : { status: 'completed' },
       ]),
     ) as RepositoryHealthReport['coverage'],
     ...(!docsEnabled

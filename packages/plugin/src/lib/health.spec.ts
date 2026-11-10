@@ -92,6 +92,110 @@ describe('repository health', () => {
         status: 'completed',
       });
       expect(report.readiness).toBe('not-assessed');
+      expect(report).not.toHaveProperty('dependencyInspection');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+  it('integrates undeclared workspace imports as advisory dependency evidence', async () => {
+    const root = await mkdtemp(
+      join(tmpdir(), 'megamono-health-workspace-import-'),
+    );
+    try {
+      await mkdir(join(root, 'apps/app'), { recursive: true });
+      await mkdir(join(root, 'packages/util'), { recursive: true });
+      await writeFile(
+        join(root, 'package.json'),
+        JSON.stringify({ name: '@fixture/source' }),
+      );
+      await writeFile(
+        join(root, 'apps/app/package.json'),
+        JSON.stringify({ name: '@fixture/app' }),
+      );
+      await writeFile(
+        join(root, 'packages/util/package.json'),
+        JSON.stringify({ name: '@fixture/util', version: '1.0.0' }),
+      );
+      const graph = projectGraph();
+      graph.dependencies.app = [
+        { source: 'app', target: 'util', type: 'static' },
+      ];
+      const run = (config: MegamonoConfig = DEFAULT_MEGAMONO_CONFIG) =>
+        runRepositoryHealth({
+          workspaceRoot: root,
+          graph,
+          config,
+          documents: [],
+          checks: ['dependency-alignment'],
+        });
+      const report = await run();
+      expect(
+        report.findings.find(
+          (finding) => finding.state === 'undeclared-workspace-import',
+        ),
+      ).toMatchObject({
+        severity: 'warning',
+        category: 'dependency-alignment',
+        confidence: 'complete',
+      });
+      expect(report.dependencyInspection).toMatchObject({
+        packageEdges: 1,
+        runtimeAssessment: 'not-assessed',
+      });
+      expect(report.coverage['dependency-alignment']).toEqual({
+        status: 'completed',
+      });
+      const skipped = await run({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        health: {
+          ...DEFAULT_MEGAMONO_CONFIG.health,
+          checks: { 'dependency-alignment': false },
+        },
+      });
+      expect(skipped).not.toHaveProperty('dependencyInspection');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+  it('marks dependency coverage partial when owned singleton resolution is unavailable', async () => {
+    const root = await mkdtemp(
+      join(tmpdir(), 'megamono-health-incomplete-singleton-'),
+    );
+    try {
+      await mkdir(join(root, 'apps/app'), { recursive: true });
+      await writeFile(
+        join(root, 'package.json'),
+        JSON.stringify({ name: '@fixture/source' }),
+      );
+      await writeFile(
+        join(root, 'apps/app/package.json'),
+        JSON.stringify({
+          name: '@fixture/app',
+          dependencies: { react: '19.3.1' },
+        }),
+      );
+      const graph = projectGraph();
+      delete graph.nodes.util;
+      delete graph.dependencies.util;
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph,
+        config: DEFAULT_MEGAMONO_CONFIG,
+        documents: [],
+        checks: ['dependency-alignment'],
+      });
+      expect(report.coverage['dependency-alignment']).toEqual({
+        status: 'partial',
+        reason: 'dependency-resolution-incomplete',
+      });
+      expect(report.dependencyInspection?.singletons[0]).toMatchObject({
+        package: 'react',
+        status: 'incomplete',
+        unavailable: ['app'],
+      });
+      expect(report.dependencyInspection?.limitations.length).toBeGreaterThan(
+        0,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
