@@ -137,6 +137,7 @@ export type PlanStep =
         | 'configure-package-manager'
         | 'configure-workspace-identity'
         | 'configure-publishable-packages'
+        | 'prune-build-approvals'
         | 'dehydrate-workspace';
     }
   | { kind: 'commit'; id: 'commit-workspace' }
@@ -882,6 +883,8 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       );
     }
   }
+  if (options.packageManager === 'pnpm')
+    steps.push({ kind: 'configure', id: 'prune-build-approvals' });
   if (!options.install) {
     steps.push({ kind: 'configure', id: 'dehydrate-workspace' });
   }
@@ -1072,6 +1075,8 @@ function renderPlanStep(
       return `${index + 1}. [staging] record ${plan.options.packageManager}, pin the bootstrap toolchain, and configure package-manager policy`;
     if (step.id === 'configure-workspace-identity')
       return `${index + 1}. [staging] normalize the workspace source condition and Node runtime declaration`;
+    if (step.id === 'prune-build-approvals')
+      return `${index + 1}. [staging] drop pre-approved pnpm builds for packages the lockfile does not install`;
     return `${index + 1}. [staging] remove bootstrap node_modules for an install-free destination`;
   }
   if (step.kind === 'springbar') {
@@ -1244,54 +1249,119 @@ async function configurePackageManager(plan: CreationPlan): Promise<void> {
   await configureWorkspaceIdentity(plan);
 
   if (plan.options.packageManager !== 'pnpm') return;
-  const workspacePath = resolve(
-    plan.options.stagingDirectory,
-    'pnpm-workspace.yaml',
-  );
-  const source = await readFile(workspacePath, 'utf8');
-  const newline = source.includes('\r\n') ? '\r\n' : '\n';
-  const lines = source.split(/\r?\n/);
-  let allowBuildsIndex = lines.findIndex((line) =>
-    /^allowBuilds:\s*$/.test(line),
-  );
-  if (allowBuildsIndex === -1) {
-    while (lines.at(-1) === '') lines.pop();
-    lines.push('', 'allowBuilds:');
-    allowBuildsIndex = lines.length - 1;
+  const policy = await readAllowBuilds(plan);
+  for (const name of megamonoBuildApprovals(plan)) {
+    // Existing decisions belong to the scaffold/policy, including explicit denial.
+    if (!policy.entries.has(name)) policy.entries.set(name, 'true');
   }
-  let end = allowBuildsIndex + 1;
-  while (end < lines.length && /^\s+\S/.test(lines[end])) end += 1;
-  const entries = new Map<string, string>();
-  for (const line of lines.slice(allowBuildsIndex + 1, end)) {
-    const match = line.match(/^\s{2}([^:#]+):\s*(.+)$/);
-    if (match) {
-      const rawKey = match[1].trim();
-      const key = rawKey.startsWith('"')
-        ? JSON.parse(rawKey)
-        : rawKey.replace(/^'(.*)'$/, '$1');
-      entries.set(key, match[2].trim());
-    }
-  }
-  const builds = [
+  await writeAllowBuilds(policy);
+}
+
+function megamonoBuildApprovals(plan: CreationPlan): string[] {
+  return [
     ...compatibility.pnpmAllowBuilds,
     ...(compatibility.databaseAdapters[plan.options.databaseAdapter]
       ?.pnpmAllowBuilds ?? []),
   ];
-  for (const name of builds) {
-    // Existing decisions belong to the scaffold/policy, including explicit denial.
-    if (!entries.has(name)) entries.set(name, 'true');
+}
+
+interface AllowBuildsPolicy {
+  path: string;
+  lines: string[];
+  newline: string;
+  start: number;
+  end: number;
+  entries: Map<string, string>;
+}
+
+async function readAllowBuilds(plan: CreationPlan): Promise<AllowBuildsPolicy> {
+  const path = resolve(plan.options.stagingDirectory, 'pnpm-workspace.yaml');
+  const source = await readFile(path, 'utf8');
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.split(/\r?\n/);
+  let start = lines.findIndex((line) => /^allowBuilds:\s*$/.test(line));
+  if (start === -1) {
+    while (lines.at(-1) === '') lines.pop();
+    lines.push('', 'allowBuilds:');
+    start = lines.length - 1;
   }
+  let end = start + 1;
+  while (end < lines.length && /^\s+\S/.test(lines[end])) end += 1;
+  const entries = new Map<string, string>();
+  for (const line of lines.slice(start + 1, end)) {
+    const entry = allowBuildsEntry(line);
+    if (entry) entries.set(entry[0], entry[1]);
+  }
+  return { path, lines, newline, start, end, entries };
+}
+
+function allowBuildsEntry(line: string): [string, string] | undefined {
+  const match = line.match(/^\s{2}([^:#]+):\s*(.+)$/);
+  if (!match) return undefined;
+  const rawKey = match[1].trim();
+  const key = rawKey.startsWith('"')
+    ? JSON.parse(rawKey)
+    : rawKey.replace(/^'(.*)'$/, '$1');
+  return [key, match[2].trim()];
+}
+
+async function writeAllowBuilds(policy: AllowBuildsPolicy): Promise<void> {
+  const lines = [...policy.lines];
   lines.splice(
-    allowBuildsIndex + 1,
-    end - allowBuildsIndex - 1,
-    ...[...entries]
+    policy.start + 1,
+    policy.end - policy.start - 1,
+    ...[...policy.entries]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([name, value]) => {
         const key = /^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.stringify(name);
         return `  ${key}: ${value}`;
       }),
   );
-  await writeFile(workspacePath, lines.join(newline), 'utf8');
+  await writeFile(policy.path, lines.join(policy.newline), 'utf8');
+}
+
+/** Package names the pnpm lockfile resolves (packages/snapshots keys). */
+export function lockfilePackageNames(lockfile: string): Set<string> {
+  const names = new Set<string>();
+  for (const match of lockfile.matchAll(
+    /^ {2}['"]?((?:@[^@'"\s/]+\/)?[^@'"\s/:]+)@/gm,
+  ))
+    names.add(match[1]);
+  return names;
+}
+
+/**
+ * Bootstrap pre-approves every build Megamono may need before anything is
+ * installed. Once the final install has settled, drop the approvals Megamono
+ * added for packages the lockfile does not contain (for example workerd when
+ * no Worker app exists). Denials and other decisions are kept.
+ */
+async function pruneBuildApprovals(plan: CreationPlan): Promise<void> {
+  let lockfile: string;
+  try {
+    lockfile = await readFile(
+      resolve(plan.options.stagingDirectory, 'pnpm-lock.yaml'),
+      'utf8',
+    );
+  } catch {
+    return;
+  }
+  const installed = lockfilePackageNames(lockfile);
+  if (installed.size === 0) return;
+  const policy = await readAllowBuilds(plan);
+  const stale = new Set(
+    megamonoBuildApprovals(plan).filter(
+      (name) => policy.entries.get(name) === 'true' && !installed.has(name),
+    ),
+  );
+  if (stale.size === 0) return;
+  // Remove only the stale lines so formatting applied by later steps survives.
+  const lines = policy.lines.filter((line, index) => {
+    if (index <= policy.start || index >= policy.end) return true;
+    const entry = allowBuildsEntry(line);
+    return !entry || !stale.has(entry[0]);
+  });
+  await writeFile(policy.path, lines.join(policy.newline), 'utf8');
 }
 
 async function writeRecovery(
@@ -1523,6 +1593,8 @@ export async function executePlan(
           await configureWorkspaceIdentity(plan);
         else if (step.id === 'configure-publishable-packages')
           await configurePublishablePackages(plan);
+        else if (step.id === 'prune-build-approvals')
+          await pruneBuildApprovals(plan);
         else await removeInstalledDependencies(plan.options.stagingDirectory);
       } else if (step.kind === 'springbar') {
         const intent = createSpringbarIntent(

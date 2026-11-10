@@ -1184,6 +1184,64 @@ describe('executePlan', () => {
     },
   );
 
+  it('drops pre-approved builds the final lockfile does not install', async () => {
+    const cwd = await fixture();
+    const plan = createPlan(
+      options(cwd, { apps: ['site'], packageManager: 'pnpm', verify: 'none' }),
+    );
+    expect(plan.steps.map((step) => step.id).slice(-2)).toEqual([
+      'prune-build-approvals',
+      'commit-workspace',
+    ]);
+    let first = true;
+    const runner: CommandRunner = async () => {
+      if (!first) return;
+      first = false;
+      await mkdir(plan.options.stagingDirectory);
+      await writeFile(
+        resolve(plan.options.stagingDirectory, 'package.json'),
+        '{}',
+      );
+      await writeFile(
+        resolve(plan.options.stagingDirectory, 'pnpm-workspace.yaml'),
+        "packages:\n  - 'packages/*'\nallowBuilds:\n  sharp: false\n",
+      );
+      await writeFile(
+        resolve(plan.options.stagingDirectory, 'pnpm-lock.yaml'),
+        [
+          "lockfileVersion: '9.0'",
+          'importers:',
+          '  .:',
+          '    devDependencies:',
+          '      nx:',
+          '        specifier: 23.2.1',
+          'packages:',
+          "  '@parcel/watcher@2.5.1':",
+          '    resolution: {}',
+          "  '@swc/core@1.16.20':",
+          '    resolution: {}',
+          '  esbuild@0.25.12:',
+          '    resolution: {}',
+          '  nx@23.2.1:',
+          '    resolution: {}',
+          '  unrs-resolver@1.12.2:',
+          '    resolution: {}',
+          '',
+        ].join('\n'),
+      );
+    };
+    await executePlan(plan, runner);
+    const policy = await readFile(
+      resolve(plan.options.destination, 'pnpm-workspace.yaml'),
+      'utf8',
+    );
+    expect(policy).toContain('"@parcel/watcher": true');
+    expect(policy).toContain('nx: true');
+    expect(policy).toContain('sharp: false');
+    expect(policy).not.toContain('workerd');
+    expect(policy).not.toContain('less');
+  });
+
   it('commits a staged workspace over an empty destination', async () => {
     const cwd = await fixture();
     const plan = createPlan(
