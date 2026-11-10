@@ -328,3 +328,13 @@ export {
   type ManagedSkillTemplate,
 } from './lib/managed-skills';
 export { megamonoEslintPlugin } from './eslint/plugin';
+export {
+  checkExtensionRuntimeBoundary,
+  extensionRuntimeEntriesSchema,
+} from './lib/extension-runtime';
+export type { ExtensionRuntimeReport } from './lib/structural-check';
+export {
+  inspectWorkspaceDependencies,
+  type WorkspaceDependencyInspection,
+  type SingletonInspection,
+} from './lib/workspace-dependency-health';

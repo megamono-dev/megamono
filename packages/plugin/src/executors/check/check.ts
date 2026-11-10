@@ -92,6 +92,9 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
             },
             raw: rawDiagnostics,
             allowed: structure.allowed,
+            ...(structure.extensionRuntime
+              ? { extensionRuntime: structure.extensionRuntime }
+              : {}),
             baselined: baseline.baselined,
             new: baseline.new,
             resolved: baseline.resolved,

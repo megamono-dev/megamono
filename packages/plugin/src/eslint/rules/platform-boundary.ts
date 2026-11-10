@@ -1,8 +1,10 @@
 import { builtinModules } from 'node:module';
+import { existsSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { Rule } from 'eslint';
 import { findProjectMetadata, filePlatform } from '../project-metadata';
 import { nextPagesLintContext } from '../next-pages';
+import { extensionRuntimeLintContext } from '../extension-runtime';
 import {
   nextPagesImports,
   nextPagesEdgeRuntime,
@@ -64,11 +66,15 @@ export const platformBoundary: Rule.RuleModule = {
     schema: [
       {
         type: 'object',
-        properties: { workspaceRoot: { type: 'string' } },
+        properties: {
+          workspaceRoot: { type: 'string' },
+          docsRoot: { type: 'string' },
+        },
         additionalProperties: false,
       },
     ],
     messages: {
+      extensionRuntimePolicy: '{{message}}',
       nodeBuiltin:
         'Project platform "{{platform}}" cannot import Node built-in "{{specifier}}".',
       projectPlatform:
@@ -81,6 +87,17 @@ export const platformBoundary: Rule.RuleModule = {
       (context.options[0] as { readonly workspaceRoot?: string } | undefined)
         ?.workspaceRoot ?? context.cwd;
     const sourceProject = findProjectMetadata(filename, workspaceRoot);
+    const extension = extensionRuntimeLintContext(
+      workspaceRoot,
+      sourceProject,
+      filename,
+      context.sourceCode.text,
+      (context.options[0] as { docsRoot?: string } | undefined)?.docsRoot,
+    );
+    const runtimeFilename = existsSync(filename)
+      ? realpathSync(filename)
+      : resolve(filename);
+    const reportedRuntimeIssues = new Set<string>();
     const next = nextPagesLintContext(workspaceRoot, sourceProject, filename);
     const currentEdge =
       next && nextPagesEdgeRuntime(filename, context.sourceCode.text);
@@ -132,10 +149,43 @@ export const platformBoundary: Rule.RuleModule = {
         runtimePlatform !== 'node' &&
         !nodeHostedTest
       ) {
+        reportedRuntimeIssues.add(`${node.range?.[0]}:node`);
         context.report({
           node,
           messageId: 'nodeBuiltin',
           data: { platform: runtimePlatform ?? 'neutral', specifier },
+        });
+        return;
+      }
+      const extensionUse = extension?.uses.find(
+        (use) => use.file === runtimeFilename && use.specifier === specifier,
+      );
+      if (extensionUse) {
+        if (extension?.complete && extensionUse.rendererOnly) return;
+        reportedRuntimeIssues.add(`${node.range?.[0]}:web`);
+        context.report({
+          node,
+          messageId: 'projectPlatform',
+          data: {
+            source: 'extension worker/unclassified',
+            target: 'web',
+            specifier,
+          },
+        });
+        return;
+      }
+      const extensionNode = extension?.issues.find(
+        (issue) =>
+          issue.file === runtimeFilename &&
+          issue.start === node.range?.[0] &&
+          issue.kind === 'node',
+      );
+      if (extensionNode) {
+        reportedRuntimeIssues.add(`${node.range?.[0]}:node`);
+        context.report({
+          node,
+          messageId: 'extensionRuntimePolicy',
+          data: { message: extensionNode.message },
         });
         return;
       }
@@ -164,6 +214,43 @@ export const platformBoundary: Rule.RuleModule = {
       });
     };
     return {
+      'Program:exit'(node) {
+        for (const message of extension?.policyErrors ?? [])
+          context.report({
+            node,
+            messageId: 'extensionRuntimePolicy',
+            data: { message },
+          });
+        for (const issue of extension?.issues ?? [])
+          if (
+            issue.file === runtimeFilename &&
+            !reportedRuntimeIssues.has(`${issue.start}:${issue.kind}`)
+          ) {
+            reportedRuntimeIssues.add(`${issue.start}:${issue.kind}`);
+            context.report({
+              node,
+              messageId: 'extensionRuntimePolicy',
+              data: { message: issue.message },
+            });
+          }
+        // The contract qualifies the whole root set. A lint-only invocation must
+        // not pass through a neutral shared helper whose transitive source fails.
+        const externalIssue = extension?.issues.find(
+          (issue) => issue.file !== runtimeFilename,
+        );
+        if (
+          externalIssue &&
+          !reportedRuntimeIssues.size &&
+          !extension?.policyErrors.length
+        )
+          context.report({
+            node,
+            messageId: 'extensionRuntimePolicy',
+            data: {
+              message: `Extension runtime contract is incomplete: ${externalIssue.file}: ${externalIssue.message}`,
+            },
+          });
+      },
       ImportDeclaration: inspect,
       ExportNamedDeclaration: inspect,
       ExportAllDeclaration: inspect,

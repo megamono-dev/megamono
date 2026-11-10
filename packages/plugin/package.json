@@ -48,7 +48,8 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
-    }
+    },
+    "./schemas/extension-runtime.schema.json": "./schemas/extension-runtime.schema.json"
   },
   "files": [
     "dist",

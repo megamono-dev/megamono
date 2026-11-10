@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megamono.com/schemas/extension-runtime.schema.json",
+  "title": "Reviewed extension runtime entry contract",
+  "description": "Value of package.json megamono.extension.runtimeEntries. This attests all runtime roots; the checker verifies literal HTML modules, source reachability and independent accepted decision authority without executing extension configuration.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "renderers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "allOf": [{ "$ref": "#/$defs/path" }, { "pattern": "\\.html$" }]
+      }
+    },
+    "workers": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "allOf": [{ "$ref": "#/$defs/path" }, { "pattern": "\\.[cm]?[jt]sx?$" }]
+      }
+    },
+    "rationale": { "type": "string", "pattern": "\\S" },
+    "decision": {
+      "type": "string",
+      "pattern": "^decision-\\d{8}-[a-z0-9]+(?:-[a-z0-9]+)*$"
+    }
+  },
+  "required": ["version", "renderers", "workers", "rationale", "decision"],
+  "$defs": {
+    "path": {
+      "type": "string",
+      "allOf": [
+        { "pattern": "^[A-Za-z0-9_-][A-Za-z0-9_./-]*$" },
+        {
+          "not": {
+            "pattern": "(^|/)(\\.{1,2}|node_modules|\\.yalc|\\.git|\\.nx|\\.wxt|\\.output|dist|build|coverage|test-output)(/|$)|//|/$"
+          }
+        }
+      ]
+    }
+  }
+}
