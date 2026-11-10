@@ -34,6 +34,13 @@
       "type": "string",
       "enum": ["development", "migration", "ci", "release"],
       "description": "Apply the named package-source policy profile. CI=true selects ci when omitted."
+    },
+    "excludeProjects": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ],
+      "description": "Projects this run deliberately omits from its install (for example pnpm --filter=!<package>), as names or a comma-separated list. Their manifests, and override/catalog addresses the committed pnpm lockfile reaches only through them, are reported as warnings instead of package-source profile violations. Structural checks still cover every project; the release profile rejects exclusions."
     }
   },
   "additionalProperties": false

@@ -27,7 +27,7 @@ vi.mock('../../lib/managed-artifacts', () => ({
   validateManagedArtifactRegistry: () => [],
 }));
 vi.mock('../../lib/package-sources', () => ({
-  validatePackageSources: async () => [],
+  validatePackageSources: vi.fn(async () => []),
 }));
 
 afterEach(() => vi.restoreAllMocks());
@@ -349,5 +349,56 @@ describe('public checker identity reports', () => {
     expect(report.policy.ratchets).toEqual(config.adoption.ratchets);
     expect(report.new).toEqual([]);
     expect(report.baselined).toEqual([]);
+  });
+});
+
+describe('package-source exclusions', () => {
+  it('passes excluded project roots to package-source validation and rejects unknown names', async () => {
+    const { validatePackageSources } =
+      await import('../../lib/package-sources');
+    const spy = vi.mocked(validatePackageSources);
+    spy.mockClear();
+    vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    vi.mocked(readMegamonoConfig).mockResolvedValue(
+      megamonoConfigSchema.parse(DEFAULT_MEGAMONO_CONFIG),
+    );
+    vi.mocked(analyzeWorkspaceStructure).mockResolvedValue({
+      diagnostics: [],
+      rawDiagnostics: [],
+      allowed: [],
+    });
+    const context = {
+      root: '/fixture',
+      projectGraph: {
+        nodes: {
+          api: { name: 'api', type: 'app', data: { root: 'apps/api' } },
+          'api-e2e': {
+            name: 'api-e2e',
+            type: 'e2e',
+            data: { root: 'apps/api-e2e' },
+          },
+        },
+        dependencies: {},
+      },
+    } as unknown as ExecutorContext;
+    expect(
+      await check({ profile: 'ci', excludeProjects: 'api, api-e2e' }, context),
+    ).toEqual({ success: true });
+    expect(spy).toHaveBeenCalledWith('/fixture', expect.anything(), {
+      profile: 'ci',
+      excludedProjects: [
+        { name: 'api', root: 'apps/api' },
+        { name: 'api-e2e', root: 'apps/api-e2e' },
+      ],
+    });
+    expect(
+      await check({ profile: 'ci', excludeProjects: ['missing'] }, context),
+    ).toEqual({ success: false });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('unknown projects: missing'),
+    );
+    expect(await check({ excludeProjects: ['api'] }, context)).toEqual({
+      success: false,
+    });
   });
 });

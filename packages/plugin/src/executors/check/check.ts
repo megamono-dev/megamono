@@ -69,10 +69,36 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
     add(await checkProjectPreflights(context.projectGraph));
     add(validateInstalledSkills(context.root));
     add(validateManagedArtifactRegistry(context.root));
+    const excludedNames = [
+      ...new Set(
+        (typeof options.excludeProjects === 'string'
+          ? [options.excludeProjects]
+          : (options.excludeProjects ?? [])
+        )
+          .flatMap((value) => value.split(','))
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (excludedNames.length && !packageSourceProfile)
+      throw new Error(
+        '--excludeProjects scopes package-source validation; select --profile (or --ci) as well.',
+      );
+    const unknown = excludedNames.filter(
+      (name) => !context.projectGraph?.nodes[name],
+    );
+    if (unknown.length)
+      throw new Error(
+        `--excludeProjects names unknown projects: ${unknown.join(', ')}.`,
+      );
     if (packageSourceProfile)
       add(
         await validatePackageSources(context.root, config, {
           profile: packageSourceProfile,
+          excludedProjects: excludedNames.map((name) => ({
+            name,
+            root: context.projectGraph.nodes[name].data.root,
+          })),
         }),
       );
     const baseline = evaluateIdentityBaseline(structure.diagnostics, config);

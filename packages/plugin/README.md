@@ -1108,6 +1108,21 @@ resolution. CI-only fixture exceptions use an exact
 `<manifest>#<dependency-location>` locator, such as
 `package.json#devDependencies.@megamono/plugin`, and do not weaken release.
 
+A CI job that deliberately installs a subset of the workspace (for example
+`pnpm install --filter=!@acme/api`) can pass the same omission to the checker:
+
+```sh
+pnpm exec nx run megamono:check --profile=ci --excludeProjects=acme-api,acme-api-e2e
+```
+
+Local addresses in an excluded project's manifest, and override or catalog
+entries that the committed `pnpm-lock.yaml` reaches only through excluded
+importers, are then reported as `package-sources-excluded-project` warnings
+instead of profile errors. An override that any included importer still reaches
+remains an error, an unreadable lockfile disables the scoping, unknown project
+names fail the check, and the `release` profile rejects exclusions. Structural,
+tag and boundary checks still cover every project.
+
 ### Develop the plugin
 
 ```sh

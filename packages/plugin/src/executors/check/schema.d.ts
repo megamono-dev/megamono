@@ -6,4 +6,5 @@ export interface CheckExecutorSchema {
   readonly json?: boolean;
   readonly ci?: boolean;
   readonly profile?: 'development' | 'migration' | 'ci' | 'release';
+  readonly excludeProjects?: string | readonly string[];
 }
