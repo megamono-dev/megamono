@@ -30,6 +30,12 @@ the new workspace is npm; pnpm, Yarn, and Bun are also supported through
 `--package-manager`. Local workspace creation does not require a hosted account
 or Playstack.
 
+Creation installs the exact Nx baseline with matching Nx plugins and verifies
+the installed versions before generating applications. The workspace records
+its Node runtime in `.nvmrc` and `engines.node`; run `nvm use` after entering
+the repository when using nvm. Source export conditions use the workspace's
+scope rather than Nx's `@org/source` placeholder.
+
 The guided flow selects named applications, optional publishable TypeScript
 packages, a database adapter, web styling, and local services. Springbar can
 optionally configure the requested apps and services; setup never starts them.

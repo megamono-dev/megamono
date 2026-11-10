@@ -133,6 +133,7 @@ export type PlanStep =
       kind: 'configure';
       id:
         | 'configure-package-manager'
+        | 'configure-workspace-identity'
         | 'configure-publishable-packages'
         | 'dehydrate-workspace';
     }
@@ -165,6 +166,8 @@ export class CreateMegamonoError extends Error {
 }
 
 interface CompatibilityRegistry {
+  toolchains: { node: string; nx: string };
+  runtimePins: { node: string };
   packageManagers: Record<PackageManager, string>;
   pnpmAllowBuilds: string[];
   databaseAdapters: Record<string, { pnpmAllowBuilds?: string[] }>;
@@ -586,7 +589,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     { kind: 'configure', id: 'configure-package-manager' },
   ];
 
-  const plugins = new Set<string>(['@megamono/plugin', 'typescript']);
+  const plugins = new Set<string>(['@megamono/plugin', 'nx', 'typescript']);
   if (options.packages.length) {
     plugins.add('@nx/js');
     plugins.add('@nx/eslint');
@@ -664,6 +667,14 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       ),
     );
   }
+
+  steps.push({
+    kind: 'command',
+    id: 'validate-bootstrap-toolchain',
+    command: 'node',
+    args: ['-e', bootstrapToolchainCheck()],
+    cwd: 'staging',
+  });
 
   for (const app of options.appInstances) {
     const port =
@@ -774,6 +785,8 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       ),
     );
   }
+
+  steps.push({ kind: 'configure', id: 'configure-workspace-identity' });
 
   if (options.verify !== 'none') {
     steps.push(
@@ -1025,7 +1038,9 @@ export function renderPlan(plan: CreationPlan): string {
         if (step.id === 'configure-publishable-packages')
           return `${index + 1}. [staging] configure ${plan.options.packageAccess} npm package access (no publication)`;
         if (step.id === 'configure-package-manager')
-          return `${index + 1}. [staging] record ${plan.options.packageManager} and configure package-manager policy`;
+          return `${index + 1}. [staging] record ${plan.options.packageManager}, pin the bootstrap toolchain, and configure package-manager policy`;
+        if (step.id === 'configure-workspace-identity')
+          return `${index + 1}. [staging] normalize the workspace source condition and Node runtime declaration`;
         return `${index + 1}. [staging] remove bootstrap node_modules for an install-free destination`;
       }
       if (step.kind === 'springbar') {
@@ -1047,17 +1062,157 @@ function requiredScaffoldVersion(name: string): string {
   return version;
 }
 
+/** Run before any Megamono generator can consume a drifted Nx installation. */
+function bootstrapToolchainCheck(): string {
+  const baseline = requiredScaffoldVersion('nx');
+  return `const manifest = require('./package.json');
+const baseline = ${JSON.stringify(baseline)};
+const packages = new Set(['nx', ...Object.keys({...manifest.dependencies, ...manifest.devDependencies}).filter(name => name.startsWith('@nx/'))]);
+for (const name of packages) {
+  const actual = require(name + '/package.json').version;
+  const expected = baseline;
+  if (actual !== expected) throw new Error('Bootstrap toolchain mismatch: ' + name + '@' + actual + '; expected ' + expected + ' from compatibility.json (Nx ${compatibility.toolchains.nx}). Reinstall the exact bootstrap pins before running Megamono generators.');
+}
+`;
+}
+
+function rewriteSourceConditions(source: string, condition: string): string {
+  // Tokenize just enough JSONC to retain comments and unrelated string values.
+  const tokens = [
+    ...source.matchAll(
+      /"(?:\\.|[^"\\])*"|\/\/[^\r\n]*|\/\*[\s\S]*?\*\/|[{}[\]:,]/g,
+    ),
+  ].filter((token) => !token[0].startsWith('//') && !token[0].startsWith('/*'));
+  const replacements: { start: number; end: number }[] = [];
+  for (let index = 0; index < tokens.length; index++) {
+    if (
+      tokens[index][0] !== '"customConditions"' ||
+      tokens[index + 1]?.[0] !== ':' ||
+      tokens[index + 2]?.[0] !== '['
+    )
+      continue;
+    let depth = 1;
+    for (let member = index + 3; member < tokens.length && depth; member++) {
+      const token = tokens[member];
+      if (token[0] === '[' || token[0] === '{') depth++;
+      else if (token[0] === ']' || token[0] === '}') depth--;
+      else if (
+        depth === 1 &&
+        token[0].startsWith('"') &&
+        JSON.parse(token[0]) === '@org/source'
+      )
+        replacements.push({
+          start: token.index,
+          end: token.index + token[0].length,
+        });
+    }
+  }
+  for (const replacement of replacements.reverse())
+    source =
+      source.slice(0, replacement.start) +
+      JSON.stringify(condition) +
+      source.slice(replacement.end);
+  return source;
+}
+
+/** Only fresh scaffold identity fields are normalized, never arbitrary text. */
+async function configureWorkspaceIdentity(plan: CreationPlan): Promise<void> {
+  const root = plan.options.stagingDirectory;
+  const condition = `@${plan.options.scope}/source`;
+  const rewriteExports = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(rewriteExports);
+    if (!value || typeof value !== 'object') return value;
+    const entries = Object.entries(value);
+    if (
+      condition !== '@org/source' &&
+      entries.some(([key]) => key === '@org/source') &&
+      entries.some(([key]) => key === condition)
+    )
+      throw new CreateMegamonoError(
+        `Generated exports contain conflicting source conditions: @org/source and ${condition}.`,
+        3,
+      );
+    return Object.fromEntries(
+      entries.map(([key, target]) => [
+        key === '@org/source' ? condition : key,
+        rewriteExports(target),
+      ]),
+    );
+  };
+  const excluded = new Set([
+    'node_modules',
+    '.git',
+    '.nx',
+    '.yalc',
+    'dist',
+    '.output',
+    '.wxt',
+  ]);
+  const walk = async (directory: string): Promise<void> => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.isSymbolicLink()) continue;
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (!excluded.has(entry.name)) await walk(path);
+      } else if (entry.isFile() && entry.name === 'package.json') {
+        const source = await readFile(path, 'utf8');
+        const manifest = JSON.parse(source);
+        if (directory === root) {
+          manifest.name = condition;
+          manifest.engines = {
+            ...manifest.engines,
+            node: compatibility.toolchains.node,
+          };
+        }
+        if (manifest.exports !== undefined)
+          manifest.exports = rewriteExports(manifest.exports);
+        const updated = `${JSON.stringify(manifest, null, 2)}\n`;
+        if (source !== updated) await writeFile(path, updated, 'utf8');
+      } else if (
+        entry.isFile() &&
+        /^tsconfig(?:\.[^.]+)*\.json$/.test(entry.name)
+      ) {
+        const source = await readFile(path, 'utf8');
+        // Nx emits JSONC. Restrict edits to string entries of customConditions;
+        // comments, paths, and ordinary strings remain byte-for-byte intact.
+        const updated = rewriteSourceConditions(source, condition);
+        if (source !== updated) await writeFile(path, updated, 'utf8');
+      }
+    }
+  };
+  await walk(root);
+  await writeFile(
+    resolve(root, '.nvmrc'),
+    `${compatibility.runtimePins.node}\n`,
+    'utf8',
+  );
+}
+
 async function configurePackageManager(plan: CreationPlan): Promise<void> {
   const packagePath = resolve(plan.options.stagingDirectory, 'package.json');
   const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as {
     packageManager?: string;
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
   };
+  const nxVersion = requiredScaffoldVersion('nx');
+  for (const field of ['dependencies', 'devDependencies'] as const) {
+    const declarations = packageJson[field];
+    for (const name of Object.keys(declarations ?? {})) {
+      if (name === 'nx' || name.startsWith('@nx/'))
+        if (declarations)
+          declarations[name] =
+            compatibility.scaffoldPackages[name] ?? nxVersion;
+    }
+  }
   packageJson.packageManager = `${plan.options.packageManager}@${compatibility.packageManagers[plan.options.packageManager]}`;
   await writeFile(
     packagePath,
     `${JSON.stringify(packageJson, null, 2)}\n`,
     'utf8',
   );
+
+  await configureWorkspaceIdentity(plan);
 
   if (plan.options.packageManager !== 'pnpm') return;
   const workspacePath = resolve(
@@ -1235,6 +1390,8 @@ export async function executePlan(
       else if (step.kind === 'configure') {
         if (step.id === 'configure-package-manager')
           await configurePackageManager(plan);
+        else if (step.id === 'configure-workspace-identity')
+          await configureWorkspaceIdentity(plan);
         else if (step.id === 'configure-publishable-packages')
           await configurePublishablePackages(plan);
         else await removeInstalledDependencies(plan.options.stagingDirectory);

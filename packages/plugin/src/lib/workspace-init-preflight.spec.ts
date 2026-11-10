@@ -3,8 +3,102 @@ import {
   assessWorkspaceInitHostReadiness,
   assertWorkspaceMutationGitPreflight,
   assertWorkspaceInitPreflight,
+  resolveWorkspaceDefaultBranch,
   type WorkspaceInitHostState,
 } from './workspace-init-preflight';
+
+describe('default branch discovery', () => {
+  function git(values: Record<string, string | undefined>) {
+    const calls: string[] = [];
+    return {
+      calls,
+      output: async (args: readonly string[]) => {
+        const key = args.join(' ');
+        calls.push(key);
+        return values[key];
+      },
+    };
+  }
+  it('uses the existing origin HEAD without accessing the network', async () => {
+    const probe = git({
+      'symbolic-ref --quiet --short refs/remotes/origin/HEAD': 'origin/trunk',
+      'check-ref-format refs/heads/trunk': '',
+    });
+    expect(
+      await resolveWorkspaceDefaultBranch('/workspace', probe.output),
+    ).toBe('trunk');
+    expect(probe.calls.some((call) => call.startsWith('ls-remote'))).toBe(
+      false,
+    );
+  });
+  it('uses the remote advertised branch before a conflicting init default', async () => {
+    const probe = git({
+      'remote get-url origin': 'https://example.test/repository.git',
+      'ls-remote --symref origin HEAD':
+        'ref: refs/heads/integration\tHEAD\naaaa\tHEAD',
+      'check-ref-format refs/heads/integration': '',
+      'config --get init.defaultBranch': 'main',
+    });
+    expect(
+      await resolveWorkspaceDefaultBranch('/workspace', probe.output),
+    ).toBe('integration');
+    expect(probe.calls).not.toContain('config --get init.defaultBranch');
+  });
+  it('supports an unpushed repository with an explicit init default', async () => {
+    const probe = git({
+      'remote get-url origin': 'https://example.test/empty.git',
+      'ls-remote --symref origin HEAD': '',
+      'config --get init.defaultBranch': 'main',
+      'check-ref-format refs/heads/main': '',
+    });
+    const defaultBranch = await resolveWorkspaceDefaultBranch(
+      '/workspace',
+      probe.output,
+    );
+    expect(defaultBranch).toBe('main');
+    expect(() =>
+      assertWorkspaceMutationGitPreflight(
+        {
+          platform: 'linux',
+          node: 'v24.22.1',
+          git: {
+            available: true,
+            clean: true,
+            branch: 'feature/start',
+            defaultBranch,
+          },
+        },
+        'Library addition',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertWorkspaceMutationGitPreflight(
+        {
+          platform: 'linux',
+          node: 'v24.22.1',
+          git: { available: true, clean: true, branch: 'main', defaultBranch },
+        },
+        'Library addition',
+      ),
+    ).toThrow('default branch main');
+  });
+  it('does not guess main or accept invalid configured refs', async () => {
+    const probe = git({ 'config --get init.defaultBranch': '../invalid' });
+    expect(
+      await resolveWorkspaceDefaultBranch('/workspace', probe.output),
+    ).toBeUndefined();
+    expect(() =>
+      assertWorkspaceMutationGitPreflight(
+        {
+          platform: 'linux',
+          node: 'v24.22.1',
+          git: { available: true, clean: true, branch: 'feature/start' },
+        },
+        'Library addition',
+      ),
+    ).toThrow('default branch could not be resolved');
+  });
+});
 
 function supportedTree() {
   const tree = createTreeWithEmptyWorkspace();

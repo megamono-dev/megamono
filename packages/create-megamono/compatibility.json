@@ -11,6 +11,7 @@
     "typescript": ">=6.0 <6.1",
     "prisma": ">=6.7"
   },
+  "runtimePins": { "node": "24.22.1" },
   "databaseAdapters": {
     "prisma": {
       "provider": "postgresql",
@@ -78,6 +79,7 @@
   ],
   "scaffoldPackages": {
     "create-nx-workspace": "23.2.1",
+    "nx": "23.2.1",
     "@nx/eslint": "23.2.1",
     "@nx/jest": "23.2.1",
     "@swc/jest": "0.2.39",

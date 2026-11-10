@@ -64,7 +64,7 @@ export function assertWorkspaceMutationGitPreflight(
   if (!state.git.defaultBranch) {
     throw new WorkspaceInitError(
       'preflight',
-      'The origin default branch could not be resolved.',
+      'The default branch could not be resolved from origin/HEAD, the origin remote, or init.defaultBranch. Fetch the remote HEAD, or explicitly configure `git config --local init.defaultBranch <integration-branch>` before retrying.',
     );
   }
   if (state.git.branch === state.git.defaultBranch) {
@@ -87,11 +87,51 @@ async function commandOutput(
       // Corepack shims can attempt network access even for --version. A
       // read-only survey must remain bounded when an optional tool is absent.
       timeout: 5_000,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     });
     return result.stdout.trim();
   } catch {
     return undefined;
   }
+}
+
+type GitOutput = (args: readonly string[]) => Promise<string | undefined>;
+
+/** Resolve repository intent without assuming a branch name or writing Git refs. */
+export async function resolveWorkspaceDefaultBranch(
+  workspaceRoot: string,
+  output: GitOutput = (args) => commandOutput(workspaceRoot, 'git', args),
+): Promise<string | undefined> {
+  const validBranch = async (name: string | undefined) =>
+    name &&
+    (await output(['check-ref-format', `refs/heads/${name}`])) !== undefined
+      ? name
+      : undefined;
+  const tracked = await output([
+    'symbolic-ref',
+    '--quiet',
+    '--short',
+    'refs/remotes/origin/HEAD',
+  ]);
+  const localDefault = tracked?.startsWith('origin/')
+    ? await validBranch(tracked.slice('origin/'.length))
+    : undefined;
+  if (localDefault) return localDefault;
+  // An advertised remote HEAD is authoritative over a machine's init default.
+  if (await output(['remote', 'get-url', 'origin'])) {
+    const advertised = await output([
+      'ls-remote',
+      '--symref',
+      'origin',
+      'HEAD',
+    ]);
+    const remoteDefault = await validBranch(
+      /^ref: refs\/heads\/([^\t\r\n]+)\tHEAD$/m.exec(advertised ?? '')?.[1],
+    );
+    if (remoteDefault) return remoteDefault;
+  }
+  // Empty remotes cannot advertise HEAD; respect an explicit Git init policy.
+  return validBranch(await output(['config', '--get', 'init.defaultBranch']));
 }
 
 export async function collectWorkspaceInitHostState(
@@ -127,13 +167,7 @@ export async function collectWorkspaceInitHostState(
     '--short',
     'HEAD',
   ]);
-  const remoteDefault = await commandOutput(workspaceRoot, 'git', [
-    'symbolic-ref',
-    '--quiet',
-    '--short',
-    'refs/remotes/origin/HEAD',
-  ]);
-  const defaultBranch = remoteDefault?.replace(/^origin\//, '');
+  const defaultBranch = await resolveWorkspaceDefaultBranch(workspaceRoot);
   return {
     platform: process.platform,
     node: process.version,

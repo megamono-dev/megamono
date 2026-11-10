@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { localPackageManifest } from './local-package.js';
+import { resolveDefaultBranch } from './git-default-branch.js';
 import { existsSync } from 'node:fs';
 import {
   DEFAULT_ARTIFACT_MANIFEST,
@@ -468,7 +469,12 @@ async function gitOutput(
 ): Promise<string | undefined> {
   try {
     return (
-      await executeFile('git', [...args], { cwd: root, encoding: 'utf8' })
+      await executeFile('git', [...args], {
+        cwd: root,
+        encoding: 'utf8',
+        timeout: 5_000,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      })
     ).stdout.trim();
   } catch {
     return undefined;
@@ -494,13 +500,9 @@ async function collectWorkspaceMutationState(
     '--short',
     'HEAD',
   ]);
-  const remoteDefault = await gitOutput(root, [
-    'symbolic-ref',
-    '--quiet',
-    '--short',
-    'refs/remotes/origin/HEAD',
-  ]);
-  const defaultBranch = remoteDefault?.replace(/^origin\//, '');
+  const defaultBranch = await resolveDefaultBranch((args) =>
+    gitOutput(root, args),
+  );
   return {
     available: true,
     clean: status === '',
@@ -530,7 +532,10 @@ async function assertWorkspaceMutationPreflight(
     );
   }
   if (!state.defaultBranch) {
-    throw new CliError('The origin default branch could not be resolved.', 3);
+    throw new CliError(
+      'The default branch could not be resolved from origin/HEAD, the origin remote, or init.defaultBranch. Fetch the remote HEAD, or explicitly configure `git config --local init.defaultBranch <integration-branch>` before retrying.',
+      3,
+    );
   }
   if (state.branch === state.defaultBranch) {
     throw new CliError(
