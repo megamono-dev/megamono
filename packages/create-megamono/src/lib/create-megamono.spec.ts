@@ -140,6 +140,40 @@ describe('normalizeCreateOptions', () => {
       publishConfig: { provenance: true, access: 'restricted' },
     });
   });
+
+  it('extends app-scoped lint inference to generated packages', async () => {
+    const root = await fixture();
+    const plan = createPlan(
+      options(root, { apps: ['site'], packages: ['core'] }),
+    );
+    const packageRoot = resolve(plan.options.stagingDirectory, 'packages/core');
+    await mkdir(packageRoot, { recursive: true });
+    await writeFile(
+      resolve(plan.options.stagingDirectory, 'package.json'),
+      '{}',
+    );
+    const scoped = {
+      plugin: '@nx/eslint/plugin',
+      options: { targetName: 'lint' },
+      include: ['apps/site/**/*'],
+    };
+    await writeFile(
+      resolve(plan.options.stagingDirectory, 'nx.json'),
+      JSON.stringify({ plugins: [scoped] }),
+    );
+    await writeFile(
+      resolve(packageRoot, 'package.json'),
+      JSON.stringify({ name: '@acme-tools/core' }),
+    );
+    await configurePublishablePackages(plan);
+    const nx = JSON.parse(
+      await readFile(resolve(plan.options.stagingDirectory, 'nx.json'), 'utf8'),
+    );
+    expect(nx.plugins).toEqual([
+      scoped,
+      { ...scoped, include: ['packages/core/**/*'] },
+    ]);
+  });
   it('normalizes the scope and applies stable defaults', () => {
     const normalized = options('/workspace');
     expect(normalized).toMatchObject({

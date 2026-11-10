@@ -358,6 +358,17 @@ workspace root with `NX_DAEMON=false`; the launcher forwards shutdown signals.
 Explicitly disabled or ambiguous inference policy requires review.
 Nx 17 retains its legacy generator path.
 
+On Nx 18+ with inference enabled, every project an app generator creates
+(including e2e projects, the Nest feature library and the extension) and every
+`create-megamono --packages` library is linted by an `@nx/eslint/plugin`
+registration scoped to its root, rather than the deprecated `@nx/eslint:lint`
+executor. The inferred target runs `eslint .` from the project root, so `files`
+and `ignores` globs in a project's `eslint.config.mjs` match relative to that
+project (`scripts/**`). Projects that still use `@nx/eslint:lint` run ESLint from
+the workspace root, where the same override must be written `**/scripts/**`;
+`nx g @nx/eslint:convert-to-inferred` migrates them. Generated extension lint
+ignores WXT's `.output/` and `.wxt/` directories.
+
 The generated Chakra theme declares React, Chakra and Emotion as peers with
 matching development dependencies and uses bundler-oriented typechecking.
 The generated Chakra app and theme configs check application source and skip dependency declaration

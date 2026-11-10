@@ -1,4 +1,10 @@
-import { readJson, updateJson, type Tree } from '@nx/devkit';
+import {
+  getProjects,
+  readJson,
+  updateJson,
+  updateProjectConfiguration,
+  type Tree,
+} from '@nx/devkit';
 import { nxWorkspaceCapabilities } from './workspace-compatibility';
 
 export function canInferGeneratedLibrary(tree: Tree): boolean {
@@ -72,4 +78,109 @@ export function scopeGeneratedLibraryInference(
     }
     return { ...value, plugins };
   });
+}
+
+const ESLINT_PLUGIN = '@nx/eslint/plugin';
+const ESLINT_CONFIG_FILES = [
+  'eslint.config.mjs',
+  'eslint.config.js',
+  'eslint.config.cjs',
+];
+
+/**
+ * Nx composed generators skip the lint target whenever any @nx/eslint/plugin
+ * registration exists, even one scoped to another project, and otherwise emit
+ * the deprecated @nx/eslint:lint executor whose `files` globs match from the
+ * workspace root. Give every newly generated project with an ESLint config
+ * inferred, project-relative linting (`eslint .` from the project root) through
+ * a registration scoped to that project. Existing projects are left alone.
+ */
+export function inferGeneratedProjectLint(
+  tree: Tree,
+  existingProjects: ReadonlySet<string>,
+): string[] {
+  if (!canInferGeneratedLibrary(tree)) return [];
+  const registrations = (
+    (readJson(tree, 'nx.json').plugins ?? []) as unknown[]
+  ).filter(
+    (entry) =>
+      (typeof entry === 'string'
+        ? entry
+        : (entry as { plugin?: string }).plugin) === ESLINT_PLUGIN,
+  ) as (
+    | string
+    | {
+        options?: Record<string, unknown>;
+        include?: string[];
+        exclude?: string[];
+      }
+  )[];
+  const unscoped = registrations.some(
+    (entry) => typeof entry === 'string' || (!entry.include && !entry.exclude),
+  );
+  const policies = new Set(
+    registrations.map((entry) =>
+      JSON.stringify(typeof entry === 'string' ? {} : (entry.options ?? {})),
+    ),
+  );
+  if (policies.size > 1)
+    throw new Error(
+      `Existing ${ESLINT_PLUGIN} registrations use different policies. Review inference coverage before adding this application.`,
+    );
+  const included = new Set(
+    registrations.flatMap((entry) =>
+      typeof entry === 'string' ? [] : (entry.include ?? []),
+    ),
+  );
+  const covered: string[] = [];
+  for (const [name, project] of getProjects(tree)) {
+    if (existingProjects.has(name)) continue;
+    if (
+      !ESLINT_CONFIG_FILES.some((file) =>
+        tree.exists(`${project.root}/${file}`),
+      )
+    )
+      continue;
+    const lint = project.targets?.lint as
+      | {
+          executor?: string;
+          command?: unknown;
+          options?: Record<string, unknown>;
+        }
+      | undefined;
+    if (lint) {
+      const explicit =
+        lint.executor === '@nx/eslint:lint' ||
+        (lint.executor === undefined &&
+          typeof lint.command === 'string' &&
+          /^eslint\s/.test(lint.command));
+      if (!explicit) continue;
+      delete project.targets?.lint;
+      updateProjectConfiguration(tree, name, project);
+    }
+    covered.push(project.root);
+  }
+  const roots = covered.filter(
+    (root) => !unscoped && !included.has(`${root}/**/*`),
+  );
+  if (roots.length === 0) return covered;
+  const representative = registrations[0];
+  const options =
+    representative && typeof representative !== 'string'
+      ? representative.options
+      : registrations.length
+        ? undefined
+        : { targetName: 'lint' };
+  updateJson(tree, 'nx.json', (value) => ({
+    ...value,
+    plugins: [
+      ...(value.plugins ?? []),
+      {
+        plugin: ESLINT_PLUGIN,
+        ...(options ? { options } : {}),
+        include: roots.map((root) => `${root}/**/*`),
+      },
+    ],
+  }));
+  return covered;
 }

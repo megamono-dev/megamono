@@ -1519,6 +1519,61 @@ async function removeInstalledDependencies(directory: string): Promise<void> {
   }
 }
 
+type PluginRegistration =
+  | string
+  | {
+      plugin: string;
+      options?: unknown;
+      include?: string[];
+      exclude?: string[];
+    };
+
+/**
+ * App generation scopes @nx/eslint/plugin to each generated app. @nx/js:library
+ * then sees a registration and adds no lint target, although no registration
+ * includes the package. Extend inference to the generated packages so they get
+ * project-relative `eslint .` targets instead of silently losing lint.
+ */
+function coverPackageLint(
+  nx: { plugins?: PluginRegistration[] },
+  packages: readonly string[],
+): void {
+  const registrations = (nx.plugins ?? []).filter(
+    (entry) =>
+      (typeof entry === 'string' ? entry : entry.plugin) ===
+      '@nx/eslint/plugin',
+  );
+  if (
+    registrations.length === 0 ||
+    registrations.some(
+      (entry) =>
+        typeof entry === 'string' || (!entry.include && !entry.exclude),
+    )
+  )
+    return;
+  const included = new Set(
+    registrations.flatMap((entry) =>
+      typeof entry === 'string' ? [] : (entry.include ?? []),
+    ),
+  );
+  const include = packages
+    .map((name) => `packages/${name}/**/*`)
+    .filter((glob) => !included.has(glob));
+  if (include.length === 0) return;
+  const representative = registrations[0] as Exclude<
+    PluginRegistration,
+    string
+  >;
+  nx.plugins = [
+    ...(nx.plugins ?? []),
+    {
+      plugin: '@nx/eslint/plugin',
+      ...(representative.options ? { options: representative.options } : {}),
+      include,
+    },
+  ];
+}
+
 export async function configurePublishablePackages(
   plan: CreationPlan,
 ): Promise<void> {
@@ -1552,6 +1607,7 @@ export async function configurePublishablePackages(
   await writeFile(rootPath, `${JSON.stringify(root, null, 2)}\n`);
   const nxPath = resolve(plan.options.stagingDirectory, 'nx.json');
   const nx = JSON.parse(await readFile(nxPath, 'utf8'));
+  coverPackageLint(nx, plan.options.packages);
   const projects = plan.options.packages.map(
     (name) => `${plan.options.scope}-${name}`,
   );

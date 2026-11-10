@@ -41,6 +41,53 @@ function snapshot(tree: ReturnType<typeof workspace>): string {
 }
 
 describe('app generator', () => {
+  it('gives every generated project inferred, project-relative lint', async () => {
+    const tree = workspace();
+    await appGenerator(tree, {
+      type: 'site',
+      scope: 'acme',
+      styling: 'chakra',
+      port: 4301,
+      yes: true,
+      interactive: false,
+    });
+    await appGenerator(tree, {
+      type: 'api',
+      scope: 'acme',
+      port: 4302,
+      yes: true,
+      interactive: false,
+    });
+    const includes = (
+      readJson(tree, 'nx.json').plugins as (
+        string | { plugin: string; include?: string[] }
+      )[]
+    )
+      .filter(
+        (entry): entry is { plugin: string; include?: string[] } =>
+          typeof entry !== 'string' && entry.plugin === '@nx/eslint/plugin',
+      )
+      .flatMap((entry) => entry.include ?? []);
+    for (const root of [
+      'packages/theme',
+      'apps/site',
+      'apps/site-e2e',
+      'apps/api',
+      'apps/api-e2e',
+      'packages/nest-home',
+    ])
+      expect(includes).toContain(`${root}/**/*`);
+    for (const name of [
+      'acme-site-e2e',
+      'acme-api',
+      'acme-api-e2e',
+      'acme-nest-home',
+    ])
+      expect(
+        readProjectConfiguration(tree, name).targets?.lint,
+      ).toBeUndefined();
+  });
+
   it('uses an existing app-owned SDK without requiring a Root Expo declaration', async () => {
     const tree = workspace();
     updateJson(tree, 'package.json', (manifest) => ({
@@ -1039,6 +1086,18 @@ describe('app generator', () => {
       if (type === 'extension') {
         expect(tree.exists('eslint.config.mjs')).toBe(true);
         expect(tree.exists('apps/extension/eslint.config.mjs')).toBe(true);
+        expect(
+          readProjectConfiguration(tree, 'fixture-extension').targets?.lint,
+        ).toBeUndefined();
+        expect(
+          tree.read('apps/extension/eslint.config.mjs', 'utf8'),
+        ).toContain("ignores: ['**/.output/**', '**/.wxt/**']");
+        expect(readJson(tree, 'nx.json').plugins).toContainEqual(
+          expect.objectContaining({
+            plugin: '@nx/eslint/plugin',
+            include: expect.arrayContaining(['apps/extension/**/*']),
+          }),
+        );
         expect(tree.read(expectedPath, 'utf8')).toContain('manifestVersion: 3');
         expect(
           tree.read('apps/extension/entrypoints/content.ts', 'utf8'),

@@ -4,6 +4,7 @@ import { wireExpoValidation } from '../../lib/expo-validation';
 import { prepareNextInference, configureNextRuntime } from './web-runtime';
 import {
   canInferGeneratedLibrary,
+  inferGeneratedProjectLint,
   scopeGeneratedLibraryInference,
 } from '../../lib/generated-library-inference';
 import { prependEslintFlatConfig } from '../../lib/eslint-flat-config';
@@ -2038,6 +2039,24 @@ function createDesktopApp(
   return [];
 }
 
+/** Inferred lint runs `eslint .`; keep WXT output and generated types out. */
+function ignoreExtensionBuildOutput(tree: Tree, root: string): void {
+  const path = `${root}/eslint.config.mjs`;
+  const source = tree.read(path, 'utf8');
+  if (!source || source.includes('.output/')) return;
+  const updated = prependEslintFlatConfig(
+    source,
+    "  { ignores: ['**/.output/**', '**/.wxt/**'] },",
+  );
+  if (updated === undefined)
+    throw new AppGeneratorError(
+      'Cannot exclude generated WXT output from the extension flat ESLint config.',
+      3,
+      'plugin-incompatible',
+    );
+  tree.write(path, updated);
+}
+
 async function confirm(options: AppGeneratorSchema): Promise<boolean> {
   if (options.yes || options.bootstrap) return true;
   if (!canPrompt(options)) {
@@ -2073,12 +2092,19 @@ export async function appGenerator(
   if (!(await confirm(rawOptions))) return () => undefined;
 
   const restoreWorkspaceYaml = preserveWorkspaceYaml(tree);
+  const existingProjects = new Set(getProjects(tree).keys());
   const callbacks =
     options.type === 'web' || options.type === 'site'
       ? await createWebApp(tree, options)
       : options.type === 'api'
         ? await createApiApp(tree, options)
         : await createDelegatedApp(tree, options);
+  // Expo keeps its separately qualified mobile inference lane.
+  if (options.type !== 'mobile') {
+    const inferred = inferGeneratedProjectLint(tree, existingProjects);
+    if (options.type === 'extension' && inferred.includes(options.directory))
+      ignoreExtensionBuildOutput(tree, options.directory);
+  }
 
   if (!options.bootstrap) {
     updateJson(tree, 'megamono.json', (value: Record<string, unknown>) => ({
