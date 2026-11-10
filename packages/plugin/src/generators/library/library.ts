@@ -21,6 +21,7 @@ import { megamonoConfigSchema } from '../../lib/config';
 import {
   assertWorkspaceMutationGitPreflight,
   collectWorkspaceInitHostState,
+  isHostedWorkspaceTree,
 } from '../../lib/workspace-init-preflight';
 import type { LibraryGeneratorSchema } from './schema';
 import { preserveWorkspaceYaml } from '../../lib/preserve-workspace-yaml';
@@ -103,10 +104,79 @@ function configureLibraryTypes(
     });
 }
 
-/** Compose consumer-local Nx without taking ownership of release workflows. */
+const lockfiles = [
+  'pnpm-lock.yaml',
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'yarn.lock',
+  'bun.lock',
+  'bun.lockb',
+];
+
+/**
+ * Compose consumer-local Nx without taking ownership of release workflows.
+ * A comma-separated name adds several libraries with the same options in one
+ * reviewed change; allowDirty permits unrelated uncommitted work but still
+ * refuses when any file this run writes (or an install would rewrite) is dirty.
+ */
 export async function libraryGenerator(
   tree: Tree,
   options: LibraryGeneratorSchema,
+): Promise<GeneratorCallback> {
+  const names = (options.name ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+  if (names.length === 0 || names.some((name) => !slug.test(name)))
+    throw new Error(
+      'Library name and scope must be lowercase kebab-case names.',
+    );
+  if (new Set(names).size !== names.length)
+    throw new Error('Library names must be unique within one generation.');
+  let dirtyPaths: readonly string[] = [];
+  let checked = false;
+  const beforeMutation = async () => {
+    if (checked || !isHostedWorkspaceTree(tree)) return;
+    checked = true;
+    const state = await collectWorkspaceInitHostState(tree.root);
+    assertWorkspaceMutationGitPreflight(state, 'Library addition', {
+      allowDirty: options.allowDirty === true,
+    });
+    dirtyPaths = state.git.dirtyPaths ?? [];
+  };
+  const callbacks: GeneratorCallback[] = [];
+  for (const name of names)
+    callbacks.push(
+      await generateLibrary(
+        tree,
+        { ...options, name },
+        beforeMutation,
+        names.length > 1,
+      ),
+    );
+  if (!checked) return callbacks[0] ?? (() => undefined);
+  if (dirtyPaths.length) {
+    const written = new Set(tree.listChanges().map(({ path }) => path));
+    const conflicts = dirtyPaths.filter(
+      (path) =>
+        written.has(path) || (!options.skipInstall && lockfiles.includes(path)),
+    );
+    if (conflicts.length)
+      throw new Error(
+        `Library addition would change files with uncommitted work: ${conflicts.join(', ')}. Commit or stash them first; nothing was written.`,
+      );
+  }
+  if (names.length === 1) return callbacks[0];
+  return options.skipInstall
+    ? () => undefined
+    : runTasksInSerial(() => installPackagesTask(tree, true));
+}
+
+async function generateLibrary(
+  tree: Tree,
+  options: LibraryGeneratorSchema,
+  beforeMutation: () => Promise<void>,
+  batched = false,
 ): Promise<GeneratorCallback> {
   if (!tree.exists('megamono.json'))
     throw new Error('Run megamono init before adding libraries.');
@@ -173,15 +243,11 @@ export async function libraryGenerator(
     ...(platform === 'neutral' ? [] : [`platform:${platform}`]),
   ];
   logger.info(
-    `# Megamono library plan\n\n- Project: ${name}\n- Root: ${root}\n- Package: ${importPath}\n- Tags: ${tags.join(', ')}\n- Tests: ${testRunner}${testRunner === 'vitest' ? ` (${compatibility.scaffoldPackages.vitest}, Node 20.19+/22.12+/24+)` : ''}\n- Publication: ${options.publishable ? (options.access ?? 'restricted') : 'private workspace library'}\n- Install: ${options.skipInstall ? 'deferred to the caller' : 'after generation'}\n\nExisting release workflows are retained. Review release enrollment separately.\n`,
+    `# Megamono library plan\n\n- Project: ${name}\n- Root: ${root}\n- Package: ${importPath}\n- Tags: ${tags.join(', ')}\n- Tests: ${testRunner}${testRunner === 'vitest' ? ` (${compatibility.scaffoldPackages.vitest}, Node 20.19+/22.12+/24+)` : ''}\n- Publication: ${options.publishable ? (options.access ?? 'restricted') : 'private workspace library'}\n- Install: ${options.skipInstall ? 'deferred to the caller' : batched ? 'once, after every listed library' : 'after generation'}\n\nExisting release workflows are retained. Review release enrollment separately.\n`,
   );
   if (options.dryRun || options.planOnly || !options.yes)
     return () => undefined;
-  if (tree.root !== '/virtual')
-    assertWorkspaceMutationGitPreflight(
-      await collectWorkspaceInitHostState(tree.root),
-      'Library addition',
-    );
+  await beforeMutation();
   let generate: (
     tree: Tree,
     options: Record<string, unknown>,
@@ -214,7 +280,7 @@ export async function libraryGenerator(
     minimal: true,
     useProjectJson: true,
     skipFormat: true,
-    skipInstall: options.skipInstall === true,
+    skipInstall: options.skipInstall === true || batched,
     addPlugin: inference,
   });
   if (inference) scopeGeneratedLibraryInference(tree, root, pluginsBefore);
@@ -392,7 +458,7 @@ export async function libraryGenerator(
   );
   await formatFiles(tree);
   restoreWorkspaceYaml();
-  return options.skipInstall
+  return options.skipInstall || batched
     ? () => undefined
     : runTasksInSerial(
         () => installPackagesTask(tree, true),

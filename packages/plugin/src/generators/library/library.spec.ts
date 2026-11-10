@@ -2,6 +2,11 @@ import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { getProjects, readJson, writeJson, workspaceRoot } from '@nx/devkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { libraryGenerator } from './library';
+import {
+  collectWorkspaceInitHostState,
+  isHostedWorkspaceTree,
+  parsePorcelainPaths,
+} from '../../lib/workspace-init-preflight';
 import { DEFAULT_MEGAMONO_CONFIG } from '../../lib/config';
 import ts = require('typescript');
 import {
@@ -14,6 +19,16 @@ import {
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+
+vi.mock('../../lib/workspace-init-preflight', async (original) => {
+  const actual =
+    await original<typeof import('../../lib/workspace-init-preflight')>();
+  return {
+    ...actual,
+    collectWorkspaceInitHostState: vi.fn(actual.collectWorkspaceInitHostState),
+    isHostedWorkspaceTree: vi.fn(actual.isHostedWorkspaceTree),
+  };
+});
 
 function workspace() {
   const tree = createTreeWithEmptyWorkspace();
@@ -399,6 +414,91 @@ describe('library generator', () => {
       '# reviewed engine',
     );
     expect(tree.exists('libs/shared/package.json')).toBe(true);
+  });
+
+  it('adds several libraries in one change and only refuses dirty files it would write', async () => {
+    const hosted = (dirtyPaths: string[]) => {
+      const tree = workspace();
+      vi.mocked(isHostedWorkspaceTree).mockReturnValue(true);
+      vi.mocked(collectWorkspaceInitHostState).mockResolvedValue({
+        platform: process.platform,
+        node: process.version,
+        git: {
+          available: true,
+          clean: dirtyPaths.length === 0,
+          dirtyPaths,
+          branch: 'feat/libraries',
+          defaultBranch: 'main',
+        },
+      });
+      return tree;
+    };
+    const batch = hosted([]);
+    await libraryGenerator(batch, {
+      name: 'core,ui',
+      scope: 'fixture',
+      yes: true,
+      skipInstall: true,
+      testRunner: 'none',
+    });
+    expect(
+      ['fixture-core', 'fixture-ui'].map(
+        (name) => getProjects(batch).get(name)?.root,
+      ),
+    ).toEqual(['libs/core', 'libs/ui']);
+    expect(collectWorkspaceInitHostState).toHaveBeenCalledTimes(1);
+
+    const dirty = hosted(['docs/notes.md', 'apps/site/src/page.tsx']);
+    await expect(
+      libraryGenerator(dirty, {
+        name: 'emails',
+        scope: 'fixture',
+        yes: true,
+        skipInstall: true,
+        testRunner: 'none',
+      }),
+    ).rejects.toThrow('clean working tree');
+    await libraryGenerator(dirty, {
+      name: 'emails',
+      scope: 'fixture',
+      yes: true,
+      skipInstall: true,
+      testRunner: 'none',
+      allowDirty: true,
+    });
+    expect(dirty.exists('libs/emails/package.json')).toBe(true);
+
+    const overlapping = hosted(['tsconfig.base.json', 'docs/notes.md']);
+    await expect(
+      libraryGenerator(overlapping, {
+        name: 'emails',
+        scope: 'fixture',
+        yes: true,
+        skipInstall: true,
+        testRunner: 'none',
+        allowDirty: true,
+      }),
+    ).rejects.toThrow(/uncommitted work: tsconfig\.base\.json\b/);
+    const locked = hosted(['pnpm-lock.yaml']);
+    await expect(
+      libraryGenerator(locked, {
+        name: 'emails',
+        scope: 'fixture',
+        yes: true,
+        testRunner: 'none',
+        allowDirty: true,
+      }),
+    ).rejects.toThrow('pnpm-lock.yaml');
+    await expect(
+      libraryGenerator(workspace(), { name: 'core,core', yes: true }),
+    ).rejects.toThrow('unique');
+    expect(
+      parsePorcelainPaths(
+        'M tsconfig.base.json\n?? "docs/a b.md"\nR  old.ts -> new.ts',
+      ),
+    ).toEqual(['tsconfig.base.json', 'docs/a b.md', 'old.ts', 'new.ts']);
+    vi.mocked(isHostedWorkspaceTree).mockReset();
+    vi.mocked(collectWorkspaceInitHostState).mockReset();
   });
 
   it('plans without mutation, and rejects unsafe names and occupied paths', async () => {

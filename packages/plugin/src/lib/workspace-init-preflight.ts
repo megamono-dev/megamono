@@ -30,14 +30,38 @@ export interface WorkspaceInitHostState {
   readonly git: {
     readonly available: boolean;
     readonly clean: boolean;
+    /** Workspace-relative paths with uncommitted or untracked changes. */
+    readonly dirtyPaths?: readonly string[];
     readonly branch?: string;
     readonly defaultBranch?: string;
   };
 }
 
+/** Whether a generator tree is backed by a real repository (not Nx's in-memory test tree). */
+export function isHostedWorkspaceTree(tree: {
+  readonly root: string;
+}): boolean {
+  return tree.root !== '/virtual';
+}
+
+/** Paths named by `git status --porcelain=v1` (both sides of a rename). */
+export function parsePorcelainPaths(status: string): string[] {
+  const unquote = (path: string) =>
+    path.startsWith('"') && path.endsWith('"')
+      ? (JSON.parse(path) as string)
+      : path;
+  // The surveyed output is trimmed, so the first entry may have lost the
+  // leading space of an unstaged-only status such as " M path".
+  return status.split(/\r?\n/).flatMap((line) => {
+    const path = /^(?:[ MTADRCU?!]{2}|[MTADRCU?!]) (.+)$/.exec(line)?.[1];
+    return path ? path.split(' -> ').map(unquote) : [];
+  });
+}
+
 export function assertWorkspaceMutationGitPreflight(
   state: WorkspaceInitHostState,
   operation: string,
+  options: { readonly allowDirty?: boolean } = {},
 ): void {
   if (!state.git.available) {
     throw new WorkspaceInitError(
@@ -49,7 +73,7 @@ export function assertWorkspaceMutationGitPreflight(
       }`,
     );
   }
-  if (!state.git.clean) {
+  if (!state.git.clean && !options.allowDirty) {
     throw new WorkspaceInitError(
       'preflight',
       `${operation} requires a clean working tree.`,
@@ -178,6 +202,7 @@ export async function collectWorkspaceInitHostState(
     git: {
       available: true,
       clean: status === '',
+      dirtyPaths: status ? parsePorcelainPaths(status) : [],
       ...(branch ? { branch } : {}),
       ...(defaultBranch ? { defaultBranch } : {}),
     },

@@ -11,4 +11,5 @@ export interface LibraryGeneratorSchema {
   dryRun?: boolean;
   planOnly?: boolean;
   yes?: boolean;
+  allowDirty?: boolean;
 }

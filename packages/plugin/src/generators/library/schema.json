@@ -6,8 +6,8 @@
   "properties": {
     "name": {
       "type": "string",
-      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-      "description": "Library name, without its package scope."
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*(?:,[a-z0-9]+(?:-[a-z0-9]+)*)*$",
+      "description": "Library name, without its package scope. A comma-separated list (core,ui,browser) adds several libraries with the same options in one change."
     },
     "scope": {
       "type": "string",
@@ -56,6 +56,11 @@
       "type": "boolean",
       "default": false,
       "description": "Apply the reviewed plan; otherwise only display it."
+    },
+    "allowDirty": {
+      "type": "boolean",
+      "default": false,
+      "description": "Permit unrelated uncommitted work. Generation still fails, writing nothing, when a file it would write (or a lockfile an install would rewrite) has uncommitted changes."
     }
   },
   "required": ["name"],
