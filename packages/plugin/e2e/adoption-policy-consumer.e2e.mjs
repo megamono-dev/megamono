@@ -85,6 +85,15 @@ try {
   );
   const schema = require('@megamono/plugin/schemas/megamono.schema.json');
   assert.deepEqual(schema.properties.version.enum, [1, 2]);
+  const runtimeSchema = require('@megamono/plugin/schemas/extension-runtime.schema.json');
+  assert.equal(runtimeSchema.properties.version.const, 1);
+  assert.deepEqual(runtimeSchema.required, [
+    'version',
+    'renderers',
+    'workers',
+    'rationale',
+    'decision',
+  ]);
   put('nx.json', {});
   put('project.json', {
     name: 'policy-consumer',
@@ -227,8 +236,142 @@ export function reviewedKey(identity: DependencyFindingIdentity): string { retur
     ),
   );
   assert(drifted.diagnostics.some((item) => item.code === 'platform-boundary'));
+
+  // Qualify the real packed check executor, including its JSON evidence and
+  // decision lookup when repository-wide documentation checks are skipped.
+  const runtimeDecision = 'decision-20261110-packed-renderers';
+  put(
+    'docs/decisions/renderers.md',
+    readFileSync(join(root, 'docs/decisions/packed.md'), 'utf8').replaceAll(
+      decision,
+      runtimeDecision,
+    ),
+  );
+  const runtimeTags = [
+    'type:app',
+    'scope:shared',
+    'platform:extension',
+    'visibility:internal',
+  ];
+  const uiTags = ['type:ui', 'scope:shared', 'platform:web'];
+  const contract = {
+    version: 1,
+    renderers: ['entrypoints/popup/index.html'],
+    workers: ['entrypoints/background.ts'],
+    rationale: 'Reviewed packed renderer and worker roots',
+    decision: runtimeDecision,
+  };
+  put('apps/extension/package.json', {
+    name: '@fixture/extension',
+    nx: { tags: runtimeTags },
+    megamono: { extension: { runtimeEntries: contract } },
+  });
+  put(
+    'apps/extension/entrypoints/popup/index.html',
+    '<script type="module" src="./main.ts"></script>',
+  );
+  put(
+    'apps/extension/entrypoints/popup/main.ts',
+    "export {button} from '@fixture/ui';",
+  );
+  put(
+    'apps/extension/entrypoints/background.ts',
+    'export const background=true;',
+  );
+  put('apps/extension/tsconfig.json', {
+    compilerOptions: {
+      module: 'ESNext',
+      moduleResolution: 'Bundler',
+      paths: { '@fixture/ui': ['../../libs/ui/src/index.ts'] },
+    },
+    include: ['entrypoints/**/*.ts'],
+  });
+  put('libs/ui/package.json', { name: '@fixture/ui', nx: { tags: uiTags } });
+  put('libs/ui/src/index.ts', 'export const button=1;');
+  const runtimeGraph = {
+    nodes: {
+      extension: {
+        name: 'extension',
+        type: 'app',
+        data: { root: 'apps/extension', tags: runtimeTags },
+      },
+      ui: { name: 'ui', type: 'lib', data: { root: 'libs/ui', tags: uiTags } },
+    },
+    dependencies: {
+      extension: [{ source: 'extension', target: 'ui', type: 'static' }],
+      ui: [],
+    },
+  };
+  const runtimeConfig = structuredClone(plugin.DEFAULT_MEGAMONO_CONFIG);
+  runtimeConfig.adoption.modules = ['lint'];
+  put('megamono.json', runtimeConfig);
+  put('.megamono/artifacts.json', { schemaVersion: 1, artifacts: [] });
+  const executorCollection = JSON.parse(
+    readFileSync(join(packageRoot, 'executors.json'), 'utf8'),
+  );
+  const checkExecutor = require(
+    resolve(packageRoot, executorCollection.executors.check.implementation),
+  ).default;
+  const packedRequire = createRequire(join(packageRoot, 'package.json'));
+  const { logger } = packedRequire('@nx/devkit');
+  const checkJson = async () => {
+    const output = [];
+    const original = logger.info;
+    logger.info = (message) => output.push(message);
+    try {
+      const result = await checkExecutor(
+        { json: true, skipDocs: true, profile: 'development' },
+        { root, projectGraph: runtimeGraph },
+      );
+      const report = JSON.parse(
+        output.find((message) => String(message).trim().startsWith('{')),
+      );
+      assert.equal(result.success, report.success);
+      return report;
+    } finally {
+      logger.info = original;
+    }
+  };
+  const rendererReport = await checkJson();
+  assert.equal(
+    rendererReport.success,
+    true,
+    JSON.stringify(rendererReport.errors),
+  );
+  assert.equal(rendererReport.extensionRuntime[0].complete, true);
+  assert.equal(
+    rendererReport.extensionRuntime[0].contract.decision,
+    runtimeDecision,
+  );
+  assert.deepEqual(
+    rendererReport.extensionRuntime[0].applied.map(
+      ({ target, dependencyKind }) => ({ target, dependencyKind }),
+    ),
+    [{ target: 'ui', dependencyKind: 'static' }],
+  );
+  put(
+    'apps/extension/entrypoints/background.ts',
+    "export {button} from '@fixture/ui';",
+  );
+  const workerReport = await checkJson();
+  assert.equal(workerReport.success, false);
+  assert.equal(workerReport.extensionRuntime[0].complete, false);
+  assert.deepEqual(workerReport.extensionRuntime[0].applied, []);
+  assert(workerReport.errors.some((item) => item.code === 'platform-boundary'));
+  put(
+    'apps/extension/entrypoints/background.ts',
+    'export const background=true;',
+  );
+  rmSync(join(root, 'docs/decisions/renderers.md'));
+  const missingAuthorityReport = await checkJson();
+  assert.equal(missingAuthorityReport.success, false);
+  assert(
+    missingAuthorityReport.errors.some(
+      (item) => item.code === 'extension-runtime-policy',
+    ),
+  );
   console.log(
-    `Packed ${manifest.name}@${manifest.version}: clean frozen pnpm install, consumer build, public exports, migration registration, exact allowances and identity replacement checks passed.`,
+    `Packed ${manifest.name}@${manifest.version}: clean frozen pnpm install, consumer build, public exports, migration registration, exact allowances, identity replacement and reviewed extension runtime JSON checks passed.`,
   );
 } finally {
   rmSync(root, { recursive: true, force: true });
