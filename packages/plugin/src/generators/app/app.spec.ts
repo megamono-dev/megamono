@@ -803,8 +803,8 @@ describe('app generator', () => {
     expect(
       readProjectConfiguration(tree, 'fixture-web').targets?.serve,
     ).toMatchObject({
-      executor: '@nx/next:server',
-      options: { dev: true },
+      executor: 'nx:run-commands',
+      options: { command: 'node scripts/next-server.cjs dev', cwd: 'apps/web' },
     });
 
     const first = snapshot(tree);
@@ -816,6 +816,45 @@ describe('app generator', () => {
       yes: true,
     });
     expect(snapshot(tree)).toBe(first);
+  });
+
+  it('gives a new Chakra theme peer ownership and bundler typechecking', async () => {
+    const tree = workspace();
+    await appGenerator(tree, {
+      type: 'site',
+      scope: 'fixture',
+      styling: 'chakra',
+      yes: true,
+      interactive: false,
+      skipInstall: true,
+    });
+    const theme = readJson(tree, 'packages/theme/package.json');
+    const app = readJson(tree, 'apps/site/package.json');
+    expect(theme.dependencies?.['@chakra-ui/react']).toBeUndefined();
+    expect(theme.dependencies?.['@emotion/react']).toBeUndefined();
+    expect(theme.peerDependencies).toMatchObject({
+      react: app.dependencies.react,
+      '@chakra-ui/react': app.dependencies['@chakra-ui/react'],
+      '@emotion/react': app.dependencies['@emotion/react'],
+    });
+    expect(theme.devDependencies).toMatchObject(theme.peerDependencies);
+    expect(readJson(tree, 'packages/theme/tsconfig.lib.json')).toMatchObject({
+      compilerOptions: {
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        skipLibCheck: true,
+      },
+      exclude: expect.arrayContaining(['src/**/*.spec.*', 'src/**/*.test.*']),
+    });
+    expect(tree.read('apps/site/next.config.js', 'utf8')).not.toContain(
+      'withNx',
+    );
+    expect(
+      readProjectConfiguration(tree, 'fixture-site').targets?.build,
+    ).toBeUndefined();
+    expect(tree.read('apps/site/scripts/next-server.cjs', 'utf8')).toContain(
+      'process.env.PORT',
+    );
   });
 
   it('creates a Nest feature library and keeps the API a composition root', async () => {

@@ -1,5 +1,10 @@
 import { preserveWorkspaceYaml } from '../../lib/preserve-workspace-yaml';
 import { wireExpoValidation } from '../../lib/expo-validation';
+import { prepareNextInference, configureNextRuntime } from './web-runtime';
+import {
+  canInferGeneratedLibrary,
+  scopeGeneratedLibraryInference,
+} from '../../lib/generated-library-inference';
 import { prependEslintFlatConfig } from '../../lib/eslint-flat-config';
 import { createAndroidApp, validateAndroidApplicationId } from './android';
 import {
@@ -906,6 +911,8 @@ async function ensureTheme(
       'conflict',
     );
   }
+  const pluginsBefore = readJson(tree, 'nx.json').plugins ?? [];
+  const infer = canInferGeneratedLibrary(tree);
   const callback = await generator('@nx/js', 'libraryGenerator')(tree, {
     name: themeProject,
     directory: themeRoot,
@@ -917,7 +924,23 @@ async function ensureTheme(
     minimal: true,
     tags: `platform:web,scope:${options.scope},type:ui`,
     skipFormat: true,
+    addPlugin: infer,
   });
+  if (infer) scopeGeneratedLibraryInference(tree, themeRoot, pluginsBefore);
+  const root = readJson<{
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  }>(tree, 'package.json');
+  const singletonDependencies = {
+    react:
+      root.dependencies?.react ??
+      root.devDependencies?.react ??
+      root.peerDependencies?.react ??
+      packageVersion('react'),
+    '@chakra-ui/react': packageVersion('@chakra-ui/react'),
+    '@emotion/react': packageVersion('@emotion/react'),
+  };
   const updateTheme = (value: Record<string, unknown>) => ({
     ...value,
     name: `@${options.scope}/theme`,
@@ -927,10 +950,13 @@ async function ensureTheme(
     exports: {
       '.': { types: './src/index.ts', default: './src/index.ts' },
     },
-    dependencies: {
-      ...((value.dependencies as Record<string, string> | undefined) ?? {}),
-      '@chakra-ui/react': packageVersion('@chakra-ui/react'),
-      '@emotion/react': packageVersion('@emotion/react'),
+    peerDependencies: {
+      ...((value.peerDependencies as Record<string, string> | undefined) ?? {}),
+      ...singletonDependencies,
+    },
+    devDependencies: {
+      ...((value.devDependencies as Record<string, string> | undefined) ?? {}),
+      ...singletonDependencies,
     },
   });
   if (tree.exists(`${themeRoot}/package.json`))
@@ -941,6 +967,25 @@ async function ensureTheme(
     "export { megamonoSystem } from './lib/system';\n",
   );
   tree.write(`${themeRoot}/src/lib/system.ts`, themeSystemSource());
+  updateJson(tree, `${themeRoot}/tsconfig.lib.json`, (value) => ({
+    ...value,
+    compilerOptions: {
+      ...value.compilerOptions,
+      module: 'ESNext',
+      moduleResolution: 'Bundler',
+      lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+      // Chakra 3.37 ships a cornerShape declaration absent from its CSS type
+      // dependency. Check our source while skipping third-party declarations.
+      skipLibCheck: true,
+    },
+    exclude: [
+      ...new Set([
+        ...(value.exclude ?? []),
+        'src/**/*.spec.*',
+        'src/**/*.test.*',
+      ]),
+    ],
+  }));
   return callback;
 }
 
@@ -952,6 +997,7 @@ async function createWebApp(
   const appRouter = options.router === 'app';
   const routeRoot = `${options.directory}/src/${appRouter ? 'app' : 'pages'}`;
   const callbacks: (GeneratorCallback | void)[] = [];
+  const nextInference = prepareNextInference(tree, options.directory);
   const manifest = readJson<{
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
@@ -983,6 +1029,7 @@ async function createWebApp(
     ),
   );
   if (styling === 'chakra') callbacks.push(await ensureTheme(tree, options));
+  const pluginsBefore = readJson(tree, 'nx.json').plugins ?? [];
   callbacks.push(
     await generator('@nx/next', 'applicationGenerator')(tree, {
       name: options.projectName,
@@ -995,8 +1042,18 @@ async function createWebApp(
       e2eTestRunner: 'playwright',
       tags: options.tags.join(','),
       skipFormat: true,
+      addPlugin: nextInference,
     }),
   );
+  if (nextInference)
+    configureNextRuntime(
+      tree,
+      options.projectName,
+      options.directory,
+      options.port ?? 3000,
+    );
+  if (nextInference)
+    scopeGeneratedLibraryInference(tree, options.directory, pluginsBefore);
   // Next rewrites its declaration and creates app-local output during development.
   const eslintPath = `${options.directory}/eslint.config.mjs`;
   const eslintConfig = prependEslintFlatConfig(
@@ -1015,6 +1072,7 @@ async function createWebApp(
     styling === 'chakra'
       ? {
           '@chakra-ui/react': packageVersion('@chakra-ui/react'),
+          '@emotion/react': packageVersion('@emotion/react'),
           [`@${options.scope}/theme`]: workspaceDependency(options),
         }
       : styling === 'emotion'
