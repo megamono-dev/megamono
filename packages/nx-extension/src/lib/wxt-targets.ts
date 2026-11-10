@@ -63,7 +63,7 @@ export function wxtTargets(
   });
   return {
     prepare: run('wxt prepare', [], ['{projectRoot}/.wxt']),
-    typecheck: run('tsc --noEmit', ['prepare']),
+    typecheck: run('tsc --noEmit', ['prepare', '^typecheck']),
     [names.devChromeTargetName ?? 'dev-chrome']: {
       ...run(wxtCommand('', 'chrome', versions.chrome), ['prepare']),
       continuous: true,
@@ -113,7 +113,7 @@ export function wxtTargets(
       ],
       outputs: ['{projectRoot}/.output/*.zip'],
     },
-    test: { ...run('vitest run'), cache: true },
+    test: { ...run('vitest run', ['prepare']), cache: true },
     lint: {
       ...run(
         "eslint . --ignore-pattern '.wxt/**' --ignore-pattern '.output/**'",

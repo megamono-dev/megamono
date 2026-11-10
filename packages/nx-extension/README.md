@@ -63,12 +63,27 @@ npm exec nx -- run your-extension:package
 | `dev-chrome`, `dev-firefox` | Start development for one browser                  |
 | `build`                     | Build Chrome and Firefox bundles                   |
 | `package`                   | Produce browser archives, including Firefox source |
+| `test`                      | Run Vitest with WXT's browser API mocks            |
 
 Finite targets share an ordered chain and are non-cacheable because WXT updates
 shared generated state. Use one Nx invocation at a time for the same app.
 Manifest-only projects have their own declared scripts instead of this WXT target
 set. Store submission requires repository-owned commands and credentials;
 Safari uses a separate Apple wrapper project.
+
+New applications ignore `.wxt/` and `.output/` locally without changing the
+workspace's existing ignore rules. Their TypeScript configuration supports React
+JSX, but the background-only scaffold does not install React or a UI framework.
+Add those dependencies explicitly when introducing UI. Production typechecking
+waits for dependency typechecks and excludes specs; `tsconfig.spec.json` covers
+the separate test sources. The Vitest configuration uses a Node environment;
+choose a DOM environment explicitly for tests that need it.
+
+Generated code imports WXT APIs explicitly. Auto-imports are disabled so shared
+workspace libraries cannot silently acquire extension-specific imports. The
+`config:resolved` hook works around WXT 0.21.4 installing the underlying unimport
+transform even with `imports: false`; keep it until the pinned WXT version is
+upgraded and this behavior is qualified again. See [WXT auto-imports](https://wxt.dev/guide/essentials/config/auto-imports).
 
 ## Requirements and help
 

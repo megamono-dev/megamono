@@ -36,10 +36,15 @@ describe('shared WXT scheduling', () => {
     for (const [index, target] of chain.entries()) {
       expect(authored[target].cache).toBe(false);
       expect(authored[target].dependsOn).toEqual(
-        index ? [chain[index - 1]] : [],
+        target === 'typecheck'
+          ? ['prepare', '^typecheck']
+          : index
+            ? [chain[index - 1]]
+            : [],
       );
     }
     expect(authored.prepare.outputs).toEqual(['{projectRoot}/.wxt']);
     expect(authored.typecheck.options.command).toBe('tsc --noEmit');
+    expect(authored.test.dependsOn).toEqual(['prepare']);
   });
 });
