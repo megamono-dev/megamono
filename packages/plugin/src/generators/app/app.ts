@@ -1,4 +1,5 @@
 import { preserveWorkspaceYaml } from '../../lib/preserve-workspace-yaml';
+import { wireGeneratedReactLint } from '../../lib/generated-react-lint';
 import { wireExpoValidation } from '../../lib/expo-validation';
 import { prepareNextInference, configureNextRuntime } from './web-runtime';
 import {
@@ -1229,6 +1230,13 @@ async function createWebApp(
   );
   tree.write(`${e2eRoot}/src/example.spec.ts`, billboardE2eSource(options));
   configureE2ePackage(tree, options);
+  callbacks.push(
+    wireGeneratedReactLint(
+      tree,
+      options.directory,
+      packageVersion('eslint-plugin-react-hooks'),
+    ),
+  );
   return callbacks;
 }
 

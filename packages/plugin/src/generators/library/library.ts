@@ -24,6 +24,7 @@ import {
 } from '../../lib/workspace-init-preflight';
 import type { LibraryGeneratorSchema } from './schema';
 import { preserveWorkspaceYaml } from '../../lib/preserve-workspace-yaml';
+import { wireGeneratedReactLint } from '../../lib/generated-react-lint';
 import { nxWorkspaceCapabilities } from '../../lib/workspace-compatibility';
 import {
   canInferGeneratedLibrary,
@@ -237,6 +238,13 @@ export async function libraryGenerator(
   );
   const dependencyCallbacks: GeneratorCallback[] = [];
   if (react) {
+    dependencyCallbacks.push(
+      wireGeneratedReactLint(
+        tree,
+        root,
+        compatibility.scaffoldPackages['eslint-plugin-react-hooks'],
+      ),
+    );
     const version =
       declared(manifest, 'react') ?? compatibility.scaffoldPackages.react;
     const typesVersion =

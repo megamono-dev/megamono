@@ -49,6 +49,7 @@
     "@vitest/coverage-v8": "~4.1.12",
     "@vitest/ui": "~4.1.12",
     "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
     "gray-matter": "^4.0.3",
     "jest": "30.5.2",
     "jest-environment-node": "30.5.2",
