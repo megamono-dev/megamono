@@ -107,6 +107,7 @@ Use `npx create-megamono@next --help` for the full command reference.
 | `--directory`         | Target directory for the new workspace                                                                        |
 | `--interactive=false` | Disable guided prompts                                                                                        |
 | `--dry-run`           | Print the plan without creating a workspace                                                                   |
+| `--resume`            | Continue a failed creation from its staging directory with the recorded options                               |
 | `--help`              | Show usage and options                                                                                        |
 
 Use `--apps=` to create without applications and `--packages=` to skip
@@ -121,6 +122,16 @@ libraries, and repository tooling. Service configuration is optional. It does no
 deploy applications, publish packages, start services, or run database migrations.
 Application behavior, environment values, credentials, and release approval stay
 with your repository.
+
+Creation runs in a `megamono-<name>-staging` directory next to the destination
+and moves it into place only after every step succeeds. When a step fails, the
+staging directory keeps `MEGAMONO-RECOVERY.md` and `.megamono-create-state.json`.
+Rerun `create-megamono <name> --resume` from the same directory (add the original
+`--directory` if you used one) to rerun the failed step and continue with the
+recorded options; completed steps are skipped. Pass only the name, `--directory`
+and `--dry-run` with `--resume`. A failure before any step completed, or state
+recorded by a different create-megamono version, cannot be resumed; remove the
+staging directory and start over.
 
 ## Related packages
 

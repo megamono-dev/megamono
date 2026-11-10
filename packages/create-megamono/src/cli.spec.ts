@@ -356,6 +356,20 @@ describe('CLI entrypoint', () => {
     }
   });
 
+  it('rejects creation options combined with --resume', async () => {
+    const error = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    try {
+      expect(
+        await main(['resume-example', '--resume', '--apps=web', '--dry-run']),
+      ).toBe(2);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining('(received --apps)'),
+      );
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('rejects conflicting Springbar runner flags before creation', async () => {
     const error = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
     try {

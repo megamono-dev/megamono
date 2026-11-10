@@ -89,6 +89,8 @@ export interface CreateMegamonoInput {
   verify?: string;
   cleanupOnFailure?: boolean;
   dryRun?: boolean;
+  /** Continue a failed creation from its staged state instead of starting over. */
+  resume?: boolean;
   localPackages?: string;
   packageManager?: string;
   cwd?: string;
@@ -144,6 +146,20 @@ export interface CreationPlan {
   options: NormalizedCreateOptions;
   steps: PlanStep[];
   springbarResult?: SpringbarSetupResult;
+  /** Step IDs already completed by an earlier, failed run (set by --resume). */
+  resumedSteps?: readonly string[];
+}
+
+/** Machine-readable twin of MEGAMONO-RECOVERY.md, read by --resume. */
+export const CREATION_STATE_FILE = '.megamono-create-state.json';
+const RECOVERY_FILE = 'MEGAMONO-RECOVERY.md';
+
+interface CreationState {
+  schemaVersion: 1;
+  options: NormalizedCreateOptions;
+  steps: string[];
+  completed: string[];
+  failure: string;
 }
 
 export interface CommandInvocation {
@@ -978,9 +994,12 @@ export async function preflightPlan(
   yalcStoreResolver: YalcStoreResolver = resolveYalcStore,
 ): Promise<void> {
   const { destination, stagingDirectory } = plan.options;
-  if (await pathExists(stagingDirectory)) {
+  if (plan.resumedSteps === undefined && (await pathExists(stagingDirectory))) {
+    const resumable = await pathExists(
+      resolve(stagingDirectory, CREATION_STATE_FILE),
+    );
     throw new CreateMegamonoError(
-      `Staging directory already exists: ${stagingDirectory}. Recover or remove it before retrying.`,
+      `Staging directory already exists: ${stagingDirectory}. ${resumable ? 'Rerun with --resume to continue from the first incomplete step, or remove it to start over.' : 'Recover or remove it before retrying.'}`,
       3,
     );
   }
@@ -1029,26 +1048,36 @@ function renderCommand(step: Extract<PlanStep, { kind: 'command' }>): string {
 }
 
 export function renderPlan(plan: CreationPlan): string {
+  const resumed = new Set(plan.resumedSteps ?? []);
   return plan.steps
     .map((step, index) => {
-      if (step.kind === 'commit') {
-        return `${index + 1}. commit ${plan.options.stagingDirectory} -> ${plan.options.destination}`;
-      }
-      if (step.kind === 'configure') {
-        if (step.id === 'configure-publishable-packages')
-          return `${index + 1}. [staging] configure ${plan.options.packageAccess} npm package access (no publication)`;
-        if (step.id === 'configure-package-manager')
-          return `${index + 1}. [staging] record ${plan.options.packageManager}, pin the bootstrap toolchain, and configure package-manager policy`;
-        if (step.id === 'configure-workspace-identity')
-          return `${index + 1}. [staging] normalize the workspace source condition and Node runtime declaration`;
-        return `${index + 1}. [staging] remove bootstrap node_modules for an install-free destination`;
-      }
-      if (step.kind === 'springbar') {
-        return `${index + 1}. [destination] Springbar MCP inspect_candidates -> setup_workspace`;
-      }
-      return `${index + 1}. [${step.cwd}] ${renderCommand(step)}`;
+      const line = renderPlanStep(plan, step, index);
+      return resumed.has(step.id) ? `${line} (completed; skipped)` : line;
     })
     .join('\n');
+}
+
+function renderPlanStep(
+  plan: CreationPlan,
+  step: PlanStep,
+  index: number,
+): string {
+  if (step.kind === 'commit') {
+    return `${index + 1}. commit ${plan.options.stagingDirectory} -> ${plan.options.destination}`;
+  }
+  if (step.kind === 'configure') {
+    if (step.id === 'configure-publishable-packages')
+      return `${index + 1}. [staging] configure ${plan.options.packageAccess} npm package access (no publication)`;
+    if (step.id === 'configure-package-manager')
+      return `${index + 1}. [staging] record ${plan.options.packageManager}, pin the bootstrap toolchain, and configure package-manager policy`;
+    if (step.id === 'configure-workspace-identity')
+      return `${index + 1}. [staging] normalize the workspace source condition and Node runtime declaration`;
+    return `${index + 1}. [staging] remove bootstrap node_modules for an install-free destination`;
+  }
+  if (step.kind === 'springbar') {
+    return `${index + 1}. [destination] Springbar MCP inspect_candidates -> setup_workspace`;
+  }
+  return `${index + 1}. [${step.cwd}] ${renderCommand(step)}`;
 }
 
 function requiredScaffoldVersion(name: string): string {
@@ -1283,18 +1312,118 @@ async function writeRecovery(
       ? completed.map((step) => `- ${step}`)
       : ['- none']),
     '',
-    'The requested destination was not populated. Inspect this staging directory, then move or remove it before retrying.',
+    'The requested destination was not populated. Inspect this staging directory, then either:',
+    '',
+    `- rerun \`create-megamono ${/^[\w.-]+$/.test(plan.options.name) ? plan.options.name : JSON.stringify(plan.options.name)} --resume\`${plan.options.destination === resolve(dirname(plan.options.stagingDirectory), plan.options.scope) ? '' : ` with \`--directory=${plan.options.destination}\``} from ${dirname(plan.options.destination)} to rerun the failed step and continue with the recorded options, or`,
+    '- move or remove this directory before starting over.',
+    '',
+    `${CREATION_STATE_FILE} records the options and completed steps for --resume; edit neither file by hand.`,
     '',
   ].join('\n');
+  const state: CreationState = {
+    schemaVersion: 1,
+    options: { ...plan.options, dryRun: false },
+    steps: plan.steps.map((step) => step.id),
+    completed: [...completed],
+    failure: message,
+  };
   await writeFile(
-    resolve(plan.options.stagingDirectory, 'MEGAMONO-RECOVERY.md'),
+    resolve(plan.options.stagingDirectory, CREATION_STATE_FILE),
+    `${JSON.stringify(state, null, 2)}\n`,
+    'utf8',
+  );
+  await writeFile(
+    resolve(plan.options.stagingDirectory, RECOVERY_FILE),
     body,
     'utf8',
   );
 }
 
+/**
+ * Rebuild the plan recorded by a failed run. Options come from the state file,
+ * so a resumed run cannot silently diverge from the staged workspace.
+ */
+export async function loadResumePlan(
+  input: Pick<CreateMegamonoInput, 'name' | 'directory' | 'cwd' | 'dryRun'>,
+): Promise<CreationPlan> {
+  const name = input.name?.trim();
+  if (!name)
+    throw new CreateMegamonoError('--resume requires the workspace name.', 2);
+  const scope = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const cwd = resolve(input.cwd ?? process.cwd());
+  const destination = resolve(cwd, input.directory ?? scope);
+  const stagingDirectory = resolve(
+    dirname(destination),
+    `megamono-${scope}-staging`,
+  );
+  let state: CreationState;
+  try {
+    state = JSON.parse(
+      await readFile(resolve(stagingDirectory, CREATION_STATE_FILE), 'utf8'),
+    ) as CreationState;
+  } catch (error) {
+    throw new CreateMegamonoError(
+      `No resumable creation state in ${stagingDirectory}${error instanceof Error && 'code' in error && error.code === 'ENOENT' ? '' : ` (${error instanceof Error ? error.message : String(error)})`}. Only failures recorded by this version of create-megamono can be resumed.`,
+      3,
+    );
+  }
+  if (
+    state.schemaVersion !== 1 ||
+    !state.options ||
+    !Array.isArray(state.steps) ||
+    !Array.isArray(state.completed)
+  )
+    throw new CreateMegamonoError(
+      `Unsupported creation state in ${stagingDirectory}.`,
+      3,
+    );
+  if (
+    state.options.stagingDirectory !== stagingDirectory ||
+    state.options.destination !== destination
+  )
+    throw new CreateMegamonoError(
+      `Recorded destination ${state.options.destination} does not match ${destination}. Resume from the original directory with the original name and --directory.`,
+      3,
+    );
+  const plan = createPlan({
+    ...state.options,
+    cleanupOnFailure: false,
+    dryRun: input.dryRun ?? false,
+  });
+  const steps = plan.steps.map((step) => step.id);
+  if (JSON.stringify(steps) !== JSON.stringify(state.steps))
+    throw new CreateMegamonoError(
+      'The recorded creation plan differs from the plan this create-megamono version produces. Resume with the version that started the creation, or remove the staging directory and start over.',
+      3,
+    );
+  const prefix = steps.slice(0, state.completed.length);
+  if (JSON.stringify(prefix) !== JSON.stringify(state.completed))
+    throw new CreateMegamonoError(
+      `Recorded completed steps are not a prefix of the plan in ${stagingDirectory}.`,
+      3,
+    );
+  if (state.completed.length === 0)
+    throw new CreateMegamonoError(
+      `No step completed before the failure (${state.failure}). Remove ${stagingDirectory} and rerun without --resume.`,
+      3,
+    );
+  if (state.completed.includes('commit-workspace'))
+    throw new CreateMegamonoError(
+      `The workspace was already committed to ${destination}; nothing to resume.`,
+      3,
+    );
+  plan.resumedSteps = state.completed;
+  return plan;
+}
+
 async function commitWorkspace(plan: CreationPlan): Promise<void> {
   const { destination, stagingDirectory } = plan.options;
+  // Recovery state describes the staging directory, never the committed workspace.
+  for (const file of [CREATION_STATE_FILE, RECOVERY_FILE])
+    await rm(resolve(stagingDirectory, file), { force: true });
   let removedEmptyDestination = false;
   if (await pathExists(destination)) {
     await rmdir(destination);
@@ -1383,9 +1512,9 @@ export async function executePlan(
 ): Promise<void> {
   await preflightPlan(plan, yalcStoreResolver);
   if (plan.options.dryRun) return;
-  const completed: string[] = [];
+  const completed: string[] = [...(plan.resumedSteps ?? [])];
   try {
-    for (const step of plan.steps) {
+    for (const step of plan.steps.slice(completed.length)) {
       if (step.kind === 'commit') await commitWorkspace(plan);
       else if (step.kind === 'configure') {
         if (step.id === 'configure-package-manager')
@@ -1443,7 +1572,9 @@ export async function createMegamono(
   springbarConfigurator: SpringbarConfigurator = configureSpringbarWithMcp,
   yalcStoreResolver: YalcStoreResolver = resolveYalcStore,
 ): Promise<CreationPlan> {
-  const plan = createPlan(normalizeCreateOptions(input));
+  const plan = input.resume
+    ? await loadResumePlan(input)
+    : createPlan(normalizeCreateOptions(input));
   await executePlan(plan, runner, springbarConfigurator, yalcStoreResolver);
   return plan;
 }

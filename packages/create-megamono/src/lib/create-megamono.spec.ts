@@ -5,7 +5,9 @@ import { execFileSync } from 'node:child_process';
 import {
   compatibility,
   configurePublishablePackages,
+  CREATION_STATE_FILE,
   CreateMegamonoError,
+  createMegamono,
   createPlan,
   executePlan,
   normalizeCreateOptions,
@@ -1250,6 +1252,122 @@ describe('executePlan', () => {
     await expect(readFile(plan.options.destination)).rejects.toMatchObject({
       code: 'ENOENT',
     });
+  });
+
+  it('resumes a failed creation from the first incomplete step', async () => {
+    const cwd = await fixture();
+    const input = {
+      name: 'Acme Tools',
+      apps: ['api'],
+      cwd,
+      platform: 'darwin' as const,
+      packageManager: 'npm',
+      verify: 'none',
+    };
+    const plan = createPlan(normalizeCreateOptions(input));
+    const ran: string[] = [];
+    const failing: CommandRunner = async ({ args }) => {
+      ran.push(args.join(' '));
+      if (ran.length === 1) {
+        await mkdir(plan.options.stagingDirectory);
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'package.json'),
+          '{}',
+        );
+        return;
+      }
+      if (args.includes('@megamono/plugin:app'))
+        throw new Error('forced generator failure');
+    };
+    await expect(createMegamono(input, failing)).rejects.toMatchObject({
+      exitCode: 1,
+    });
+    const recovery = await readRecovery(plan.options.stagingDirectory);
+    expect(recovery).toContain('create-megamono "Acme Tools" --resume');
+    const state = JSON.parse(
+      await readFile(
+        resolve(plan.options.stagingDirectory, CREATION_STATE_FILE),
+        'utf8',
+      ),
+    );
+    expect(state.completed).toEqual([
+      'create-nx-workspace',
+      'configure-package-manager',
+      'install-plugins',
+      'validate-bootstrap-toolchain',
+    ]);
+    await expect(createMegamono(input, failing)).rejects.toThrow(
+      /Rerun with --resume/,
+    );
+
+    const resumed: string[] = [];
+    const resumedPlan = await createMegamono(
+      { name: 'Acme Tools', cwd, resume: true },
+      async ({ args }) => {
+        resumed.push(args.join(' '));
+      },
+    );
+    expect(resumed[0]).toContain('@megamono/plugin:app');
+    expect(resumed.some((args) => args.includes('create-nx-workspace'))).toBe(
+      false,
+    );
+    expect(renderPlan(resumedPlan)).toContain('1. [parent] "npm"');
+    expect(renderPlan(resumedPlan).split('\n')[0]).toMatch(
+      /\(completed; skipped\)$/,
+    );
+    await expect(
+      readFile(resolve(plan.options.destination, CREATION_STATE_FILE)),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readRecovery(plan.options.destination)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    expect(
+      JSON.parse(
+        await readFile(
+          resolve(plan.options.destination, 'package.json'),
+          'utf8',
+        ),
+      ),
+    ).toMatchObject({ name: '@acme-tools/source' });
+  });
+
+  it('refuses to resume without recorded progress or with a drifted plan', async () => {
+    const cwd = await fixture();
+    await expect(
+      createMegamono({ name: 'Acme Tools', cwd, resume: true }),
+    ).rejects.toThrow(/No resumable creation state/);
+    const input = {
+      name: 'Acme Tools',
+      apps: ['api'],
+      cwd,
+      platform: 'darwin' as const,
+      verify: 'none',
+    };
+    await expect(
+      createMegamono(input, async () => {
+        throw new Error('scaffold failed');
+      }),
+    ).rejects.toMatchObject({ exitCode: 1 });
+    await expect(
+      createMegamono({ name: 'Acme Tools', cwd, resume: true }),
+    ).rejects.toThrow(/No step completed/);
+    const statePath = resolve(
+      cwd,
+      'megamono-acme-tools-staging',
+      CREATION_STATE_FILE,
+    );
+    const state = JSON.parse(await readFile(statePath, 'utf8'));
+    await writeFile(
+      statePath,
+      JSON.stringify({
+        ...state,
+        steps: ['create-nx-workspace', 'something-else'],
+        completed: ['create-nx-workspace'],
+      }),
+    );
+    await expect(
+      createMegamono({ name: 'Acme Tools', cwd, resume: true }),
+    ).rejects.toThrow(/recorded creation plan differs/);
   });
 
   it('configures Springbar against the committed destination as the last step', async () => {
