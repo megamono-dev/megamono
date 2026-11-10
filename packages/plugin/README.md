@@ -143,6 +143,25 @@ TypeScript, and package-manager ranges are listed in the
 [requirements guide](https://megamono.com/docs/workflows/requirements) and
 [`compatibility.json`](./compatibility.json).
 
+### Where shared UI components live
+
+Type direction is fixed: `type:ui` may import only `type:util`, so one UI
+library cannot import another (for example an icon or logo package). Choose one
+of these documented shapes rather than retagging projects:
+
+- Keep components that compose each other in one `type:ui` library, and move
+  renderer-free logic (tokens, ranking, formatting) into `type:util` libraries
+  that any UI library can import.
+- Put portable design tokens in a single platform-neutral `type:util` library
+  tagged `capability:theme-tokens`; UI libraries and the Chakra theme both
+  import it. The Chakra theme generated with a web/site app stays a
+  `platform:web`/`type:ui` runtime adapter (it calls `createSystem`); the app,
+  not a component library, provides it through `ChakraProvider`.
+- Compose UI libraries in a `type:feature` library, which may import `ui`.
+- For a reviewed exception, use configuration version 2 and record one
+  `boundaryAllowances` entry (constraint `module-boundaries:type-direction`)
+  for the exact source/target pair, backed by an accepted decision.
+
 ## Learn more
 
 - [Adopt an existing workspace](https://megamono.com/docs/workflows/adoption)
