@@ -1,5 +1,6 @@
 import { designHandoffFiles } from '../../lib/docs-design';
 import {
+  appendEslintFlatConfig,
   prependEslintFlatConfig,
   locateEslintFlatConfig,
   wrapEslintBoundaryAllowances,
@@ -1196,6 +1197,45 @@ function wireEslintConfig(tree: Tree, policyVersion = 1): EslintWiringResult {
   return { imports, rules };
 }
 
+/**
+ * Fresh workspaces only: allow `interface A extends B {}`, the declaration
+ * merging pattern feature modules use to extend shared contracts. The block is
+ * repository-owned (not a managed section) and needs typescript-eslint, which
+ * the Nx TypeScript flat config registers for the same files. Later severity-only
+ * entries keep these options.
+ */
+export const DECLARATION_MERGING_ESLINT_BLOCK = `  {
+    files: ['**/*.ts', '**/*.tsx', '**/*.cts', '**/*.mts'],
+    // Feature modules extend shared contracts by declaration merging.
+    rules: {
+      '@typescript-eslint/no-empty-interface': [
+        'error',
+        { allowSingleExtends: true },
+      ],
+      '@typescript-eslint/no-empty-object-type': [
+        'error',
+        { allowInterfaces: 'with-single-extends' },
+      ],
+    },
+  },`;
+
+function addDeclarationMergingDefaults(tree: Tree): void {
+  const path = 'eslint.config.mjs';
+  const source = tree.read(path, 'utf8');
+  if (
+    !source ||
+    !source.includes("configs['flat/typescript']") ||
+    source.includes('no-empty-object-type') ||
+    source.includes('no-empty-interface')
+  )
+    return;
+  const updated = appendEslintFlatConfig(
+    source,
+    DECLARATION_MERGING_ESLINT_BLOCK,
+  );
+  if (updated !== undefined) tree.write(path, updated);
+}
+
 function delimiterCount(source: string, delimiter: string): number {
   return source.split(delimiter).length - 1;
 }
@@ -2263,6 +2303,8 @@ export async function workspaceInitGenerator(
     modules.has('lint') && lintCanWire
       ? wireEslintConfig(tree, config.version)
       : { imports: false, rules: false };
+  if (options.bootstrap && modules.has('lint') && lintCanWire)
+    addDeclarationMergingDefaults(tree);
   const docsLoaderTemplate = renderContentCollectionsConfig(docsRoot);
   const docsLoaderCanUpdate =
     modules.has('docs') && docsContract.loaderMode === 'create'

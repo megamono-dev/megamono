@@ -51,6 +51,45 @@ describe('workspace-init generator', () => {
     tree = createTreeWithEmptyWorkspace();
   });
 
+  it('allows single-extends declaration merging in fresh workspaces only', async () => {
+    const root = `import nx from '@nx/eslint-plugin';
+
+export default [
+  ...nx.configs['flat/base'],
+  ...nx.configs['flat/typescript'],
+  ...nx.configs['flat/javascript'],
+  {
+    ignores: ['**/dist'],
+  },
+];
+`;
+    tree.write('eslint.config.mjs', root);
+    await workspaceInitGenerator(tree, {
+      only: 'lint',
+      yes: true,
+      bootstrap: true,
+    });
+    const source = tree.read('eslint.config.mjs', 'utf8') ?? '';
+    expect(source).toContain("{ allowInterfaces: 'with-single-extends' }");
+    expect(source).toContain('{ allowSingleExtends: true }');
+    expect(source.indexOf('allowSingleExtends')).toBeGreaterThan(
+      source.indexOf("configs['flat/typescript']"),
+    );
+    await workspaceInitGenerator(tree, {
+      only: 'lint',
+      yes: true,
+      bootstrap: true,
+    });
+    expect(tree.read('eslint.config.mjs', 'utf8')).toBe(source);
+
+    const adopted = createTreeWithEmptyWorkspace();
+    adopted.write('eslint.config.mjs', root);
+    await workspaceInitGenerator(adopted, { only: 'lint', yes: true });
+    expect(adopted.read('eslint.config.mjs', 'utf8')).not.toContain(
+      'allowSingleExtends',
+    );
+  });
+
   it('retains explicit Megamono rule severity when adding lint adoption', async () => {
     tree.write(
       'megamono.json',
@@ -603,7 +642,9 @@ describe('workspace-init generator', () => {
     });
     const publisher = tree.read('.megamono/publish-yalc.mjs', 'utf8') ?? '';
     expect(publisher).toContain('dist/packages/fixture-kit');
-    expect(publisher).toContain("await run(yalc, ['publish'], join(root, selected))");
+    expect(publisher).toContain(
+      "await run(yalc, ['publish'], join(root, selected))",
+    );
     expect(publisher.indexOf('"build"')).toBeLessThan(
       publisher.indexOf("['publish']"),
     );
