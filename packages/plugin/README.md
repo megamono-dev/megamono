@@ -298,6 +298,15 @@ too. In other workspaces generated starters keep Nx's specifiers; opt in by
 adding the same base option (it also applies to applications that typecheck
 library source, such as `next build`).
 
+Applications typecheck against TypeScript project references, which `nx sync`
+maintains. For a referenced library, `tsc` reads the library's built declaration
+output rather than its source, whatever export condition matches. Run
+`nx typecheck <app>` (or `tsc --build` on the application config), which checks
+referenced libraries first; a bare `tsc --noEmit` in an application directory
+reads whatever library declarations were last built and can report stale
+missing exports. The generated extension's `typecheck` target depends on
+`^typecheck` for the same reason.
+
 Libraries start with a single `.` export. To let a bundle import one feature
 without the rest of the barrel (and its dependencies), add a subpath export:
 
