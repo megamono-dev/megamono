@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-10T22:09:16.587117+00:00",
+  "repository": "megamono-dev/megamono",
+  "previousEvidence": [
+    "browsersweet-remediation-20261110.evidence.json",
+    "browsersweet-followup-20261110.evidence.json"
+  ],
+  "sourceReport": {
+    "repository": "browsersweet-int",
+    "path": "docs/research/20261109-megamono-and-playstack-upstream-issues.md",
+    "sha256": "f496556581b0c82af179a675047f3023b8915a1369a80c4da84fe1fd8fbe15b3",
+    "reviewedMegamonoVersion": "0.1.0-next.0"
+  },
+  "baseSourceRevision": "270ed84",
+  "branch": "fix/browsersweet-remaining",
+  "scope": "Remaining Browser Sweet Megamono items (M2, M15, M17, M19, M21, M25, M27, M28, M29, M31, M32, M33, M39). Local source changes and local qualification only; no push, npm or Yalc publication, adopter migration, hosted CI or deployment.",
+  "status": "locally-qualified",
+  "items": [
+    {
+      "id": "M2",
+      "status": "implemented",
+      "revision": "db8cec5",
+      "assessment": "Failures write .megamono-create-state.json beside MEGAMONO-RECOVERY.md. `create-megamono <name> --resume` rebuilds the plan from the recorded normalized options, refuses drifted step lists, nothing-completed failures or extra creation flags, reruns the failed step and continues; both recovery files are removed before the atomic rename. A partially applied failed step is rerun, not rolled back."
+    },
+    {
+      "id": "M15",
+      "status": "documented-policy-retained",
+      "revision": "9c9966a",
+      "assessment": "Not retagged. packages/plugin/README.md records that the generated Chakra theme remains a web runtime adapter with portable tokens living separately, and spec 06 fixes ui -> util only. README now documents the legal homes: one composing ui library plus util logic, a neutral capability:theme-tokens library, type:feature composition, or a reviewed v2 type-direction boundary allowance. A blanket ui -> ui relaxation or theme split is a product decision."
+    },
+    {
+      "id": "M17",
+      "status": "implemented",
+      "revision": "65a6d18",
+      "assessment": "Nx lintProjectGenerator skips the lint target whenever any (even scoped) @nx/eslint/plugin registration exists, so site-then-api workspaces left api, api-e2e, nest-home, site-e2e and --packages libraries without lint. App generation (except Expo) now covers every project it creates with a scoped @nx/eslint/plugin include, replacing @nx/eslint:lint or `eslint <patterns>` targets; create-megamono covers --packages libraries; extension config ignores .output/.wxt. Verified with ESLint 10 that project `files: ['scripts/**']` matches under `eslint .` from the project root and not under the root-cwd executor form. Existing projects are not migrated; README documents convert-to-inferred."
+    },
+    {
+      "id": "M19",
+      "status": "implemented",
+      "revision": "f79a307",
+      "assessment": "Web UI libraries in a Chakra workspace declare @chakra-ui/react and @emotion/react as peers plus devDependencies (theme already did). Health adds singleton-regular-dependency for libraries declaring react/@chakra-ui/react/@emotion/react in dependencies without a peer; megamono:check prints duplicate installed singletons and non-peer singletons as workspace-dependencies warnings."
+    },
+    {
+      "id": "M21",
+      "status": "implemented",
+      "revision": "f79a307",
+      "assessment": "megamono:check now prints health's undeclared-workspace-import findings as non-failing workspace-dependencies warnings, outside adoption ratchets and identity baselines (no adopter budget change)."
+    },
+    {
+      "id": "M25",
+      "status": "implemented",
+      "revision": "05dc893",
+      "assessment": "create-megamono bootstrap (workspace-init --bootstrap) appends a repository-owned TypeScript block with no-empty-interface allowSingleExtends and no-empty-object-type allowInterfaces: 'with-single-extends' when the root config uses the Nx TypeScript flat config and neither rule is configured. Verified with ESLint that a later severity-only entry keeps the options. Adopted repositories unchanged."
+    },
+    {
+      "id": "M27",
+      "status": "documented",
+      "revision": "08a5a81",
+      "assessment": "Not changed to source resolution: nx sync maintains project references and tsc redirects imports of a referenced project's source to its declaration output regardless of export conditions, so the @<scope>/source condition cannot make direct app typecheck read library source. README documents nx typecheck <app> / tsc --build."
+    },
+    {
+      "id": "M28",
+      "status": "implemented",
+      "revision": "80237d2",
+      "assessment": "App generation declares runtime packages that framework generators added at the root in the generated projects importing them (e2e as devDependencies; app fallback for peers such as rxjs). Root declarations are kept (Nx plugins resolve frameworks from the root; Nx production pruning ignores root devDependencies). New @megamono/plugin:audit-production executor audits one project's `pnpm list --prod --json --depth Infinity --filter` closure against the registry bulk advisory endpoint; generated pnpm apps get an `audit` target. Smoke-tested against registry.npmjs.org."
+    },
+    {
+      "id": "M29",
+      "status": "implemented",
+      "revision": "ddbead3",
+      "assessment": "New prune-build-approvals step after the final install removes only Megamono-pre-seeded `true` approvals for packages absent from pnpm-lock.yaml (e.g. workerd without a Worker app); denials, other entries and later formatting are kept; skipped without a lockfile."
+    },
+    {
+      "id": "M31",
+      "status": "implemented",
+      "revision": "d4bcc52",
+      "assessment": "Generated Next launcher resolves PORT, then megamono.json ports.<name> found by walking up from the app, then the planned port, and runs from any directory. Smoke-run with real Node from the app directory with and without PORT. Springbar MCP admission is still not claimed."
+    },
+    {
+      "id": "M32",
+      "status": "implemented",
+      "revision": "dbc72af",
+      "assessment": "Chose bundler-consumable source over a webpack-only site. Fresh TypeScript 5.7+ workspaces set rewriteRelativeImportExtensions in the base config and the library generator writes `./lib/x.ts` re-exports when that option (or allowImportingTsExtensions) is on; tsc still emits `.js`. Reproduced the Turbopack failure with Next 16.4.3 and `.js` specifiers; `.ts` builds with Turbopack and with webpack (+transpilePackages), nodenext/bundler consumers typecheck emitted declarations, Node runs output. Adopted workspaces opt in."
+    },
+    {
+      "id": "M33",
+      "status": "not-reproducible-with-current-scaffold",
+      "assessment": "No change. New Next apps (M12) use inferred `next build` with in-place `.next` output and the generated launcher's `next start` in the app directory, so runtime dependencies resolve through the app's node_modules. The dist copy only existed under the legacy @nx/next:build executor; the Nx 17 lane pairs with Next versions predating bundlePagesRouterDependencies."
+    },
+    {
+      "id": "M39",
+      "status": "blocked-not-widened",
+      "assessment": "typescript@7.0.2 (npm latest, checked 2026-11-10) exports only `version` from its main entry (plus ./unstable/* subpaths); createSourceFile, createProgram, resolveModuleName, sys, readConfigFile, parseJsonConfigFileContent, SyntaxKind, forEachChild and the is* guards are undefined. The plugin uses that API in 13 modules (structural/Next/extension boundary analysis, import tooling, ESLint reviewed boundaries), so the typescript peer stays >=5.2 <7. Supporting TS 7 needs a decision (bundle a TS 6 compiler-API dependency or port to the new API). npm publication of next.1 is the user's action."
+    }
+  ],
+  "notCompleted": [
+    {
+      "id": "M15",
+      "assessment": "No ui -> ui policy relaxation or generated theme-tokens split; requires a product decision against spec 06 and the recorded theme decision."
+    },
+    {
+      "id": "M39",
+      "assessment": "TypeScript 7 peer widening blocked by the missing compiler API."
+    }
+  ],
+  "qualification": {
+    "focusedCheckpoints": [
+      {
+        "id": "creator-resume-and-build-approvals",
+        "status": "passed"
+      },
+      {
+        "id": "workspace-init-bootstrap-lint-and-typescript",
+        "status": "passed",
+        "testsPassed": 82
+      },
+      {
+        "id": "app-generator",
+        "status": "passed",
+        "testsPassed": 94,
+        "note": "Includes lint inference, runtime ownership and audit target cases."
+      },
+      {
+        "id": "library-generator",
+        "status": "passed"
+      },
+      {
+        "id": "check-health-dependencies",
+        "status": "passed",
+        "testsPassed": 44
+      },
+      {
+        "id": "audit-production",
+        "status": "passed",
+        "testsPassed": 3
+      },
+      {
+        "id": "eslint-declaration-merging",
+        "status": "passed",
+        "note": "Real ESLint 10 run with nx flat configs."
+      },
+      {
+        "id": "eslint-project-relative-globs",
+        "status": "passed",
+        "note": "Real ESLint run comparing project-cwd and root-cwd invocation."
+      },
+      {
+        "id": "next-turbopack-ts-specifiers",
+        "status": "passed",
+        "note": "Next 16.4.3 Turbopack build fails with .js and succeeds with .ts plus rewriteRelativeImportExtensions; webpack builds .ts with transpilePackages and fails on .js."
+      },
+      {
+        "id": "typescript-7-api-probe",
+        "status": "recorded",
+        "note": "typescript@7.0.2 installed in an isolated scratch directory."
+      }
+    ],
+    "fullPluginSuite": {
+      "status": "passed",
+      "filesPassed": 89,
+      "testsPassed": 1179,
+      "testsSkipped": 1,
+      "testsTotal": 1180,
+      "durationSeconds": 334.77,
+      "log": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/final-plugin-test.log"
+    },
+    "fullCreatorSuite": {
+      "status": "passed",
+      "filesPassed": 4,
+      "testsPassed": 110,
+      "log": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/final-creator-test.log"
+    },
+    "buildAndLint": {
+      "status": "passed",
+      "projects": ["@megamono/plugin", "create-megamono", "@megamono/cli"],
+      "lintErrors": 0,
+      "lintWarnings": 3,
+      "lintWarningNote": "Pre-existing no-non-null-assertion warnings in app.spec.ts.",
+      "buildLog": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/final-build.log",
+      "lintLog": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/final-lint.log"
+    },
+    "releasePolicy": {
+      "status": "passed",
+      "command": "pnpm run release:check"
+    },
+    "knownPreexistingFailures": [
+      {
+        "target": "create-megamono:typecheck",
+        "status": "failed-before-and-after",
+        "detail": "src/cli.spec.ts:1 TS1543/TS6307 importing package.json without a JSON import attribute; reproduced on the unmodified base 270ed84."
+      }
+    ],
+    "environment": "Heavily loaded host (load average ~350 during runs)."
+  },
+  "limitations": [
+    "Existing adopter projects, lint targets, dependency placement and TypeScript configs are not migrated.",
+    "No fresh create-megamono consumer run or hosted CI was performed for this batch.",
+    "megamono:check workspace-dependencies warnings never fail and are not budgeted.",
+    "audit-production requires a pnpm workspace and network access to the advisory registry."
+  ],
+  "implementationRevisions": {
+    "M2": "db8cec5",
+    "M29": "ddbead3",
+    "M25": "05dc893",
+    "M17": "65a6d18",
+    "M19_M21": "f79a307",
+    "M31": "d4bcc52",
+    "M32": "dbc72af",
+    "M27": "08a5a81",
+    "M15": "9c9966a",
+    "M28": "80237d2"
+  },
+  "runtime": {
+    "node": "24.22.1",
+    "pnpm": "11.24.0 (workspace pin 11.28.9)",
+    "platform": "darwin",
+    "publicPackageVersion": "0.1.0-next.1"
+  },
+  "localEvidenceReceipts": [
+    {
+      "path": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/final-plugin-test.log",
+      "sha256": "30bb23210a60a70b2ee5aa858e94164a38c95255b12a3f962a12f9613a7c8c4a",
+      "bytes": 1240450
+    },
+    {
+      "path": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/final-creator-test.log",
+      "sha256": "598e360fa1e2151b1fab3d36c4bd8727c7d550e7b890d3768d3cae5ab30d74ef",
+      "bytes": 1036
+    },
+    {
+      "path": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/final-build.log",
+      "sha256": "b407f13bb647e7a319eda0fa7d37fdbc75548a16f9a4778fc8b107ac4972b17a",
+      "bytes": 845
+    },
+    {
+      "path": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/final-lint.log",
+      "sha256": "3761af0db9034a23c1ed1a620880eb5bc7ad7c9f221362b162ebf626ca8b28fb",
+      "bytes": 891
+    }
+  ]
+}
