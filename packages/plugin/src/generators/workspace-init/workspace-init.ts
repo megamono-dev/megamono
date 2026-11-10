@@ -706,7 +706,9 @@ interface WorkflowToolchain {
 
 interface ReleaseProject {
   readonly name: string;
-  readonly outputPath: string;
+  readonly packageName: string;
+  /** Publish candidates in order: an explicit build output, then the project root. */
+  readonly directories: readonly string[];
 }
 
 function releaseProjects(tree: Tree): readonly ReleaseProject[] {
@@ -727,12 +729,18 @@ function releaseProjects(tree: Tree): readonly ReleaseProject[] {
       ) {
         return [];
       }
+      // Inferred (@nx/js/typescript) and TS-solution builds keep the manifest
+      // at the project root and emit into it; only an explicit output that
+      // receives its own package.json is published from the output path.
       const configuredOutput = project.targets?.build?.options?.outputPath;
-      const outputPath =
-        typeof configuredOutput === 'string'
-          ? configuredOutput
-          : `dist/${project.root}`;
-      return [{ name, outputPath }];
+      const directories = [
+        ...(typeof configuredOutput === 'string' &&
+        configuredOutput.replace(/\/+$/, '') !== project.root
+          ? [configuredOutput.replace(/\/+$/, '')]
+          : []),
+        project.root,
+      ];
+      return [{ name, packageName: manifest.name, directories }];
     })
     .sort((left, right) => left.name.localeCompare(right.name));
 }
@@ -750,7 +758,7 @@ function renderYalcPublisher(
   return `#!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { access } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -778,11 +786,23 @@ function run(command, args, cwd = root) {
 try {
   await run(yalc, ['--version']);
   await run(packageManager, [...${JSON.stringify(managerArgs[packageManager])}, ...projects.map(({ name }) => name), '--output-style=static']);
-  for (const { name, outputPath } of projects) {
-    const directory = join(root, outputPath);
-    await access(join(directory, 'package.json'));
-    process.stdout.write(\`\\nPublishing \${name} from \${outputPath} to yalc...\\n\`);
-    await run(yalc, ['publish'], directory);
+  for (const { name, packageName, directories } of projects) {
+    // Publish from the first candidate holding this package's own manifest.
+    let selected;
+    for (const candidate of directories) {
+      try {
+        const manifest = JSON.parse(await readFile(join(root, candidate, 'package.json'), 'utf8'));
+        if (manifest.name === packageName && manifest.private !== true) {
+          selected = candidate;
+          break;
+        }
+      } catch {
+        // Try the next candidate.
+      }
+    }
+    if (!selected) throw new Error(\`No publishable package.json for \${packageName} in \${directories.join(' or ')} after building \${name}.\`);
+    process.stdout.write(\`\\nPublishing \${name} from \${selected} to yalc...\\n\`);
+    await run(yalc, ['publish'], join(root, selected));
   }
 } catch (error) {
   process.stderr.write(\`\${error instanceof Error ? error.message : String(error)}\\n\`);

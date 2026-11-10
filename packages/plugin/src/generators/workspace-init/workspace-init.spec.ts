@@ -3,6 +3,7 @@ import { prompt } from 'enquirer';
 import { vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import {
+  chmodSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -602,7 +603,7 @@ describe('workspace-init generator', () => {
     });
     const publisher = tree.read('.megamono/publish-yalc.mjs', 'utf8') ?? '';
     expect(publisher).toContain('dist/packages/fixture-kit');
-    expect(publisher).toContain("await run(yalc, ['publish'], directory)");
+    expect(publisher).toContain("await run(yalc, ['publish'], join(root, selected))");
     expect(publisher.indexOf('"build"')).toBeLessThan(
       publisher.indexOf("['publish']"),
     );
@@ -624,6 +625,60 @@ describe('workspace-init generator', () => {
         }),
       ]),
     );
+  });
+
+  it('publishes inferred-build packages from the project root that holds their manifest', async () => {
+    addProjectConfiguration(tree, 'fixture-mcp', {
+      root: 'packages/mcp',
+      projectType: 'library',
+      targets: {},
+    });
+    tree.write(
+      'packages/mcp/package.json',
+      JSON.stringify({ name: '@fixture/mcp', version: '0.0.1' }),
+    );
+
+    await workspaceInitGenerator(tree, {
+      only: 'release',
+      packageManager: 'pnpm',
+      yes: true,
+    });
+
+    const publisher = tree.read('.megamono/publish-yalc.mjs', 'utf8') ?? '';
+    expect(publisher).not.toContain('dist/packages/mcp');
+    const root = mkdtempSync(join(tmpdir(), 'megamono-yalc-publisher-'));
+    try {
+      const bin = join(root, 'bin');
+      mkdirSync(join(root, '.megamono'), { recursive: true });
+      mkdirSync(join(root, 'packages/mcp/dist'), { recursive: true });
+      mkdirSync(bin);
+      writeFileSync(join(root, '.megamono/publish-yalc.mjs'), publisher);
+      writeFileSync(
+        join(root, 'packages/mcp/package.json'),
+        JSON.stringify({ name: '@fixture/mcp', main: './dist/index.js' }),
+      );
+      for (const tool of ['pnpm', 'yalc']) {
+        writeFileSync(
+          join(bin, tool),
+          `#!/bin/sh\necho "${tool} $* @ $(pwd)" >> "${join(root, 'calls.log')}"\n`,
+        );
+        chmodSync(join(bin, tool), 0o755);
+      }
+      execFileSync(process.execPath, ['.megamono/publish-yalc.mjs'], {
+        cwd: root,
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+        stdio: 'pipe',
+      });
+      const calls = readFileSync(join(root, 'calls.log'), 'utf8');
+      expect(calls).toContain('pnpm exec nx run-many -t build -p fixture-mcp');
+      expect(calls).toMatch(
+        new RegExp(
+          `yalc publish @ (?:/private)?${join(root, 'packages/mcp')}\\n`,
+        ),
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('matches the representative package, Nx, and Megamono contract snapshot', async () => {
