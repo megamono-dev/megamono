@@ -2,6 +2,7 @@ import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { format } from 'prettier';
 import {
   ARTIFACT_REGISTRY_PATH,
   ArtifactRegistryError,
@@ -16,7 +17,9 @@ import {
   readArtifactRegistryFromDisk,
   refreshDerivedArtifactHashes,
   renderArtifactRegistry,
+  renderPrettierJson,
   upsertArtifactEntry,
+  workspaceJsonLayout,
   validateManagedArtifactRegistry,
   writeArtifactRegistry,
   writeArtifactRegistryToDisk,
@@ -43,6 +46,63 @@ function artifact(
 }
 
 describe('managed artifacts', () => {
+  it('writes registry JSON that the workspace Prettier configuration leaves unchanged', async () => {
+    const registry = upsertArtifactEntry(
+      upsertArtifactEntry(
+        { schemaVersion: 1, artifacts: [] },
+        artifact({
+          id: 'skill.docs-placement',
+          module: 'skills',
+          target: '.agents/skills/docs-placement',
+          files: ['SKILL.md', 'references/triggers.md'],
+        }),
+      ),
+      artifact({
+        id: 'skill.structure-review',
+        module: 'skills',
+        target: '.agents/skills/structure-review',
+        files: [
+          'SKILL.md',
+          'references/a-considerably-longer-reference-name.md',
+          'references/triggers.md',
+        ],
+      }),
+    );
+    for (const config of [
+      {},
+      { singleQuote: true },
+      { printWidth: 120 },
+      { tabWidth: 4 },
+      { useTabs: true },
+      { overrides: [{ files: '*.json', options: { printWidth: 40 } }] },
+    ]) {
+      const tree = createTreeWithEmptyWorkspace();
+      tree.write('.prettierrc', JSON.stringify(config));
+      writeArtifactRegistry(tree, registry);
+      const rendered = tree.read(ARTIFACT_REGISTRY_PATH, 'utf8') ?? '';
+      expect(
+        await format(rendered, {
+          ...config,
+          overrides: undefined,
+          ...((config as { overrides?: { options: object }[] }).overrides?.[0]
+            ?.options ?? {}),
+          parser: 'json',
+        }),
+      ).toBe(rendered);
+      expect(parseArtifactRegistry(rendered)).toEqual(registry);
+    }
+    expect(
+      workspaceJsonLayout((path) =>
+        path === 'package.json'
+          ? JSON.stringify({ prettier: { tabWidth: 3 } })
+          : undefined,
+      ),
+    ).toEqual({ printWidth: 80, indent: '   ', tabWidth: 3 });
+    expect(renderPrettierJson({ empty: [], nested: {} })).toBe(
+      '{\n  "empty": [],\n  "nested": {}\n}\n',
+    );
+  });
+
   it('renders a strict, stable, ID-sorted registry', () => {
     const registry = upsertArtifactEntry(
       upsertArtifactEntry(
@@ -260,10 +320,7 @@ describe('managed artifacts', () => {
         'new archive index\n',
       );
 
-      refreshDerivedArtifactHashes(root, [
-        'docs.index',
-        'docs.archive-index',
-      ]);
+      refreshDerivedArtifactHashes(root, ['docs.index', 'docs.archive-index']);
 
       const registry = readArtifactRegistryFromDisk(root);
       expect(
