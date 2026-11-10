@@ -425,6 +425,16 @@
         "options": {
           "command": "node packages/plugin/e2e/adoption-policy-consumer.e2e.mjs"
         }
+      },
+      "e2e-web-scaffold": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "command": "node packages/plugin/e2e/web-scaffold.e2e.mjs"
+        }
       }
     },
     "tags": [
