@@ -193,6 +193,7 @@ try {
     'The new site must have a resolved lint target.',
   );
   assert.equal(project.targets.serve.options.cwd, 'apps/site');
+  run([nx, 'run', 'fixture-site:lint', '--output-style=static']);
   run([nx, 'run', 'fixture-site:build', '--output-style=static']);
   for (const nested of [false, true]) {
     let output = '';
