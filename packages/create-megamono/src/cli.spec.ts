@@ -1,4 +1,4 @@
-import manifest from '../package.json';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -13,6 +13,10 @@ import {
   selectPackages,
   type InteractivePrompt,
 } from './cli.js';
+
+const manifest = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+) as { readonly version: string };
 
 vi.mock('@inquirer/prompts', () => ({
   input: vi.fn(),
