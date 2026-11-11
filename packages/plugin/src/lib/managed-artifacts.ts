@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join, posix, relative, resolve, sep } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import type { Diagnostic } from './diagnostics';
 
 export const ARTIFACT_REGISTRY_PATH = '.megamono/artifacts.json';
@@ -393,12 +394,16 @@ export function renderPrettierJson(
   return `${print(value, 0, '', '')}\n`;
 }
 
-function readJsonFile(
+function readConfigFile(
   source: string | null | undefined,
+  format: 'json' | 'yaml' = 'json',
 ): Record<string, unknown> | undefined {
   if (!source) return undefined;
   try {
-    const value = JSON.parse(source) as unknown;
+    // YAML is a superset of JSON, which is how Prettier reads `.prettierrc`.
+    const value = (
+      format === 'yaml' ? parseYaml(source) : JSON.parse(source)
+    ) as unknown;
     return value && typeof value === 'object' && !Array.isArray(value)
       ? (value as Record<string, unknown>)
       : undefined;
@@ -408,18 +413,25 @@ function readJsonFile(
 }
 
 /**
- * Resolve printWidth/tabWidth/useTabs from a JSON Prettier configuration
- * (`.prettierrc`, `.prettierrc.json` or package.json#prettier), including a
- * JSON-file override. Other configuration formats use Prettier defaults.
+ * Resolve printWidth/tabWidth/useTabs from a static Prettier configuration
+ * (package.json#prettier, `.prettierrc` as JSON or YAML, `.prettierrc.json`,
+ * `.prettierrc.yaml` or `.prettierrc.yml`, in Prettier's search order),
+ * including a JSON-file override. Executable configurations use Prettier
+ * defaults.
  */
 export function workspaceJsonLayout(
   read: (path: string) => string | null | undefined,
 ): JsonLayout {
+  // Prettier's own search order: package.json#prettier wins over rc files.
+  const packageConfig = readConfigFile(read('package.json'))?.prettier;
   const config =
-    readJsonFile(read('.prettierrc')) ??
-    readJsonFile(read('.prettierrc.json')) ??
-    (readJsonFile(read('package.json'))?.prettier as
-      Record<string, unknown> | undefined);
+    (packageConfig && typeof packageConfig === 'object'
+      ? (packageConfig as Record<string, unknown>)
+      : undefined) ??
+    readConfigFile(read('.prettierrc'), 'yaml') ??
+    readConfigFile(read('.prettierrc.json')) ??
+    readConfigFile(read('.prettierrc.yaml'), 'yaml') ??
+    readConfigFile(read('.prettierrc.yml'), 'yaml');
   if (!config || typeof config !== 'object') return DEFAULT_JSON_LAYOUT;
   const overrides = Array.isArray(config.overrides) ? config.overrides : [];
   const json = overrides

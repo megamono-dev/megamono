@@ -98,6 +98,22 @@ describe('managed artifacts', () => {
           : undefined,
       ),
     ).toEqual({ printWidth: 80, indent: '   ', tabWidth: 3 });
+    const files: Record<string, string> = {
+      'package.json': JSON.stringify({ prettier: { printWidth: 60 } }),
+      '.prettierrc': 'printWidth: 100\n',
+      '.prettierrc.yml': 'printWidth: 120\n',
+    };
+    // package.json#prettier wins, as in Prettier's own search order.
+    expect(workspaceJsonLayout((path) => files[path]).printWidth).toBe(60);
+    delete files['package.json'];
+    // `.prettierrc` may be YAML.
+    expect(workspaceJsonLayout((path) => files[path]).printWidth).toBe(100);
+    delete files['.prettierrc'];
+    expect(workspaceJsonLayout((path) => files[path])).toEqual({
+      printWidth: 120,
+      indent: '  ',
+      tabWidth: 2,
+    });
     expect(renderPrettierJson({ empty: [], nested: {} })).toBe(
       '{\n  "empty": [],\n  "nested": {}\n}\n',
     );
