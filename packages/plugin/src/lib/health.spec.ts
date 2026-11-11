@@ -228,6 +228,22 @@ describe('repository health', () => {
         );
         expect((await check()).findings).toEqual([]);
       }
+      // The root's workspace:* packs to the exact local version.
+      await writeFile(
+        join(root, 'apps/app/package.json'),
+        JSON.stringify({ dependencies: { '@acme/util': '0.5.0' } }),
+      );
+      expect((await check()).findings).toEqual([]);
+      await writeFile(
+        join(root, 'apps/app/package.json'),
+        JSON.stringify({ dependencies: { '@acme/util': '^0.5.0' } }),
+      );
+      expect((await check()).findings).toEqual([
+        expect.objectContaining({
+          state: 'alignable',
+          evidence: ['app: ^0.5.0', 'root: workspace:*'],
+        }),
+      ]);
       for (const range of ['workspace:^1.0.0', '^1.0.0', 'workspace:other@*']) {
         await writeFile(
           join(root, 'apps/app/package.json'),

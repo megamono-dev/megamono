@@ -497,6 +497,13 @@ async function readText(path: string): Promise<string | undefined> {
   }
 }
 
+/** pnpm/Yarn workspace shorthands and the range prefix each packs to. */
+const workspaceShorthands = new Map([
+  ['workspace:*', ''],
+  ['workspace:^', '^'],
+  ['workspace:~', '~'],
+]);
+
 function compareVersions(left: string, right: string): number {
   const a = left.split('.').map(Number);
   const b = right.split('.').map(Number);
@@ -999,26 +1006,39 @@ async function dependencyAlignmentFindings(
   for (const [key, consumers] of [...declarations].sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
-    const ranges = [...new Set(consumers.map(({ range }) => range))].sort();
-    if (ranges.length < 2) continue;
+    const declaredRanges = [
+      ...new Set(consumers.map(({ range }) => range)),
+    ].sort();
+    if (declaredRanges.length < 2) continue;
     // These shorthand forms resolve to the same local package today, although
     // they deliberately produce different ranges when packed. Do not rewrite
     // publication intent or assume an alias/missing/ambiguous package resolves.
     const localVersions = workspacePackages.get(key);
-    if (
+    const localVersion =
       localVersions?.length === 1 &&
       localVersions[0] &&
-      validVersion(localVersions[0]) &&
-      consumers.every(
-        ({ ecosystem, range }) =>
-          ecosystem === 'npm' &&
-          ['workspace:*', 'workspace:^', 'workspace:~'].includes(range),
-      )
-    )
-      continue;
+      validVersion(localVersions[0])
+        ? localVersions[0]
+        : undefined;
+    const shorthand = ({ ecosystem, range }: DependencyDeclaration) =>
+      ecosystem === 'npm' && workspaceShorthands.has(range);
+    if (localVersion && consumers.every(shorthand)) continue;
+    // Next to plain ranges, compare a shorthand as the range it packs to
+    // (`workspace:*` -> the exact local version, `workspace:^` -> `^version`),
+    // so `workspace:*` and an exact pin of the same version are one range.
+    const effective = consumers.map((consumer) =>
+      localVersion && shorthand(consumer)
+        ? {
+            ...consumer,
+            range: `${workspaceShorthands.get(consumer.range)}${localVersion}`,
+          }
+        : consumer,
+    );
+    const ranges = [...new Set(effective.map(({ range }) => range))].sort();
+    if (ranges.length < 2) continue;
     const installedRanges = [
       ...new Set(
-        consumers
+        effective
           .filter(({ kind }) => kind !== 'peerDependency')
           .map(({ range }) => range),
       ),

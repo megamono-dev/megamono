@@ -1104,7 +1104,9 @@ package-source policy checks; real untagged or unused libraries remain visible.
 `workspace:*`, `workspace:^`, and `workspace:~` are treated as one current local
 dependency only when a unique versioned workspace package exists. Their distinct
 packed publication ranges are preserved; aliases and unresolved references are
-not assumed to resolve. See [pnpm's workspace protocol](https://pnpm.io/workspaces#workspace-protocol-workspace).
+not assumed to resolve. Next to a plain range, each is compared as the range it
+packs to (`workspace:*` as the exact local version, `workspace:^` as
+`^<version>`), so `workspace:*` and an exact pin of the same version agree. See [pnpm's workspace protocol](https://pnpm.io/workspaces#workspace-protocol-workspace).
 Package-source profiles keep local evaluation separate from publication policy.
 `development` permits local references, `migration` reports them as warnings,
 `ci` rejects them except for exact fixture locators approved in
