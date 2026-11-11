@@ -176,16 +176,16 @@ Every execution installs a small baseline: `megamono.json`, the `megamono` proje
 
 The independently selectable modules are:
 
-| Module      | Adds or configures                                                                                                                                                |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs`      | Centralized corpus directories, collision-free Content Collections integration, indexes, and `megamono-docs` targets (`spec-megamono-0004`, `spec-megamono-0011`) |
-| `agents`    | A managed section in `AGENTS.md`, a safe `CLAUDE.md` pointer when possible, and `docs/DESIGN.md`                                                                  |
-| `ci`        | Retains equivalent repository CI by default, or adds a standalone/reusable affected-CI workflow owned by Megamono                                                 |
-| `release`   | Nx Release groups and tag strategy for publishable packages, a private prerelease workflow, and yalc-from-dist local package vetting                              |
-| `lint`      | Project-tag completion, project-graph structural checks, and ESLint wiring (`spec-megamono-0006`)                                                                 |
-| `skills`    | Managed portable skills under `.agents/skills` and the `.claude/skills` projection (`spec-megamono-0005`)                                                         |
-| `health`    | The deterministic scheduled health workflow and local health target (`spec-megamono-0008`)                                                                        |
-| `inference` | Supported Apple, Cargo, or Cloudflare plugins when corresponding manifests are detected (`spec-megamono-0003`, `spec-megamono-0015`)                              |
+| Module      | Adds or configures                                                                                                                                                                                                                                             |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs`      | Centralized corpus directories, collision-free Content Collections integration, indexes, and `megamono-docs` targets (`spec-megamono-0004`, `spec-megamono-0011`)                                                                                              |
+| `agents`    | A managed section in `AGENTS.md`, a safe `CLAUDE.md` pointer when possible, and `docs/DESIGN.md`                                                                                                                                                               |
+| `ci`        | Retains equivalent repository CI by default, or adds a standalone/reusable affected-CI workflow owned by Megamono                                                                                                                                              |
+| `release`   | Nx Release groups and tag strategy for publishable packages, a manually dispatched release workflow (dry run by default; `publish-current` or `bump-and-publish`; npm trusted publishing or an `NPM_TOKEN` fallback), and yalc-from-dist local package vetting |
+| `lint`      | Project-tag completion, project-graph structural checks, and ESLint wiring (`spec-megamono-0006`)                                                                                                                                                              |
+| `skills`    | Managed portable skills under `.agents/skills` and the `.claude/skills` projection (`spec-megamono-0005`)                                                                                                                                                      |
+| `health`    | The deterministic scheduled health workflow and local health target (`spec-megamono-0008`)                                                                                                                                                                     |
+| `inference` | Supported Apple, Cargo, or Cloudflare plugins when corresponding manifests are detected (`spec-megamono-0003`, `spec-megamono-0015`)                                                                                                                           |
 
 ```text
 npm exec nx g @megamono/plugin:workspace-init --only=docs,agents
@@ -384,6 +384,7 @@ The completion summary lists modules adopted or skipped, paths added or modified
 - Every emitted artifact is classified as managed, managed-section, seeded, or derived; registry hashes, delimiters, IDs, and ordering are deterministic.
 - Updating pristine managed artifacts succeeds, while modified, seeded, and ejected artifacts remain byte-for-byte unchanged; derived artifacts regenerate from canonical input.
 - `workspace-eject --dry-run` and execution produce the same ownership plan, preserve content, and never affect Playstack-owned artifacts.
+- The generated release workflow authenticates for npm, pnpm, Yarn, and Bun through npm trusted publishing or an `NPM_TOKEN` secret, sets a git identity before versioning, passes dispatch inputs to scripts only through environment variables, pushes the version commit and tags before publishing, can publish the versions already in the manifests, and defaults to a dry run.
 - Init never moves an existing path, and docs classification never applies during init.
 - Temporary structural warnings remain visible to health until ratcheted or covered by an accepted decision.
 - A failed external command writes recovery guidance without committing, pushing, or rolling back repository-owned changes.
