@@ -13,6 +13,8 @@ projects:
   - nx-cargo
   - nx-cloudflare
   - nx-extension
+  - nx-laravel
+  - nx-phpnative
   - nx-render
 topics: [architecture, generators, nx, release]
 summary: Canonical package map, compatibility baseline, command contract, and definition of done for Megamono v1.
