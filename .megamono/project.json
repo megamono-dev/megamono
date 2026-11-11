@@ -2,12 +2,7 @@
   "name": "megamono",
   "$schema": "../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
-  "tags": [
-    "type:app",
-    "scope:shared",
-    "platform:node",
-    "visibility:internal"
-  ],
+  "tags": ["type:app", "scope:shared", "platform:node", "visibility:internal"],
   "targets": {
     "check": {
       "executor": "@megamono/plugin:check",

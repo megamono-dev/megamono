@@ -7,3 +7,8 @@
 .content-collections/
 .megamono/graph.json
 .megamono/health.json
+# Generated: pnpm writes the lockfile; `nx configure-ai-agents` writes the agent skill copies.
+pnpm-lock.yaml
+.agents/skills/
+.github/skills/
+.opencode/skills/

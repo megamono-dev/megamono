@@ -12,7 +12,14 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -202,7 +209,9 @@ function boundedDiagnostic(error: unknown): string {
   return message.length <= 800 ? message : `${message.slice(0, 797)}...`;
 }
 
-async function dumpSwiftPackage(packageRoot: string): Promise<SwiftPackageDump> {
+async function dumpSwiftPackage(
+  packageRoot: string,
+): Promise<SwiftPackageDump> {
   const cacheRoot = join(
     tmpdir(),
     'megamono-swiftpm',

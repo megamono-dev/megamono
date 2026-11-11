@@ -43,9 +43,7 @@
       "high": 0,
       "critical": 0
     },
-    "underlyingAdvisories": [
-      "GHSA-gcqx-w48m-w2h4"
-    ],
+    "underlyingAdvisories": ["GHSA-gcqx-w48m-w2h4"],
     "admissionPassed": false,
     "exceptionAdded": false,
     "note": "pnpm reports advisories; prior npm audit counted affected package entries. The same deepmerge advisory remains blocked."

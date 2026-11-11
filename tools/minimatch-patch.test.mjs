@@ -90,8 +90,12 @@ before(() => {
     originals.set(expected.name, directory);
   }
   // These reviewed dependencies already exist through the qualified glob14 path.
-  const reporterRoots = createToolingLayout(root).packageRoots('@jest/reporters');
-  assert(reporterRoots.length, 'The qualified Jest reporter must be installed.');
+  const reporterRoots =
+    createToolingLayout(root).packageRoots('@jest/reporters');
+  assert(
+    reporterRoots.length,
+    'The qualified Jest reporter must be installed.',
+  );
   const reporterRequire = createRequire(join(reporterRoots[0], 'package.json'));
   const globRequire = createRequire(reporterRequire.resolve('glob'));
   for (const dependency of Object.values(provenance.dependencies)) {

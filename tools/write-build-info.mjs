@@ -25,7 +25,8 @@ async function files(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) found.push(...(await files(path)));
-    else if (entry.isFile() && entry.name !== 'build-info.json') found.push(path);
+    else if (entry.isFile() && entry.name !== 'build-info.json')
+      found.push(path);
   }
   return found.sort();
 }
@@ -42,7 +43,9 @@ const dirty =
 
 for (const directory of packageDirectories) {
   const packageRoot = join(root, directory);
-  const manifest = JSON.parse(await readFile(join(packageRoot, 'package.json')));
+  const manifest = JSON.parse(
+    await readFile(join(packageRoot, 'package.json')),
+  );
   const dist = join(packageRoot, 'dist');
   const hash = createHash('sha256');
   for (const path of await files(dist)) {

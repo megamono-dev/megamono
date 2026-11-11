@@ -6,7 +6,11 @@ export async function contentTypeGenerator(
   tree: Tree,
   options: ContentTypeGeneratorSchema,
 ): Promise<void> {
-  addContentType(tree, findContentCollection(tree, options.collection), options.name);
+  addContentType(
+    tree,
+    findContentCollection(tree, options.collection),
+    options.name,
+  );
 }
 
 export default contentTypeGenerator;

@@ -1,14 +1,14 @@
 ---
-id: "spec-megamono-0019"
-type: "spec"
-status: "accepted"
-visibility: "internal"
-projects: ["megamono"]
-topics: ["architecture", "migration", "lint", "ci"]
-summary: "Defines explicit v2 boundary allowances, reviewed warning identities, and the report/apply migration workflow."
-date: "2026-11-05"
+id: 'spec-megamono-0019'
+type: 'spec'
+status: 'accepted'
+visibility: 'internal'
+projects: ['megamono']
+topics: ['architecture', 'migration', 'lint', 'ci']
+summary: 'Defines explicit v2 boundary allowances, reviewed warning identities, and the report/apply migration workflow.'
+date: '2026-11-05'
 supersedes: null
-references: ["spec-megamono-0006", "spec-megamono-0014"]
+references: ['spec-megamono-0006', 'spec-megamono-0014']
 external_references: []
 ---
 

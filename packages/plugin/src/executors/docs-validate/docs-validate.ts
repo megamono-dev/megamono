@@ -96,13 +96,10 @@ const runExecutor: PromiseExecutor<DocsValidateExecutorSchema> = async (
       );
     const { createBuilder } = await loadContentCollections();
     const outputDirectory = resolve(context.root, outputDir);
-    const builder = await createBuilder(
-      resolve(context.root, contentConfig),
-      {
-        configName: 'content-collections',
-        outputDir: outputDirectory,
-      },
-    );
+    const builder = await createBuilder(resolve(context.root, contentConfig), {
+      configName: 'content-collections',
+      outputDir: outputDirectory,
+    });
     const collectionErrors: Error[] = [];
     builder.on('_error', ({ error }) => collectionErrors.push(error));
     await builder.build();
