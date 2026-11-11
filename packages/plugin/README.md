@@ -665,6 +665,21 @@ CI and release management; and `full` selects every governance module.
 modules into suggested commit batches without running Git or committing on the
 caller's behalf.
 
+The `release` module's `.github/workflows/megamono-release.yml` is dispatched
+manually from the `npm-next` environment and defaults to a dry run. Its
+`publish-current` mode publishes the versions already in `package.json` (a
+first release, or a retry after a failed publish); `bump-and-publish` runs
+`nx release version` with a commit and tags as `github-actions[bot]`, builds,
+pushes, and only then publishes. It publishes through npm trusted publishing
+(`id-token: write`; npm 11.5.1+ is installed when the runner's npm is older,
+and pnpm 11 uses its own OIDC support) or, when the `NPM_TOKEN` secret is set,
+with that token in the runner's `.npmrc` (also exported as
+`YARN_NPM_AUTH_TOKEN` for Yarn and `NPM_CONFIG_TOKEN` for Bun). Dispatch inputs
+reach scripts only through environment variables. Rerunning `workspace-init
+--only=release` replaces an unmodified managed copy with the current template;
+a modified copy is left in place with a warning, and an ejected copy is never
+touched.
+
 The survey includes a versioned `inventory`, plus
 `adoptionTemplates.projects`, `adoptionTemplates.documentation`, and
 `adoptionTemplates.render`. Inventory

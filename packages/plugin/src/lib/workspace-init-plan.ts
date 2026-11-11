@@ -1777,7 +1777,7 @@ export function createWorkspaceInitPlan(
           '.github/workflows/megamono-release.yml',
         ),
         '.github/workflows/megamono-release.yml',
-        'Add a manually dispatched next-tag prerelease workflow.',
+        'Add a manually dispatched workflow that publishes current versions or bumps, pushes and publishes them, with trusted publishing or NPM_TOKEN.',
       );
       operation(
         operations,

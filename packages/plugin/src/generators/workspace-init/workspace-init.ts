@@ -814,6 +814,22 @@ try {
 `;
 }
 
+/**
+ * Registry auth for the generated release workflow. `nx release publish` runs
+ * `npm publish` for npm and Yarn (Classic and Berry), `pnpm publish` for pnpm
+ * and `bun publish` for Bun, so a token in the runner's user `.npmrc` reaches
+ * every manager; Yarn Berry's own commands and Bun additionally read the
+ * environment variables exported here.
+ */
+const RELEASE_TOKEN_ENVIRONMENT: Readonly<
+  Record<PackageManager, readonly string[]>
+> = {
+  npm: [],
+  pnpm: [],
+  yarn: ['YARN_NPM_AUTH_TOKEN'],
+  bun: ['NPM_CONFIG_TOKEN'],
+};
+
 function renderReleaseWorkflow(
   projects: readonly ReleaseProject[],
   packageManager: PackageManager,
@@ -827,27 +843,83 @@ function renderReleaseWorkflow(
   const install = frozenInstall(packageManager, toolchain);
   const nx = adapter.nx;
   const projectSelection = projects.map(({ name }) => name).join(',');
-  return `name: Megamono package prerelease
+  const tokenExports = RELEASE_TOKEN_ENVIRONMENT[packageManager]
+    .map((name) => `\n            echo "${name}=$NPM_TOKEN" >> "$GITHUB_ENV"`)
+    .join('');
+  const bunNote =
+    packageManager === 'bun'
+      ? `
+#   bun publish cannot use trusted publishing; Nx 23 retries an unauthenticated bun publish with
+#   npm publish, older Nx versions need NPM_TOKEN.`
+      : '';
+  return `name: Megamono package release
+
+# Megamono artifact release.workflow (.megamono/artifacts.json): plugin upgrades replace this file while
+# it is unmodified. Run workspace-eject before editing it.
+#
+# Run it from Actions -> "Megamono package release" -> Run workflow. Leave "dry_run" on to rehearse.
+#   - publish-current: publish the versions already in package.json. Use it for a first release and
+#     to retry a bump-and-publish run whose publish step failed.
+#   - bump-and-publish: \`nx release version\` with a commit and tags, push them, then publish.
+#
+# Registry credentials, whichever is available:
+#   - npm trusted publishing (preferred): on npmjs.com, each package -> Settings -> Trusted publishing
+#     -> GitHub Actions, this repository, workflow megamono-release.yml, environment npm-next. npm
+#     offers it only once a package exists, so a first publish needs a token. Provenance is added
+#     automatically when the repository is public.
+#   - NPM_TOKEN: a granular npm token with publish rights, stored as a secret on the npm-next
+#     environment or the repository. Remove it once trusted publishing works.${bunNote}
 
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: publish-current, or bump-and-publish
+        required: true
+        default: publish-current
+        type: choice
+        options:
+          - publish-current
+          - bump-and-publish
       specifier:
-        description: Semver keyword or exact version
+        description: 'bump-and-publish only: semver keyword or exact version'
         required: true
         default: prerelease
         type: string
       preid:
-        description: Prerelease identifier
+        description: 'bump-and-publish only: prerelease identifier'
         required: true
         default: next
         type: string
+      dist_tag:
+        description: npm dist-tag
+        required: true
+        default: next
+        type: string
+      dry_run:
+        description: Rehearse without pushing or publishing
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: write
+  id-token: write
+
+concurrency:
+  group: megamono-release
+  cancel-in-progress: false
+
+# Inputs reach scripts only through the environment, never interpolated into \`run\`.
+env:
+  MODE: \${{ inputs.mode }}
+  SPECIFIER: \${{ inputs.specifier }}
+  PREID: \${{ inputs.preid }}
+  DIST_TAG: \${{ inputs.dist_tag }}
+  DRY_RUN: \${{ inputs.dry_run }}
 
 jobs:
-  prerelease:
+  release:
     runs-on: ubuntu-latest
     environment: npm-next
     steps:
@@ -856,16 +928,45 @@ jobs:
           fetch-depth: 0
 ${packageManagerSetup}
       - run: ${install}
-      - run: ${nx} run-many -t lint test build -p ${projectSelection} --output-style=static
-      - name: Preview version changes
-        run: ${nx} release version "\${{ inputs.specifier }}" --preid "\${{ inputs.preid }}" --dry-run
+      - run: ${nx} run-many -t lint test -p ${projectSelection} --output-style=static
+      - name: Set the git identity for the release commit and tags
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
       - name: Version packages
-        run: ${nx} release version "\${{ inputs.specifier }}" --preid "\${{ inputs.preid }}" --git-commit --git-tag
-      - name: Publish next prerelease
+        if: \${{ inputs.mode == 'bump-and-publish' }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" != branch ]; then
+            echo "bump-and-publish pushes a release commit, so run it from a branch, not $GITHUB_REF_TYPE $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+          flags=(--git-commit --git-tag)
+          if [ "$DRY_RUN" = true ]; then flags+=(--dry-run); fi
+          ${nx} release version "$SPECIFIER" --preid "$PREID" "\${flags[@]}"
+      - run: ${nx} run-many -t build -p ${projectSelection} --output-style=static
+      # Pushed before publishing, so a failed publish can be retried with publish-current.
+      - name: Push the release commit and tags
+        if: \${{ inputs.mode == 'bump-and-publish' && !inputs.dry_run }}
+        run: git push --follow-tags origin "HEAD:refs/heads/$GITHUB_REF_NAME"
+      - name: Configure registry credentials
         env:
-          NODE_AUTH_TOKEN: \${{ secrets.NPM_TOKEN }}
-        run: ${nx} release publish --tag next
-      - run: git push --follow-tags origin HEAD
+          NPM_TOKEN: \${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> "$HOME/.npmrc"${tokenExports}
+            echo 'Publishing with NPM_TOKEN.'
+          else
+            echo 'No NPM_TOKEN: publishing through npm trusted publishing.'
+          fi
+          # Trusted publishing needs npm 11.5.1 or newer.
+          if ! node -e 'const [major, minor, patch] = process.argv[1].split(".").map(Number); process.exit(major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1))) ? 0 : 1)' "$(npm --version)"; then
+            npm install --global npm@^11.5.1
+          fi
+      - name: Publish packages
+        run: |
+          flags=(--tag "$DIST_TAG")
+          if [ "$DRY_RUN" = true ]; then flags+=(--dry-run); fi
+          ${nx} release publish "\${flags[@]}"
 `;
 }
 
