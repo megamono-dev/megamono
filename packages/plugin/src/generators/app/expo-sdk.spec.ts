@@ -4,7 +4,7 @@ import { satisfies } from 'semver';
 import compatibility from '../../../compatibility.json';
 import { selectExpoSdk, type ExpoSdkRegistry } from './expo-sdk';
 
-const registry: ExpoSdkRegistry = compatibility.expoSdks;
+const registry = compatibility.expoSdks as ExpoSdkRegistry;
 const names = Object.keys(registry.snapshots[57].requirements);
 
 describe('published Expo SDK metadata selection', () => {

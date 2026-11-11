@@ -114,7 +114,10 @@ describe('audit-production', () => {
       },
     } as unknown as ExecutorContext;
     expect(await audit({}, context)).toEqual({ success: false });
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+    const [[, request]] = fetch.mock.calls as unknown as [
+      [string, { body: string }],
+    ];
+    expect(JSON.parse(request.body)).toEqual({
       react: ['19.3.1'],
       zod: ['4.6.6'],
     });

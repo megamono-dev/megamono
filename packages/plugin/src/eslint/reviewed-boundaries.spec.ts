@@ -1,7 +1,7 @@
 import { ok } from 'node:assert/strict';
 import type { ProjectGraph } from '@nx/devkit';
 import nxPlugin from '@nx/eslint-plugin';
-import { Linter, type Rule } from 'eslint';
+import { Linter, type ESLint, type Rule } from 'eslint';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -157,7 +157,7 @@ function fixture(kind: 'static' | 'dynamic' = 'static') {
   process.argv = [process.execPath, '/node_modules/eslint/bin/eslint.js'];
   const delegate = nxPlugin.rules[
     'enforce-module-boundaries'
-  ] as Rule.RuleModule;
+  ] as unknown as Rule.RuleModule;
   const options = {
     enforceBuildableLibDependency: true,
     depConstraints: [
@@ -301,10 +301,11 @@ describe('reviewed source boundaries with real Nx delegation', () => {
     const f = fixture();
     const entries = [
       {
-        plugins: { '@nx': nxPlugin },
+        // @nx/eslint-plugin types its legacy configs' ecmaVersion as number.
+        plugins: { '@nx': nxPlugin as unknown as ESLint.Plugin },
         rules: {
           '@nx/enforce-module-boundaries': ['warn', f.options] as [
-            string,
+            'warn',
             typeof f.options,
           ],
           'no-debugger': 'error' as const,

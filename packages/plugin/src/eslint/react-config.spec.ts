@@ -1,4 +1,4 @@
-import { Linter, type Rule } from 'eslint';
+import { Linter, type ESLint, type Rule } from 'eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import { describe, expect, it } from 'vitest';
 import { createReactConfig, withReactConfig } from './react-config';
@@ -132,6 +132,10 @@ describe('explicit React Hooks flat config', () => {
   });
 });
 
+// eslint-plugin-react-hooks nests `configs.flat`, which ESLint's Plugin type
+// does not model; flat config accepts the plugin object at runtime.
+const hooksPlugin = reactHooks as unknown as ESLint.Plugin;
+
 describe('React flat-config composition', () => {
   it('reuses the real existing instance instead of a distinct supplied copy', () => {
     const supplied = { ...reactHooks };
@@ -139,7 +143,7 @@ describe('React flat-config composition', () => {
       {
         files: ['**/*.tsx'],
         languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
-        plugins: { 'react-hooks': reactHooks },
+        plugins: { 'react-hooks': hooksPlugin },
       },
     ];
     const config = withReactConfig(supplied, base);
@@ -169,8 +173,8 @@ describe('React flat-config composition', () => {
       },
     };
     const registered = {
-      ...reactHooks,
-      rules: { ...reactHooks.rules, 'custom-check': custom },
+      ...hooksPlugin,
+      rules: { ...hooksPlugin.rules, 'custom-check': custom },
     };
     const base = [
       {
@@ -222,8 +226,8 @@ describe('React flat-config composition', () => {
   it('does not hide conflicting registrations even when one matches the supplied plugin', () => {
     expect(() =>
       withReactConfig(reactHooks, [
-        { plugins: { 'react-hooks': reactHooks } },
-        { plugins: { 'react-hooks': { ...reactHooks } } },
+        { plugins: { 'react-hooks': hooksPlugin } },
+        { plugins: { 'react-hooks': { ...hooksPlugin } } },
       ]),
     ).toThrow('conflicting react-hooks plugin instances');
   });

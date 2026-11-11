@@ -63,7 +63,7 @@ beforeEach(async () => {
       version: 2,
       projects: { mobile: { root: 'apps/mobile', targets: {} } },
     },
-  } as ExecutorContext;
+  } as unknown as ExecutorContext;
 });
 
 afterEach(async () => {

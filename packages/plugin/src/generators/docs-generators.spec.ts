@@ -43,7 +43,7 @@ describe('documentation generators', () => {
     const ajv = new Ajv({ strict: false, validateFormats: false });
     for (const [name, fields] of Object.entries(required)) {
       const schema = JSON.parse(
-        readFileSync(join(import.meta.dirname, name, 'schema.json'), 'utf8'),
+        readFileSync(join(__dirname, name, 'schema.json'), 'utf8'),
       );
       expect(schema.description.length).toBeGreaterThan(20);
       expect(schema.required ?? []).toEqual(fields);

@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { inspectWorkspaceDependencies } from './workspace-dependency-health';
 
 const roots: string[] = [];
-const moduleApi = createRequire(import.meta.url)('node:module') as {
+const moduleApi = createRequire(__filename)('node:module') as {
   _initPaths(): void;
 };
 afterEach(() => {

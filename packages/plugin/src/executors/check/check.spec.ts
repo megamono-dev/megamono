@@ -362,7 +362,7 @@ describe('public checker identity reports', () => {
 describe('package-source exclusions', () => {
   it('passes excluded project roots to package-source validation and rejects unknown names', async () => {
     const { validatePackageSources } =
-      await import('../../lib/package-sources');
+      await import('../../lib/package-sources.js');
     const spy = vi.mocked(validatePackageSources);
     spy.mockClear();
     vi.spyOn(logger, 'error').mockImplementation(() => undefined);

@@ -169,7 +169,7 @@ describe('library generator', () => {
     const root = mkdtempSync(join(tmpdir(), 'megamono-library-types-'));
     try {
       for (const change of tree.listChanges()) {
-        if (change.type === 'DELETE') continue;
+        if (change.type === 'DELETE' || change.content === null) continue;
         const path = join(root, change.path);
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, change.content);
