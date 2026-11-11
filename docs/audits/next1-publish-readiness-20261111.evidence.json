@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-11T14:25:55.097589+00:00",
+  "repository": "megamono-dev/megamono",
+  "previousEvidence": ["browsersweet-remaining-20261110.evidence.json"],
+  "baseSourceRevision": "b4d15cf",
+  "branch": "fix/next1-publish-readiness",
+  "scope": "Publish-readiness fixes before 0.1.0-next.1: create-megamono and plugin spec typecheck failures, the generated release workflow (M41), registry formatting on workspace-eject, and a TypeScript 7 (M39) investigation. Local source changes and local qualification only; no push, tag, npm or Yalc publication, adopter migration or hosted CI.",
+  "status": "locally-qualified",
+  "items": [
+    {
+      "id": "create-megamono-typecheck",
+      "status": "implemented",
+      "revision": "6118c00",
+      "assessment": "cli.spec.ts imported ../package.json: TS1543 (nodenext ESM JSON import needs `with { type: 'json' }`) and TS6307 (package.json outside the composite tsconfig.spec.json include), so an attribute alone would not pass. The spec reads the manifest with readFileSync like cli.ts."
+    },
+    {
+      "id": "plugin-spec-typecheck",
+      "status": "implemented",
+      "revision": "338ba85",
+      "assessment": "14 spec-only TS errors (import.meta in CommonJS specs, a dynamic import without .js, untyped mock tuples and casts, eslint-plugin-react-hooks and @nx/eslint-plugin objects not matching ESLint's Plugin type). Fixed in specs only; no runtime source change."
+    },
+    {
+      "id": "M41",
+      "status": "implemented",
+      "revision": "3c027d4",
+      "assessment": "Generated megamono-release.yml now has publish-current and bump-and-publish modes, a dry-run default and dist_tag input, inputs passed only through env, id-token: write for npm trusted publishing or NPM_TOKEN written to the user .npmrc (Yarn also YARN_NPM_AUTH_TOKEN, Bun NPM_CONFIG_TOKEN), npm >=11.5.1 installed only when older, github-actions[bot] identity, branch-only bumps, build after versioning, and push before publish. nx release publish (Nx 23.3.1) runs npm publish for npm and Yarn, pnpm publish for pnpm and bun publish for Bun with an npm fallback. Unmodified managed copies upgrade on workspace-init --only=release; modified copies warn; ejected copies are untouched (specs cover next.0 -> next.1 and ejected)."
+    },
+    {
+      "id": "workspace-eject-registry-format",
+      "status": "implemented",
+      "revision": "45e3d93",
+      "assessment": "Already addressed on release/next.1 by b9a3be2: ejecting release.workflow from Browser Sweet's committed registry changes exactly one line. Remaining gaps fixed: YAML .prettierrc/.prettierrc.yaml/.yml were ignored, and rc files outranked package.json#prettier against Prettier's search order. Specs assert eject changes only the state line under JSON and YAML configs."
+    },
+    {
+      "id": "M39",
+      "status": "blocked-not-widened",
+      "assessment": "Plugin TypeScript use: 8 modules parse only (createSourceFile/forEachChild/parseConfigFileTextToJson), 2 bind a single file with noLib/noResolve (createProgram in runtime-verification, next-pages-imports), 3 read workspace tsconfig and resolve modules (extension-runtime, next-pages-boundary, eslint reviewed-boundaries). A pinned TS 6 alias would work for the plugin itself, but widening the peer would not make typescript@7 workspaces work: nx@23.3.1 and nx/@nx/js@24.0.6 (npm latest) require the workspace's `typescript` JS API in the @nx/js/typescript inference plugin, tsc executor, typescript-sync generator and nx core tsconfig reading. Nx's TS 7 route keeps typescript 6 and adds @typescript/native-preview with @nx/js/typescript `compiler: 'tsgo'`, which already satisfies the plugin peer >=5.2 <7. typescript@7.0.2 exports '.' -> ./lib/version.cjs plus ./unstable/* only."
+    }
+  ],
+  "notCompleted": [
+    {
+      "id": "M39",
+      "assessment": "No peer widening or TypeScript 6 alias: blocked by Nx's own dependency on the workspace typescript JS API. Revisit when Nx supports typescript@7 as the workspace `typescript` package."
+    }
+  ],
+  "qualification": {
+    "runMany": {
+      "status": "passed",
+      "command": "nx run-many -t lint test build typecheck --exclude=tag:platform:apple",
+      "projects": 10,
+      "pluginTests": "1188 passed, 1 skipped",
+      "creatorTests": "110 passed",
+      "lintErrors": 0,
+      "lintWarnings": 4,
+      "lintWarningNote": "Pre-existing no-non-null-assertion warnings in plugin app.spec.ts and nx-extension application.spec.ts.",
+      "log": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/next1-gates/run-many.log"
+    },
+    "releasePolicy": {
+      "status": "passed",
+      "commands": ["pnpm run release:check", "pnpm run release:test"]
+    },
+    "tooling": {
+      "status": "passed",
+      "command": "nx run-many -t tooling-check tooling-test --projects=@megamono/workspace"
+    },
+    "megamonoCheck": {
+      "status": "passed"
+    },
+    "docsValidate": {
+      "status": "passed"
+    },
+    "formatCheck": {
+      "status": "passed",
+      "command": "nx format:check --base=release/next.1"
+    },
+    "notRun": [
+      "release:qualify (packed local-registry consumer qualification)",
+      "release:check-publishing (needs GitHub API)",
+      "e2e consumer targets",
+      "security:audit (deepmerge finding left to the user)"
+    ]
+  },
+  "limitations": [
+    "The generated release workflow was validated by YAML parsing, bash -n on every script and running its scripts against fake nx/git/npm; no hosted GitHub Actions run or real npm publication.",
+    "Trusted publishing and provenance behavior follows npm/pnpm documentation; registry auth targets registry.npmjs.org only.",
+    "Existing adopters receive the workflow only by rerunning workspace-init --only=release."
+  ],
+  "implementationRevisions": {
+    "create-megamono-typecheck": "6118c00",
+    "M41": "3c027d4",
+    "plugin-spec-typecheck": "338ba85",
+    "workspace-eject-registry-format": "45e3d93"
+  },
+  "runtime": {
+    "node": "24.22.1",
+    "pnpm": "11.28.9",
+    "platform": "darwin",
+    "publicPackageVersion": "0.1.0-next.1"
+  },
+  "localEvidenceReceipts": [
+    {
+      "path": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/next1-gates/run-many.log",
+      "sha256": "889c3851992d43821096ff842fa242126484d8aaeb8bc0163025d05f48a76975",
+      "bytes": 1319779
+    },
+    {
+      "path": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/next1-gates/release-check.log",
+      "sha256": "766771db06c79c39f753bcd5e0aefa94122edfb13e3b0f707d4bda44c3b3fc34",
+      "bytes": 141
+    },
+    {
+      "path": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/next1-gates/release-test.log",
+      "sha256": "95c22741a4907d5873f3c669523e1cef5831b6c2782d18d4d2770663fc4d5824",
+      "bytes": 2734
+    },
+    {
+      "path": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/next1-gates/tooling.log",
+      "sha256": "33cb2917750587129c45c878c938af09067e2b37739b5758e9d3f89186a0406e",
+      "bytes": 7786
+    },
+    {
+      "path": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/next1-gates/megamono-check.log",
+      "sha256": "a92e0c11bb2ab8c1736e7786d7a10f9e6d6cc719dba2ed4a68d3acdc46605f59",
+      "bytes": 654
+    },
+    {
+      "path": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/next1-gates/docs-validate.log",
+      "sha256": "884826eb8d69682e5a7319504871b2fa0b6a6d3c5862d44b64398add84710519",
+      "bytes": 940
+    },
+    {
+      "path": "/private/tmp/claude-501/-Users-ryanhefner-Code-org-browsersweet/7a791057-a1c9-4c4f-9332-84c54b971bfd/scratchpad/next1-gates/format.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ]
+}
