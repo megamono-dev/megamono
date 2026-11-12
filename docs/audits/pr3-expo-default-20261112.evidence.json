@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-12T12:30:54.282Z",
+  "pullRequest": "https://github.com/megamono-dev/megamono/pull/3",
+  "sourceRevision": "c7f006abaa91efb759d33fd6563eee98ecb4007a",
+  "status": "locally-qualified-hosted-rerun-pending",
+  "failure": {
+    "sourceRevision": "268c2eb3dae0d0a8806d6f67333ddf9484f5267e",
+    "workflowRun": 43214945995,
+    "job": 131172125796,
+    "target": "@megamono/plugin:e2e-expo-default-consumer",
+    "stage": "doctor-and-platform-exports",
+    "doctor": "20/21 checks passed; expected expo ~57.0.32, found 57.0.31",
+    "artifact": 13944147176,
+    "artifactSha256": "3baf48d6b6c94bb469fb9ac146b2358790eec748e012ec4b5bf0a6431cccf94c",
+    "otherConsumerTargets": "8 passed",
+    "earlierStages": "Linux lint/test/build, Native and Nx compatibility passed"
+  },
+  "resolution": {
+    "previousDefault": "57.0.31",
+    "defaultVersion": "57.0.32",
+    "source": {
+      "metadata": "https://registry.npmjs.org/expo/57.0.32",
+      "tarball": "https://registry.npmjs.org/expo/-/expo-57.0.32.tgz",
+      "integrity": "sha512-1SuRh1bCZfj/nRCUlgySyQ40uJ7Z1geeG1uAjqceVT16S0Ou9yE4U1AMTDWBz3hLPRRvjCneAJkf20630rmjAQ==",
+      "tarballSha256": "79a4500d9ec25c79c2ffe9371f85a8c9ba46bb21f4e2e57283313b848deafdff",
+      "manifestSha256": "ef6496676d2e75bea7f915fd455e1e6bad86e85210e196178d3812f5818cbc74",
+      "bundledNativeModulesSha256": "36af7b2ab4abe287fc933001db076f397ea4294b6842b509b32534d9d49e3f4b"
+    },
+    "metadataSha256": "c210301a7a10fab9def0b71c9dc76d1461e56675bd473ea9d328ee6e616ea0b9",
+    "requirementsSha256": "b94df0832679b2b9280a9f5a3912d4a8e9e9c89741aab975bca5f01ad017909a",
+    "requirementsDelta": {
+      "@expo/cli": {
+        "before": "^57.0.32",
+        "after": "^57.0.33"
+      },
+      "@expo/metro-config": {
+        "before": "~57.0.13",
+        "after": "~57.0.14"
+      },
+      "@expo/metro-runtime": {
+        "before": "~57.0.17",
+        "after": "~57.0.18"
+      },
+      "babel-preset-expo": {
+        "before": "~57.0.16",
+        "after": "~57.0.17"
+      },
+      "expo-splash-screen": {
+        "before": "~57.0.10",
+        "after": "~57.0.11"
+      }
+    },
+    "react": "19.2.3",
+    "reactNative": "0.86.3",
+    "reactNativePeerReact": {
+      "range": "^19.2.3",
+      "metadata": "https://registry.npmjs.org/react-native/0.86.3",
+      "metadataSha256": "2731073da9a29419aef882360abdcb45c48b31db2a53e289c4b0fb1e8f6b375d"
+    },
+    "otherSdkSnapshots": "SDK53-56 unchanged",
+    "selectionPolicy": "Explicit authored SDK declarations are preserved; an unavailable older exact patch requires installed matching metadata rather than silently upgrading it.",
+    "doctorPolicy": "No ignored packages, skipped checks, disabled validation or post-generation repairs."
+  },
+  "qualification": {
+    "focusedTests": 81,
+    "creatorTests": 110,
+    "releaseTests": 29,
+    "lint": "0 errors; 3 pre-existing app.spec warnings",
+    "typecheck": "plugin and creator passed",
+    "docsValidation": "passed",
+    "registrySync": "passed; canonical and bootstrap registries identical",
+    "format": "passed",
+    "runtime": {
+      "node": "v24.22.2",
+      "npm": "11.19.1",
+      "platform": "darwin",
+      "architecture": "arm64"
+    },
+    "packedPlugin": {
+      "filename": "megamono-plugin-0.1.0-next.1.tgz",
+      "integrity": "sha512-xEeL85h7vk1gawkqQLiimpAYcp7h0nD67cxhN7j0qj0u4+DcS0BxsRDvWjhqMjPADha0n9rewxLTSJ+yuNUnzA==",
+      "sha256": "1623c28eaad71fa2b1ea964abea84f97f9063927ed540927316492f9be45e051"
+    },
+    "resolved": {
+      "expo": "57.0.32",
+      "expoEngines": null,
+      "nativeEngines": {
+        "node": "^20.19.4 || ^22.13.0 || ^24.3.0 || >= 25.0.0"
+      },
+      "react": "19.2.3",
+      "native": "0.86.3",
+      "webReact": "19.3.1",
+      "doctor": "1.21.6",
+      "babelPreset": "57.0.17",
+      "typesReact": "19.2.18"
+    },
+    "checks": [
+      {
+        "id": "public-sdk-metadata",
+        "status": "passed",
+        "durationMs": 193
+      },
+      {
+        "id": "framework-install",
+        "status": "passed",
+        "durationMs": 56076
+      },
+      {
+        "id": "normal-feature-branch-adoption",
+        "status": "passed",
+        "durationMs": 1701
+      },
+      {
+        "id": "normal-mobile-generation-and-install",
+        "status": "passed",
+        "durationMs": 49791
+      },
+      {
+        "id": "doctor-and-platform-exports",
+        "status": "passed",
+        "durationMs": 24280
+      },
+      {
+        "id": "native-bundle-react-isolation",
+        "status": "passed",
+        "durationMs": 28
+      },
+      {
+        "id": "generated-typecheck",
+        "status": "passed",
+        "durationMs": 856
+      },
+      {
+        "id": "generated-default-jest",
+        "status": "passed",
+        "durationMs": 5174
+      }
+    ],
+    "doctor": "21/21",
+    "preserved": [
+      "Metro configuration",
+      "app manifest",
+      "post-install lockfile"
+    ],
+    "lockfileSha256": "a93ae182d8cec807b7482957bf81b402506faf5266ff68a006f3034f5e796798"
+  },
+  "limitations": [
+    "Fresh local qualification is macOS JavaScript export evidence; it does not certify native/device/cloud builds.",
+    "The hosted rerun for this patch is pending at this recording point.",
+    "Existing historical SDK57.0.31 evidence is retained unchanged."
+  ],
+  "receipts": [
+    {
+      "path": "/private/tmp/megamono-pr3-expo-default-doctor-268c2eb.log",
+      "bytes": 3202,
+      "sha256": "e3f63dc5c3d95c416481be5da48f8237224d69d89787b142603c6b99f0d091c0"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-expo57-patch-refresh/receipt.json",
+      "bytes": 2233,
+      "sha256": "8f074a10e6fa8cefb8a9f4e4bcbb82bdf4e729330446f20c5afc11467d2cc20c"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-expo57-patch-refresh/focused-tests.log",
+      "bytes": 64505,
+      "sha256": "cdd04e8b387535cc7823251a245df4c34dc37f8d3e15b02650b2a6ee41cd82a7"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-expo57-patch-refresh/lint.log",
+      "bytes": 926,
+      "sha256": "82ca3562f14c3346479d4573ad31483b21c4917ac373d56b0a22540de373915b"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-expo57-32-consumer.log",
+      "bytes": 4750,
+      "sha256": "575558c050423bb81030a73d437a9e52e06a11e677f066d6b092e92e4bb7713b"
+    },
+    {
+      "path": "tmp/expo-default-consumer/report.json",
+      "bytes": 3210,
+      "sha256": "a00a5775743e24246e5c584acb90f0712b991c61108df1905be0709589268c5c"
+    },
+    {
+      "path": "tmp/expo-default-consumer/doctor-and-platform-exports.log",
+      "bytes": 2633,
+      "sha256": "489176fe74548b470652db853d8cd0bdf9b0d34718bd8b5e5ebe2452766791dd"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-expo57-creator-test.log",
+      "bytes": 1573,
+      "sha256": "0c2eec0c42ae0124dc4b4d2d2aae8ffc5b0701629b0537401916455fc3db1067"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-expo57-release-tests.log",
+      "bytes": 2816,
+      "sha256": "b5d83c631ac820920785b6eb7bda541555bc0fd38cc28468734d78c9b4e20a6b"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-expo57-typecheck.log",
+      "bytes": 1668,
+      "sha256": "2d7623a21fc422cbde589f00e0c08369697009944dc3005dcdfc7a6ecd05799b"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-expo57-docs-validate.log",
+      "bytes": 1073,
+      "sha256": "00f4dc5be106266a7c637a94756d8b39be9f1e40355029b1d8b76336b409a3c2"
+    }
+  ]
+}
