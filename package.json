@@ -4,7 +4,7 @@
   "license": "MIT",
   "scripts": {
     "release:check": "node tools/check-release-policy.mjs && node tools/sync-release-pins.mjs --check",
-    "release:test": "node --test tools/release-policy.test.mjs tools/release-channel.test.mjs tools/sync-release-pins.test.mjs tools/publishing-setup.test.mjs tools/published-release.test.mjs",
+    "release:test": "node --test tools/release-policy.test.mjs tools/release-channel.test.mjs tools/sync-release-pins.test.mjs tools/publishing-setup.test.mjs tools/published-release.test.mjs tools/release-admission.test.mjs",
     "release:check-publishing": "node tools/check-publishing-setup.mjs",
     "release:qualify": "node tools/qualify-release.mjs",
     "release:verify-published": "node tools/check-published-release.mjs",
@@ -12,58 +12,83 @@
     "packages:check-exports": "node tools/write-build-info.mjs && node tools/check-packed-exports.mjs",
     "yalc:publish": "node tools/publish-yalc.mjs",
     "yalc:install-cli": "node tools/install-yalc-cli.mjs",
-    "yalc:install-clis": "node tools/install-yalc-cli.mjs"
+    "yalc:install-clis": "node tools/install-yalc-cli.mjs",
+    "postinstall": "node tools/patch-magicast-bundle.mjs && node tools/patch-minimatch-consumers.mjs",
+    "tooling:check": "nx run @megamono/workspace:tooling-check",
+    "tooling:test": "nx run @megamono/workspace:tooling-test",
+    "security:audit": "pnpm audit --audit-level=low --registry=https://registry.npmjs.org",
+    "tooling:review-minimatch": "nx run @megamono/workspace:tooling-review-minimatch",
+    "tooling:review-deepmerge": "nx run @megamono/workspace:tooling-review-deepmerge"
   },
   "private": true,
   "devDependencies": {
-    "@chakra-ui/react": "3.36.1",
-    "@content-collections/core": "0.15.2",
+    "@chakra-ui/react": "3.37.0",
+    "@content-collections/core": "0.15.3",
     "@emotion/react": "11.14.0",
     "@eslint/js": "^10.0.1",
-    "@nx/eslint": "23.1.1",
-    "@nx/eslint-plugin": "23.1.1",
-    "@nx/expo": "23.1.1",
-    "@nx/jest": "23.1.1",
-    "@nx/js": "23.1.1",
-    "@nx/nest": "23.1.1",
-    "@nx/next": "23.1.1",
-    "@nx/playwright": "23.1.1",
-    "@nx/plugin": "^23.1.1",
-    "@nx/vite": "23.1.1",
-    "@nx/vitest": "23.1.1",
-    "@swc-node/register": "~1.11.1",
-    "@swc/cli": "~0.8.1",
-    "@swc/core": "~1.15.5",
-    "@swc/helpers": "~0.5.18",
-    "@swc/jest": "0.2.38",
+    "@nx/eslint": "23.3.1",
+    "@nx/eslint-plugin": "23.3.1",
+    "@nx/expo": "23.3.1",
+    "@nx/jest": "23.3.1",
+    "@nx/js": "23.3.1",
+    "@nx/nest": "23.3.1",
+    "@nx/next": "23.3.1",
+    "@nx/playwright": "23.3.1",
+    "@nx/plugin": "23.3.1",
+    "@nx/vite": "23.3.1",
+    "@nx/vitest": "23.3.1",
+    "@nx/webpack": "23.3.1",
+    "@swc-node/register": "~1.12.1",
+    "@swc/cli": "0.8.1",
+    "@swc/core": "~1.16.20",
+    "@swc/helpers": "~0.5.23",
+    "@swc/jest": "0.2.39",
     "@types/jest": "30.0.0",
-    "@types/node": "24.13.3",
-    "@types/semver": "7.7.1",
-    "@vitest/coverage-v8": "~4.1.10",
-    "@vitest/ui": "~4.1.10",
-    "eslint": "~10.6.0",
+    "@types/node": "24.19.2",
+    "@types/semver": "7.8.0",
+    "@vitest/coverage-v8": "~4.1.12",
+    "@vitest/ui": "~4.1.12",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
     "gray-matter": "^4.0.3",
-    "jest": "30.3.0",
-    "jest-environment-node": "30.3.0",
-    "jest-util": "30.3.0",
-    "jiti": "2.4.2",
-    "jsdom": "^27.1.0",
-    "jsonc-eslint-parser": "^2.1.0",
-    "nx": "23.1.1",
-    "prettier": "^3.8.1",
-    "ts-jest": "29.4.7",
-    "ts-node": "10.9.1",
-    "tslib": "^2.3.0",
+    "jest": "30.5.2",
+    "jest-environment-node": "30.5.2",
+    "jest-util": "30.5.1",
+    "jiti": "2.7.0",
+    "jsdom": "^27.4.0",
+    "jsonc-eslint-parser": "^3.3.0",
+    "magicast": "0.5.5",
+    "minimatch": "11.0.4",
+    "nx": "23.3.1",
+    "oxfmt": "0.75.0",
+    "prettier": "^3.9.10",
+    "rollup": "4.67.4",
+    "source-map-js": "1.2.2",
+    "ts-jest": "29.4.15",
+    "ts-node": "10.9.2",
+    "tslib": "^2.8.1",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.63.0",
-    "verdaccio": "6.10.0",
-    "vite": "^8.1.4",
-    "vitest": "~4.1.10",
-    "zod": "^4.1.12"
+    "typescript-eslint": "^8.72.1",
+    "verdaccio": "6.11.1",
+    "vite": "^8.3.5",
+    "vitest": "~4.1.12",
+    "zod": "^4.6.7",
+    "yaml": "2.9.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "next": "16.4.3",
+    "webpack": "5.112.2",
+    "@megamono/cli": "workspace:*",
+    "create-megamono": "workspace:*",
+    "@megamono/nx-apple": "workspace:*",
+    "@megamono/nx-cargo": "workspace:*",
+    "@megamono/nx-cloudflare": "workspace:*",
+    "@megamono/nx-extension": "workspace:*",
+    "@megamono/nx-laravel": "workspace:*",
+    "@megamono/nx-phpnative": "workspace:*",
+    "@megamono/nx-render": "workspace:*",
+    "@megamono/plugin": "workspace:*"
   },
-  "workspaces": [
-    "packages/*"
-  ],
   "nx": {
     "includedScripts": [],
     "targets": {
@@ -73,6 +98,38 @@
           "port": 4873,
           "config": ".verdaccio/config.yml",
           "storage": "tmp/local-registry/storage"
+        }
+      },
+      "tooling-check": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "node tools/patch-magicast-bundle.mjs --check && node tools/patch-minimatch-consumers.mjs --check",
+          "cwd": "."
+        }
+      },
+      "tooling-test": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "node tools/run-tooling-tests.mjs",
+          "cwd": "."
+        }
+      },
+      "tooling-review-minimatch": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "node tools/minimatch-tooling-review.mjs",
+          "cwd": "."
+        }
+      },
+      "tooling-review-deepmerge": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "node tools/deepmerge-tooling-review.mjs",
+          "cwd": "."
         }
       }
     },
@@ -84,13 +141,11 @@
     ]
   },
   "dependencies": {
-    "@nx/devkit": "23.1.1"
+    "@nx/devkit": "23.3.1"
   },
-  "overrides": {
-    "nx": {
-      "brace-expansion": "5.0.9",
-      "smol-toml": "^1.8.0"
-    }
-  },
-  "packageManager": "npm@11.21.0"
+  "packageManager": "pnpm@11.28.9",
+  "engines": {
+    "node": ">=24.22.1 <25",
+    "pnpm": ">=11.28.9 <12"
+  }
 }

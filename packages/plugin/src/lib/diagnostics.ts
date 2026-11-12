@@ -1,3 +1,5 @@
+import type { DependencyFindingIdentity } from './dependency-policy-contract';
+
 export type DiagnosticSeverity = 'error' | 'warning';
 
 export interface Diagnostic {
@@ -5,6 +7,7 @@ export interface Diagnostic {
   readonly code: string;
   readonly message: string;
   readonly path?: string;
+  readonly identity?: DependencyFindingIdentity;
 }
 
 export function formatDiagnostic(diagnostic: Diagnostic): string {

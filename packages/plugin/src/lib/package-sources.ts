@@ -47,6 +47,12 @@ interface PackageAddress {
 export type PackageSourceProfileName =
   'development' | 'migration' | 'ci' | 'release';
 
+/** A project omitted from this run's install and task set (for example `pnpm install --filter=!<project>`). */
+export interface ExcludedPackageSourceProject {
+  readonly name: string;
+  readonly root: string;
+}
+
 function addressLocator(address: PackageAddress): string {
   return `${address.manifestPath}#${address.location}`;
 }
@@ -254,13 +260,164 @@ async function pnpmWorkspaceAddresses(
   return output;
 }
 
+function insideProject(path: string, root: string): boolean {
+  const normalized = root.replace(/\\/g, '/').replace(/\/+$/, '');
+  return (
+    normalized === '.' ||
+    normalized === '' ||
+    path === `${normalized}/package.json` ||
+    path.startsWith(`${normalized}/`)
+  );
+}
+
+/** The package an override or catalog entry addresses (`a>b@^1` addresses `b`). */
+function addressedPackage(location: string): string | undefined {
+  const match =
+    /^(?:overrides|resolutions|pnpm\.overrides|pnpm\.catalog|catalog|pnpm\.catalogs\.[^.]+|catalogs\.[^.]+)\.(.+)$/.exec(
+      location,
+    );
+  if (!match) return undefined;
+  const selector = match[1].split('>').at(-1)?.trim() ?? '';
+  const name = /^(@[^/@]+\/[^@]+|[^@]+)/.exec(selector)?.[1];
+  return name || undefined;
+}
+
+type LockRecord = Record<string, unknown>;
+
+function recordAt(value: unknown, key: string): LockRecord | undefined {
+  const child =
+    value && typeof value === 'object' ? (value as LockRecord)[key] : undefined;
+  return child && typeof child === 'object' && !Array.isArray(child)
+    ? (child as LockRecord)
+    : undefined;
+}
+
+/**
+ * Package names installed for the included pnpm importers, from the committed
+ * lockfile. Returns undefined when the lockfile cannot establish reachability,
+ * so callers keep validating every address.
+ */
+async function pnpmReachablePackages(
+  root: string,
+  excludedRoots: readonly string[],
+): Promise<ReadonlySet<string> | undefined> {
+  const path = join(root, 'pnpm-lock.yaml');
+  if (!(await exists(path))) return undefined;
+  let lock: unknown;
+  try {
+    lock = parseYaml(await readFile(path, 'utf8'));
+  } catch {
+    return undefined;
+  }
+  const importers = recordAt(lock, 'importers');
+  if (!importers) return undefined;
+  const snapshots = recordAt(lock, 'snapshots') ?? recordAt(lock, 'packages');
+  const names = new Set<string>();
+  const visitedImporters = new Set<string>();
+  const visitedPackages = new Set<string>();
+  const pending: Array<
+    | { kind: 'importer'; id: string }
+    | { kind: 'package'; name: string; version: string }
+  > = Object.keys(importers)
+    .filter(
+      (id) =>
+        !excludedRoots.some((excluded) =>
+          insideProject(
+            id === '.' ? 'package.json' : `${id}/package.json`,
+            excluded,
+          ),
+        ),
+    )
+    .map((id) => ({ kind: 'importer' as const, id }));
+  const dependencies = (entry: LockRecord | undefined) =>
+    ['dependencies', 'devDependencies', 'optionalDependencies'].flatMap(
+      (field) =>
+        Object.entries(recordAt(entry, field) ?? {}).flatMap(
+          ([name, value]) => {
+            const version =
+              typeof value === 'string'
+                ? value
+                : recordAt({ value }, 'value')?.version;
+            return typeof version === 'string' ? [{ name, version }] : [];
+          },
+        ),
+    );
+  while (pending.length) {
+    const next = pending.pop();
+    if (!next) break;
+    if (next.kind === 'importer') {
+      if (visitedImporters.has(next.id)) continue;
+      visitedImporters.add(next.id);
+      for (const { name, version } of dependencies(
+        recordAt(importers, next.id),
+      )) {
+        names.add(name);
+        if (version.startsWith('link:')) {
+          const target = relative(
+            root,
+            resolve(root, next.id, version.slice('link:'.length)),
+          )
+            .split(sep)
+            .join('/');
+          if (recordAt(importers, target || '.'))
+            pending.push({ kind: 'importer', id: target || '.' });
+        } else pending.push({ kind: 'package', name, version });
+      }
+      continue;
+    }
+    const keys = [
+      `${next.name}@${next.version}`,
+      `/${next.name}@${next.version}`,
+      next.version,
+      `/${next.version}`,
+    ];
+    const key = keys.find((candidate) => recordAt(snapshots, candidate));
+    if (!key || visitedPackages.has(key)) continue;
+    visitedPackages.add(key);
+    for (const dependency of dependencies(recordAt(snapshots, key))) {
+      names.add(dependency.name);
+      pending.push({ kind: 'package', ...dependency });
+    }
+  }
+  return names;
+}
+
 export async function validatePackageSources(
   root: string,
   config: MegamonoConfig,
-  options: { readonly profile?: PackageSourceProfileName } = {},
+  options: {
+    readonly profile?: PackageSourceProfileName;
+    /**
+     * Projects this run deliberately omits (CI filtered installs). Their
+     * manifests, and override/catalog addresses that the committed pnpm lockfile
+     * reaches only through them, are reported as unvalidated warnings instead of
+     * profile violations. Release verification never accepts exclusions.
+     */
+    readonly excludedProjects?: readonly ExcludedPackageSourceProject[];
+  } = {},
 ): Promise<readonly Diagnostic[]> {
   const diagnostics: Diagnostic[] = [];
   const profileName = options.profile ?? 'ci';
+  const excludedProjects = options.excludedProjects ?? [];
+  if (excludedProjects.length && profileName === 'release')
+    throw new Error(
+      'The release package-source profile validates every project; excluded projects are not accepted.',
+    );
+  if (
+    excludedProjects.some(({ root: projectRoot }) =>
+      ['', '.'].includes(projectRoot.replace(/\/+$/, '')),
+    )
+  )
+    throw new Error(
+      'The workspace root project cannot be excluded from package-source validation.',
+    );
+  const excludedRoots = excludedProjects.map(({ root: projectRoot }) =>
+    projectRoot.replace(/\\/g, '/').replace(/\/+$/, ''),
+  );
+  const excludedBy = (manifestPath: string) =>
+    excludedProjects.find(({ root: projectRoot }) =>
+      insideProject(manifestPath, projectRoot.replace(/\\/g, '/')),
+    );
   const configuredPolicy = config.packageSources.profiles[profileName];
   const localReferences =
     profileName === 'ci' && !config.packageSources.forbidLocalInCi
@@ -304,9 +461,29 @@ export async function validatePackageSources(
   else diagnostics.push(pnpmAddresses);
   let hasApprovedYalcReference = false;
   let hasUnapprovedYalcReference = false;
+  const reachable =
+    excludedProjects.length && manager === 'pnpm'
+      ? await pnpmReachablePackages(root, excludedRoots)
+      : undefined;
   for (const address of addresses) {
     if (!isLocalPackageAddress(address.specifier)) continue;
     const locator = addressLocator(address);
+    const owner = excludedBy(address.manifestPath);
+    const addressed = owner ? undefined : addressedPackage(address.location);
+    if (
+      localReferences !== 'allow' &&
+      (owner || (addressed && reachable && !reachable.has(addressed)))
+    ) {
+      diagnostics.push({
+        severity: 'warning',
+        code: 'package-sources-excluded-project',
+        path: address.manifestPath,
+        message: owner
+          ? `${address.location} uses local address ${address.specifier} in excluded project ${owner.name}; it is not validated by this ${profileName} run. Locator: ${locator}.`
+          : `${address.location} uses local address ${address.specifier}, which the committed pnpm lockfile reaches only through excluded projects (${excludedProjects.map(({ name }) => name).join(', ')}); it is not validated by this ${profileName} run. Locator: ${locator}.`,
+      });
+      continue;
+    }
     const isApproved = approved.has(locator);
     const isYalc = /(?:^|[/:])\.yalc(?:\/|$)/.test(address.specifier.trim());
     if (isYalc) {
@@ -344,9 +521,13 @@ export async function validatePackageSources(
       code: 'package-sources-local-state',
       path,
       message:
-        localReferences === 'warn'
+        (localReferences === 'warn'
           ? 'Yalc state is permitted during migration but must be replaced before release.'
-          : `${profileName} package policy does not permit Yalc state.`,
+          : `${profileName} package policy does not permit Yalc state, even when Git ignores it.`) +
+        (hasApprovedYalcReference || hasUnapprovedYalcReference
+          ? ' Yalc dependency addresses are present in package manifests or package-manager source configuration; replace those addresses with registry packages before release.'
+          : ' No Yalc dependency addresses were found in package manifests or package-manager source configuration; this may be leftover local state, rather than an active dependency.') +
+        ' Verify the committed dependency setup in a separate clean checkout without local Yalc state. This check does not remove local files or change dependency sources.',
     });
   }
   const npmrc = (await exists(join(root, '.npmrc')))

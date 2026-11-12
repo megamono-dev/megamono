@@ -30,14 +30,38 @@ export interface WorkspaceInitHostState {
   readonly git: {
     readonly available: boolean;
     readonly clean: boolean;
+    /** Workspace-relative paths with uncommitted or untracked changes. */
+    readonly dirtyPaths?: readonly string[];
     readonly branch?: string;
     readonly defaultBranch?: string;
   };
 }
 
+/** Whether a generator tree is backed by a real repository (not Nx's in-memory test tree). */
+export function isHostedWorkspaceTree(tree: {
+  readonly root: string;
+}): boolean {
+  return tree.root !== '/virtual';
+}
+
+/** Paths named by `git status --porcelain=v1` (both sides of a rename). */
+export function parsePorcelainPaths(status: string): string[] {
+  const unquote = (path: string) =>
+    path.startsWith('"') && path.endsWith('"')
+      ? (JSON.parse(path) as string)
+      : path;
+  // The surveyed output is trimmed, so the first entry may have lost the
+  // leading space of an unstaged-only status such as " M path".
+  return status.split(/\r?\n/).flatMap((line) => {
+    const path = /^(?:[ MTADRCU?!]{2}|[MTADRCU?!]) (.+)$/.exec(line)?.[1];
+    return path ? path.split(' -> ').map(unquote) : [];
+  });
+}
+
 export function assertWorkspaceMutationGitPreflight(
   state: WorkspaceInitHostState,
   operation: string,
+  options: { readonly allowDirty?: boolean } = {},
 ): void {
   if (!state.git.available) {
     throw new WorkspaceInitError(
@@ -49,7 +73,7 @@ export function assertWorkspaceMutationGitPreflight(
       }`,
     );
   }
-  if (!state.git.clean) {
+  if (!state.git.clean && !options.allowDirty) {
     throw new WorkspaceInitError(
       'preflight',
       `${operation} requires a clean working tree.`,
@@ -64,7 +88,7 @@ export function assertWorkspaceMutationGitPreflight(
   if (!state.git.defaultBranch) {
     throw new WorkspaceInitError(
       'preflight',
-      'The origin default branch could not be resolved.',
+      'The default branch could not be resolved from origin/HEAD, the origin remote, or init.defaultBranch. Fetch the remote HEAD, or explicitly configure `git config --local init.defaultBranch <integration-branch>` before retrying.',
     );
   }
   if (state.git.branch === state.git.defaultBranch) {
@@ -87,11 +111,51 @@ async function commandOutput(
       // Corepack shims can attempt network access even for --version. A
       // read-only survey must remain bounded when an optional tool is absent.
       timeout: 5_000,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     });
     return result.stdout.trim();
   } catch {
     return undefined;
   }
+}
+
+type GitOutput = (args: readonly string[]) => Promise<string | undefined>;
+
+/** Resolve repository intent without assuming a branch name or writing Git refs. */
+export async function resolveWorkspaceDefaultBranch(
+  workspaceRoot: string,
+  output: GitOutput = (args) => commandOutput(workspaceRoot, 'git', args),
+): Promise<string | undefined> {
+  const validBranch = async (name: string | undefined) =>
+    name &&
+    (await output(['check-ref-format', `refs/heads/${name}`])) !== undefined
+      ? name
+      : undefined;
+  const tracked = await output([
+    'symbolic-ref',
+    '--quiet',
+    '--short',
+    'refs/remotes/origin/HEAD',
+  ]);
+  const localDefault = tracked?.startsWith('origin/')
+    ? await validBranch(tracked.slice('origin/'.length))
+    : undefined;
+  if (localDefault) return localDefault;
+  // An advertised remote HEAD is authoritative over a machine's init default.
+  if (await output(['remote', 'get-url', 'origin'])) {
+    const advertised = await output([
+      'ls-remote',
+      '--symref',
+      'origin',
+      'HEAD',
+    ]);
+    const remoteDefault = await validBranch(
+      /^ref: refs\/heads\/([^\t\r\n]+)\tHEAD$/m.exec(advertised ?? '')?.[1],
+    );
+    if (remoteDefault) return remoteDefault;
+  }
+  // Empty remotes cannot advertise HEAD; respect an explicit Git init policy.
+  return validBranch(await output(['config', '--get', 'init.defaultBranch']));
 }
 
 export async function collectWorkspaceInitHostState(
@@ -127,13 +191,7 @@ export async function collectWorkspaceInitHostState(
     '--short',
     'HEAD',
   ]);
-  const remoteDefault = await commandOutput(workspaceRoot, 'git', [
-    'symbolic-ref',
-    '--quiet',
-    '--short',
-    'refs/remotes/origin/HEAD',
-  ]);
-  const defaultBranch = remoteDefault?.replace(/^origin\//, '');
+  const defaultBranch = await resolveWorkspaceDefaultBranch(workspaceRoot);
   return {
     platform: process.platform,
     node: process.version,
@@ -144,6 +202,7 @@ export async function collectWorkspaceInitHostState(
     git: {
       available: true,
       clean: status === '',
+      dirtyPaths: status ? parsePorcelainPaths(status) : [],
       ...(branch ? { branch } : {}),
       ...(defaultBranch ? { defaultBranch } : {}),
     },
@@ -479,7 +538,7 @@ export function assertWorkspaceInitPreflight(
     'Nx',
     workspaceDependencyVersion(tree, 'nx'),
     { major: 17, minor: 0, patch: 0 },
-    { major: 24, minor: 0, patch: 0 },
+    { major: 25, minor: 0, patch: 0 },
   );
   requireVersionRange(
     'TypeScript',

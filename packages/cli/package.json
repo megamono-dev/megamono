@@ -1,18 +1,21 @@
 {
   "name": "@megamono/cli",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "license": "MIT",
-  "description": "Global megamono command for adopting and operating Megamono in an existing Nx workspace.",
+  "description": "Adopt and maintain existing Nx monorepos with the Megamono CLI: workspace setup, project generators, documentation, and repository health checks.",
   "keywords": [
     "megamono",
     "nx",
     "monorepo",
+    "workspace",
     "cli",
     "generators",
-    "scaffolding"
+    "scaffolding",
+    "documentation",
+    "governance"
   ],
   "author": "Ryan Hefner",
-  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/cli#readme",
+  "homepage": "https://megamono.com/docs/cli",
   "bugs": {
     "url": "https://github.com/megamono-dev/megamono/issues"
   },
@@ -136,9 +139,9 @@
     ]
   },
   "dependencies": {
-    "enquirer": "2.3.6",
+    "enquirer": "2.4.1",
     "semver": "7.8.5",
-    "tslib": "^2.3.0"
+    "tslib": "^2.8.1"
   },
   "peerDependencies": {
     "@playstack/client-auth": ">=0.1.0-beta.1 <0.2.0"

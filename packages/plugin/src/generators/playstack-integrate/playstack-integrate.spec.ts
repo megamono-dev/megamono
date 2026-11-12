@@ -838,6 +838,7 @@ describe('Playstack integration generator', () => {
   );
   it('is stable after repository formatting and preserves real user edits', async () => {
     const tree = fixture();
+    tree.delete('.oxfmtrc.json');
     tree.write('.prettierrc', '{"singleQuote":false}');
     const manifest = integrationManifest(tree);
     const content = "export const message='hello';\n";

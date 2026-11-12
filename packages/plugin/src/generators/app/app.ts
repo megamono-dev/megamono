@@ -1,7 +1,16 @@
 import { preserveWorkspaceYaml } from '../../lib/preserve-workspace-yaml';
+import { wireGeneratedReactLint } from '../../lib/generated-react-lint';
+import { wireExpoValidation } from '../../lib/expo-validation';
+import { prepareNextInference, configureNextRuntime } from './web-runtime';
+import {
+  canInferGeneratedLibrary,
+  inferGeneratedProjectLint,
+  scopeGeneratedLibraryInference,
+} from '../../lib/generated-library-inference';
 import { prependEslintFlatConfig } from '../../lib/eslint-flat-config';
 import { createAndroidApp, validateAndroidApplicationId } from './android';
 import {
+  addDependenciesToPackageJson,
   formatFiles,
   getProjects,
   installPackagesTask,
@@ -10,6 +19,7 @@ import {
   runTasksInSerial,
   updateJson,
   updateProjectConfiguration,
+  visitNotIgnoredFiles,
   workspaceRoot,
   writeJson,
   type GeneratorCallback,
@@ -21,7 +31,14 @@ import { isMap, isSeq, parseDocument } from 'yaml';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, posix } from 'node:path';
+import { intersects, minVersion, subset, validRange } from 'semver';
 import { isSafeWorkspaceRelativePath } from '../../lib/config';
+import { nxWorkspaceCapabilities } from '../../lib/workspace-compatibility';
+import {
+  selectExpoSdk,
+  type ExpoSdkRegistry,
+  type ExpoSdkSelection,
+} from './expo-sdk';
 import {
   assertWorkspaceMutationGitPreflight,
   collectWorkspaceInitHostState,
@@ -74,7 +91,9 @@ const compatibility = JSON.parse(
   readFileSync(join(__dirname, '../../../compatibility.json'), 'utf8'),
 ) as {
   readonly scaffoldPackages: Record<string, string>;
+  readonly expoSdks: ExpoSdkRegistry;
   readonly rustCrates: Record<string, string>;
+  readonly tauri: { readonly rustVersion: string };
 };
 
 function packageVersion(name: string): string {
@@ -141,8 +160,9 @@ export class AppGeneratorError extends Error {
     message: string,
     readonly exitCode: 2 | 3 | 4,
     diagnostic: string,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
     this.name = 'AppGeneratorError';
     this.diagnosticCode = `app-${diagnostic}`;
   }
@@ -894,6 +914,8 @@ async function ensureTheme(
       'conflict',
     );
   }
+  const pluginsBefore = readJson(tree, 'nx.json').plugins ?? [];
+  const infer = canInferGeneratedLibrary(tree);
   const callback = await generator('@nx/js', 'libraryGenerator')(tree, {
     name: themeProject,
     directory: themeRoot,
@@ -905,7 +927,23 @@ async function ensureTheme(
     minimal: true,
     tags: `platform:web,scope:${options.scope},type:ui`,
     skipFormat: true,
+    addPlugin: infer,
   });
+  if (infer) scopeGeneratedLibraryInference(tree, themeRoot, pluginsBefore);
+  const root = readJson<{
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  }>(tree, 'package.json');
+  const singletonDependencies = {
+    react:
+      root.dependencies?.react ??
+      root.devDependencies?.react ??
+      root.peerDependencies?.react ??
+      packageVersion('react'),
+    '@chakra-ui/react': packageVersion('@chakra-ui/react'),
+    '@emotion/react': packageVersion('@emotion/react'),
+  };
   const updateTheme = (value: Record<string, unknown>) => ({
     ...value,
     name: `@${options.scope}/theme`,
@@ -915,10 +953,13 @@ async function ensureTheme(
     exports: {
       '.': { types: './src/index.ts', default: './src/index.ts' },
     },
-    dependencies: {
-      ...((value.dependencies as Record<string, string> | undefined) ?? {}),
-      '@chakra-ui/react': packageVersion('@chakra-ui/react'),
-      '@emotion/react': packageVersion('@emotion/react'),
+    peerDependencies: {
+      ...((value.peerDependencies as Record<string, string> | undefined) ?? {}),
+      ...singletonDependencies,
+    },
+    devDependencies: {
+      ...((value.devDependencies as Record<string, string> | undefined) ?? {}),
+      ...singletonDependencies,
     },
   });
   if (tree.exists(`${themeRoot}/package.json`))
@@ -929,6 +970,25 @@ async function ensureTheme(
     "export { megamonoSystem } from './lib/system';\n",
   );
   tree.write(`${themeRoot}/src/lib/system.ts`, themeSystemSource());
+  updateJson(tree, `${themeRoot}/tsconfig.lib.json`, (value) => ({
+    ...value,
+    compilerOptions: {
+      ...value.compilerOptions,
+      module: 'ESNext',
+      moduleResolution: 'Bundler',
+      lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+      // Chakra 3.37 ships a cornerShape declaration absent from its CSS type
+      // dependency. Check our source while skipping third-party declarations.
+      skipLibCheck: true,
+    },
+    exclude: [
+      ...new Set([
+        ...(value.exclude ?? []),
+        'src/**/*.spec.*',
+        'src/**/*.test.*',
+      ]),
+    ],
+  }));
   return callback;
 }
 
@@ -940,7 +1000,39 @@ async function createWebApp(
   const appRouter = options.router === 'app';
   const routeRoot = `${options.directory}/src/${appRouter ? 'app' : 'pages'}`;
   const callbacks: (GeneratorCallback | void)[] = [];
+  const nextInference = prepareNextInference(tree, options.directory);
+  const manifest = readJson<{
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  }>(tree, 'package.json');
+  const declaredVersion = (name: string) =>
+    manifest.dependencies?.[name] ??
+    manifest.devDependencies?.[name] ??
+    manifest.peerDependencies?.[name];
+  const frameworkDependencies = Object.fromEntries(
+    ['next', 'react', 'react-dom'].map((name) => [
+      name,
+      declaredVersion(name) ?? packageVersion(name),
+    ]),
+  );
+  // Nx's defaults can lag security releases. Seed qualified versions only for
+  // missing packages; existing workspace declarations remain authoritative.
+  callbacks.push(
+    addDependenciesToPackageJson(
+      tree,
+      Object.fromEntries(
+        Object.entries(frameworkDependencies).filter(
+          ([name]) => !declaredVersion(name),
+        ),
+      ),
+      declaredVersion('eslint-config-next')
+        ? {}
+        : { 'eslint-config-next': packageVersion('eslint-config-next') },
+    ),
+  );
   if (styling === 'chakra') callbacks.push(await ensureTheme(tree, options));
+  const pluginsBefore = readJson(tree, 'nx.json').plugins ?? [];
   callbacks.push(
     await generator('@nx/next', 'applicationGenerator')(tree, {
       name: options.projectName,
@@ -953,8 +1045,20 @@ async function createWebApp(
       e2eTestRunner: 'playwright',
       tags: options.tags.join(','),
       skipFormat: true,
+      addPlugin: nextInference,
     }),
   );
+  if (nextInference)
+    configureNextRuntime(
+      tree,
+      options.projectName,
+      options.directory,
+      options.port ?? 3000,
+      styling === 'chakra',
+      options.name,
+    );
+  if (nextInference)
+    scopeGeneratedLibraryInference(tree, options.directory, pluginsBefore);
   // Next rewrites its declaration and creates app-local output during development.
   const eslintPath = `${options.directory}/eslint.config.mjs`;
   const eslintConfig = prependEslintFlatConfig(
@@ -973,6 +1077,7 @@ async function createWebApp(
     styling === 'chakra'
       ? {
           '@chakra-ui/react': packageVersion('@chakra-ui/react'),
+          '@emotion/react': packageVersion('@emotion/react'),
           [`@${options.scope}/theme`]: workspaceDependency(options),
         }
       : styling === 'emotion'
@@ -995,12 +1100,10 @@ async function createWebApp(
             : styling === 'panda'
               ? { '@pandacss/dev': packageVersion('@pandacss/dev') }
               : {};
-  updatePackage(
-    tree,
-    `${options.directory}/package.json`,
-    options,
-    dependencies,
-  );
+  updatePackage(tree, `${options.directory}/package.json`, options, {
+    ...frameworkDependencies,
+    ...dependencies,
+  });
   const e2eRoot = `${options.directory}-e2e`;
   if (tree.exists(`${e2eRoot}/package.json`))
     updatePackage(tree, `${e2eRoot}/package.json`, options);
@@ -1130,6 +1233,13 @@ async function createWebApp(
   );
   tree.write(`${e2eRoot}/src/example.spec.ts`, billboardE2eSource(options));
   configureE2ePackage(tree, options);
+  callbacks.push(
+    wireGeneratedReactLint(
+      tree,
+      options.directory,
+      packageVersion('eslint-plugin-react-hooks'),
+    ),
+  );
   return callbacks;
 }
 
@@ -1247,6 +1357,328 @@ async function createApiApp(
   return callbacks;
 }
 
+const dependencySections = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+] as const;
+const mobileTestPackages = [
+  '@testing-library/react-native',
+  'jest-expo',
+  'react-test-renderer',
+] as const;
+const mobileDevPackages = [
+  ...mobileTestPackages,
+  '@types/react',
+  'babel-preset-expo',
+  '@expo/cli',
+  '@babel/runtime',
+] as const;
+const mobileSdkPackages = [
+  ...mobileDevPackages,
+  'react',
+  'react-dom',
+  'react-native',
+  '@expo/cli',
+  '@expo/vector-icons',
+  '@expo/metro',
+  '@expo/metro-config',
+  '@expo/metro-runtime',
+  'expo-splash-screen',
+  'expo-status-bar',
+  'expo-system-ui',
+  'react-native-web',
+  'react-native-svg',
+  'react-native-svg-transformer',
+  'metro-config',
+  'metro-resolver',
+] as const;
+const unusedMobilePackages = [
+  '@expo/vector-icons',
+  '@expo/metro-config',
+  'metro-config',
+  'metro-resolver',
+] as const;
+type DependencyManifest = Partial<
+  Record<(typeof dependencySections)[number], Record<string, string>>
+>;
+
+function dependencyDeclarations(manifest: DependencyManifest, name: string) {
+  return dependencySections.flatMap((section) => {
+    const version = manifest[section]?.[name];
+    return version ? [{ section, version }] : [];
+  });
+}
+
+function restoreDependencyDeclarations(
+  tree: Tree,
+  original: DependencyManifest,
+): void {
+  const names = new Set(
+    dependencySections.flatMap((section) =>
+      Object.keys(original[section] ?? {}),
+    ),
+  );
+  updateJson(tree, 'package.json', (manifest: DependencyManifest) => {
+    for (const section of dependencySections) {
+      if (!manifest[section] && !original[section]) continue;
+      const dependencies = { ...manifest[section] };
+      for (const name of names) {
+        const existing = original[section]?.[name];
+        if (existing !== undefined) dependencies[name] = existing;
+        else delete dependencies[name];
+      }
+      manifest[section] = dependencies;
+    }
+    return manifest;
+  });
+}
+
+interface MobileSdkLane {
+  readonly version: string;
+  readonly core: Record<
+    'expo' | 'react' | 'react-dom' | 'react-native',
+    string
+  >;
+  readonly requirements: Readonly<Record<string, string>>;
+}
+
+function mobileSdkLane(
+  tree: Tree,
+  original: DependencyManifest,
+): MobileSdkLane {
+  const existingExpo = dependencyDeclarations(original, 'expo');
+  if (
+    existingExpo.length > 1 ||
+    (existingExpo[0] && !boundedRuntimeRange(existingExpo[0].version))
+  )
+    throw new AppGeneratorError(
+      'Expo must have one explicit semver declaration bounded to a single SDK major before adding a mobile app. Retain the selected SDK and resolve duplicate declarations, unbounded ranges, or local/tag protocols first.',
+      3,
+      'compatibility',
+    );
+  const existingNative = dependencyDeclarations(original, 'react-native');
+  if (
+    existingNative.length > 1 ||
+    (existingNative[0] && !boundedRuntimeRange(existingNative[0].version))
+  )
+    throw new AppGeneratorError(
+      'React Native must have one explicit semver declaration bounded to one native runtime lane before adding a mobile app; choose a compatible native SDK before generation.',
+      3,
+      'compatibility',
+    );
+  const owners = existingExpo.length
+    ? [{ root: '.', version: existingExpo[0].version }]
+    : [];
+  for (const [name, project] of [...getProjects(tree)].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    if (project.root === '.' || !project.root) continue;
+    if (!isSafeWorkspaceRelativePath(project.root))
+      throw new AppGeneratorError(
+        `Project ${name} has an unsupported SDK ownership root. Review the project configuration before generation.`,
+        3,
+        'compatibility',
+      );
+    const path = posix.join(project.root, 'package.json');
+    if (!tree.exists(path)) continue;
+    const declarations = dependencyDeclarations(
+      readJson<DependencyManifest>(tree, path),
+      'expo',
+    );
+    if (
+      declarations.length > 1 ||
+      declarations.some(({ version }) => !boundedRuntimeRange(version))
+    )
+      throw new AppGeneratorError(
+        `${name} must declare one bounded Expo SDK policy before adding another mobile app.`,
+        3,
+        'compatibility',
+      );
+    if (declarations[0])
+      owners.push({ root: project.root, version: declarations[0].version });
+  }
+  if (new Set(owners.map((owner) => minVersion(owner.version)?.major)).size > 1)
+    throw new AppGeneratorError(
+      'Existing workspace applications select different Expo SDK majors. Review and choose a coherent SDK policy before adding another app; Megamono will not align or upgrade existing applications.',
+      3,
+      'compatibility',
+    );
+  const declared = existingExpo[0]?.version ?? owners[0]?.version;
+  let sdk: ExpoSdkSelection;
+  try {
+    sdk = selectExpoSdk(
+      tree,
+      compatibility.expoSdks,
+      declared,
+      mobileSdkPackages,
+      owners.map((owner) => owner.root),
+    );
+  } catch (error) {
+    throw new AppGeneratorError(
+      error instanceof Error
+        ? error.message
+        : 'Expo SDK metadata could not be read.',
+      3,
+      'compatibility',
+      { cause: error },
+    );
+  }
+  if (
+    existingNative[0] &&
+    !intersects(existingNative[0].version, sdk.requirements['react-native'])
+  )
+    throw new AppGeneratorError(
+      'The selected Expo SDK requires React Native ' +
+        sdk.requirements['react-native'] +
+        ', but this workspace owns ' +
+        existingNative[0].version +
+        '. Resolve native compatibility before adding an app.',
+      3,
+      'compatibility',
+    );
+  return {
+    version: sdk.version,
+    core: {
+      expo: sdk.declaration,
+      react: sdk.requirements.react,
+      'react-dom': sdk.requirements['react-dom'],
+      'react-native': sdk.requirements['react-native'],
+    },
+    requirements: sdk.requirements,
+  };
+}
+
+function boundedRuntimeRange(range: string): boolean {
+  if (!validRange(range)) return false;
+  const minimum = minVersion(range);
+  if (!minimum || (!minimum.major && !minimum.minor)) return false;
+  const lower = minimum.major ? `${minimum.major}.0.0` : `0.${minimum.minor}.0`;
+  const upper = minimum.major
+    ? `${minimum.major + 1}.0.0`
+    : `0.${minimum.minor + 1}.0`;
+  return subset(range, `>=${lower} <${upper}`);
+}
+
+function mobileMetroConfig(): string {
+  return `const { getDefaultConfig } = require('expo/metro-config');
+
+// Expo owns monorepo roots and resolution defaults for this app's SDK.
+const config = getDefaultConfig(__dirname);
+config.transformer.babelTransformerPath = require.resolve('react-native-svg-transformer/expo');
+config.resolver.assetExts = config.resolver.assetExts.filter((extension) => extension !== 'svg');
+config.resolver.sourceExts = [...new Set([...config.resolver.sourceExts, 'svg'])];
+
+// Hoisted native libraries must use this app's React singleton, including JSX
+// runtimes. Sibling web apps can retain their separately supported versions.
+const expoResolveRequest = config.resolver.resolveRequest;
+const appEntry = require.resolve('./index.js');
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const appContext = /^(react|react-dom)(\\/|$)/.test(moduleName)
+    ? { ...context, originModulePath: appEntry }
+    : context;
+  return (expoResolveRequest ?? context.resolveRequest)(appContext, moduleName, platform);
+};
+
+module.exports = config;
+`;
+}
+
+function scopeMobileJestReact(tree: Tree, directory: string): void {
+  for (const extension of ['cts', 'ts', 'cjs', 'js', 'mts', 'mjs']) {
+    const path = `${directory}/jest.config.${extension}`;
+    const source = tree.read(path, 'utf8');
+    if (!source) continue;
+    if (!/moduleNameMapper\s*:\s*\{/.test(source))
+      throw new AppGeneratorError(
+        'The installed Expo generator emits an unsupported Jest configuration; review app-scoped React resolution before using this template.',
+        3,
+        'plugin-incompatible',
+      );
+    const entries = ['react', 'react-dom', 'react-test-renderer']
+      .flatMap((name) => [
+        `    '^${name}$': require.resolve('${name}', { paths: [__dirname] }),`,
+        `    '^${name}/(.*)$': require('node:path').join(require('node:path').dirname(require.resolve('${name}/package.json', { paths: [__dirname] })), '$1'),`,
+      ])
+      .join('\n');
+    tree.write(
+      path,
+      source.replace(
+        /moduleNameMapper\s*:\s*\{/,
+        (match) => `${match}\n${entries}`,
+      ),
+    );
+  }
+}
+
+interface ExpoInferenceRegistration {
+  readonly plugin: '@nx/expo/plugin';
+  readonly options?: Readonly<Record<string, unknown>>;
+  readonly include?: readonly string[];
+  readonly exclude?: readonly string[];
+}
+
+function newMobileInference(
+  tree: Tree,
+  directory: string,
+): ExpoInferenceRegistration | undefined {
+  if (nxWorkspaceCapabilities(tree).major < 18) return undefined;
+  const nx = readJson<{
+    plugins?: readonly (string | ExpoInferenceRegistration)[];
+  }>(tree, 'nx.json');
+  const registrations = (nx.plugins ?? []).filter(
+    (entry) =>
+      (typeof entry === 'string' ? entry : entry.plugin) === '@nx/expo/plugin',
+  );
+  const defaults = {
+    startTargetName: 'start',
+    buildTargetName: 'build',
+    prebuildTargetName: 'prebuild',
+    serveTargetName: 'serve',
+    installTargetName: 'install',
+    exportTargetName: 'export',
+    submitTargetName: 'submit',
+    runIosTargetName: 'run-ios',
+    runAndroidTargetName: 'run-android',
+    buildDepsTargetName: 'build-deps',
+    watchDepsTargetName: 'watch-deps',
+  };
+  const policy = (entry: string | ExpoInferenceRegistration) =>
+    JSON.stringify(
+      Object.fromEntries(
+        Object.entries({
+          ...defaults,
+          ...(typeof entry === 'object' ? entry.options : {}),
+        }).sort(([left], [right]) => left.localeCompare(right)),
+      ),
+    );
+  if (new Set(registrations.map(policy)).size > 1)
+    throw new AppGeneratorError(
+      'Existing Nx Expo registrations use different target policies. Review and choose one compatible policy before adding a mobile app; Megamono will not guess which scoped policy applies or rewrite existing registrations.',
+      3,
+      'compatibility',
+    );
+  if (
+    registrations.some(
+      (entry) =>
+        typeof entry === 'string' ||
+        (entry.include === undefined && entry.exclude === undefined),
+    )
+  )
+    return undefined;
+  const representative = registrations[0];
+  return {
+    plugin: '@nx/expo/plugin',
+    ...(typeof representative === 'object' && representative.options
+      ? { options: representative.options }
+      : {}),
+    include: ['app.json', 'app.config.js', 'app.config.ts'].map(
+      (file) => `${directory}/${file}`,
+    ),
+  };
+}
+
 async function createDelegatedApp(
   tree: Tree,
   options: NormalizedAppOptions,
@@ -1309,13 +1741,139 @@ async function createDelegatedApp(
     ];
   }
   if (options.type === 'mobile') {
-    const callbacks = [
-      await generator('@nx/expo', 'expoApplicationGenerator')(tree, {
+    const originalManifest = readJson<DependencyManifest>(tree, 'package.json');
+    const inference = newMobileInference(tree, options.directory);
+    const sdk = mobileSdkLane(tree, originalManifest);
+    if (inference)
+      updateJson(tree, 'nx.json', (value) => ({
+        ...value,
+        plugins: [...(value.plugins ?? []), inference],
+      }));
+    updateJson(tree, 'package.json', (manifest: DependencyManifest) => {
+      for (const section of dependencySections) delete manifest[section]?.expo;
+      manifest.dependencies = { ...manifest.dependencies, expo: sdk.core.expo };
+      return manifest;
+    });
+    updateJson(tree, 'package.json', (manifest: DependencyManifest) => {
+      // Existing declarations may belong to another app or toolchain. Keep
+      // them out of the maintained template's dependency merge, project the
+      // selected public SDK requirements, and restore them before installing.
+      for (const section of dependencySections)
+        for (const name of mobileSdkPackages) delete manifest[section]?.[name];
+      return manifest;
+    });
+    let appTask: GeneratorCallback | void;
+    try {
+      appTask = await generator('@nx/expo', 'expoApplicationGenerator')(tree, {
         ...common,
         e2eTestRunner: 'none',
+      });
+    } catch (error) {
+      restoreDependencyDeclarations(tree, originalManifest);
+      throw error;
+    }
+    const callbacks = [appTask];
+    const generatedManifest = readJson<DependencyManifest>(
+      tree,
+      'package.json',
+    );
+    restoreDependencyDeclarations(tree, originalManifest);
+    const appManifest = readJson<DependencyManifest>(
+      tree,
+      `${options.directory}/package.json`,
+    );
+    const runtimeNames = new Set([
+      ...Object.entries(appManifest.dependencies ?? {})
+        .filter(([, version]) => version === '*')
+        .map(([name]) => name),
+      ...mobileSdkPackages.filter(
+        (name) =>
+          !mobileDevPackages.some((dev) => dev === name) &&
+          !unusedMobilePackages.some((unused) => unused === name),
+      ),
+    ]);
+    const runtimeDependencies = Object.fromEntries(
+      [...runtimeNames].flatMap((name) => {
+        const selected =
+          sdk.requirements[name] ??
+          dependencyDeclarations(generatedManifest, name)[0]?.version;
+        if (!selected && !appManifest.dependencies?.[name]) return [];
+        if (!selected || !validRange(selected))
+          throw new AppGeneratorError(
+            `The installed Expo generator did not provide a bounded ${name} requirement for the new app. Review this template's compatibility before installation.`,
+            3,
+            'plugin-incompatible',
+          );
+        return [[name, selected]];
       }),
-    ];
-    updatePackage(tree, `${options.directory}/package.json`, options);
+    );
+    const testDependencies = Object.fromEntries(
+      mobileDevPackages.flatMap((name) => {
+        const version =
+          name === 'react-test-renderer'
+            ? sdk.core.react
+            : (sdk.requirements[name] ??
+              dependencyDeclarations(generatedManifest, name)[0]?.version);
+        const selectedTypes =
+          name === '@types/react' && version ? minVersion(version) : undefined;
+        return version
+          ? [[name, selectedTypes ? `~${selectedTypes.version}` : version]]
+          : [];
+      }),
+    );
+    updateJson(tree, 'package.json', (manifest: DependencyManifest) => {
+      for (const name of [...mobileSdkPackages, 'expo']) {
+        if (dependencyDeclarations(originalManifest, name).length) continue;
+        for (const section of dependencySections)
+          delete manifest[section]?.[name];
+      }
+      return manifest;
+    });
+    updatePackage(tree, `${options.directory}/package.json`, options, {
+      ...runtimeDependencies,
+      ...sdk.core,
+    });
+    updateJson(tree, `${options.directory}/package.json`, (manifest) => {
+      for (const name of [
+        ...Object.keys(testDependencies),
+        ...unusedMobilePackages,
+      ])
+        delete manifest.dependencies?.[name];
+      return {
+        ...manifest,
+        main: './index.js',
+        devDependencies: { ...manifest.devDependencies, ...testDependencies },
+        expo: {
+          ...manifest.expo,
+          autolinking: {
+            ...manifest.expo?.autolinking,
+            exclude: [
+              ...new Set([
+                ...(manifest.expo?.autolinking?.exclude ?? []),
+                'react',
+                'react-dom',
+              ]),
+            ],
+          },
+        },
+      };
+    });
+    if ((minVersion(sdk.version)?.major ?? 0) >= 56) {
+      // New SDKs enforce edge-to-edge and the New Architecture instead of
+      // accepting these template opt-ins. Change only the newly created app.
+      updateJson(tree, `${options.directory}/app.json`, (config) => {
+        delete config.expo?.android?.edgeToEdgeEnabled;
+        if ((minVersion(sdk.version)?.major ?? 0) >= 57)
+          delete config.expo?.newArchEnabled;
+        return config;
+      });
+    }
+    tree.write(`${options.directory}/metro.config.js`, mobileMetroConfig());
+    scopeMobileJestReact(tree, options.directory);
+    wireExpoValidation(tree, undefined, [options.projectName]);
+    logger.warn(
+      'Install expo-doctor compatible with this app SDK and Node version before running its expo-doctor/build targets. Direct EAS commands need their own validation checks.',
+    );
     const appSource = `${options.directory}/src/app/App.tsx`;
     if (tree.exists(appSource)) {
       tree.write(
@@ -1423,7 +1981,7 @@ function createDesktopApp(
   );
   tree.write(
     `${options.directory}/src-tauri/Cargo.toml`,
-    `[package]\nname = "${options.projectName}"\nversion = "0.1.0"\nedition = "2021"\n\n[lib]\nname = "${crateName}_lib"\ncrate-type = ["staticlib", "cdylib", "rlib"]\n\n[build-dependencies]\ntauri-build = { version = "${rustCrateVersion('tauri-build')}", features = [] }\n\n[dependencies]\ntauri = { version = "${rustCrateVersion('tauri')}", features = [] }\ntauri-plugin-opener = "${rustCrateVersion('tauri-plugin-opener')}"\nserde = { version = "${rustCrateVersion('serde')}", features = ["derive"] }\nserde_json = "${rustCrateVersion('serde_json')}"\n`,
+    `[package]\nname = "${options.projectName}"\nversion = "0.1.0"\nedition = "2021"\nrust-version = "${compatibility.tauri.rustVersion}"\n\n[lib]\nname = "${crateName}_lib"\ncrate-type = ["staticlib", "cdylib", "rlib"]\n\n[build-dependencies]\ntauri-build = { version = "${rustCrateVersion('tauri-build')}", features = [] }\n\n[dependencies]\ntauri = { version = "~${rustCrateVersion('tauri')}", features = [] }\ntauri-plugin-opener = "=${rustCrateVersion('tauri-plugin-opener')}"\nserde = { version = "${rustCrateVersion('serde')}", features = ["derive"] }\nserde_json = "${rustCrateVersion('serde_json')}"\n`,
   );
   tree.write(
     `${options.directory}/src-tauri/src/main.rs`,
@@ -1483,6 +2041,110 @@ function createDesktopApp(
   return [];
 }
 
+const SOURCE_FILE = /\.(?:[cm]?[jt]sx?)$/;
+
+/**
+ * Nx framework generators add runtime packages (Nest, axios, ...) only to the
+ * root manifest, which makes every application's production closure look the
+ * same. Declare each runtime package this run added at the root in the
+ * generated projects that import it (or the application when none does, for
+ * framework peers such as rxjs), so per-project audits and deploy pruning see
+ * real ownership. The root declaration stays: Nx plugins resolve framework
+ * packages from the workspace root.
+ */
+function declareGeneratedRuntimeDependencies(
+  tree: Tree,
+  before: ReadonlySet<string>,
+  existingProjects: ReadonlySet<string>,
+  application: string,
+): void {
+  const root = readJson<{ dependencies?: Record<string, string> }>(
+    tree,
+    'package.json',
+  ).dependencies;
+  const added = Object.entries(root ?? {}).filter(
+    // tslib is a TypeScript emit helper shared by every compiled project.
+    ([name]) => !before.has(name) && name !== 'tslib',
+  );
+  if (added.length === 0) return;
+  const projects = [...getProjects(tree)].filter(
+    ([name, project]) =>
+      !existingProjects.has(name) &&
+      tree.exists(`${project.root}/package.json`),
+  );
+  const sources = new Map<string, string>();
+  for (const [name, project] of projects) {
+    let text = '';
+    visitNotIgnoredFiles(tree, project.root, (path) => {
+      if (SOURCE_FILE.test(path) && !path.includes('/node_modules/'))
+        text += `${tree.read(path, 'utf8') ?? ''}\n`;
+    });
+    sources.set(name, text);
+  }
+  const imports = (text: string, dependency: string) => {
+    const escaped = dependency.replace(/[.*+?^$()|[\]\\/{}]/g, '\\$&');
+    return new RegExp(
+      `(?:from|import|require\\s*\\()\\s*\\(?\\s*['"]${escaped}(?:/[^'"]*)?['"]`,
+    ).test(text);
+  };
+  for (const [dependency, version] of added) {
+    const owners = projects.filter(([name]) =>
+      imports(sources.get(name) ?? '', dependency),
+    );
+    const targets = owners.length
+      ? owners
+      : projects.filter(([name]) => name === application);
+    for (const [name, project] of targets) {
+      const section = name.endsWith('-e2e')
+        ? 'devDependencies'
+        : 'dependencies';
+      updateJson(tree, `${project.root}/package.json`, (value) => {
+        if (
+          ['dependencies', 'devDependencies', 'peerDependencies'].some(
+            (field) => value[field]?.[dependency] !== undefined,
+          )
+        )
+          return value;
+        return {
+          ...value,
+          [section]: { ...(value[section] ?? {}), [dependency]: version },
+        };
+      });
+    }
+  }
+}
+
+/** pnpm workspaces: audit only this application's production closure. */
+function addProductionAuditTarget(tree: Tree, projectName: string): void {
+  const project = getProjects(tree).get(projectName);
+  if (!project || project.targets?.audit) return;
+  updateProjectConfiguration(tree, projectName, {
+    ...project,
+    targets: {
+      ...project.targets,
+      audit: { executor: '@megamono/plugin:audit-production', cache: false },
+    },
+  });
+}
+
+/** Inferred lint runs `eslint .`; keep WXT output and generated types out. */
+function ignoreExtensionBuildOutput(tree: Tree, root: string): void {
+  const path = `${root}/eslint.config.mjs`;
+  const source = tree.read(path, 'utf8');
+  if (!source || source.includes('.output/')) return;
+  const updated = prependEslintFlatConfig(
+    source,
+    "  { ignores: ['**/.output/**', '**/.wxt/**'] },",
+  );
+  if (updated === undefined)
+    throw new AppGeneratorError(
+      'Cannot exclude generated WXT output from the extension flat ESLint config.',
+      3,
+      'plugin-incompatible',
+    );
+  tree.write(path, updated);
+}
+
 async function confirm(options: AppGeneratorSchema): Promise<boolean> {
   if (options.yes || options.bootstrap) return true;
   if (!canPrompt(options)) {
@@ -1518,12 +2180,33 @@ export async function appGenerator(
   if (!(await confirm(rawOptions))) return () => undefined;
 
   const restoreWorkspaceYaml = preserveWorkspaceYaml(tree);
+  const existingProjects = new Set(getProjects(tree).keys());
+  const rootDependenciesBefore = new Set(
+    Object.keys(
+      readJson<{ dependencies?: Record<string, string> }>(tree, 'package.json')
+        .dependencies ?? {},
+    ),
+  );
   const callbacks =
     options.type === 'web' || options.type === 'site'
       ? await createWebApp(tree, options)
       : options.type === 'api'
         ? await createApiApp(tree, options)
         : await createDelegatedApp(tree, options);
+  // Expo keeps its separately qualified mobile inference lane.
+  if (options.type !== 'mobile') {
+    const inferred = inferGeneratedProjectLint(tree, existingProjects);
+    if (options.type === 'extension' && inferred.includes(options.directory))
+      ignoreExtensionBuildOutput(tree, options.directory);
+  }
+  declareGeneratedRuntimeDependencies(
+    tree,
+    rootDependenciesBefore,
+    existingProjects,
+    options.projectName,
+  );
+  if (options.packageManager === 'pnpm')
+    addProductionAuditTarget(tree, options.projectName);
 
   if (!options.bootstrap) {
     updateJson(tree, 'megamono.json', (value: Record<string, unknown>) => ({

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
+import { localPackageManifest } from './local-package.js';
 import {
   existsSync,
   lstatSync,
@@ -8,7 +8,7 @@ import {
   realpathSync,
   statSync,
 } from 'node:fs';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 
 export const DEFAULT_ARTIFACT_MANIFEST =
@@ -159,14 +159,9 @@ function manifestBytes(bytes: Buffer): Buffer {
 }
 
 function installedDirectory(consumerManifest: string, name: string): string {
-  const resolver = createRequire(consumerManifest);
-  // A package need not export package.json. Resolve its physical Node search
-  // location without loading an entry point or skipping a nearer installation.
-  for (const search of resolver.resolve.paths(name) ?? []) {
-    const directory = join(search, name);
-    if (existsSync(join(directory, 'package.json'))) return directory;
-  }
-  throw new Error('No installed package resolves for this consumer.');
+  // Packages need not export package.json; inspect local metadata without
+  // loading an entry point or admitting inherited NODE_PATH/global fallbacks.
+  return dirname(localPackageManifest(dirname(consumerManifest), name));
 }
 
 export function verifyArtifactAlignment(

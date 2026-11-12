@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "package": "magicast",
+  "version": "0.5.5",
+  "tarball": "https://registry.npmjs.org/magicast/-/magicast-0.5.5.tgz",
+  "tarballIntegrity": "sha512-UicdXN8zQ3JHlxVq+28afMXPr1z7WNY6+7EJnzTdQWkTAlMLF5fNCCKxJHBQwGaNGR11581EiQmQzx73+MvszA==",
+  "bundle": "dist/builders-CDdrUKLb.js",
+  "originalSha256": "6d589e4c1b4c89141d67698af6750c470184c575553029c80b110e8e091d553c",
+  "patchedSha256": "ab6e6a3542f5199a675ff2f05dc6d744f7e551069cc6888ce22767c7da9a4edd",
+  "originalBytes": 349142,
+  "patchedBytes": 266690,
+  "removedEmbeddedBytes": 82269,
+  "externalPackage": "source-map-js",
+  "externalVersion": "1.2.2",
+  "externalTarball": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.2.tgz",
+  "externalTarballIntegrity": "sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==",
+  "upstreamSources": [
+    "https://github.com/unjs/magicast/blob/v0.5.5/package.json",
+    "https://github.com/unjs/magicast/blob/v0.5.5/tsdown.config.ts"
+  ],
+  "transformation": "Remove the complete contiguous source-map-js@1.2.1 bundle regions and their generated import_source_map CommonJS namespace shim. Replace that namespace with an ESM import from the separately installed, exactly pinned source-map-js@1.2.2. Preserve all remaining Magicast, Recast, and ast-types implementation bytes.",
+  "scope": "Megamono repository development tooling only. This is an explicit local artifact patch, not an upstream Magicast release or an npm advisory suppression. No dependency is downloaded or installed by the patch script."
+}

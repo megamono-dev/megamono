@@ -13,6 +13,9 @@ export default [
             '{projectRoot}/vitest.config.{js,ts,mjs,mts}',
             // This unpublished fixture uses the repository's Jest toolchain.
             '{projectRoot}/e2e/inferred-targets.e2e.mjs',
+            // Runtime dependencies are installed only in the isolated Expo consumer.
+            '{projectRoot}/e2e/expo-consumer.e2e.mjs',
+            '{projectRoot}/e2e/expo-default-consumer.e2e.mjs',
           ],
           ignoredDependencies: [
             '@nx/expo',

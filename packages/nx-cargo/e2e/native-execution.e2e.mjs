@@ -10,13 +10,18 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
+import { resolveConsumerNpmCli } from '../../../tools/consumer-npm.mjs';
 
 const workspace = resolve(import.meta.dirname, '../../..');
 const require = createRequire(join(workspace, 'package.json'));
 const root = mkdtempSync(join(tmpdir(), "megamono native & space's-"));
-const npmCli = process.env.npm_execpath;
-assert(npmCli, 'Run this fixture through npm exec nx.');
-const env = { ...process.env, NX_DAEMON: 'false', NX_ISOLATE_PLUGINS: 'false' };
+const npmCli = resolveConsumerNpmCli();
+const env = {
+  ...process.env,
+  NX_DAEMON: 'false',
+  NX_ISOLATE_PLUGINS: 'false',
+  npm_config_cache: process.env.MEGAMONO_NPM_CACHE ?? join(root, 'npm-cache'),
+};
 for (const key of Object.keys(env))
   if (
     key.startsWith('NX_') &&

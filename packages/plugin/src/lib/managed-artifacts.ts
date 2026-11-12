@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join, posix, relative, resolve, sep } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import type { Diagnostic } from './diagnostics';
 
 export const ARTIFACT_REGISTRY_PATH = '.megamono/artifacts.json';
@@ -328,8 +329,145 @@ export function parseArtifactRegistry(source: string): ManagedArtifactRegistry {
   return { schemaVersion: 1, artifacts };
 }
 
+/** JSON layout settings shared with Prettier's JSON printer. */
+export interface JsonLayout {
+  readonly printWidth: number;
+  readonly indent: string;
+  readonly tabWidth?: number;
+}
+
+const DEFAULT_JSON_LAYOUT: JsonLayout = { printWidth: 80, indent: '  ' };
+
+/**
+ * Print JSON the way Prettier's JSON printer leaves JSON.stringify output:
+ * objects stay expanded, and arrays of scalars collapse onto one line when the
+ * whole line fits the print width. A registry rewritten by a generator then
+ * passes `prettier --check` / `nx format:check` without another formatting pass.
+ */
+export function renderPrettierJson(
+  value: unknown,
+  layout: JsonLayout = DEFAULT_JSON_LAYOUT,
+): string {
+  const print = (
+    current: unknown,
+    depth: number,
+    prefix: string,
+    suffix: string,
+  ): string => {
+    const indent = layout.indent.repeat(depth);
+    const width = (text: string) =>
+      text.replace(/\t/g, ' '.repeat(layout.tabWidth ?? 2)).length;
+    if (Array.isArray(current)) {
+      if (current.length === 0) return `${indent}${prefix}[]${suffix}`;
+      if (current.every((item) => item === null || typeof item !== 'object')) {
+        const inline = `${indent}${prefix}[${current.map((item) => JSON.stringify(item)).join(', ')}]${suffix}`;
+        if (width(inline) <= layout.printWidth) return inline;
+      }
+      return [
+        `${indent}${prefix}[`,
+        ...current.map((item, index) =>
+          print(item, depth + 1, '', index < current.length - 1 ? ',' : ''),
+        ),
+        `${indent}]${suffix}`,
+      ].join('\n');
+    }
+    if (current && typeof current === 'object') {
+      const entries = Object.entries(current).filter(
+        ([, item]) => item !== undefined,
+      );
+      if (entries.length === 0) return `${indent}${prefix}{}${suffix}`;
+      return [
+        `${indent}${prefix}{`,
+        ...entries.map(([key, item], index) =>
+          print(
+            item,
+            depth + 1,
+            `${JSON.stringify(key)}: `,
+            index < entries.length - 1 ? ',' : '',
+          ),
+        ),
+        `${indent}}${suffix}`,
+      ].join('\n');
+    }
+    return `${indent}${prefix}${JSON.stringify(current)}${suffix}`;
+  };
+  return `${print(value, 0, '', '')}\n`;
+}
+
+function readConfigFile(
+  source: string | null | undefined,
+  format: 'json' | 'yaml' = 'json',
+): Record<string, unknown> | undefined {
+  if (!source) return undefined;
+  try {
+    // YAML is a superset of JSON, which is how Prettier reads `.prettierrc`.
+    const value = (
+      format === 'yaml' ? parseYaml(source) : JSON.parse(source)
+    ) as unknown;
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolve printWidth/tabWidth/useTabs from a static Prettier configuration
+ * (package.json#prettier, `.prettierrc` as JSON or YAML, `.prettierrc.json`,
+ * `.prettierrc.yaml` or `.prettierrc.yml`, in Prettier's search order),
+ * including a JSON-file override. Executable configurations use Prettier
+ * defaults.
+ */
+export function workspaceJsonLayout(
+  read: (path: string) => string | null | undefined,
+): JsonLayout {
+  // Prettier's own search order: package.json#prettier wins over rc files.
+  const packageConfig = readConfigFile(read('package.json'))?.prettier;
+  const config =
+    (packageConfig && typeof packageConfig === 'object'
+      ? (packageConfig as Record<string, unknown>)
+      : undefined) ??
+    readConfigFile(read('.prettierrc'), 'yaml') ??
+    readConfigFile(read('.prettierrc.json')) ??
+    readConfigFile(read('.prettierrc.yaml'), 'yaml') ??
+    readConfigFile(read('.prettierrc.yml'), 'yaml');
+  if (!config || typeof config !== 'object') return DEFAULT_JSON_LAYOUT;
+  const overrides = Array.isArray(config.overrides) ? config.overrides : [];
+  const json = overrides
+    .filter(
+      (entry): entry is { files: unknown; options: Record<string, unknown> } =>
+        Boolean(entry && typeof entry === 'object' && 'options' in entry),
+    )
+    .filter(({ files }) =>
+      (Array.isArray(files) ? files : [files]).some(
+        (pattern) =>
+          typeof pattern === 'string' && /\.json\b|\{[^}]*json/.test(pattern),
+      ),
+    )
+    .reduce(
+      (merged, { options }) => ({ ...merged, ...options }),
+      {} as Record<string, unknown>,
+    );
+  const effective = { ...config, ...json };
+  const printWidth =
+    typeof effective.printWidth === 'number' && effective.printWidth > 0
+      ? effective.printWidth
+      : 80;
+  const tabWidth =
+    typeof effective.tabWidth === 'number' && effective.tabWidth >= 0
+      ? effective.tabWidth
+      : 2;
+  return {
+    printWidth,
+    indent: effective.useTabs === true ? '\t' : ' '.repeat(tabWidth),
+    tabWidth,
+  };
+}
+
 export function renderArtifactRegistry(
   registry: ManagedArtifactRegistry,
+  layout: JsonLayout = DEFAULT_JSON_LAYOUT,
 ): string {
   const artifacts = [...registry.artifacts].sort((left, right) =>
     left.id.localeCompare(right.id),
@@ -337,7 +475,7 @@ export function renderArtifactRegistry(
   const normalized = parseArtifactRegistry(
     JSON.stringify({ schemaVersion: 1, artifacts }),
   );
-  return `${JSON.stringify(normalized, null, 2)}\n`;
+  return renderPrettierJson(normalized, layout);
 }
 
 export function readArtifactRegistry(tree: Tree): ManagedArtifactRegistry {
@@ -358,7 +496,13 @@ export function writeArtifactRegistry(
   tree: Tree,
   registry: ManagedArtifactRegistry,
 ): void {
-  tree.write(ARTIFACT_REGISTRY_PATH, renderArtifactRegistry(registry));
+  tree.write(
+    ARTIFACT_REGISTRY_PATH,
+    renderArtifactRegistry(
+      registry,
+      workspaceJsonLayout((path) => tree.read(path, 'utf8')),
+    ),
+  );
 }
 
 export function writeArtifactRegistryToDisk(
@@ -367,7 +511,13 @@ export function writeArtifactRegistryToDisk(
 ): void {
   writeFileSync(
     resolve(workspaceRoot, ARTIFACT_REGISTRY_PATH),
-    renderArtifactRegistry(registry),
+    renderArtifactRegistry(
+      registry,
+      workspaceJsonLayout((path) => {
+        const file = resolve(workspaceRoot, path);
+        return existsSync(file) ? readFileSync(file, 'utf8') : undefined;
+      }),
+    ),
     'utf8',
   );
 }
@@ -393,10 +543,7 @@ export function refreshDerivedArtifactHashes(
         `Unable to refresh derived artifact ${artifact.id}; ${artifact.target} is missing.`,
       );
     }
-    if (
-      artifact.templateHash === hash &&
-      artifact.installedHash === hash
-    ) {
+    if (artifact.templateHash === hash && artifact.installedHash === hash) {
       return artifact;
     }
     changed = true;

@@ -1,0 +1,652 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-04T20:52:58.716796+00:00",
+  "repository": "megamono-dev/megamono",
+  "qualifiedSourceRevision": "0978b5c8fd119bbe9acc161e48865b1d5908d6c5",
+  "scope": "Local Linux ARM64 repository checks and packed JavaScript consumers; no hosted CI, publication, native/cloud/device or application deployment admission.",
+  "linuxQualification": {
+    "reportSha256": "c9fab6a3d574686a038b352fffb683c583178dc0a1305d36743279a1e2108121",
+    "report": {
+      "schemaVersion": 1,
+      "startedAt": "2026-11-04T20:46:11.954Z",
+      "scope": "Local Docker Linux arm64 qualification; not hosted GitHub Ubuntu amd64 CI, package publication, native build, or application deployment admission.",
+      "platform": "linux",
+      "architecture": "arm64",
+      "node": "v24.22.1",
+      "expectedRevision": "0978b5c8fd119bbe9acc161e48865b1d5908d6c5",
+      "status": "local-linux-checks-passed-audit-blocked",
+      "checks": [
+        {
+          "id": "release-policy",
+          "command": ["npm", "run", "release:check"],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 175,
+          "log": "release-policy.log",
+          "logSha256": "aeec3f9eb6bb2c738362834b1ab7009555bf576f64ddcb2838f085fb87b5cf43"
+        },
+        {
+          "id": "release-policy-tests",
+          "command": ["npm", "run", "release:test"],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 1019,
+          "log": "release-policy-tests.log",
+          "logSha256": "0e9a71b0fe1e7f3cfd80b5bf5ead7a8cd2f0e11beb2f0cebd0b0f84611c2bdee"
+        },
+        {
+          "id": "create-build-lint-tests",
+          "command": [
+            "npm",
+            "exec",
+            "nx",
+            "--",
+            "run-many",
+            "-t",
+            "build",
+            "lint",
+            "test",
+            "--projects=create-megamono",
+            "--parallel=2",
+            "--skip-nx-cache",
+            "--output-style=static"
+          ],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 8579,
+          "log": "create-build-lint-tests.log",
+          "logSha256": "65b66ac1d36a3f1f61f23fee750bc4c83c01d4af3249d9be036796778774e5e6"
+        },
+        {
+          "id": "governance",
+          "command": [
+            "npm",
+            "exec",
+            "nx",
+            "--",
+            "run",
+            "megamono:check",
+            "--output-style=static"
+          ],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 2520,
+          "log": "governance.log",
+          "logSha256": "93bfe9a3e422c0a3fa75d77d8ae20686f1e98cf6a7ed936b04f7031cb49fff67"
+        },
+        {
+          "id": "documentation",
+          "command": [
+            "npm",
+            "exec",
+            "nx",
+            "--",
+            "run",
+            "megamono-docs:validate",
+            "--output-style=static"
+          ],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 8476,
+          "log": "documentation.log",
+          "logSha256": "79616bb286e3409c25373603ec901f9ec5c38166eea93104171f4b5c492174f8"
+        },
+        {
+          "id": "packed-exports",
+          "command": ["npm", "run", "packages:check-exports"],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 3222,
+          "log": "packed-exports.log",
+          "logSha256": "996ee0a52e79611f016dd4f49f1ddb45666362daad930004d1e3e93f8f3bbe18"
+        },
+        {
+          "id": "expo-sdk54-consumer",
+          "command": [
+            "npm",
+            "exec",
+            "nx",
+            "--",
+            "run",
+            "@megamono/plugin:e2e-expo-consumer",
+            "--skip-nx-cache",
+            "--output-style=static"
+          ],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 214232,
+          "log": "expo-sdk54-consumer.log",
+          "logSha256": "6d0fb3e2fd3b3da95ea9b7abefed59d6c25293a0fa2c06d1ce9682811398c8d9"
+        },
+        {
+          "id": "expo-default-sdk57-consumer",
+          "command": [
+            "npm",
+            "exec",
+            "nx",
+            "--",
+            "run",
+            "@megamono/plugin:e2e-expo-default-consumer",
+            "--skip-nx-cache",
+            "--output-style=static"
+          ],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 102270,
+          "log": "expo-default-sdk57-consumer.log",
+          "logSha256": "540dff30a48aa7b3da30ad73453b6dc7e00b9092df6c536862ba05f3a5a6c61b"
+        },
+        {
+          "id": "post-expo-packed-exports",
+          "command": ["npm", "run", "packages:check-exports"],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 9110,
+          "log": "post-expo-packed-exports.log",
+          "logSha256": "996ee0a52e79611f016dd4f49f1ddb45666362daad930004d1e3e93f8f3bbe18"
+        }
+      ],
+      "revision": "0978b5c8fd119bbe9acc161e48865b1d5908d6c5",
+      "historyShallow": "false",
+      "initialStatus": "",
+      "npm": "11.21.1",
+      "git": "git version 2.39.5",
+      "python": "Python 3.11.2",
+      "filterRepoVersion": "a40bce548d2c",
+      "lockfileSha256": "6130f59177ad5f2caad3e57151f9cc3b7fd65081cb1a96ac7c3f38186f97d3c0",
+      "changedFilesSinceFullRun": [
+        "packages/create-megamono/compatibility.json",
+        "tools/sync-release-pins.mjs",
+        "tools/sync-release-pins.test.mjs"
+      ],
+      "retainedChecks": [
+        {
+          "id": "frozen-install",
+          "command": ["npm", "ci", "--registry=https://registry.npmjs.org"],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 87409,
+          "log": ".git/linux-qualification-7aecc-failed/frozen-install.log",
+          "logSha256": "79ea153e9762c2534196653baeb4dd65fbc2a998b5231f4e7951d5ef12ea8fa6",
+          "sourceRevision": "7aecc02bcb4001ca55ebcb5f7eaf5beb2a50e233"
+        },
+        {
+          "id": "tooling-artifacts-and-consumers",
+          "command": [
+            "npm",
+            "exec",
+            "nx",
+            "--",
+            "run-many",
+            "-t",
+            "tooling-check",
+            "tooling-test",
+            "--projects=@megamono/workspace",
+            "--parallel=2",
+            "--output-style=static"
+          ],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 12908,
+          "log": ".git/linux-qualification-7aecc-failed/tooling-artifacts-and-consumers.log",
+          "logSha256": "65994bdbf3f5a7a3a6042e0eece39c5a5fed0e86ce235ed919c25e9630279204",
+          "sourceRevision": "7aecc02bcb4001ca55ebcb5f7eaf5beb2a50e233"
+        },
+        {
+          "id": "release-policy",
+          "command": ["npm", "run", "release:check"],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 140,
+          "log": ".git/linux-qualification-7aecc-failed/release-policy.log",
+          "logSha256": "aeec3f9eb6bb2c738362834b1ab7009555bf576f64ddcb2838f085fb87b5cf43",
+          "sourceRevision": "7aecc02bcb4001ca55ebcb5f7eaf5beb2a50e233"
+        },
+        {
+          "id": "release-policy-tests",
+          "command": ["npm", "run", "release:test"],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 942,
+          "log": ".git/linux-qualification-7aecc-failed/release-policy-tests.log",
+          "logSha256": "0158cc23857834a784c5886700ae80f09654a781ac62e67e6147815a63c9ec7c",
+          "sourceRevision": "7aecc02bcb4001ca55ebcb5f7eaf5beb2a50e233"
+        },
+        {
+          "id": "build",
+          "command": [
+            "npm",
+            "exec",
+            "nx",
+            "--",
+            "run-many",
+            "-t",
+            "build",
+            "--parallel=2",
+            "--skip-nx-cache",
+            "--output-style=static"
+          ],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 17497,
+          "log": ".git/linux-qualification-7aecc-failed/build.log",
+          "logSha256": "a2e3b5989d6ccc9942131dbe25a9c10f71c335d803fb39d17e749f70c44e45d3",
+          "sourceRevision": "7aecc02bcb4001ca55ebcb5f7eaf5beb2a50e233"
+        }
+      ],
+      "priorFullWorkspaceTests": {
+        "sourceRevision": "7aecc02bcb4001ca55ebcb5f7eaf5beb2a50e233",
+        "reportSha256": "e218f3e4cb23c324d56ab3de60ee35d276562f7ca2bc84fa491293e697c67a5a",
+        "log": ".git/linux-qualification-7aecc-failed/lint-and-unit-tests.log",
+        "logSha256": "9de6c97281a0884669501a8b7f3b364309001b4995edac596e0ffc3cd63a9a94",
+        "plugin": {
+          "files": 74,
+          "passed": 874
+        },
+        "otherProjectsPassed": 8,
+        "failedProject": "create-megamono",
+        "failedCase": "bundled compatibility registry differs from canonical",
+        "createPassedBeforeFix": 101,
+        "createFailedBeforeFix": 1
+      },
+      "frozenInstall": {
+        "reusedFromRevision": "7aecc02bcb4001ca55ebcb5f7eaf5beb2a50e233",
+        "npm": "11.21.1",
+        "unchangedLockfileSha256": "6130f59177ad5f2caad3e57151f9cc3b7fd65081cb1a96ac7c3f38186f97d3c0",
+        "status": "passed"
+      },
+      "audit": {
+        "freshAtThisRevision": false,
+        "priorRevision": "5e81b76e586b29c50a5b67a9bbd1ee071bb9176e",
+        "priorAuditPath": ".git/linux-qualification-continuation/security-audit.stdout.json",
+        "priorAuditSha256": "34bdb359c0a5ca5e5d8e0a29bf8c97932ca6fa329d8d8ceeed23928b9a4c7f43",
+        "unchangedLockfileSha256": "6130f59177ad5f2caad3e57151f9cc3b7fd65081cb1a96ac7c3f38186f97d3c0",
+        "exitCode": 1,
+        "gatePassed": false,
+        "counts": {
+          "info": 0,
+          "low": 23,
+          "moderate": 0,
+          "high": 0,
+          "critical": 0,
+          "total": 23
+        },
+        "underlying": [
+          {
+            "name": "deepmerge",
+            "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
+            "severity": "low"
+          }
+        ]
+      },
+      "finalStatus": "",
+      "finishedAt": "2026-11-04T20:52:28.468Z",
+      "postExpoVerification": {
+        "sourceRevision": "0978b5c8fd119bbe9acc161e48865b1d5908d6c5",
+        "identityAndExportsRefreshed": true,
+        "completedAt": "2026-11-04T20:52:28.233Z"
+      }
+    }
+  },
+  "fullWorkspaceRunBeforeBootstrapParityFix": {
+    "reportSha256": "e218f3e4cb23c324d56ab3de60ee35d276562f7ca2bc84fa491293e697c67a5a",
+    "report": {
+      "schemaVersion": 1,
+      "startedAt": "2026-11-04T20:39:22.286Z",
+      "scope": "Local Docker Linux arm64 qualification; not hosted GitHub Ubuntu amd64 CI, package publication, native build, or application deployment admission.",
+      "platform": "linux",
+      "architecture": "arm64",
+      "node": "v24.22.1",
+      "expectedRevision": "7aecc02bcb4001ca55ebcb5f7eaf5beb2a50e233",
+      "status": "failed",
+      "checks": [
+        {
+          "id": "frozen-install",
+          "command": ["npm", "ci", "--registry=https://registry.npmjs.org"],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 87409,
+          "log": "frozen-install.log",
+          "logSha256": "79ea153e9762c2534196653baeb4dd65fbc2a998b5231f4e7951d5ef12ea8fa6"
+        },
+        {
+          "id": "tooling-artifacts-and-consumers",
+          "command": [
+            "npm",
+            "exec",
+            "nx",
+            "--",
+            "run-many",
+            "-t",
+            "tooling-check",
+            "tooling-test",
+            "--projects=@megamono/workspace",
+            "--parallel=2",
+            "--output-style=static"
+          ],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 12908,
+          "log": "tooling-artifacts-and-consumers.log",
+          "logSha256": "65994bdbf3f5a7a3a6042e0eece39c5a5fed0e86ce235ed919c25e9630279204"
+        },
+        {
+          "id": "release-policy",
+          "command": ["npm", "run", "release:check"],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 140,
+          "log": "release-policy.log",
+          "logSha256": "aeec3f9eb6bb2c738362834b1ab7009555bf576f64ddcb2838f085fb87b5cf43"
+        },
+        {
+          "id": "release-policy-tests",
+          "command": ["npm", "run", "release:test"],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 942,
+          "log": "release-policy-tests.log",
+          "logSha256": "0158cc23857834a784c5886700ae80f09654a781ac62e67e6147815a63c9ec7c"
+        },
+        {
+          "id": "build",
+          "command": [
+            "npm",
+            "exec",
+            "nx",
+            "--",
+            "run-many",
+            "-t",
+            "build",
+            "--parallel=2",
+            "--skip-nx-cache",
+            "--output-style=static"
+          ],
+          "status": "passed",
+          "exitCode": 0,
+          "expectedExit": 0,
+          "durationMs": 17497,
+          "log": "build.log",
+          "logSha256": "a2e3b5989d6ccc9942131dbe25a9c10f71c335d803fb39d17e749f70c44e45d3"
+        },
+        {
+          "id": "lint-and-unit-tests",
+          "command": [
+            "npm",
+            "exec",
+            "nx",
+            "--",
+            "run-many",
+            "-t",
+            "lint",
+            "test",
+            "--parallel=2",
+            "--skip-nx-cache",
+            "--output-style=static"
+          ],
+          "status": "failed",
+          "exitCode": 1,
+          "expectedExit": 0,
+          "durationMs": 186947,
+          "log": "lint-and-unit-tests.log",
+          "logSha256": "9de6c97281a0884669501a8b7f3b364309001b4995edac596e0ffc3cd63a9a94"
+        }
+      ],
+      "revision": "7aecc02bcb4001ca55ebcb5f7eaf5beb2a50e233",
+      "historyShallow": "false",
+      "initialStatus": "",
+      "npm": "11.21.1",
+      "git": "git version 2.39.5",
+      "python": "Python 3.11.2",
+      "filterRepoVersion": "a40bce548d2c",
+      "lockfileSha256": "6130f59177ad5f2caad3e57151f9cc3b7fd65081cb1a96ac7c3f38186f97d3c0",
+      "error": "lint-and-unit-tests failed (exit 1, expected 0).",
+      "finishedAt": "2026-11-04T20:44:28.664Z"
+    }
+  },
+  "packedExpoConsumers": {
+    "sdk54": {
+      "reportSha256": "3bc40076650ce0504ce731e36bbff0e83cad410e25ba346cb39f62364ef5155e",
+      "report": {
+        "schemaVersion": 1,
+        "startedAt": "2026-11-04T20:46:42.793Z",
+        "scope": "Packed plugin adoption and new mobile generation, Expo Doctor, and JavaScript bundle qualification; no native or cloud build.",
+        "versions": {
+          "expo": "54.0.38",
+          "react-native": "0.81.5",
+          "mobileReact": "19.1.0",
+          "webReact": "19.2.5",
+          "expo-doctor": "1.21.6",
+          "babel-preset-expo": "54.0.12",
+          "@babel/core": "7.29.0",
+          "nx": "23.3.1",
+          "typescript": "6.0.3"
+        },
+        "checks": [
+          {
+            "id": "install",
+            "status": "passed"
+          },
+          {
+            "id": "adopt-and-preserve",
+            "status": "passed"
+          },
+          {
+            "id": "metro-and-react-isolation",
+            "status": "passed"
+          },
+          {
+            "id": "doctor-and-platform-exports",
+            "status": "passed"
+          },
+          {
+            "id": "bundle-react-isolation",
+            "status": "passed"
+          },
+          {
+            "id": "doctor-blocks-incompatible-build",
+            "status": "passed"
+          },
+          {
+            "id": "generated-toolchain-install",
+            "status": "passed"
+          },
+          {
+            "id": "generate-mobile-and-preserve-web",
+            "status": "passed"
+          },
+          {
+            "id": "generated-install-and-targets",
+            "status": "passed"
+          },
+          {
+            "id": "generated-doctor-and-exports",
+            "status": "passed"
+          },
+          {
+            "id": "generated-bundle-react-isolation",
+            "status": "passed"
+          },
+          {
+            "id": "generated-typecheck",
+            "status": "passed"
+          },
+          {
+            "id": "generated-default-unit-tests",
+            "status": "passed"
+          }
+        ],
+        "status": "passed",
+        "node": "v24.22.1",
+        "npm": "11.21.1",
+        "packedPlugin": {
+          "filename": "megamono-plugin-0.1.0-next.0.tgz",
+          "integrity": "sha512-2H4z6R4nAawHHPcg2Oru0NR1O8EL8x6FACE6wScss8cReIBvEDesoCHoz1y/GAH86lwDoIfyz4oLnE/xvnLjsw=="
+        },
+        "resolved": {
+          "expo": "54.0.38",
+          "react-native": "0.81.5",
+          "react": "19.1.0",
+          "react-dom": "19.1.0",
+          "webReact": "19.2.5",
+          "doctor": "1.21.6"
+        },
+        "generated": {
+          "project": "fixture-generated",
+          "exportTarget": "export",
+          "react": "19.1.0",
+          "expo": "54.0.38"
+        },
+        "lockfileSha256": "5be840451779ea79b9c5017d004f7fb7af1d9d3ae5ebe2ad9a2702304aebde4f"
+      }
+    },
+    "defaultSdk57": {
+      "reportSha256": "07233049501dbfa2f0ed3c2c2974006b6a01f78f2e32f25ab0627bc10b94402f",
+      "report": {
+        "schemaVersion": 1,
+        "startedAt": "2026-11-04T20:50:17.315Z",
+        "scope": "Locally packed plugin, default SDK fresh-mobile generation, Doctor and JavaScript exports; no native/cloud/registry-publication claim.",
+        "platform": "linux",
+        "architecture": "arm64",
+        "node": "v24.22.1",
+        "versions": {
+          "nx": "23.2.1",
+          "expo": "57.0.31",
+          "webReact": "19.3.1",
+          "next": "16.4.3",
+          "typesReact": "19.3.0",
+          "typesReactDom": "19.3.0",
+          "typescript": "6.0.3",
+          "doctor": "1.21.6"
+        },
+        "status": "passed",
+        "checks": [
+          {
+            "id": "public-sdk-metadata",
+            "status": "passed",
+            "durationMs": 263
+          },
+          {
+            "id": "framework-install",
+            "status": "passed",
+            "durationMs": 23341
+          },
+          {
+            "id": "normal-feature-branch-adoption",
+            "status": "passed",
+            "durationMs": 802
+          },
+          {
+            "id": "normal-mobile-generation-and-install",
+            "status": "passed",
+            "durationMs": 20614
+          },
+          {
+            "id": "doctor-and-platform-exports",
+            "status": "passed",
+            "durationMs": 39927
+          },
+          {
+            "id": "native-bundle-react-isolation",
+            "status": "passed",
+            "durationMs": 36
+          },
+          {
+            "id": "generated-typecheck",
+            "status": "passed",
+            "durationMs": 1174
+          },
+          {
+            "id": "generated-default-jest",
+            "status": "passed",
+            "durationMs": 6492
+          }
+        ],
+        "npm": "11.21.1",
+        "packedPlugin": {
+          "filename": "megamono-plugin-0.1.0-next.0.tgz",
+          "integrity": "sha512-2H4z6R4nAawHHPcg2Oru0NR1O8EL8x6FACE6wScss8cReIBvEDesoCHoz1y/GAH86lwDoIfyz4oLnE/xvnLjsw==",
+          "sha256": "dfdbc102521ce9324506f4cda746042987264eea8cae631cd35e9bdb1422926b"
+        },
+        "publicSdkMetadata": {
+          "url": "https://registry.npmjs.org/expo/57.0.31",
+          "checkedAt": "2026-11-04T20:50:18.300Z",
+          "rawSha256": "889840aa6e718e771efd21bc526b25c6a5c3220d24f089ac126105de84fd79ec",
+          "version": "57.0.31",
+          "integrity": "sha512-+9AJvHZMLIY/Tv6r5Tpu84vWfI75FBTnineYqjjlHAU138IPg2gYQKn9FQFetCB9YScwyc7STk7WGHSCHAdTiQ=="
+        },
+        "framework": {
+          "nx": {
+            "version": "23.2.1",
+            "engines": null
+          },
+          "@nx/expo": {
+            "version": "23.2.1",
+            "engines": null
+          }
+        },
+        "resolved": {
+          "expo": "57.0.31",
+          "expoEngines": null,
+          "nativeEngines": {
+            "node": "^20.19.4 || ^22.13.0 || ^24.3.0 || >= 25.0.0"
+          },
+          "react": "19.2.3",
+          "native": "0.86.3",
+          "webReact": "19.3.1",
+          "doctor": "1.21.6",
+          "babelPreset": "57.0.16",
+          "typesReact": "19.2.18"
+        },
+        "resolvedSdkMetadata": {
+          "url": "https://registry.npmjs.org/expo/57.0.31",
+          "checkedAt": "2026-11-04T20:51:03.266Z",
+          "version": "57.0.31",
+          "rawSha256": "889840aa6e718e771efd21bc526b25c6a5c3220d24f089ac126105de84fd79ec",
+          "integrity": "sha512-+9AJvHZMLIY/Tv6r5Tpu84vWfI75FBTnineYqjjlHAU138IPg2gYQKn9FQFetCB9YScwyc7STk7WGHSCHAdTiQ=="
+        },
+        "exportQualification": {
+          "target": "export",
+          "inferredArgs": ["--clear"],
+          "options": [
+            "--args=--clear --platform all --source-maps --no-bytecode --max-workers 1"
+          ]
+        },
+        "lockfileSha256": "17030753fd4a90adfee75cf3f759aded1bc14520f7854e723764a9b98406d4e4",
+        "updatedAt": "2026-11-04T20:51:51.232Z"
+      }
+    }
+  },
+  "advisoryReview": {
+    "evidence": "../../tools/deepmerge-advisory.evidence.json",
+    "sha256": "bef93df40b332e6f7fb3b56de3f7d7526cb289c36aedf84a216b83147f28ddaf",
+    "releaseAdmissionPassed": false,
+    "exceptionAdded": false,
+    "freshAuditAtQualifiedRevision": false,
+    "note": "The Linux continuation verifies the unchanged committed lockfile and earlier genuine audit report hash; the known advisory remains blocked."
+  },
+  "limitations": [
+    "The initial full-project run failed bootstrap registry parity; its passing plugin/other-package results are retained at their actual source revision.",
+    "The corrected continuation verifies the three-file source delta and reruns the affected bootstrap/release checks plus all remaining permanent Expo/export gates.",
+    "The audit documentation commit records these results after execution; the qualified package source revision is explicit.",
+    "SDK53/55/56 snapshots have metadata-selection coverage, not full runtime qualification; SDK58 was not qualified."
+  ]
+}

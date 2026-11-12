@@ -68,6 +68,38 @@ Dependency direction is fixed:
 
 `platform:mobile` represents applications that execute across the iOS and Android runtime families, including Expo and React Native applications. Framework names are inference evidence rather than tag vocabulary: an Expo project is `platform:mobile`, not `platform:expo` or `platform:react-native`. Native Xcode/Swift projects remain `platform:apple`.
 
+Next.js Pages Router applications remain `platform:web`, but their aggregate Nx
+edges include server code. For applications with a Next config and a `pages` or
+`src/pages` directory, the structural checker traces browser imports from pages
+and client instrumentation instead of rejecting every Node project edge. API
+routes, `_document`, Node instrumentation, and imports used exclusively by
+exported `getServerSideProps`, `getStaticProps`, or `getStaticPaths` run on the
+server. Wrapped data functions and their private, exclusively used helpers are
+included. Middleware and explicit Edge routes retain Node restrictions.
+
+Browser tracing follows local imports, TypeScript path aliases, and re-export
+barrels. It rejects Node built-ins, `server-only`, Node project entry points,
+unresolved local code imports, and nonliteral runtime imports. Explicit type-only
+imports are excluded. A Node package may declare a browser-safe entry point with
+an active `browser` condition in its `exports` map; naming a subpath `contracts`
+does not establish that capability. The package author owns the safety of that
+export, just as they own the accuracy of a platform tag. Export condition order
+and `import` versus `require` selection are respected.
+
+This policy supports JavaScript/TypeScript Pages Router source and does not
+execute Next configuration or inspect third-party npm package internals. App
+Router and hybrid-router applications retain the aggregate platform boundary.
+MDX pages and custom `pageExtensions` configurations also retain that boundary
+until their routing and import transforms have a supported source policy.
+Type/scope rules and adoption warning budgets are unchanged. Framework builds
+and browser bundle checks remain necessary deployment checks.
+
+The ESLint platform rule uses the same data-function import analysis and local
+server/browser reachability when checking Node built-ins and relative imports.
+A helper reached exclusively through server entries may use Node APIs; a helper
+also reached by browser code retains browser restrictions. Classification is
+refreshed when source files or route entries change in an editor session.
+
 When `structure-review` recommends extracting or moving a project, it must propose the complete tag change needed to preserve this matrix. A recommendation that would immediately fail deterministic checks without naming the required tag or dependency correction is incomplete.
 
 ### Megamono versus Playstack rules

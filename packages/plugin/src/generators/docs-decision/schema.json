@@ -6,30 +6,59 @@
   "properties": {
     "title": {
       "type": "string",
-      "$default": { "$source": "argv", "index": 0 },
-      "x-prompt": "What decision is being recorded?"
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      },
+      "x-prompt": "What decision is being recorded?",
+      "description": "Required. Human-readable document title. It must contain at least one non-whitespace character.",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
     },
     "project": {
       "type": "string",
-      "x-prompt": "Which project does this decision affect?"
+      "x-prompt": "Which project does this decision affect?",
+      "description": "Required. Documentation project namespace; may describe an existing or planned project and is normalized to a kebab-case identifier.",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
     },
     "topics": {
       "type": "array",
-      "items": { "type": "string" },
-      "default": ["architecture"]
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": ["architecture"],
+      "description": "Built-in topics or entries from megamono.json topics.extend. Unknown or duplicate topics are rejected before record creation.",
+      "uniqueItems": true
     },
     "references": {
       "type": "array",
-      "items": { "type": "string" },
-      "default": []
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": [],
+      "description": "Existing repository document IDs referenced by this record; duplicates are rejected.",
+      "uniqueItems": true
     },
     "externalReferences": {
       "type": "array",
-      "items": { "type": "string" },
-      "default": []
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": [],
+      "description": "External document references in namespace:identifier form; duplicates are rejected.",
+      "uniqueItems": true
     },
-    "date": { "type": "string", "format": "date" }
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Record date in YYYY-MM-DD format; defaults to the current UTC date."
+    }
   },
   "required": ["title", "project"],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "description": "Create an internal proposed decision record. Topics must belong to the workspace vocabulary; the decision is not accepted automatically."
 }

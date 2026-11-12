@@ -62,6 +62,28 @@ function analyze(
 }
 
 describe('conversion analysis', () => {
+  it.each([
+    '.oxfmtrc.json',
+    '.oxfmtrc.jsonc',
+    'oxfmt.config.ts',
+    'oxfmt.config.mts',
+  ])('keeps %s as repository infrastructure', (path) => {
+    const tree = createFixture({
+      scripts: { build: 'vite build' },
+      devDependencies: { vite: '^8.0.0' },
+    });
+    tree.write(path, '{}');
+    tree.write('src/main.ts', 'export const app = true;\n');
+    tree.write('vite.config.ts', 'export default {};\n');
+
+    const result = analyze(tree);
+
+    expect(result.ready).toBe(true);
+    expect(result.operations).not.toContainEqual(
+      expect.objectContaining({ kind: 'move', source: path }),
+    );
+  });
+
   it('creates a stable, accepted plan for a single-package Vite app', () => {
     const tree = createFixture({
       scripts: {

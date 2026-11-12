@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoExpoDoctor",
+  "title": "Validate an Expo application",
+  "description": "Run the locally installed Expo Doctor in the target application's directory without downloading or installing tools.",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}

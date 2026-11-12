@@ -1,4 +1,32 @@
 import type { Rule } from 'eslint';
+import ignore = require('ignore');
+import { isAbsolute, relative, resolve } from 'node:path';
+
+interface NoBareJsxStringsOptions {
+  readonly ignorePatterns?: readonly string[];
+  readonly ignoreTests?: boolean;
+}
+
+function ignoredFile(context: Rule.RuleContext): boolean {
+  const options = (context.options[0] ?? {}) as NoBareJsxStringsOptions;
+  const filename = context.filename.replaceAll('\\', '/');
+  if (
+    options.ignoreTests !== false &&
+    /(?:^|\/)__tests__\/|\.(?:spec|test)\.[cm]?[jt]sx?$/i.test(filename)
+  )
+    return true;
+  if (!options.ignorePatterns?.length) return false;
+  const path = relative(
+    resolve(context.cwd),
+    resolve(context.filename),
+  ).replaceAll('\\', '/');
+  // Do not turn unresolvable/outside-workspace paths into exemptions.
+  if (!path || isAbsolute(path) || path === '..' || path.startsWith('../'))
+    return false;
+  return ignore()
+    .add([...options.ignorePatterns])
+    .ignores(path);
+}
 
 type LiteralNode = Rule.Node & { readonly value?: unknown };
 type TemplateNode = Rule.Node & {
@@ -44,14 +72,35 @@ export const noBareJsxStrings: Rule.RuleModule = {
   meta: {
     type: 'suggestion',
     docs: {
-      description: 'Require user-facing JSX strings to pass through t().',
+      description:
+        'Disallow inline user-facing JSX text; message catalogs and localization calls are application-owned.',
     },
-    schema: [],
+    schema: [
+      {
+        type: 'object',
+        properties: {
+          ignorePatterns: {
+            type: 'array',
+            items: { type: 'string', minLength: 1 },
+            description:
+              'Additional gitignore-style paths relative to the lint working directory, such as **/dev/** or **/*.stories.tsx.',
+          },
+          ignoreTests: {
+            type: 'boolean',
+            default: true,
+            description:
+              'Skip spec/test filenames and __tests__ directories; set false to check them too.',
+          },
+        },
+        additionalProperties: false,
+      },
+    ],
     messages: {
-      bare: 'User-facing JSX string "{{text}}" must pass through t().',
+      bare: 'Move user-facing JSX string "{{text}}" to a message catalog or localization call. This rule checks inline literals, not translation completeness.',
     },
   },
   create(context) {
+    if (ignoredFile(context)) return {};
     const report = (node: Rule.Node, value: string) => {
       context.report({
         node,

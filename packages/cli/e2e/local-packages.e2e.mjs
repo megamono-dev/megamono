@@ -180,7 +180,7 @@ async function createWorkspace(root, manager, registry, environment) {
     packageManager: `${manager}@${compatibility.packageManagers[manager]}`,
     devDependencies: {
       '@megamono/plugin': pluginVersion,
-      nx: '23.1.1',
+      nx: '23.3.1',
     },
   });
   await json(resolve(root, 'nx.json'), {});
@@ -345,7 +345,7 @@ try {
       'nx',
       await createPackage(
         packageRoot,
-        { name: 'nx', version: '23.1.1' },
+        { name: 'nx', version: '23.3.1' },
         'nx',
         nxBin,
       ),

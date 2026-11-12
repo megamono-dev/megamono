@@ -1,11 +1,27 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { ProjectGraph } from '@nx/devkit';
 import type { MegamonoConfig } from './config';
 import type { Diagnostic } from './diagnostics';
 import { isTauriProject } from './tauri-platform';
 import { repositoryOwnedGraph } from './repository-graph';
+import { checkNextPagesBoundary } from './next-pages-boundary';
+import {
+  checkExtensionRuntimeBoundary,
+  extensionAllowsWebEdge,
+  type ExtensionRuntimeEntries,
+} from './extension-runtime';
+import {
+  allowedTypeDependencies,
+  matchingBoundaryAllowance,
+  validateBoundaryAllowances,
+} from './boundary-policy';
+import {
+  classifyDependency,
+  type BoundaryAllowance,
+  type DependencyFindingIdentity,
+} from './dependency-policy-contract';
 
 const typeTags = [
   'type:app',
@@ -170,19 +186,13 @@ function validateTagCardinality(
   }
 }
 
-const allowedTypeDependencies: Readonly<Record<string, readonly string[]>> = {
-  app: ['app', 'feature', 'ui', 'data', 'util'],
-  feature: ['ui', 'data', 'util'],
-  ui: ['util'],
-  data: ['util'],
-  util: ['util'],
-};
-
 function validateDependencies(
   workspaceRoot: string,
   graph: ProjectGraph,
   diagnostics: Diagnostic[],
-): void {
+  docsRoot: string,
+): ExtensionRuntimeReport[] {
+  const runtimeReports: ExtensionRuntimeReport[] = [];
   for (const [sourceName, dependencies] of Object.entries(graph.dependencies)) {
     const source = graph.nodes[sourceName];
     if (!source) continue;
@@ -195,6 +205,49 @@ function validateDependencies(
     const tauri =
       source.type === 'app' &&
       isTauriProject(join(workspaceRoot, source.data.root), existsSync);
+    const nextPages =
+      source.type === 'app' && sourcePlatform === 'web'
+        ? checkNextPagesBoundary(
+            workspaceRoot,
+            join(workspaceRoot, source.data.root),
+            graph,
+          )
+        : undefined;
+    const extension =
+      source.type === 'app' && sourcePlatform === 'extension'
+        ? checkExtensionRuntimeBoundary(
+            workspaceRoot,
+            join(workspaceRoot, source.data.root),
+            graph,
+            docsRoot,
+          )
+        : undefined;
+    const applied: ExtensionRuntimeReport['applied'][number][] = [];
+    if (extension) {
+      for (const message of extension.policyErrors)
+        diagnostics.push(
+          projectDiagnostic('extension-runtime-policy', sourceName, message),
+        );
+      for (const issue of extension.issues)
+        diagnostics.push(
+          projectDiagnostic(
+            'platform-boundary',
+            sourceName,
+            `${issue.file}: ${issue.message}`,
+          ),
+        );
+      runtimeReports.push({
+        project: sourceName,
+        contract: extension.contract,
+        complete: extension.complete,
+        applied,
+      });
+    }
+    for (const violation of nextPages?.violations ?? []) {
+      diagnostics.push(
+        projectDiagnostic('platform-boundary', sourceName, violation),
+      );
+    }
 
     for (const dependency of dependencies) {
       const target = graph.nodes[dependency.target];
@@ -203,7 +256,54 @@ function validateDependencies(
       const targetType = tagValue(targetTags, 'type:');
       const targetScope = tagValue(targetTags, 'scope:');
       const targetPlatform = tagValue(targetTags, 'platform:');
+      const extensionWeb =
+        targetPlatform === 'web' &&
+        extensionAllowsWebEdge(
+          extension,
+          resolve(workspaceRoot, target.data.root),
+          dependency.type,
+        );
+      if (extensionWeb)
+        for (const use of extension?.uses ?? [])
+          if (
+            use.target === dependency.target &&
+            use.kind === dependency.type &&
+            !applied.some(
+              (entry) =>
+                entry.target === use.target &&
+                entry.dependencyKind === use.kind &&
+                entry.source === use.file,
+            )
+          )
+            applied.push({
+              target: use.target,
+              dependencyKind: use.kind,
+              source: use.file,
+            });
+      // An explicitly identified e2e project schedules the applications it
+      // tests through implicit edges. This is only a platform exemption for
+      // this edge; imports and every other dependency constraint still apply.
+      const testOrchestration =
+        (source.type === 'e2e' || sourceTags.includes('role:e2e')) &&
+        dependency.type === 'implicit' &&
+        target.type === 'app' &&
+        !targetTags.includes('role:e2e');
 
+      const classification = classifyDependency(
+        source,
+        target,
+        dependency.type,
+      );
+      const identity = (constraint: DependencyFindingIdentity['constraint']) =>
+        classification
+          ? {
+              rule: 'module-boundaries' as const,
+              constraint,
+              source: sourceName,
+              target: dependency.target,
+              classification,
+            }
+          : undefined;
       if (
         sourceScope &&
         targetScope &&
@@ -212,30 +312,35 @@ function validateDependencies(
           (sourceScope !== 'shared' && targetScope === 'shared')
         )
       ) {
-        diagnostics.push(
-          projectDiagnostic(
+        diagnostics.push({
+          ...projectDiagnostic(
             'module-boundaries',
             sourceName,
             `${sourceName} (${sourceScope}) may not depend on ${dependency.target} (${targetScope}).`,
           ),
-        );
+          identity: identity('module-boundaries:scope-direction'),
+        });
       }
       if (
         sourceType &&
         targetType &&
         !allowedTypeDependencies[sourceType]?.includes(targetType)
       ) {
-        diagnostics.push(
-          projectDiagnostic(
+        diagnostics.push({
+          ...projectDiagnostic(
             'module-boundaries',
             sourceName,
             `type:${sourceType} may not depend on type:${targetType} (${dependency.target}).`,
           ),
-        );
+          identity: identity('module-boundaries:type-direction'),
+        });
       }
       if (
         targetPlatform &&
         sourcePlatform !== targetPlatform &&
+        !testOrchestration &&
+        !(nextPages && targetPlatform === 'node') &&
+        !extensionWeb &&
         !(tauri && ['rust', 'web', 'node'].includes(targetPlatform))
       ) {
         diagnostics.push(
@@ -260,6 +365,18 @@ function validateDependencies(
       }
     }
   }
+  return runtimeReports;
+}
+
+export interface ExtensionRuntimeReport {
+  readonly project: string;
+  readonly contract?: ExtensionRuntimeEntries;
+  readonly complete: boolean;
+  readonly applied: readonly {
+    readonly target?: string;
+    readonly dependencyKind: 'static' | 'dynamic';
+    readonly source: string;
+  }[];
 }
 
 interface PackageManifest {
@@ -421,17 +538,22 @@ async function validateManifests(
   }
 }
 
-export async function checkWorkspaceStructure(
+export async function analyzeWorkspaceStructure(
   workspaceRoot: string,
   graph: ProjectGraph,
   config: MegamonoConfig,
   acceptedDecisionIds: ReadonlySet<string> = new Set(),
   enabledRules?: ReadonlySet<string>,
-): Promise<readonly Diagnostic[]> {
+): Promise<StructuralAnalysis> {
   graph = repositoryOwnedGraph(graph);
   const diagnostics: Diagnostic[] = [];
   validateTagCardinality(graph, diagnostics);
-  validateDependencies(workspaceRoot, graph, diagnostics);
+  const extensionRuntime = validateDependencies(
+    workspaceRoot,
+    graph,
+    diagnostics,
+    config.docs.root,
+  );
   await validateManifests(workspaceRoot, graph, config, diagnostics);
 
   const invalidOverrides = new Set<string>();
@@ -456,10 +578,11 @@ export async function checkWorkspaceStructure(
       { severity: 'off' | 'warning' | 'error'; decision?: string } | undefined
     >
   >;
-  return diagnostics
+  const rawDiagnostics = diagnostics
     .filter(
       (diagnostic) =>
         diagnostic.code === 'rule-override-decision' ||
+        diagnostic.code === 'extension-runtime-policy' ||
         enabledRules === undefined ||
         enabledRules.has(diagnostic.code),
     )
@@ -476,4 +599,49 @@ export async function checkWorkspaceStructure(
       }
       return diagnostic;
     });
+  const policy = validateBoundaryAllowances(workspaceRoot, graph, config);
+  const allowed: StructuralAnalysis['allowed'][number][] = [];
+  const effective = rawDiagnostics.filter((diagnostic) => {
+    const allowance =
+      diagnostic.identity &&
+      matchingBoundaryAllowance(diagnostic.identity, policy.valid);
+    if (!allowance) return true;
+    allowed.push({ diagnostic, allowance });
+    return false;
+  });
+  return {
+    diagnostics: [...effective, ...policy.diagnostics],
+    rawDiagnostics: [...rawDiagnostics, ...policy.diagnostics],
+    allowed,
+    ...(extensionRuntime.length ? { extensionRuntime } : {}),
+  };
+}
+
+export interface StructuralAnalysis {
+  readonly extensionRuntime?: readonly ExtensionRuntimeReport[];
+  readonly diagnostics: readonly Diagnostic[];
+  readonly rawDiagnostics: readonly Diagnostic[];
+  readonly allowed: readonly {
+    readonly diagnostic: Diagnostic;
+    readonly allowance: BoundaryAllowance;
+  }[];
+}
+
+/** Existing callers receive the effective diagnostics as before. */
+export async function checkWorkspaceStructure(
+  workspaceRoot: string,
+  graph: ProjectGraph,
+  config: MegamonoConfig,
+  acceptedDecisionIds: ReadonlySet<string> = new Set(),
+  enabledRules?: ReadonlySet<string>,
+): Promise<readonly Diagnostic[]> {
+  return (
+    await analyzeWorkspaceStructure(
+      workspaceRoot,
+      graph,
+      config,
+      acceptedDecisionIds,
+      enabledRules,
+    )
+  ).diagnostics;
 }

@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const yalc = process.platform === 'win32' ? 'yalc.cmd' : 'yalc';
 const packages = [
   { project: '@megamono/cli', directory: 'packages/cli' },
@@ -47,10 +47,9 @@ function run(command, args, cwd = root) {
 
 try {
   await run(yalc, ['--version']);
-  await run(npm, [
+  await run(pnpm, [
     'exec',
     'nx',
-    '--',
     'run-many',
     '-t',
     'build',

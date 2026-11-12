@@ -1,18 +1,21 @@
 {
   "name": "@megamono/nx-laravel",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "license": "MIT",
-  "description": "Nx plugin for Laravel and Composer project inference, targets, and application generators.",
+  "description": "Nx plugin for Laravel and Composer: generate applications, discover PHP projects and dependencies, and run Artisan and Composer tasks.",
   "keywords": [
     "megamono",
     "nx",
     "nx-plugin",
+    "monorepo",
     "laravel",
     "php",
-    "composer"
+    "composer",
+    "artisan",
+    "generators"
   ],
   "author": "Ryan Hefner",
-  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/nx-laravel#readme",
+  "homepage": "https://megamono.com/docs/platforms/laravel",
   "bugs": {
     "url": "https://github.com/megamono-dev/megamono/issues"
   },
@@ -69,11 +72,11 @@
     ]
   },
   "dependencies": {
-    "tslib": "^2.3.0"
+    "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "@nx/devkit": ">=22 <24",
-    "nx": ">=22 <24"
+    "@nx/devkit": ">=22 <25",
+    "nx": ">=22 <25"
   },
   "engines": {
     "node": ">=22 <25"

@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { runInNewContext } from 'node:vm';
 
 const releaseVersion = await packageVersion('@megamono/nx-extension');
 
@@ -28,14 +29,27 @@ function run(command, args, options = {}) {
     });
     let stdout = '';
     let stderr = '';
+    const timeoutMs = options.timeoutMs ?? 180_000;
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(
+        new Error(
+          `${command} ${args.join(' ')} timed out after ${timeoutMs}ms`,
+        ),
+      );
+    }, timeoutMs);
     child.stdout.on('data', (chunk) => {
       stdout += chunk;
     });
     child.stderr.on('data', (chunk) => {
       stderr += chunk;
     });
-    child.once('error', reject);
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
     child.once('exit', (code, signal) => {
+      clearTimeout(timer);
       if (code === 0) {
         resolvePromise({ stdout, stderr });
         return;
@@ -120,6 +134,19 @@ await writeFile(
       storage: registryStorage,
       uplinks: { npmjs: { url: 'https://registry.npmjs.org/' } },
       packages: {
+        // Local packages must never fall through to their published npm versions.
+        '@megamono/*': {
+          access: '$all',
+          publish: '$all',
+          unpublish: '$all',
+          proxy: [],
+        },
+        'create-megamono': {
+          access: '$all',
+          publish: '$all',
+          unpublish: '$all',
+          proxy: [],
+        },
         '**': {
           access: '$all',
           publish: '$all',
@@ -254,6 +281,18 @@ try {
     await readFile(resolve(fixtureRoot, 'apps/browser/package.json'), 'utf8'),
   );
   assert(
+    (await readFile(
+      resolve(fixtureRoot, 'apps/browser/.gitignore'),
+      'utf8',
+    )) === '.wxt/\n.output/\n',
+    'Generated WXT state must be ignored without changing root policy.',
+  );
+  assert(
+    JSON.stringify(project.targets.typecheck.dependsOn) ===
+      JSON.stringify(['prepare', '^typecheck']),
+    'Extension typechecking must wait for dependency typechecks.',
+  );
+  assert(
     generatedManifest.devDependencies.wxt === '0.21.4',
     'Generated extension did not pin the supported WXT version.',
   );
@@ -275,6 +314,43 @@ try {
   assert(
     installedPlugin.version === releaseVersion,
     'Fixture did not install the published extension plugin.',
+  );
+  // React is an explicit consumer choice, rather than a dependency imposed on
+  // every background-only extension. Exercise both production JSX and Vitest.
+  generatedManifest.dependencies = {
+    react: compatibility.scaffoldPackages.react,
+  };
+  generatedManifest.devDependencies['@types/react'] = '19.3.0';
+  await writeFile(
+    resolve(fixtureRoot, 'apps/browser/package.json'),
+    JSON.stringify(generatedManifest),
+  );
+  await run('npm', ['install', '--audit=false', '--fund=false'], {
+    cwd: fixtureRoot,
+    env: environment,
+  });
+  await writeFile(
+    resolve(fixtureRoot, 'apps/browser/src/view.tsx'),
+    'export const view = <span>Fixture view</span>;\n',
+  );
+  await writeFile(
+    resolve(fixtureRoot, 'apps/browser/src/view.spec.tsx'),
+    "import { isValidElement } from 'react';\nimport { expect, it } from 'vitest';\nimport { view } from './view';\n\nit('renders the explicitly adopted React view', () => { expect(isValidElement(view)).toBe(true); });\n",
+  );
+  // A free identifier matching WXT's storage preset must remain untouched in
+  // shared code. typeof makes this safe and observable without browser mocks.
+  const sharedRoot = resolve(fixtureRoot, 'libs/shared-runtime');
+  await mkdir(sharedRoot, { recursive: true });
+  const sharedSource =
+    'export function storageProbe() { return typeof storage; }\n';
+  await writeFile(resolve(sharedRoot, 'index.js'), sharedSource);
+  await writeFile(
+    resolve(sharedRoot, 'index.d.ts'),
+    'export declare function storageProbe(): string;\n',
+  );
+  await writeFile(
+    resolve(fixtureRoot, 'apps/browser/entrypoints/background.ts'),
+    "import { defineBackground } from 'wxt/utils/define-background';\nimport { storageProbe } from '../../../libs/shared-runtime/index.js';\n\nexport default defineBackground(() => { Object.assign(globalThis, { __megamonoStorageProbe: storageProbe() }); });\n",
   );
   // Remove generated browser targets so this build exercises inference rather
   // than project.json overrides. WXT must find the app-local configuration.
@@ -308,6 +384,59 @@ try {
     ],
     { cwd: fixtureRoot, env: environment },
   );
+  await run('npm', ['exec', 'nx', '--', 'run', 'fixture-browser:test'], {
+    cwd: fixtureRoot,
+    env: environment,
+  });
+  await run(
+    'npm',
+    [
+      'exec',
+      '--workspace=@fixture/browser',
+      '--',
+      'tsc',
+      '--noEmit',
+      '-p',
+      'tsconfig.spec.json',
+    ],
+    { cwd: fixtureRoot, env: environment },
+  );
+  const invalidSpec = resolve(fixtureRoot, 'apps/browser/src/invalid.spec.ts');
+  await writeFile(
+    invalidSpec,
+    "export const invalid: number = 'test-only-error';\n",
+  );
+  await run('npm', ['exec', 'nx', '--', 'run', 'fixture-browser:typecheck'], {
+    cwd: fixtureRoot,
+    env: environment,
+  });
+  let rejectedTestType = false;
+  try {
+    await run(
+      'npm',
+      [
+        'exec',
+        '--workspace=@fixture/browser',
+        '--',
+        'tsc',
+        '--noEmit',
+        '-p',
+        'tsconfig.spec.json',
+      ],
+      { cwd: fixtureRoot, env: environment },
+    );
+  } catch (error) {
+    assert(
+      String(error).includes('TS2322'),
+      'Test typechecking failed for an unrelated reason.',
+    );
+    rejectedTestType = true;
+  }
+  assert(
+    rejectedTestType,
+    'The separate test configuration must catch test-only type errors.',
+  );
+  await rm(invalidSpec);
   for (const browser of ['chrome', 'firefox']) {
     const manifest = JSON.parse(
       await readFile(
@@ -332,7 +461,27 @@ try {
         !manifest.permissions?.length,
       `${browser} default scaffold unexpectedly requests access`,
     );
+    const context = { console, setTimeout, clearTimeout };
+    runInNewContext(
+      await readFile(
+        resolve(
+          fixtureRoot,
+          `apps/browser/.output/${browser}-mv3/background.js`,
+        ),
+        'utf8',
+      ),
+      context,
+      { timeout: 2000 },
+    );
+    assert(
+      context.__megamonoStorageProbe === 'undefined',
+      `${browser} injected a WXT auto-import into shared workspace code`,
+    );
   }
+  assert(
+    (await readFile(resolve(sharedRoot, 'index.js'), 'utf8')) === sharedSource,
+    'Building must not rewrite shared workspace source files.',
+  );
   await rm(resolve(fixtureRoot, 'apps/browser/.wxt'), {
     recursive: true,
     force: true,
@@ -347,7 +496,7 @@ try {
   );
   succeeded = true;
   process.stdout.write(
-    `nx-extension local-registry e2e passed (TypeScript ${fixtureTypeScript}): published generator, peer verification, parallel-requested serial builds/packages, typechecking after .wxt deletion, least privilege, display name, and Safari boundary verified.\n`,
+    `nx-extension local-registry e2e passed (TypeScript ${fixtureTypeScript}): published generator, peer verification, serial builds/packages, production JSX, WXT Vitest, separate test types, disabled shared-code auto-imports, typechecking after .wxt deletion, least privilege, display name, and Safari boundary verified.\n`,
   );
 } finally {
   verdaccio.kill('SIGTERM');

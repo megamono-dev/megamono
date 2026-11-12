@@ -3,6 +3,7 @@ import { prompt } from 'enquirer';
 import { vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import {
+  chmodSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -29,6 +30,7 @@ import { workspaceInitGenerator } from './workspace-init';
 import { WorkspaceInitGeneratorSchema } from './schema';
 import { workspaceEjectGenerator } from '../workspace-eject/workspace-eject';
 import Ajv2020 from 'ajv/dist/2020';
+import { parse as parseYaml } from 'yaml';
 import {
   DEFAULT_MEGAMONO_CONFIG,
   megamonoConfigSchema,
@@ -48,6 +50,86 @@ describe('workspace-init generator', () => {
 
   beforeEach(() => {
     tree = createTreeWithEmptyWorkspace();
+  });
+
+  it('lets fresh TypeScript 5.7+ workspaces import .ts specifiers', async () => {
+    const setup = (tree: Tree, typescript: string) => {
+      tree.write(
+        'package.json',
+        JSON.stringify({
+          name: '@acme/source',
+          devDependencies: { typescript },
+        }),
+      );
+      tree.write(
+        'tsconfig.base.json',
+        JSON.stringify({ compilerOptions: { module: 'nodenext' } }),
+      );
+    };
+    setup(tree, '~6.0.3');
+    await workspaceInitGenerator(tree, {
+      only: 'lint',
+      yes: true,
+      bootstrap: true,
+    });
+    expect(readJson(tree, 'tsconfig.base.json').compilerOptions).toEqual({
+      module: 'nodenext',
+      rewriteRelativeImportExtensions: true,
+    });
+    for (const [typescript, bootstrap] of [
+      ['~5.6.3', true],
+      ['~6.0.3', false],
+    ] as const) {
+      const other = createTreeWithEmptyWorkspace();
+      setup(other, typescript);
+      await workspaceInitGenerator(other, {
+        only: 'lint',
+        yes: true,
+        bootstrap,
+      });
+      expect(
+        readJson(other, 'tsconfig.base.json').compilerOptions,
+      ).not.toHaveProperty('rewriteRelativeImportExtensions');
+    }
+  });
+
+  it('allows single-extends declaration merging in fresh workspaces only', async () => {
+    const root = `import nx from '@nx/eslint-plugin';
+
+export default [
+  ...nx.configs['flat/base'],
+  ...nx.configs['flat/typescript'],
+  ...nx.configs['flat/javascript'],
+  {
+    ignores: ['**/dist'],
+  },
+];
+`;
+    tree.write('eslint.config.mjs', root);
+    await workspaceInitGenerator(tree, {
+      only: 'lint',
+      yes: true,
+      bootstrap: true,
+    });
+    const source = tree.read('eslint.config.mjs', 'utf8') ?? '';
+    expect(source).toContain("{ allowInterfaces: 'with-single-extends' }");
+    expect(source).toContain('{ allowSingleExtends: true }');
+    expect(source.indexOf('allowSingleExtends')).toBeGreaterThan(
+      source.indexOf("configs['flat/typescript']"),
+    );
+    await workspaceInitGenerator(tree, {
+      only: 'lint',
+      yes: true,
+      bootstrap: true,
+    });
+    expect(tree.read('eslint.config.mjs', 'utf8')).toBe(source);
+
+    const adopted = createTreeWithEmptyWorkspace();
+    adopted.write('eslint.config.mjs', root);
+    await workspaceInitGenerator(adopted, { only: 'lint', yes: true });
+    expect(adopted.read('eslint.config.mjs', 'utf8')).not.toContain(
+      'allowSingleExtends',
+    );
   });
 
   it('retains explicit Megamono rule severity when adding lint adoption', async () => {
@@ -602,14 +684,18 @@ describe('workspace-init generator', () => {
     });
     const publisher = tree.read('.megamono/publish-yalc.mjs', 'utf8') ?? '';
     expect(publisher).toContain('dist/packages/fixture-kit');
-    expect(publisher).toContain("await run(yalc, ['publish'], directory)");
+    expect(publisher).toContain(
+      "await run(yalc, ['publish'], join(root, selected))",
+    );
     expect(publisher.indexOf('"build"')).toBeLessThan(
       publisher.indexOf("['publish']"),
     );
     const workflow =
       tree.read('.github/workflows/megamono-release.yml', 'utf8') ?? '';
-    expect(workflow).toContain('release publish --tag next');
-    expect(workflow).toContain('pnpm exec nx run-many -t lint test build');
+    expect(workflow).toContain('pnpm exec nx release publish "${flags[@]}"');
+    expect(workflow).toContain(
+      'pnpm exec nx run-many -t lint test -p fixture-kit',
+    );
     expect(tree.read('.gitignore', 'utf8')).toContain('.yalc/');
     expect(tree.read('.gitignore', 'utf8')).toContain('yalc.lock');
     expect(readJson(tree, '.megamono/artifacts.json').artifacts).toEqual(
@@ -624,6 +710,60 @@ describe('workspace-init generator', () => {
         }),
       ]),
     );
+  });
+
+  it('publishes inferred-build packages from the project root that holds their manifest', async () => {
+    addProjectConfiguration(tree, 'fixture-mcp', {
+      root: 'packages/mcp',
+      projectType: 'library',
+      targets: {},
+    });
+    tree.write(
+      'packages/mcp/package.json',
+      JSON.stringify({ name: '@fixture/mcp', version: '0.0.1' }),
+    );
+
+    await workspaceInitGenerator(tree, {
+      only: 'release',
+      packageManager: 'pnpm',
+      yes: true,
+    });
+
+    const publisher = tree.read('.megamono/publish-yalc.mjs', 'utf8') ?? '';
+    expect(publisher).not.toContain('dist/packages/mcp');
+    const root = mkdtempSync(join(tmpdir(), 'megamono-yalc-publisher-'));
+    try {
+      const bin = join(root, 'bin');
+      mkdirSync(join(root, '.megamono'), { recursive: true });
+      mkdirSync(join(root, 'packages/mcp/dist'), { recursive: true });
+      mkdirSync(bin);
+      writeFileSync(join(root, '.megamono/publish-yalc.mjs'), publisher);
+      writeFileSync(
+        join(root, 'packages/mcp/package.json'),
+        JSON.stringify({ name: '@fixture/mcp', main: './dist/index.js' }),
+      );
+      for (const tool of ['pnpm', 'yalc']) {
+        writeFileSync(
+          join(bin, tool),
+          `#!/bin/sh\necho "${tool} $* @ $(pwd)" >> "${join(root, 'calls.log')}"\n`,
+        );
+        chmodSync(join(bin, tool), 0o755);
+      }
+      execFileSync(process.execPath, ['.megamono/publish-yalc.mjs'], {
+        cwd: root,
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+        stdio: 'pipe',
+      });
+      const calls = readFileSync(join(root, 'calls.log'), 'utf8');
+      expect(calls).toContain('pnpm exec nx run-many -t build -p fixture-mcp');
+      expect(calls).toMatch(
+        new RegExp(
+          `yalc publish @ (?:/private)?${join(root, 'packages/mcp')}\\n`,
+        ),
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('matches the representative package, Nx, and Megamono contract snapshot', async () => {
@@ -703,6 +843,315 @@ describe('workspace-init generator', () => {
         },
       }
     `);
+  });
+
+  describe('generated release workflow', () => {
+    const addPublishableKit = (target: Tree) => {
+      addProjectConfiguration(target, 'fixture-kit', {
+        root: 'packages/fixture-kit',
+        projectType: 'library',
+        targets: {},
+      });
+      target.write(
+        'packages/fixture-kit/package.json',
+        JSON.stringify({ name: '@fixture/kit', version: '0.1.0-next.1' }),
+      );
+    };
+    type Step = {
+      name?: string;
+      uses?: string;
+      if?: string;
+      run?: string;
+      env?: Record<string, string>;
+    };
+    const releaseSteps = (target: Tree) => {
+      const source =
+        target.read('.github/workflows/megamono-release.yml', 'utf8') ?? '';
+      const workflow = parseYaml(source) as {
+        permissions: Record<string, string>;
+        env: Record<string, string>;
+        on: {
+          workflow_dispatch: {
+            inputs: Record<string, { default: unknown; options?: string[] }>;
+          };
+        };
+        jobs: { release: { environment: string; steps: Step[] } };
+      };
+      return { source, workflow, steps: workflow.jobs.release.steps };
+    };
+
+    it.each(['npm', 'pnpm', 'yarn', 'bun'] as const)(
+      'publishes with trusted publishing or NPM_TOKEN using %s',
+      async (packageManager) => {
+        addPublishableKit(tree);
+        await workspaceInitGenerator(tree, {
+          only: 'release',
+          packageManager,
+          yes: true,
+        });
+        const { source, workflow, steps } = releaseSteps(tree);
+        const nx = {
+          npm: 'npm exec nx --',
+          pnpm: 'pnpm exec nx',
+          yarn: 'yarn nx',
+          bun: 'bunx nx',
+        }[packageManager];
+
+        expect(workflow.permissions).toEqual({
+          contents: 'write',
+          'id-token': 'write',
+        });
+        expect(workflow.jobs.release.environment).toBe('npm-next');
+        expect(workflow.on.workflow_dispatch.inputs.mode).toMatchObject({
+          default: 'publish-current',
+          options: ['publish-current', 'bump-and-publish'],
+        });
+        expect(workflow.on.workflow_dispatch.inputs.dry_run.default).toBe(true);
+        // Free-text inputs reach scripts only through the environment.
+        expect(workflow.env).toMatchObject({
+          SPECIFIER: '${{ inputs.specifier }}',
+          PREID: '${{ inputs.preid }}',
+          DIST_TAG: '${{ inputs.dist_tag }}',
+        });
+        for (const step of steps) {
+          expect(step.run ?? '').not.toContain('${{');
+        }
+        // setup-node without registry-url leaves the user .npmrc in charge.
+        expect(source).not.toContain('registry-url');
+        expect(source).not.toContain('NODE_AUTH_TOKEN');
+
+        const index = (predicate: (step: Step) => boolean) => {
+          const found = steps.findIndex(predicate);
+          expect(found).toBeGreaterThanOrEqual(0);
+          return found;
+        };
+        const identity = index((step) =>
+          Boolean(step.run?.includes('git config user.email')),
+        );
+        const version = index((step) => step.name === 'Version packages');
+        const build = index(
+          (step) =>
+            step.run ===
+            `${nx} run-many -t build -p fixture-kit --output-style=static`,
+        );
+        const push = index((step) =>
+          Boolean(step.run?.startsWith('git push --follow-tags')),
+        );
+        const credentials = index(
+          (step) => step.name === 'Configure registry credentials',
+        );
+        const publish = index((step) => step.name === 'Publish packages');
+        expect(identity).toBeLessThan(version);
+        expect(version).toBeLessThan(build);
+        expect(build).toBeLessThan(push);
+        expect(push).toBeLessThan(publish);
+        expect(credentials).toBeLessThan(publish);
+        expect(steps[version].if).toBe(
+          "${{ inputs.mode == 'bump-and-publish' }}",
+        );
+        expect(steps[version].run).toContain(
+          `${nx} release version "$SPECIFIER" --preid "$PREID" "\${flags[@]}"`,
+        );
+        expect(steps[push].if).toBe(
+          "${{ inputs.mode == 'bump-and-publish' && !inputs.dry_run }}",
+        );
+        expect(steps[publish].run).toContain(
+          `${nx} release publish "\${flags[@]}"`,
+        );
+        expect(steps[credentials].env).toEqual({
+          NPM_TOKEN: '${{ secrets.NPM_TOKEN }}',
+        });
+        expect(steps[credentials].run).toContain(
+          '//registry.npmjs.org/:_authToken=$NPM_TOKEN',
+        );
+        expect(steps[credentials].run).toContain('npm@^11.5.1');
+        expect(steps[credentials].run?.includes('YARN_NPM_AUTH_TOKEN')).toBe(
+          packageManager === 'yarn',
+        );
+        expect(steps[credentials].run?.includes('NPM_CONFIG_TOKEN')).toBe(
+          packageManager === 'bun',
+        );
+        for (const step of steps) {
+          if (!step.run) continue;
+          execFileSync('bash', ['-n'], { input: step.run, stdio: 'pipe' });
+        }
+      },
+    );
+
+    it('runs the release modes against a fake Nx, git and npm', async () => {
+      addPublishableKit(tree);
+      await workspaceInitGenerator(tree, {
+        only: 'release',
+        packageManager: 'pnpm',
+        yes: true,
+      });
+      const { steps } = releaseSteps(tree);
+      const scripts = Object.fromEntries(
+        steps.flatMap((step) =>
+          step.name && step.run ? [[step.name, step.run]] : [],
+        ),
+      );
+      const root = mkdtempSync(join(tmpdir(), 'megamono-release-workflow-'));
+      try {
+        const bin = join(root, 'bin');
+        mkdirSync(bin);
+        for (const tool of ['pnpm', 'git']) {
+          writeFileSync(
+            join(bin, tool),
+            `#!/bin/sh\nprintf '%s\\n' "${tool} $*" >> "${join(root, 'calls.log')}"\n`,
+          );
+          chmodSync(join(bin, tool), 0o755);
+        }
+        writeFileSync(join(bin, 'npm'), '#!/bin/sh\necho 11.6.2\n');
+        chmodSync(join(bin, 'npm'), 0o755);
+        const run = (
+          name: string,
+          env: Record<string, string>,
+        ): { status: number; log: string; stderr: string } => {
+          rmSync(join(root, 'calls.log'), { force: true });
+          let status = 0;
+          let stderr = '';
+          try {
+            execFileSync('bash', ['-e', '-c', scripts[name]], {
+              cwd: root,
+              env: {
+                PATH: `${bin}:${process.env.PATH}`,
+                HOME: root,
+                GITHUB_ENV: join(root, 'github.env'),
+                GITHUB_REF_TYPE: 'branch',
+                GITHUB_REF_NAME: 'main',
+                SPECIFIER: 'prerelease',
+                PREID: 'next',
+                DIST_TAG: 'next',
+                DRY_RUN: 'false',
+                ...env,
+              },
+              stdio: 'pipe',
+            });
+          } catch (error) {
+            const failure = error as { status: number; stderr: Buffer };
+            status = failure.status;
+            stderr = failure.stderr.toString();
+          }
+          let log = '';
+          try {
+            log = readFileSync(join(root, 'calls.log'), 'utf8');
+          } catch {
+            // Nothing ran.
+          }
+          return { status, log, stderr };
+        };
+
+        // A hostile specifier stays a single argument instead of running.
+        const hostile = run('Version packages', {
+          SPECIFIER: 'prerelease"; touch pwned; echo "',
+        });
+        expect(hostile.status).toBe(0);
+        expect(hostile.log).toBe(
+          'pnpm exec nx release version prerelease"; touch pwned; echo " --preid next --git-commit --git-tag\n',
+        );
+        expect(run('Version packages', { DRY_RUN: 'true' }).log).toContain(
+          '--git-tag --dry-run',
+        );
+        const detached = run('Version packages', {
+          GITHUB_REF_TYPE: 'tag',
+          GITHUB_REF_NAME: 'v1.0.0',
+        });
+        expect(detached.status).toBe(1);
+        expect(detached.stderr).toContain('run it from a branch');
+        expect(run('Push the release commit and tags', {}).log).toBe(
+          'git push --follow-tags origin HEAD:refs/heads/main\n',
+        );
+
+        expect(run('Configure registry credentials', {}).status).toBe(0);
+        expect(() => readFileSync(join(root, '.npmrc'), 'utf8')).toThrow();
+        expect(
+          run('Configure registry credentials', { NPM_TOKEN: 'npm_secret' })
+            .status,
+        ).toBe(0);
+        expect(readFileSync(join(root, '.npmrc'), 'utf8')).toBe(
+          '//registry.npmjs.org/:_authToken=npm_secret\n',
+        );
+
+        expect(run('Publish packages', {}).log).toBe(
+          'pnpm exec nx release publish --tag next\n',
+        );
+        expect(run('Publish packages', { DRY_RUN: 'true' }).log).toBe(
+          'pnpm exec nx release publish --tag next --dry-run\n',
+        );
+        expect(() => readFileSync(join(root, 'pwned'))).toThrow();
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it('upgrades an unmodified next.0 release workflow and leaves an ejected one alone', async () => {
+      addPublishableKit(tree);
+      await workspaceInitGenerator(tree, {
+        only: 'release',
+        packageManager: 'pnpm',
+        yes: true,
+      });
+      const current =
+        tree.read('.github/workflows/megamono-release.yml', 'utf8') ?? '';
+      const previous = current
+        .replace('  id-token: write\n', '')
+        .replace(/\n {6}- name: Configure registry credentials[\s\S]*$/, '\n');
+      const previousHash = hashArtifactBytes(previous);
+      const install = (state: 'managed' | 'ejected') => {
+        const registry = readJson(tree, '.megamono/artifacts.json');
+        registry.artifacts = registry.artifacts.map(
+          (artifact: { id: string }) =>
+            artifact.id === 'release.workflow'
+              ? {
+                  ...artifact,
+                  sourceVersion: '0.1.0-next.0',
+                  templateHash: previousHash,
+                  installedHash: previousHash,
+                  state,
+                }
+              : artifact,
+        );
+        tree.write(
+          '.megamono/artifacts.json',
+          `${JSON.stringify(registry, null, 2)}\n`,
+        );
+        tree.write('.github/workflows/megamono-release.yml', previous);
+      };
+      const entry = () =>
+        readJson(tree, '.megamono/artifacts.json').artifacts.find(
+          ({ id }: { id: string }) => id === 'release.workflow',
+        );
+
+      install('managed');
+      await workspaceInitGenerator(tree, {
+        only: 'release',
+        packageManager: 'pnpm',
+        yes: true,
+      });
+      expect(tree.read('.github/workflows/megamono-release.yml', 'utf8')).toBe(
+        current,
+      );
+      expect(entry()).toMatchObject({
+        state: 'managed',
+        installedHash: hashArtifactBytes(current),
+        templateHash: hashArtifactBytes(current),
+      });
+
+      install('ejected');
+      await workspaceInitGenerator(tree, {
+        only: 'release',
+        packageManager: 'pnpm',
+        yes: true,
+      });
+      expect(tree.read('.github/workflows/megamono-release.yml', 'utf8')).toBe(
+        previous,
+      );
+      expect(entry()).toMatchObject({
+        state: 'ejected',
+        installedHash: previousHash,
+      });
+    });
   });
 
   it('defers release artifacts when no publishable libraries exist', async () => {
@@ -815,9 +1264,9 @@ describe('workspace-init generator', () => {
   });
 
   it('routes unknown configuration versions to migration guidance', async () => {
-    tree.write('megamono.json', JSON.stringify({ version: 2 }));
+    tree.write('megamono.json', JSON.stringify({ version: 3 }));
     await expect(workspaceInitGenerator(tree, options)).rejects.toThrow(
-      /Unsupported Megamono configuration version 2.*configuration migration/s,
+      /Unsupported Megamono configuration version 3.*configuration migration/s,
     );
   });
 
@@ -1150,6 +1599,110 @@ export default [
 
     expect(readJson(tree, 'megamono.json').conventions.rules).toEqual({});
     expect(readJson(tree, 'megamono.json').adoption.ratchets).toEqual([]);
+  });
+
+  it('adds lint to an explicit v2 config without capturing debt or promoting severity', async () => {
+    tree.write(
+      'megamono.json',
+      JSON.stringify({ ...DEFAULT_MEGAMONO_CONFIG, version: 2 }),
+    );
+    addProjectConfiguration(tree, 'web', {
+      root: 'apps/web',
+      projectType: 'application',
+      targets: {},
+    });
+    await workspaceInitGenerator(tree, {
+      only: 'lint',
+      yes: true,
+      defaultPlatform: 'web',
+    });
+    const config = readJson(tree, 'megamono.json');
+    expect(config.version).toBe(2);
+    expect(config.adoption.ratchets).toEqual([]);
+    expect(config.adoption.warningBaseline).toBeUndefined();
+    expect(config.conventions.boundaryAllowances).toBeUndefined();
+    expect(config.conventions.rules).toEqual({});
+    expect(tree.read('eslint.config.mjs', 'utf8')).toContain(
+      'megamonoPlugin.withBoundaryAllowances(',
+    );
+  });
+
+  it('preserves every reviewed v2 policy and nonstructural ratchet on repeated init', async () => {
+    const classification = {
+      dependencyKind: 'implicit',
+      source: { kind: 'lib', tags: ['scope:shared', 'type:util'] },
+      target: { kind: 'lib', tags: ['scope:billing', 'type:ui'] },
+    };
+    const allowance = {
+      source: 'legacy',
+      target: 'ui',
+      constraint: 'module-boundaries:type-direction',
+      classification,
+      rationale: 'Reviewed composition edge',
+      decision: 'decision-20261105-composition',
+    };
+    const baseline = {
+      identityVersion: 1,
+      rules: ['module-boundaries'],
+      entries: [
+        {
+          identity: {
+            rule: 'module-boundaries',
+            constraint: 'module-boundaries:scope-direction',
+            source: 'legacy',
+            target: 'ui',
+            classification,
+          },
+          reason: 'Scoped migration debt',
+          reviewReference: 'review:27',
+          revision: 'a'.repeat(40),
+        },
+      ],
+    };
+    const ratchets = [
+      { rule: 'no-bare-jsx-strings', initialCount: 7, targetSeverity: 'error' },
+    ];
+    tree.write(
+      'megamono.json',
+      JSON.stringify({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        version: 2,
+        conventions: {
+          ...DEFAULT_MEGAMONO_CONFIG.conventions,
+          boundaryAllowances: [allowance],
+          rules: { 'module-boundaries': { severity: 'warning' } },
+        },
+        adoption: {
+          ...DEFAULT_MEGAMONO_CONFIG.adoption,
+          warningBaseline: baseline,
+          ratchets,
+        },
+      }),
+    );
+    addProjectConfiguration(tree, 'legacy', {
+      root: 'libs/legacy',
+      projectType: 'library',
+      tags: classification.source.tags,
+      targets: {},
+    });
+    addProjectConfiguration(tree, 'ui', {
+      root: 'libs/ui',
+      projectType: 'library',
+      tags: classification.target.tags,
+      targets: {},
+    });
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+    const first = tree.read('eslint.config.mjs', 'utf8');
+    await workspaceInitGenerator(tree, { only: 'lint', yes: true });
+    const config = readJson(tree, 'megamono.json');
+    expect(config.adoption.ratchets).toEqual(ratchets);
+    expect(config.adoption.warningBaseline).toEqual(baseline);
+    expect(config.conventions.boundaryAllowances).toEqual([allowance]);
+    expect(config.conventions.rules).toEqual({
+      'module-boundaries': { severity: 'warning' },
+    });
+    expect(tree.read('eslint.config.mjs', 'utf8')).toBe(first);
+    expect((first?.match(/withBoundaryAllowances/g) ?? []).length).toBe(1);
   });
 
   it('seeds explicitly selected repository-owned Node pin files', async () => {
@@ -1657,6 +2210,7 @@ export default [
         '{"name":"format-fixture","private":true}',
       );
       writeFileSync(join(root, '.prettierignore'), ignore);
+      writeFileSync(join(root, '.prettierrc'), '{}');
       writeFileSync(join(root, 'source.ts'), 'export const value={a:1,b:2}');
       // Resolve the existing tools without installing or copying dependencies.
       mkdirSync(join(root, 'node_modules'));

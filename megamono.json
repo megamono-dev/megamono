@@ -4,7 +4,7 @@
   "conventions": {
     "nestFeatureLibraries": true,
     "docsLocation": "centralized",
-    "packageManager": "npm",
+    "packageManager": "pnpm",
     "rules": {}
   },
   "platforms": ["node"],

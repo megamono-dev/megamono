@@ -4,6 +4,12 @@ import { docsVisibilityBoundary } from './rules/docs-visibility-boundary';
 import { noBareJsxStrings } from './rules/no-bare-jsx-strings';
 import { noDeepRelativeImports } from './rules/no-deep-relative-imports';
 import { platformBoundary } from './rules/platform-boundary';
+import { withBoundaryAllowances } from './reviewed-boundaries';
+import { createReactConfig, withReactConfig } from './react-config';
+
+type ConfigInput = Pick<MegamonoConfig, 'conventions'> & {
+  readonly docs?: Pick<MegamonoConfig['docs'], 'root'>;
+};
 
 type RuleSeverity = Linter.RuleSeverity | 'off' | 'warn' | 'error';
 
@@ -26,7 +32,10 @@ const rules = {
 export const megamonoEslintPlugin = {
   meta: { name: '@megamono/plugin', version: '0.0.1' },
   rules,
-  createConfig(config: Pick<MegamonoConfig, 'conventions'>): Linter.Config {
+  withBoundaryAllowances,
+  createReactConfig,
+  withReactConfig,
+  createConfig(config: ConfigInput): Linter.Config {
     return {
       name: '@megamono/plugin/recommended',
       files: ['**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}'],
@@ -57,7 +66,10 @@ export const megamonoEslintPlugin = {
             ? 'off'
             : [
                 severity(config, 'platform-boundary', 'error'),
-                { workspaceRoot: process.cwd() },
+                {
+                  workspaceRoot: process.cwd(),
+                  ...(config.docs ? { docsRoot: config.docs.root } : {}),
+                },
               ],
         'megamono/no-bare-jsx-strings': severity(
           config,

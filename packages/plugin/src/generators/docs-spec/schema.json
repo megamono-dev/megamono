@@ -6,59 +6,108 @@
   "properties": {
     "project": {
       "type": "string",
-      "$default": { "$source": "argv", "index": 0 },
-      "x-prompt": "Which project does this spec describe?"
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      },
+      "x-prompt": "Which project does this spec describe?",
+      "description": "Required. Documentation project namespace; may describe an existing or planned project and is normalized to a kebab-case identifier.",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
     },
     "projects": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
       "minItems": 1,
       "uniqueItems": true,
-      "description": "Nx projects governed by this specification; defaults to project."
+      "description": "Project identifiers governed by this specification, including planned projects; defaults to project."
     },
     "title": {
       "type": "string",
-      "$default": { "$source": "argv", "index": 1 },
-      "description": "Spec title; defaults to '<project> specification'."
+      "$default": {
+        "$source": "argv",
+        "index": 1
+      },
+      "description": "Spec title; defaults to '<project> specification'.",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
     },
     "topics": {
       "type": "array",
-      "items": { "type": "string" },
-      "default": ["architecture"]
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": ["architecture"],
+      "description": "Built-in topics or entries from megamono.json topics.extend. Unknown or duplicate topics are rejected before record creation.",
+      "uniqueItems": true
     },
     "references": {
       "type": "array",
-      "items": { "type": "string" },
-      "default": []
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": [],
+      "description": "Existing repository document IDs referenced by this record; duplicates are rejected.",
+      "uniqueItems": true
     },
     "externalReferences": {
       "type": "array",
-      "items": { "type": "string" },
-      "default": []
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": [],
+      "description": "External document references in namespace:identifier form; duplicates are rejected.",
+      "uniqueItems": true
     },
     "allowedDependencies": {
       "type": "array",
-      "items": { "$ref": "#/definitions/architectureDependency" },
+      "items": {
+        "$ref": "#/definitions/architectureDependency"
+      },
       "description": "Expected directed project-graph edges."
     },
     "forbiddenDependencies": {
       "type": "array",
-      "items": { "$ref": "#/definitions/architectureDependency" },
+      "items": {
+        "$ref": "#/definitions/architectureDependency"
+      },
       "description": "Directed project-graph edges that must remain absent."
     },
-    "date": { "type": "string", "format": "date" }
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Record date in YYYY-MM-DD format; defaults to the current UTC date."
+    }
   },
   "definitions": {
     "architectureDependency": {
       "type": "object",
       "properties": {
-        "from": { "type": "string" },
-        "to": { "type": "string" }
+        "from": {
+          "type": "string",
+          "description": "Source project identifier.",
+          "minLength": 1,
+          "pattern": ".*\\S.*"
+        },
+        "to": {
+          "type": "string",
+          "description": "Target project identifier.",
+          "minLength": 1,
+          "pattern": ".*\\S.*"
+        }
       },
       "required": ["from", "to"],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "One directed relationship between project identifiers listed by the specification."
     }
   },
   "required": ["project"],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "description": "Create a numbered internal draft specification, optionally declaring project dependency expectations. Project namespaces may describe planned work."
 }

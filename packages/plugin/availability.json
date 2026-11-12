@@ -25,6 +25,12 @@
       "schema": "./dist/generators/library/schema.json",
       "description": "Add an internal or publishable TypeScript library"
     },
+    "library-entrypoint": {
+      "status": "available",
+      "factory": "./dist/generators/library-entrypoint/library-entrypoint",
+      "schema": "./dist/generators/library-entrypoint/schema.json",
+      "description": "Add a subpath export to a library and optionally declare it side-effect free"
+    },
     "database": {
       "status": "available",
       "factory": "./dist/generators/database/database",
@@ -166,6 +172,12 @@
     "playstack-queues": {
       "status": "reserved",
       "gate": "Playstack queue generation is reserved for a later wave."
+    },
+    "adoption-policy": {
+      "status": "available",
+      "factory": "./dist/generators/adoption-policy/adoption-policy",
+      "schema": "./dist/generators/adoption-policy/schema.json",
+      "description": "Report or apply a reviewed exact adoption policy"
     }
   },
   "executors": {
@@ -228,6 +240,18 @@
       "implementation": "./dist/executors/import/import",
       "schema": "./dist/executors/import/schema.json",
       "description": "Analyze and safely import one repository into a Megamono host"
+    },
+    "expo-doctor": {
+      "status": "available",
+      "implementation": "./dist/executors/expo-doctor/expo-doctor",
+      "schema": "./dist/executors/expo-doctor/schema.json",
+      "description": "Run locally installed Expo Doctor for an application without installing tools"
+    },
+    "audit-production": {
+      "status": "available",
+      "implementation": "./dist/executors/audit-production/audit-production",
+      "schema": "./dist/executors/audit-production/schema.json",
+      "description": "Audit one project's production dependency closure against registry security advisories"
     }
   }
 }

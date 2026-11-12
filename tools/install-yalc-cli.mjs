@@ -7,6 +7,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+// This is an npm distribution-consumer check: global artifact installation must
+// share the explicit CLI dependency and optional hosted peer. pnpm 11 globals
+// resolve the bootstrap CLI dependency separately through the registry instead.
+// Repository builds run through pnpm in publish-yalc.mjs.
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const yalc = process.platform === 'win32' ? 'yalc.cmd' : 'yalc';
 const globalPackages = [

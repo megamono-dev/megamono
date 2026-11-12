@@ -1,19 +1,23 @@
 {
   "name": "@megamono/nx-apple",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "license": "MIT",
-  "description": "Nx plugin inferring Apple and Swift Package Manager projects, targets, and graph edges from Xcode workspaces.",
+  "description": "Nx plugin for Swift packages and Xcode projects: dependency graphs, native build and test targets, and SwiftUI application generation.",
   "keywords": [
     "megamono",
     "nx",
     "nx-plugin",
+    "monorepo",
     "apple",
     "xcode",
     "swift",
-    "swiftpm"
+    "swiftpm",
+    "swift-package-manager",
+    "swiftui",
+    "macos"
   ],
   "author": "Ryan Hefner",
-  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/nx-apple#readme",
+  "homepage": "https://megamono.com/docs/platforms/apple",
   "bugs": {
     "url": "https://github.com/megamono-dev/megamono/issues"
   },
@@ -96,11 +100,11 @@
     ]
   },
   "dependencies": {
-    "tslib": "^2.3.0"
+    "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "@nx/devkit": ">=18 <24",
-    "nx": ">=18 <24"
+    "@nx/devkit": ">=18 <25",
+    "nx": ">=18 <25"
   },
   "engines": {
     "node": ">=18.18 <25",

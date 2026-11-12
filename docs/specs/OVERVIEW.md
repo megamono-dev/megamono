@@ -7,7 +7,7 @@ Megamono is an MIT-licensed set of Nx development tools for creating, maintainin
 ## Scaffold baseline and adoption compatibility
 
 - New workspaces use Node.js 24, Nx 23.1, and TypeScript 6.0. npm is the default; pnpm, Yarn, and Bun are supported compatibility options.
-- Existing workspaces retain their package manager and supported toolchain: core adoption accepts Nx 17–23, TypeScript 5.2–6, and Node.js 18.18–24. Inference plugins require Nx 18 or newer. Exact ranges are defined in the implementation contract and packaged compatibility registry.
+- Existing workspaces retain their package manager and supported toolchain: core adoption accepts Nx 17–24, TypeScript 5.2–6, and Node.js 18.18–24. Inference plugins require Nx 18 or newer. Exact ranges are defined in the implementation contract and packaged compatibility registry.
 - Bootstrap supports macOS and Linux. Platform-neutral adoption also supports Windows; native capability requirements are checked separately.
 - Eight packages: `@megamono/plugin`, `@megamono/cli`, `create-megamono`, and the Apple, Cargo, Cloudflare, extension, and Render Nx plugins. Unimplemented roadmap plugins are not implied to be available.
 - `create-megamono` bootstraps new workspaces. `megamono adopt` surveys established Nx workspaces before an explicitly requested write; `megamono init` and `megamono add` expose the same additive primitives. A missing survey plugin can be staged temporarily without adding a consumer dependency. Mutation requires the local plugin.

@@ -20,6 +20,7 @@ references:
     spec-megamono-0009,
     spec-megamono-0011,
     spec-megamono-0015,
+    spec-megamono-0019,
   ]
 external_references: [playstack:45-cli]
 ---
@@ -77,6 +78,37 @@ megamono add skills
 
 Module add commands delegate to `workspace-init --only=<module>`. Application add delegates to the canonical `@megamono/plugin:app` generator from `spec-megamono-0003`; database add delegates to `@megamono/plugin:database` with a user-defined logical name and explicit or prompted adapter. Add commands require the initialized baseline rather than silently running init, inherit the same clean-worktree and branch safety rules, preview by default, and support `--dry-run` plus fully explicit `--interactive=false --yes` automation.
 
+### Expo validation during CI adoption
+
+The CI module adds an app-scoped, non-cacheable `expo-doctor` target for detected
+Expo applications and adds it as a prerequisite to existing build/export/native
+run targets. Maintained Nx Expo inference receives dependency-only overlays,
+including configured target names; resolved existing-project inference is used
+for scoped plugins. Existing custom Doctor targets and build configuration stay
+repository-owned. A Doctor prerequisite that would introduce a local task cycle
+is a conflict rather than an automatic rewrite. The operation plan discloses the
+target changes and records that validation has not yet run.
+
+Ambiguous wildcard Doctor prerequisites or filtered/complex target defaults that
+cannot be safely assessed require explicit configuration review before mutation.
+Preview and apply use the same resolved evidence for existing Expo inference.
+
+Generated affected CI runs Doctor before lint/test/build. Existing equivalent CI
+is retained, so callers must explicitly reach Doctor or a guarded target. Direct
+EAS commands and custom build entrypoints require their own integration. The
+executor resolves the installed Doctor from the app, checks its declared Node
+engine, and propagates failure; it never downloads or installs a tool. Consumers
+select a pinned Doctor compatible with their SDK and Node version. This optional
+platform tooling does not raise Megamono's core adoption Node floor.
+
+Adoption does not replace Metro configuration, upgrade an Expo SDK, or flatten
+app-specific React versions. Read-only health evidence distinguishes an installed
+SDK, static configuration, configured checks, and unassessed validation. Actual
+Doctor, per-platform exports and native/cloud qualification remain separate from
+governance success. A packed Expo fixture qualifies SDK-owned Metro defaults,
+Doctor failure propagation, and mobile/web React isolation in real iOS/Android
+JavaScript exports.
+
 ### Optional Springbar handoff
 
 `megamono init --springbar` preflights Springbar's read-only candidates, then
@@ -122,7 +154,7 @@ For a survey, no packages are installed. An already-installed Playstack CLI cont
 
 The composite command treats `--dry-run` as an end-to-end transaction boundary. Megamono may inspect the Nx graph and local package metadata, but it never installs either CLI or capability packages. When a local Playstack CLI is already present, each capability receives `--dry-run` and final initialization uses the read-only survey; otherwise Megamono prints the exact deferred package and capability plan.
 
-Existing-workspace mutation uses the adoption baseline from `spec-megamono-0000`: Node `>=18.18 <25`; npm `>=9 <12`, pnpm `>=8 <12`, Yarn `>=1.22 <5`, or Bun `>=1.1 <2`; Nx `>=17 <24`; and TypeScript `>=5.2 <7`. Core adoption is operating-system-neutral. Platform-specific generators and targets apply their own host gates instead of disqualifying the repository. Optional Playstack setup applies its narrower Node `>=20` gate only when requested, plus ESLint `^9` only when the explicit `@playstack/lint` package is selected; these constraints never narrow core Megamono adoption. Inference plugins require Nx 18 or newer; an Nx 17 workspace can adopt the core modules and receives an explicit capability reduction for detected Apple, Cargo, or Cloudflare manifests.
+Existing-workspace mutation uses the adoption baseline from `spec-megamono-0000`: Node `>=18.18 <25`; npm `>=9 <12`, pnpm `>=8 <12`, Yarn `>=1.22 <5`, or Bun `>=1.1 <2`; Nx `>=17 <25`; and TypeScript `>=5.2 <7`. Core adoption is operating-system-neutral. Platform-specific generators and targets apply their own host gates instead of disqualifying the repository. Optional Playstack setup applies its narrower Node `>=20` gate only when requested, plus ESLint `^9` only when the explicit `@playstack/lint` package is selected; these constraints never narrow core Megamono adoption. Inference plugins require Nx 18 or newer; an Nx 17 workspace can adopt the core modules and receives an explicit capability reduction for detected Apple, Cargo, or Cloudflare manifests.
 
 Eligibility, mutation safety, and host readiness are separate decisions. Any established Nx repository with the local plugin can be surveyed, including one with no recognized manager, an unavailable global manager, a dirty tree, or an untested future Nx version. Mutation additionally requires supported Nx and TypeScript versions, unambiguous root ownership, a supported active Node and selected package-manager binary, a valid project graph, a clean worktree, and a non-default named branch. Nested project lockfiles are ignored for root ownership; conflicting root managers refuse. If the lockfile identifies the manager but `package.json#packageManager` is absent, init records the inferred manager only in `megamono.json`. It never adds, replaces, or upgrades the repository's manager declaration. Package-manager migration is a separate explicit operation. `--toolchainPin=nvmrc|node-version|both --toolchainNode=<exact-version>` may add explicit repository-owned runtime pins after the same conflict preview.
 
@@ -144,16 +176,16 @@ Every execution installs a small baseline: `megamono.json`, the `megamono` proje
 
 The independently selectable modules are:
 
-| Module      | Adds or configures                                                                                                                                                |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs`      | Centralized corpus directories, collision-free Content Collections integration, indexes, and `megamono-docs` targets (`spec-megamono-0004`, `spec-megamono-0011`) |
-| `agents`    | A managed section in `AGENTS.md`, a safe `CLAUDE.md` pointer when possible, and `docs/DESIGN.md`                                                                  |
-| `ci`        | Retains equivalent repository CI by default, or adds a standalone/reusable affected-CI workflow owned by Megamono                                                 |
-| `release`   | Nx Release groups and tag strategy for publishable packages, a private prerelease workflow, and yalc-from-dist local package vetting                              |
-| `lint`      | Project-tag completion, project-graph structural checks, and ESLint wiring (`spec-megamono-0006`)                                                                 |
-| `skills`    | Managed portable skills under `.agents/skills` and the `.claude/skills` projection (`spec-megamono-0005`)                                                         |
-| `health`    | The deterministic scheduled health workflow and local health target (`spec-megamono-0008`)                                                                        |
-| `inference` | Supported Apple, Cargo, or Cloudflare plugins when corresponding manifests are detected (`spec-megamono-0003`, `spec-megamono-0015`)                              |
+| Module      | Adds or configures                                                                                                                                                                                                                                             |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs`      | Centralized corpus directories, collision-free Content Collections integration, indexes, and `megamono-docs` targets (`spec-megamono-0004`, `spec-megamono-0011`)                                                                                              |
+| `agents`    | A managed section in `AGENTS.md`, a safe `CLAUDE.md` pointer when possible, and `docs/DESIGN.md`                                                                                                                                                               |
+| `ci`        | Retains equivalent repository CI by default, or adds a standalone/reusable affected-CI workflow owned by Megamono                                                                                                                                              |
+| `release`   | Nx Release groups and tag strategy for publishable packages, a manually dispatched release workflow (dry run by default; `publish-current` or `bump-and-publish`; npm trusted publishing or an `NPM_TOKEN` fallback), and yalc-from-dist local package vetting |
+| `lint`      | Project-tag completion, project-graph structural checks, and ESLint wiring (`spec-megamono-0006`)                                                                                                                                                              |
+| `skills`    | Managed portable skills under `.agents/skills` and the `.claude/skills` projection (`spec-megamono-0005`)                                                                                                                                                      |
+| `health`    | The deterministic scheduled health workflow and local health target (`spec-megamono-0008`)                                                                                                                                                                     |
+| `inference` | Supported Apple, Cargo, or Cloudflare plugins when corresponding manifests are detected (`spec-megamono-0003`, `spec-megamono-0015`)                                                                                                                           |
 
 ```text
 npm exec nx g @megamono/plugin:workspace-init --only=docs,agents
@@ -303,11 +335,13 @@ An existing repository-contained `.tgz` with an exact semantic version in its fi
 
 ## Lint adoption
 
-Fresh `create-megamono` workspaces use the default severities from `spec-megamono-0006`. An existing workspace may adopt newly enabled structural rules at warning severity so the adoption commit does not fail on pre-existing violations.
+Fresh `create-megamono` workspaces use the default severities from `spec-megamono-0006`. A version 1 existing workspace may adopt newly enabled structural rules at warning severity so the adoption commit does not fail on pre-existing violations.
 
 Flat ESLint configuration receives the Megamono plugin wiring. A workspace using `.eslintrc*` keeps that configuration byte-for-byte and records an `eslint-rule-wiring` capability reduction with migration guidance; project tags, `megamono:check`, and other structural validation remain available. Init never performs an implicit ESLint flat-config migration.
 
 The adoption decision records the affected rules, initial counts, and the intended ratchet. The health report keeps the temporary warning overrides visible until each becomes an error or receives a separate accepted decision. Stylistic warnings remain warnings.
+
+Version 2 is explicit opt-in through the reviewed adoption-policy workflow in spec-megamono-0019. Init preserves its existing boundary allowances, warning identities, review provenance, rule severities, and all ratchets exactly. It does not capture new counts or automatically expand/prune identity sets. Canonical flat ESLint wiring is wrapped once for exact policy activation; unsupported customized wiring requires review. New-workspace defaults remain version 1.
 
 ## Health and external commands
 
@@ -331,7 +365,7 @@ The completion summary lists modules adopted or skipped, paths added or modified
 - Init offers but does not run repository health after adoption.
 - Existing Nest libraries are never renamed by init.
 - Partial module adoption is supported and recorded in `megamono.json`.
-- Core adoption supports Nx 17–23 without forcing a repository upgrade; async language inference begins at Nx 18.
+- Core adoption supports Nx 17–24 without forcing a repository upgrade; async language inference begins at Nx 18.
 - Unsupported target metadata is omitted by installed-Nx capability, and generated workflows inherit repository toolchain declarations.
 - Legacy `.eslintrc*` configuration is retained with an explicit capability reduction.
 - `.megamono/artifacts.json` is the sole authority for Megamono workspace-artifact ownership. Playstack artifact state remains external.
@@ -350,6 +384,7 @@ The completion summary lists modules adopted or skipped, paths added or modified
 - Every emitted artifact is classified as managed, managed-section, seeded, or derived; registry hashes, delimiters, IDs, and ordering are deterministic.
 - Updating pristine managed artifacts succeeds, while modified, seeded, and ejected artifacts remain byte-for-byte unchanged; derived artifacts regenerate from canonical input.
 - `workspace-eject --dry-run` and execution produce the same ownership plan, preserve content, and never affect Playstack-owned artifacts.
+- The generated release workflow authenticates for npm, pnpm, Yarn, and Bun through npm trusted publishing or an `NPM_TOKEN` secret, sets a git identity before versioning, passes dispatch inputs to scripts only through environment variables, pushes the version commit and tags before publishing, can publish the versions already in the manifests, and defaults to a dry run.
 - Init never moves an existing path, and docs classification never applies during init.
 - Temporary structural warnings remain visible to health until ratcheted or covered by an accepted decision.
 - A failed external command writes recovery guidance without committing, pushing, or rolling back repository-owned changes.

@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-12T11:46:15.758Z",
+  "repository": "megamono-dev/megamono",
+  "pullRequest": "https://github.com/megamono-dev/megamono/pull/3",
+  "branch": "release/next.1",
+  "failingSourceRevision": "bffbf16ab36986d043fe729871d06f48f9427735",
+  "locallyQualifiedSourceRevision": "0db58e3",
+  "status": "locally-qualified-hosted-rerun-pending",
+  "findings": [
+    {
+      "id": "tooling-cold-cache",
+      "workflowRun": 43209978692,
+      "jobs": [131154804201],
+      "cause": "Tooling repair tests require original Magicast/Nx/other reviewed archives through npm pack --offline. pnpm install fills a separate store, so a clean CI runner has no required npm cache entries and fails ENOTCACHED before the Linux job.",
+      "fix": "Prepare exact provenance-listed archives with SHA-512 verification in a temporary directory, then pass explicit artifact paths into the unchanged repair suites. Explicit reviewed archives still allow offline use. No skip or cache fallback on integrity/network failure.",
+      "revision": "0db58e3"
+    },
+    {
+      "id": "consumer-manager-inheritance",
+      "workflowRun": 43209978666,
+      "jobs": [
+        131154803145, 131154803572, 131154803708, 131154803685, 131154803748,
+        131154803845
+      ],
+      "cause": "npm_execpath denotes the parent manager. Under pnpm exec nx it points to pnpm: Cargo invoked pnpm pack with npm-only flags and Android rejected the non-npm parent. Governance contained the same latent assumption.",
+      "fix": "Resolve the actual npm CLI independently, execute it through Node, and isolate the consumer npm cache. pnpm remains the authoring task manager; these intentionally test npm consumers.",
+      "revision": "44cfdcb"
+    },
+    {
+      "id": "node20-authoring-cache",
+      "workflowRun": 43209978682,
+      "jobs": [131154804080, 131154804218, 131154804220, 131154804230],
+      "cause": "The second setup-node action automatically detects the root pnpm packageManager and invokes pnpm 11 after switching to Node 20. pnpm fails on the unavailable node:sqlite builtin before the Nx17-20 consumer tests start.",
+      "fix": "Disable automatic package-manager caching only on consumer runtime switches; retain the explicit pnpm cache on the Node24 authoring step. A regression checks this separation in both compatibility jobs.",
+      "revision": "6930d9f"
+    }
+  ],
+  "originalPassingCompatibilityLanes": [
+    "Nx21 / Node22",
+    "Nx22 / Node22",
+    "Nx23 / Node24",
+    "Nx24 / Node24",
+    "Mixed portfolio / Node22",
+    "Mixed portfolio / Node24"
+  ],
+  "validation": {
+    "tooling": {
+      "status": "passed",
+      "tests": 66,
+      "skipped": 0,
+      "emptyNpmCache": true,
+      "installedPatchChecks": "passed"
+    },
+    "release": {
+      "status": "passed",
+      "tests": 29,
+      "publicPackages": 10,
+      "registrySync": "passed"
+    },
+    "changedJavaScriptLint": {
+      "status": "passed",
+      "errors": 0
+    },
+    "android": {
+      "status": "passed-generation-and-resolved-graph",
+      "pathWithSpaces": true,
+      "nativeGradle": "not-run-locally"
+    },
+    "cargo": {
+      "status": "passed-on-macos",
+      "checks": [
+        "Actual Cargo build",
+        "Actual Cargo tests",
+        "Strict Clippy",
+        "Local Tauri argument handling"
+      ],
+      "signedTauriBundles": "not-assessed"
+    },
+    "governance": {
+      "status": "passed-packed-npm-consumer",
+      "checks": [
+        "Import/tag/edge/removal recomputation",
+        "Next server/browser boundaries",
+        "Warning budgets"
+      ]
+    },
+    "oldestCompatibilityConsumer": {
+      "status": "passed",
+      "node": "20.19.2",
+      "nx": "17.1.2",
+      "typescript": "5.2.2",
+      "npm": "11.21.1"
+    },
+    "hostedRerun": {
+      "status": "pending-push"
+    }
+  },
+  "limitations": [
+    "Windows/Linux native execution and actual Android Gradle tasks require the hosted rerun.",
+    "The first local non-network-enabled consumer attempts hit sandbox cache-write/network restrictions; those attempts are not recorded as passing qualification.",
+    "No public npm or shared Yalc publication was performed."
+  ],
+  "receipts": [
+    {
+      "path": "/private/tmp/megamono-pr3-agent-tooling.log",
+      "bytes": 10380,
+      "sha256": "83bf9762a8d42abee18e2c298d7f7e9cd333e1629d14bbdd1003f04980c6f69a"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-agent-native-governance.log",
+      "bytes": 3775,
+      "sha256": "35ad7b6e1ccbcb8241895d8af3c40a4c3098cfb459b958e45a551b926969aa2c"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-agent-node20-nx17.log",
+      "bytes": 85,
+      "sha256": "03c9bcd59567671edebbdfd8bafde50152ceaace3d50b8d7ea6892bce42f45ce"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-android-generation.log",
+      "bytes": 1966,
+      "sha256": "b0c440fcc229b5df76dcbf7af1fa1acd00d1a33d9ba4e5de78fd2c45ba3537c6"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-release-tests-final.log",
+      "bytes": 2822,
+      "sha256": "c10a0651dc9271300c9170a3d02643a146ff7cab2085137e3f84a518a928550a"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-release-check.log",
+      "bytes": 141,
+      "sha256": "766771db06c79c39f753bcd5e0aefa94122edfb13e3b0f707d4bda44c3b3fc34"
+    },
+    {
+      "path": "/private/tmp/megamono-pr3-changed-js-lint.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

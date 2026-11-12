@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "scope": "Megamono repository tooling only: explicitly reviewed local migrations to the pinned minimatch11/glob14 public APIs. Not emitted to adopted workspaces, not upstream package releases, and not advisory exclusions.",
+  "upstreamSources": [
+    "https://raw.githubusercontent.com/isaacs/minimatch/v11.0.1/changelog.md",
+    "https://raw.githubusercontent.com/isaacs/node-glob/v14.0.3/changelog.md"
+  ],
+  "semantics": [
+    "Preserve Nx compile-failure behavior using an empty parsed set check, cache/exact-match shortcuts, and negated-regex empty-input behavior.",
+    "Preserve Verdaccio ACL first-match order, nocase matching, and fail-closed TypeError for noncompiling empty/comment patterns. Both CJS and ESM branches are migrated.",
+    "Fork checker imports the public named minimatch function; Rollup ESM imports the public named glob function. Existing surrounding algorithms are preserved.",
+    "Omit stale sourceMappingURL comments in the3affected files that have them; upstream maps no longer describe transformed bytes.",
+    "Minimatch11 matching semantics intentionally differ in documented edge cases. Focused actual-consumer fixtures and full repository qualification, rather than universal equivalence, support this migration."
+  ],
+  "dependencies": {
+    "minimatch": {
+      "name": "minimatch",
+      "version": "11.0.4",
+      "manifestSha256": "6b31405e9b7b9a3613bd001ebf468b7a7d7a7a1b5c83fa5f00240631a0c369b5",
+      "tarball": "https://registry.npmjs.org/minimatch/-/minimatch-11.0.4.tgz",
+      "tarballIntegrity": "sha512-/UJ1dEoVQTjPNDh6SGlUo+ueLMmoHTas4q+8yaAR/5t6nLAIiBDJtoYUh20IYleix7ehiQkgczb84PE3uzHkxg=="
+    },
+    "glob": {
+      "name": "glob",
+      "version": "14.0.3",
+      "manifestSha256": "89a2a1a6fe096f20e0a4d3d4817c1c487afd1f0bf80d5f73be9085f8e95f2939",
+      "tarball": "https://registry.npmjs.org/glob/-/glob-14.0.3.tgz",
+      "tarballIntegrity": "sha512-A1vjIwC3qpdCso45Iw127gnp7sPhqgY8lUQhDrArIs+GbmfaaVPFuoyy7WyLT9EPZCRZ7j7aLdwUhQmHWesEow=="
+    }
+  },
+  "packages": [
+    {
+      "name": "nx",
+      "version": "23.3.1",
+      "manifestSha256": "b19147bb12507b52a7af905fa10e7d278453e51cec69f04bebdaa0567d002c47",
+      "tarball": "https://registry.npmjs.org/nx/-/nx-23.3.1.tgz",
+      "tarballIntegrity": "sha512-dufPxsiUazuSejFYdtLAotKXeda9ufz3B9gVtsrvgxkjWjpAM23rOpIJoqZj3FFauig64lYsaMX+nX2hh+YhYQ==",
+      "requiredDependency": "minimatch",
+      "files": [
+        {
+          "path": "dist/src/utils/find-matching-projects.js",
+          "originalSha256": "f55e29a08c635eee1d4a08e03f4254d130a9a69d5a92e6e5a8e169df3eb71d61",
+          "patchedSha256": "be4441ed27261635706f2f8ef064f9907f2bc411b271a7141e883ae01117c1f8",
+          "originalBytes": 8879,
+          "patchedBytes": 8946,
+          "replacements": [
+            {
+              "before": "const regexCache = new Map();",
+              "after": "const matcherCache = new Map();",
+              "count": 1
+            },
+            {
+              "before": "        if (!regexCache.has(pattern)) {\n            const regex = minimatch_1.minimatch.makeRe(pattern, { dot: true });\n            if (regex) {\n                regexCache.set(pattern, regex);\n            }\n            else {\n                throw new Error('Invalid glob pattern ' + pattern);\n            }\n        }\n        const matcher = regexCache.get(pattern);",
+              "after": "        if (!matcherCache.has(pattern)) {\n            const matcher = new minimatch_1.Minimatch(pattern, { dot: true });\n            if (matcher.set.length !== 0) {\n                matcherCache.set(pattern, matcher);\n            }\n            else {\n                throw new Error('Invalid glob pattern ' + pattern);\n            }\n        }\n        const matcher = matcherCache.get(pattern);",
+              "count": 1
+            },
+            {
+              "before": "entry = item === pattern ? true : matcher.test(item);",
+              "after": "entry = item === pattern ? true : ((!matcher.negate || item !== '') && matcher.match(item));",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "path": "dist/src/generators/utils/glob.js",
+          "originalSha256": "2fb2a697656405498f176dd5d6aeb318b4a34e35d2eb7aa86e65cc886b0a068c",
+          "patchedSha256": "f53c1bc73ad0891ff493eb3139ecdf3ca8f638779c3d503317b9642037ec61fd",
+          "originalBytes": 2166,
+          "patchedBytes": 2223,
+          "replacements": [
+            {
+              "before": "const matcher = minimatch_1.minimatch.makeRe(combinedGlob);\n    if (!matcher)",
+              "after": "const matcher = new minimatch_1.Minimatch(combinedGlob);\n    if (matcher.set.length === 0)",
+              "count": 1
+            },
+            {
+              "before": "matcher.test(change.path)",
+              "after": "(!matcher.negate || change.path !== '') && matcher.match(change.path)",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "path": "dist/src/command-line/release/utils/repository-git-tags.js",
+          "originalSha256": "1d01b7321f8397739f498331b5fe52cf6ebbfa3eb1dafa4cdd1bb9060109c6c6",
+          "patchedSha256": "aace7e8f088f804f856c05799ea24eb0e3684b78b4719e7aa3b7f7ecbd481f54",
+          "originalBytes": 5948,
+          "patchedBytes": 6025,
+          "replacements": [
+            {
+              "before": "                    const r = minimatch_1.minimatch.makeRe(pattern, { dot: true });\n                    if (!r) {\n                        return false;\n                    }\n                    return r.test(currentBranch);",
+              "after": "                    const matcher = new minimatch_1.Minimatch(pattern, { dot: true });\n                    if (matcher.set.length === 0) {\n                        return false;\n                    }\n                    return (!matcher.negate || currentBranch !== '') && matcher.match(currentBranch);",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@verdaccio/core",
+      "version": "8.4.0",
+      "manifestSha256": "fef2c6d11762ca28e3c69c12c29fb1eb96e3bc716c5cabed7b9fc517d9844aa3",
+      "tarball": "https://registry.npmjs.org/@verdaccio/core/-/core-8.4.0.tgz",
+      "tarballIntegrity": "sha512-+0Fug/ilB+LmTgh1oO4vum054ADtJM1gGgZtUUwz6nxbtvnCmRK/kKl8Wa3d2UtySYkTAQOtET1WJwlkzzQ4DA==",
+      "requiredDependency": "minimatch",
+      "files": [
+        {
+          "path": "build/auth-utils.js",
+          "originalSha256": "f882a7a82c9eb01227f911844620821a295ab40bc21d60547c77489211fe3e36",
+          "patchedSha256": "37db858da7cb34d1f0607c4feb6fc564ac954f9981cf2aa5be5bcd3db56071ba",
+          "originalBytes": 1472,
+          "patchedBytes": 1591,
+          "replacements": [
+            {
+              "before": "\tfor (const i in packages) if (minimatch.minimatch.makeRe(i, { nocase: true }).exec(pkgName)) return packages[i];",
+              "after": "\tfor (const i in packages) {\n\t\tconst matcher = new minimatch.Minimatch(i, { nocase: true });\n\t\tif (matcher.set.length === 0) throw new TypeError(\"Invalid package pattern: \" + i);\n\t\tif ((!matcher.negate || pkgName !== \"\") && matcher.match(pkgName)) return packages[i];\n\t}",
+              "count": 1
+            },
+            {
+              "before": "//# sourceMappingURL=auth-utils.js.map",
+              "after": "",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "path": "build/auth-utils.mjs",
+          "originalSha256": "f3a72057139f8f89af8dac1158fc655ceba3e49b179c96c88bab9bd61c266bb6",
+          "patchedSha256": "9baec6df3ea808950068c670634947818fb9cfc612e4c8514837637fb37ad301",
+          "originalBytes": 1203,
+          "patchedBytes": 1321,
+          "replacements": [
+            {
+              "before": "import { minimatch } from \"minimatch\";",
+              "after": "import { Minimatch } from \"minimatch\";",
+              "count": 1
+            },
+            {
+              "before": "\tfor (const i in packages) if (minimatch.makeRe(i, { nocase: true }).exec(pkgName)) return packages[i];",
+              "after": "\tfor (const i in packages) {\n\t\tconst matcher = new Minimatch(i, { nocase: true });\n\t\tif (matcher.set.length === 0) throw new TypeError(\"Invalid package pattern: \" + i);\n\t\tif ((!matcher.negate || pkgName !== \"\") && matcher.match(pkgName)) return packages[i];\n\t}",
+              "count": 1
+            },
+            {
+              "before": "//# sourceMappingURL=auth-utils.mjs.map",
+              "after": "",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "fork-ts-checker-webpack-plugin",
+      "version": "9.1.0",
+      "manifestSha256": "394144e70b7bc590d5e35f4052118a6328a8b97e83e9a35ff018fb768008a21a",
+      "tarball": "https://registry.npmjs.org/fork-ts-checker-webpack-plugin/-/fork-ts-checker-webpack-plugin-9.1.0.tgz",
+      "tarballIntegrity": "sha512-mpafl89VFPJmhnJ1ssH+8wmM2b50n+Rew5x42NeI2U78aRWgtkEtGmctp7iT16UjquJTjorEmIfESj3DxdW84Q==",
+      "requiredDependency": "minimatch",
+      "files": [
+        {
+          "path": "lib/issue/issue-match.js",
+          "originalSha256": "7a401e55aab0dc61442112bb0989feec16b7dce81dc2c7f0d3d54b42b640a1ef",
+          "patchedSha256": "3ffef727721eb84b9ebda4b20856ad07be83a63eda375c34114c5c8b9fa911f6",
+          "originalBytes": 1060,
+          "patchedBytes": 1045,
+          "replacements": [
+            {
+              "before": "const minimatch_1 = __importDefault(require(\"minimatch\"));",
+              "after": "const minimatch_1 = require(\"minimatch\");",
+              "count": 1
+            },
+            {
+              "before": "minimatch_1.default",
+              "after": "minimatch_1.minimatch",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "path": "lib/watch/inclusive-node-watch-file-system.js",
+          "originalSha256": "b4c4730824df846ab664ebd929c6fad1ee3e994e3601244d0848618f4e2b249d",
+          "patchedSha256": "10cc42cd6ddd353bee1daccd289eff847f1e8ed561aea82c18118184ae045fdd",
+          "originalBytes": 8954,
+          "patchedBytes": 8939,
+          "replacements": [
+            {
+              "before": "const minimatch_1 = __importDefault(require(\"minimatch\"));",
+              "after": "const minimatch_1 = require(\"minimatch\");",
+              "count": 1
+            },
+            {
+              "before": "minimatch_1.default",
+              "after": "minimatch_1.minimatch",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@rollup/plugin-commonjs",
+      "version": "25.0.8",
+      "manifestSha256": "864251efa7793ddea970e6521ea1dfa1a997fc52cc1e8a9cf67b5affc59494c7",
+      "tarball": "https://registry.npmjs.org/@rollup/plugin-commonjs/-/plugin-commonjs-25.0.8.tgz",
+      "tarballIntegrity": "sha512-ZEZWTK5n6Qde0to4vS9Mr5x/0UZoqCxPVR9KRUjU4kA2sO7GEUn1fop0DAwpO6z0Nw/kJON9bDmSxdWxO/TT1A==",
+      "requiredDependency": "glob",
+      "files": [
+        {
+          "path": "dist/es/index.js",
+          "originalSha256": "64fee0a43d004f39883b3e131dde0fe1dbd4c8d3a40f720e59c0b6634be76fd8",
+          "patchedSha256": "44a89a1b6e131e78cd0e8a8de866b2410bffab612dc4b79cfbba1f0632f1b4a6",
+          "originalBytes": 74480,
+          "patchedBytes": 74451,
+          "replacements": [
+            {
+              "before": "import glob from 'glob';",
+              "after": "import { glob } from 'glob';",
+              "count": 1
+            },
+            {
+              "before": "//# sourceMappingURL=index.js.map",
+              "after": "",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

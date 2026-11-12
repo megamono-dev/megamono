@@ -179,7 +179,7 @@ try {
   await chmod(shim, 0o755);
   const lanes = [
     { name: 'int', nx: '22.7.8', typescript: '5.9.3' },
-    { name: 'js', nx: '23.1.1', typescript: '6.0.3' },
+    { name: 'js', nx: '23.3.1', typescript: '6.0.3' },
   ];
   for (const lane of lanes) {
     lane.root = join(root, lane.name);

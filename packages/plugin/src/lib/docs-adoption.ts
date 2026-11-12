@@ -59,7 +59,8 @@ export function readDocsAdoptionMap(
     for (const child of tree.children(directory)) {
       const path = directory ? `${directory}/${child}` : child;
       if (!tree.isFile(path)) {
-        if (!['.git', '.nx', 'dist', 'node_modules'].includes(child)) visit(path);
+        if (!['.git', '.nx', 'dist', 'node_modules'].includes(child))
+          visit(path);
         continue;
       }
       if (!path.endsWith('.md') || mappedPaths.has(path)) continue;
@@ -84,7 +85,9 @@ export function readDocsAdoptionMap(
       const details = metadata.error.issues
         .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
         .join('; ');
-      throw new Error(`${entry.path} has invalid adoption metadata: ${details}`);
+      throw new Error(
+        `${entry.path} has invalid adoption metadata: ${details}`,
+      );
     }
     if (!expectedId(metadata.data.type, metadata.data.id)) {
       throw new Error(

@@ -4,6 +4,66 @@ import { extensionApplicationGenerator } from './application';
 import { parse } from 'yaml';
 
 describe('extension application generator', () => {
+  it('isolates generated outputs, disables auto-import transforms and separates production/test TypeScript', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    tree.write('.gitignore', '# Repository policy\nprivate/\n');
+    await extensionApplicationGenerator(tree, {
+      name: 'browser',
+      directory: 'products/browser',
+      contentScriptMatches: ['https://example.com/*'],
+      skipInstall: true,
+      skipFormat: true,
+    });
+    expect(tree.read('.gitignore', 'utf8')).toBe(
+      '# Repository policy\nprivate/\n',
+    );
+    expect(tree.read('products/browser/.gitignore', 'utf8')).toBe(
+      '.wxt/\n.output/\n',
+    );
+    expect(readJson(tree, 'products/browser/tsconfig.json')).toMatchObject({
+      extends: './.wxt/tsconfig.json',
+      compilerOptions: { strict: true, jsx: 'react-jsx' },
+      exclude: expect.arrayContaining([
+        '**/*.spec.*',
+        '**/*.test.*',
+        'vitest.config.ts',
+      ]),
+    });
+    expect(readJson(tree, 'products/browser/tsconfig.spec.json')).toMatchObject(
+      {
+        extends: './tsconfig.json',
+        include: expect.arrayContaining(['src/**/*.tsx', '.wxt/wxt.d.ts']),
+        exclude: ['node_modules', '.output'],
+      },
+    );
+    expect(tree.read('products/browser/vitest.config.ts', 'utf8')).toContain(
+      'WxtVitest()',
+    );
+    const wxt = tree.read('products/browser/wxt.config.ts', 'utf8') ?? '';
+    expect(wxt).toContain('imports: false');
+    expect(wxt).toContain("'config:resolved'(wxt)");
+    expect(wxt).toContain(
+      'Object.assign(wxt.config.imports, { autoImport: false })',
+    );
+    expect(
+      tree.read('products/browser/entrypoints/background.ts', 'utf8'),
+    ).toContain("from 'wxt/utils/define-background'");
+    expect(
+      tree.read('products/browser/entrypoints/content.ts', 'utf8'),
+    ).toContain("from 'wxt/utils/define-content-script'");
+    expect(
+      readJson(tree, 'products/browser/package.json').dependencies,
+    ).toBeUndefined();
+    const before = tree.listChanges();
+    await extensionApplicationGenerator(tree, {
+      name: 'browser',
+      directory: 'products/browser',
+      contentScriptMatches: ['https://example.com/*'],
+      skipInstall: true,
+      skipFormat: true,
+    });
+    expect(tree.listChanges()).toEqual(before);
+  });
   it('registers the app under packages while preserving trailing pnpm policies', async () => {
     const tree = createTreeWithEmptyWorkspace();
     tree.write(

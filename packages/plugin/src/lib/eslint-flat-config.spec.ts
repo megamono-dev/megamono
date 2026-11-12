@@ -2,6 +2,8 @@ import ts = require('typescript');
 import {
   appendEslintFlatConfig,
   locateEslintFlatConfig,
+  wrapEslintBoundaryAllowances,
+  hasBoundaryAllowanceEslintActivation,
 } from './eslint-flat-config';
 
 describe('syntax-aware ESLint flat config editing', () => {
@@ -70,4 +72,62 @@ describe('syntax-aware ESLint flat config editing', () => {
       expect(appendEslintFlatConfig(source, 'added,')).toBeUndefined();
     },
   );
+});
+
+describe('canonical v2 boundary policy wrapper', () => {
+  const imports =
+    "import megamonoPlugin from '@megamono/plugin/eslint';\nimport megamonoConfig from './megamono.json' with { type: 'json' };\n";
+  it('wraps exactly once while preserving comments and consumer rule order', () => {
+    const source =
+      imports +
+      'export default [\n  megamonoPlugin.createConfig(megamonoConfig),\n  consumerConfig // keep\n];\n';
+    const result = wrapEslintBoundaryAllowances(source);
+    expect(result).toBeDefined();
+    expect(result).toContain('withBoundaryAllowances(megamonoConfig, [');
+    expect(result).toContain('consumerConfig // keep\n]);');
+    expect(hasBoundaryAllowanceEslintActivation(result ?? '')).toBe(true);
+    expect(wrapEslintBoundaryAllowances(result ?? '')).toBe(result);
+    expect(appendEslintFlatConfig(result ?? '', '  nextConfig,')).toContain(
+      'consumerConfig, // keep\n  nextConfig,\n]);',
+    );
+  });
+  it.each([
+    'export default fake.withBoundaryAllowances(megamonoConfig, []);',
+    'export default megamonoPlugin.withBoundaryAllowances(otherConfig, []);',
+    'export default megamonoPlugin.withBoundaryAllowances(megamonoConfig, factory());',
+    'export default megamonoPlugin.withBoundaryAllowances(megamonoConfig, megamonoPlugin.withBoundaryAllowances(megamonoConfig, []));',
+  ])(
+    'refuses unsupported wrappers without inventing an activation: %s',
+    (source) => {
+      expect(locateEslintFlatConfig(source)).toBeUndefined();
+      expect(wrapEslintBoundaryAllowances(source)).toBeUndefined();
+      expect(hasBoundaryAllowanceEslintActivation(source)).toBe(false);
+    },
+  );
+  it('requires canonical imports and a real createConfig call', () => {
+    const array =
+      'export default megamonoPlugin.withBoundaryAllowances(megamonoConfig, [megamonoPlugin.createConfig(megamonoConfig)]);';
+    expect(hasBoundaryAllowanceEslintActivation(array)).toBe(false);
+    expect(
+      hasBoundaryAllowanceEslintActivation(
+        imports.replace('@megamono/plugin/eslint', 'other-plugin') + array,
+      ),
+    ).toBe(false);
+    expect(
+      hasBoundaryAllowanceEslintActivation(
+        imports +
+          array.replace(
+            'megamonoPlugin.createConfig(megamonoConfig)',
+            '/* megamonoPlugin.createConfig(megamonoConfig) */',
+          ),
+      ),
+    ).toBe(false);
+    expect(hasBoundaryAllowanceEslintActivation(imports + array)).toBe(true);
+    expect(
+      hasBoundaryAllowanceEslintActivation(
+        imports +
+          'const unused = megamonoPlugin.createConfig(megamonoConfig); export default megamonoPlugin.withBoundaryAllowances(megamonoConfig, []);',
+      ),
+    ).toBe(false);
+  });
 });

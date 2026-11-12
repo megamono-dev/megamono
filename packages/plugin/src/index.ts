@@ -6,6 +6,8 @@ export {
 export type { AppGeneratorSchema, AppType } from './generators/app/schema';
 export { libraryGenerator } from './generators/library/library';
 export type { LibraryGeneratorSchema } from './generators/library/schema';
+export { adoptionPolicyGenerator } from './generators/adoption-policy/adoption-policy';
+export type { AdoptionPolicyGeneratorSchema } from './generators/adoption-policy/schema';
 export {
   DatabaseGeneratorError,
   databaseGenerator,
@@ -162,6 +164,7 @@ export {
   DATABASE_ADAPTERS,
   DEFAULT_MEGAMONO_CONFIG,
   MEGAMONO_CONFIG_VERSION,
+  SUPPORTED_MEGAMONO_CONFIG_VERSIONS,
   assertSupportedMegamonoConfigVersion,
   getTopicVocabulary,
   isSafeWorkspaceRelativePath,
@@ -215,7 +218,26 @@ export {
   type RepositoryArchitecture,
   type RepositoryDocumentType,
 } from './lib/docs';
-export { checkWorkspaceStructure } from './lib/structural-check';
+export {
+  checkWorkspaceStructure,
+  analyzeWorkspaceStructure,
+} from './lib/structural-check';
+export {
+  BOUNDARY_CONSTRAINTS,
+  DEPENDENCY_KINDS,
+  classifyDependency,
+  dependencyIdentityKey,
+  dependencyFindingIdentitySchema,
+  type BoundaryAllowance,
+  type DependencyClassification,
+  type DependencyFindingIdentity,
+  type WarningBaseline,
+  type WarningBaselineEntry,
+} from './lib/dependency-policy-contract';
+export {
+  evaluateIdentityBaseline,
+  type IdentityBaselineResult,
+} from './lib/identity-baseline';
 export {
   HEALTH_CHECKS,
   collectHealthGitState,
@@ -306,3 +328,13 @@ export {
   type ManagedSkillTemplate,
 } from './lib/managed-skills';
 export { megamonoEslintPlugin } from './eslint/plugin';
+export {
+  checkExtensionRuntimeBoundary,
+  extensionRuntimeEntriesSchema,
+} from './lib/extension-runtime';
+export type { ExtensionRuntimeReport } from './lib/structural-check';
+export {
+  inspectWorkspaceDependencies,
+  type WorkspaceDependencyInspection,
+  type SingletonInspection,
+} from './lib/workspace-dependency-health';

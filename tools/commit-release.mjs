@@ -22,7 +22,7 @@ const directories = [
 ];
 const allowed = new Set([
   'package.json',
-  'package-lock.json',
+  'pnpm-lock.yaml',
   ...compatibilityFiles,
   ...directories.map((name) => `packages/${name}/package.json`),
 ]);

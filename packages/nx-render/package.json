@@ -1,18 +1,22 @@
 {
   "name": "@megamono/nx-render",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "license": "MIT",
-  "description": "Nx plugin for Render Blueprint inference, service targets, and configuration validation.",
+  "description": "Nx plugin for Render Blueprints: map services to projects, run service commands, validate configuration, and propose Blueprint adoption.",
   "keywords": [
     "megamono",
     "nx",
     "nx-plugin",
+    "monorepo",
     "render",
+    "render-com",
     "blueprint",
-    "deployment"
+    "render-blueprint",
+    "deployment",
+    "infrastructure-as-code"
   ],
   "author": "Ryan Hefner",
-  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/nx-render#readme",
+  "homepage": "https://megamono.com/docs/platforms/render",
   "bugs": {
     "url": "https://github.com/megamono-dev/megamono/issues"
   },
@@ -72,12 +76,12 @@
     ]
   },
   "dependencies": {
-    "tslib": "^2.3.0",
-    "yaml": "2.9.0"
+    "tslib": "^2.8.1",
+    "yaml": "2.9.1"
   },
   "peerDependencies": {
-    "@nx/devkit": ">=18 <24",
-    "nx": ">=18 <24"
+    "@nx/devkit": ">=18 <25",
+    "nx": ">=18 <25"
   },
   "engines": {
     "node": ">=18.18 <25",

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-04T21:27:21.026471+00:00",
+  "scope": "Megamono authoring-workspace pnpm migration; no package publication, push, deployment or production admission.",
+  "packageManager": "pnpm@11.28.9",
+  "node": "24.22.1",
+  "dependencyGraph": {
+    "recordedAt": "2026-11-04T21:20:55.329Z",
+    "npmLockSha256": "6130f59177ad5f2caad3e57151f9cc3b7fd65081cb1a96ac7c3f38186f97d3c0",
+    "pnpmLockSha256": "db484fb6cf9474d7bb3c1a9cf085a8f77a486b43b87b6052de6e11d2752e93b6",
+    "publicArtifactCount": 1648,
+    "added": [],
+    "removed": [],
+    "changedIntegrity": []
+  },
+  "install": {
+    "frozenLockfile": true,
+    "freshNormalInstall": true,
+    "lifecycleApproval": "Exact-version allowBuilds retained from prior npm approvals",
+    "automaticPostinstall": "Magicast externalization and 8 reviewed minimatch compatibility patches applied",
+    "missingPeers": 0
+  },
+  "checks": {
+    "buildProjects": 10,
+    "toolingTestsPassed": 57,
+    "releaseTestsPassed": 28,
+    "cliTestsPassed": 148,
+    "pluginTestsPassed": 873,
+    "pluginExistingSkippedTests": 1,
+    "bootstrapTestsPassed": 102,
+    "otherPackageLintAndTests": "Passed in full pnpm run; original CLI failures corrected and all 148 CLI tests rerun",
+    "governance": "passed",
+    "documentation": "passed"
+  },
+  "audit": {
+    "command": "pnpm audit --audit-level=low --json --registry=https://registry.npmjs.org",
+    "exitCode": 1,
+    "rawReportSha256": "1609c97a1f3f91102374471f5c25b99322cbea4b1e1d2c5ef64169f9a0766aa2",
+    "reportedCounts": {
+      "info": 0,
+      "low": 1,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0
+    },
+    "underlyingAdvisories": ["GHSA-gcqx-w48m-w2h4"],
+    "admissionPassed": false,
+    "exceptionAdded": false,
+    "note": "pnpm reports advisories; prior npm audit counted affected package entries. The same deepmerge advisory remains blocked."
+  },
+  "intentionalNpmUsage": [
+    "Public npm registry operations and tarball inventory",
+    "Isolated npm consumer compatibility fixtures",
+    "Global CLI artifact installation preserving exact sibling and optional-peer resolution"
+  ],
+  "otherRepositories": {
+    "megamono-int": "Already pnpm@11.28.9; no migration needed",
+    "flightpaths-js": "Already pnpm@11.24.0; no migration needed"
+  },
+  "limitations": [
+    "Hosted GitHub workflows have not run on these commits",
+    "This migration does not apply Megamono repository-local tooling patches to Flightpaths",
+    "Historical npm audit and qualification evidence is retained unchanged"
+  ]
+}

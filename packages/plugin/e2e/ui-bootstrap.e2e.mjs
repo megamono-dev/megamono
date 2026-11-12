@@ -250,7 +250,10 @@ try {
     );
     // Recipes install at the workspace root. Reuse the generated theme's peers
     // there, instead of letting npm introduce a second Chakra context version.
-    manifest.dependencies = { ...manifest.dependencies, ...theme.dependencies };
+    manifest.dependencies = {
+      ...manifest.dependencies,
+      ...theme.peerDependencies,
+    };
     const selectedManifest = pinManifest(manifest, lane.versions, true);
     await put(rootFile, selectedManifest);
     await put(join(reportRoot, 'selected-package.json'), selectedManifest);

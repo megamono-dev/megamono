@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "MegamonoAuditProduction",
+  "title": "Audit one project's production dependencies",
+  "description": "List the project's production dependency closure with pnpm (including workspace packages it depends on) and check only those package versions against the registry's security advisories. Root and sibling-project dependencies are not reported.",
+  "type": "object",
+  "properties": {
+    "auditLevel": {
+      "type": "string",
+      "enum": ["low", "moderate", "high", "critical"],
+      "default": "low",
+      "description": "Fail when an advisory at or above this severity affects an installed production version."
+    },
+    "registry": {
+      "type": "string",
+      "default": "https://registry.npmjs.org",
+      "description": "Registry that serves the npm bulk security advisory endpoint."
+    }
+  },
+  "additionalProperties": false
+}

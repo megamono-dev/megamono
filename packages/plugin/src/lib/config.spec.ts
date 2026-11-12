@@ -269,10 +269,10 @@ describe('Megamono configuration', () => {
     try {
       await writeFile(
         join(root, 'megamono.json'),
-        JSON.stringify({ ...DEFAULT_MEGAMONO_CONFIG, version: 2 }),
+        JSON.stringify({ ...DEFAULT_MEGAMONO_CONFIG, version: 3 }),
       );
       await expect(readMegamonoConfig(root)).rejects.toThrow(
-        /Unsupported Megamono configuration version 2.*supports version 1.*documented configuration migration/s,
+        /Unsupported Megamono configuration version 3.*supports versions 1 and 2.*documented configuration migration/s,
       );
     } finally {
       await rm(root, { recursive: true, force: true });

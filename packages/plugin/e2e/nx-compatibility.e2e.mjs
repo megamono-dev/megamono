@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 const workspaceRoot = resolve(
   fileURLToPath(new URL('../../..', import.meta.url)),
 );
-const nxVersion = process.env.MEGAMONO_NX_VERSION ?? '23.1.1';
+const nxVersion = process.env.MEGAMONO_NX_VERSION ?? '23.3.1';
 const typescriptVersion = process.env.MEGAMONO_TYPESCRIPT_VERSION ?? '6.0.3';
 const future = process.env.MEGAMONO_FUTURE_NX === 'true';
 const nxMatch = nxVersion.match(/(\d+)\.(\d+)/);

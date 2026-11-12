@@ -48,7 +48,187 @@ function graph(
   };
 }
 
+function orchestrationGraph(
+  types: readonly string[] = ['implicit'],
+  source = 'browser-e2e',
+  target = 'browser',
+): ProjectGraph {
+  return {
+    nodes: {
+      [source]: {
+        name: source,
+        type: 'app',
+        data: {
+          root: 'apps/browser-e2e',
+          tags: [
+            'type:app',
+            'scope:product',
+            'platform:node',
+            'visibility:internal',
+            'role:e2e',
+          ],
+        },
+      },
+      [target]: {
+        name: target,
+        type: 'app',
+        data: {
+          root: 'apps/browser',
+          tags: [
+            'type:app',
+            'scope:product',
+            'platform:web',
+            'visibility:public',
+          ],
+        },
+      },
+    },
+    dependencies: {
+      [source]: types.map((type) => ({ source, target, type })),
+      [target]: [],
+    },
+  };
+}
+
 describe('workspace structural checks', () => {
+  describe('test orchestration', () => {
+    let root: string;
+    beforeEach(async () => {
+      root = await mkdtemp(join(tmpdir(), 'megamono-e2e-boundary-'));
+    });
+    afterEach(async () => {
+      await rm(root, { recursive: true, force: true });
+    });
+    const check = (fixture: ProjectGraph) =>
+      checkWorkspaceStructure(root, fixture, DEFAULT_MEGAMONO_CONFIG);
+
+    it.each(['role:e2e', 'e2e project kind'])(
+      'allows implicit Node-hosted tests of a web app identified by %s',
+      async (identification) => {
+        const fixture = orchestrationGraph();
+        if (identification === 'e2e project kind') {
+          fixture.nodes['browser-e2e'].type = 'e2e';
+          fixture.nodes['browser-e2e'].data.tags = fixture.nodes[
+            'browser-e2e'
+          ].data.tags?.filter((tag) => tag !== 'role:e2e');
+        }
+        expect(await check(fixture)).toEqual([]);
+      },
+    );
+
+    it.each(['static', 'dynamic'])(
+      'still rejects a %s import from the e2e project into the app',
+      async (type) => {
+        expect(await check(orchestrationGraph([type]))).toEqual([
+          expect.objectContaining({
+            severity: 'error',
+            code: 'platform-boundary',
+            path: 'browser-e2e',
+          }),
+        ]);
+      },
+    );
+
+    it.each([
+      ['implicit', 'static'],
+      ['static', 'implicit'],
+      ['implicit', 'dynamic'],
+      ['dynamic', 'implicit'],
+    ])(
+      'does not conceal a prohibited import when edges are %s then %s',
+      async (...types) => {
+        expect(await check(orchestrationGraph(types))).toEqual([
+          expect.objectContaining({ code: 'platform-boundary' }),
+        ]);
+      },
+    );
+
+    it('rejects an ordinary Node project even when its name ends in e2e', async () => {
+      const fixture = orchestrationGraph();
+      fixture.nodes['browser-e2e'].data.tags = fixture.nodes[
+        'browser-e2e'
+      ].data.tags?.filter((tag) => tag !== 'role:e2e');
+      expect(await check(fixture)).toEqual([
+        expect.objectContaining({ code: 'platform-boundary' }),
+      ]);
+    });
+
+    it.each(['library', 'another e2e project'])(
+      'does not exempt an implicit dependency on %s',
+      async (target) => {
+        const fixture = orchestrationGraph();
+        if (target === 'library') {
+          fixture.nodes.browser.type = 'lib';
+          fixture.nodes.browser.data.tags = [
+            'type:util',
+            'scope:product',
+            'platform:web',
+          ];
+        } else fixture.nodes.browser.data.tags?.push('role:e2e');
+        expect(await check(fixture)).toEqual([
+          expect.objectContaining({ code: 'platform-boundary' }),
+        ]);
+      },
+    );
+
+    it.each(['implicit', 'static', 'dynamic'])(
+      'still rejects production browser to Node dependencies (%s)',
+      async (type) => {
+        const fixture = orchestrationGraph([type]);
+        fixture.nodes['browser-e2e'].data.tags = [
+          'type:app',
+          'scope:product',
+          'platform:web',
+          'visibility:public',
+        ];
+        fixture.nodes.browser.data.tags = [
+          'type:app',
+          'scope:product',
+          'platform:node',
+          'visibility:internal',
+        ];
+        expect(await check(fixture)).toEqual([
+          expect.objectContaining({ code: 'platform-boundary' }),
+        ]);
+      },
+    );
+
+    it('retains scope and type constraints on orchestration edges', async () => {
+      const fixture = orchestrationGraph();
+      fixture.nodes['browser-e2e'].type = 'lib';
+      fixture.nodes['browser-e2e'].data.tags = [
+        'type:util',
+        'scope:product',
+        'platform:node',
+        'role:e2e',
+      ];
+      fixture.nodes.browser.data.tags = [
+        'type:app',
+        'scope:other',
+        'platform:web',
+        'visibility:public',
+      ];
+      expect(await check(fixture)).toEqual([
+        expect.objectContaining({
+          code: 'module-boundaries',
+          message: expect.stringContaining('(product)'),
+        }),
+        expect.objectContaining({
+          code: 'module-boundaries',
+          message: expect.stringContaining('type:util'),
+        }),
+      ]);
+    });
+
+    it('retains Playstack dependency direction on orchestration edges', async () => {
+      expect(
+        await check(
+          orchestrationGraph(['implicit'], '@playstack/tests', '@megamono/app'),
+        ),
+      ).toEqual([expect.objectContaining({ code: 'playstack-direction' })]);
+    });
+  });
+
   it('allows aggregate native/frontend/tooling edges only for a manifest-backed Tauri app', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-tauri-check-'));
     try {

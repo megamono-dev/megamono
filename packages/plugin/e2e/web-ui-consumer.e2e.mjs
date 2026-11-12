@@ -220,7 +220,7 @@ try {
     ...manifest.dependencies,
     // Reuse the scaffold's provider versions for root-installed UI peers.
     // Two Chakra copies create distinct contexts even with matching peer majors.
-    ...themeManifest.dependencies,
+    ...themeManifest.peerDependencies,
     ...Object.fromEntries(
       [...closure.keys()].map((name) => [name, `file:.yalc/${name}`]),
     ),
@@ -234,8 +234,10 @@ try {
     'Generated Playwright dependency is required.',
   );
   await put(join(consumer, 'package.json'), manifest);
-  themeManifest.dependencies['@playstack/chakra'] =
-    'file:../../.yalc/@playstack/chakra';
+  themeManifest.dependencies = {
+    ...themeManifest.dependencies,
+    '@playstack/chakra': 'file:../../.yalc/@playstack/chakra',
+  };
   await put(themeManifestPath, themeManifest);
   for (const router of ['app', 'pages']) {
     const path = join(consumer, 'apps', router, 'package.json');

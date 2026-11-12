@@ -1,10 +1,13 @@
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import {
   compatibility,
   configurePublishablePackages,
+  CREATION_STATE_FILE,
   CreateMegamonoError,
+  createMegamono,
   createPlan,
   executePlan,
   normalizeCreateOptions,
@@ -136,6 +139,40 @@ describe('normalizeCreateOptions', () => {
       ...manifest,
       publishConfig: { provenance: true, access: 'restricted' },
     });
+  });
+
+  it('extends app-scoped lint inference to generated packages', async () => {
+    const root = await fixture();
+    const plan = createPlan(
+      options(root, { apps: ['site'], packages: ['core'] }),
+    );
+    const packageRoot = resolve(plan.options.stagingDirectory, 'packages/core');
+    await mkdir(packageRoot, { recursive: true });
+    await writeFile(
+      resolve(plan.options.stagingDirectory, 'package.json'),
+      '{}',
+    );
+    const scoped = {
+      plugin: '@nx/eslint/plugin',
+      options: { targetName: 'lint' },
+      include: ['apps/site/**/*'],
+    };
+    await writeFile(
+      resolve(plan.options.stagingDirectory, 'nx.json'),
+      JSON.stringify({ plugins: [scoped] }),
+    );
+    await writeFile(
+      resolve(packageRoot, 'package.json'),
+      JSON.stringify({ name: '@acme-tools/core' }),
+    );
+    await configurePublishablePackages(plan);
+    const nx = JSON.parse(
+      await readFile(resolve(plan.options.stagingDirectory, 'nx.json'), 'utf8'),
+    );
+    expect(nx.plugins).toEqual([
+      scoped,
+      { ...scoped, include: ['packages/core/**/*'] },
+    ]);
   });
   it('normalizes the scope and applies stable defaults', () => {
     const normalized = options('/workspace');
@@ -394,7 +431,7 @@ describe('createPlan', () => {
           command: 'pnpm',
           args: expect.arrayContaining([
             'dlx',
-            'create-nx-workspace@23.1.1',
+            'create-nx-workspace@23.2.1',
             '--packageManager=pnpm',
           ]),
         }),
@@ -405,9 +442,9 @@ describe('createPlan', () => {
             'add',
             '--save-dev',
             '--save-exact',
-            '@nx/eslint@23.1.1',
-            '@nx/next@23.1.1',
-            '@nx/playwright@23.1.1',
+            '@nx/eslint@23.2.1',
+            '@nx/next@23.2.1',
+            '@nx/playwright@23.2.1',
           ]),
         }),
         expect.objectContaining({
@@ -448,8 +485,8 @@ describe('createPlan', () => {
   });
 
   it.each([
-    ['yarn', 'yarn', 'create', 'nx-workspace@23.1.1', 'add', ['nx']],
-    ['bun', 'bun', 'x', 'create-nx-workspace@23.1.1', 'add', ['x', 'nx']],
+    ['yarn', 'yarn', 'create', 'nx-workspace@23.2.1', 'add', ['nx']],
+    ['bun', 'bun', 'x', 'create-nx-workspace@23.2.1', 'add', ['x', 'nx']],
   ] as const)(
     'uses %s consistently across bootstrap, install, and Nx delegation',
     (manager, command, scaffoldVerb, scaffoldPackage, addVerb, nxParts) => {
@@ -498,9 +535,11 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
+      'validate-bootstrap-toolchain',
       'generate-site',
       'generate-web',
       'initialize-megamono',
+      'configure-workspace-identity',
       'sync-workspace',
       'format',
       'validate-docs',
@@ -511,13 +550,13 @@ describe('createPlan', () => {
       'verify-acme-tools-web-e2e',
       'commit-workspace',
     ]);
-    expect(rendered).toContain('create-nx-workspace@23.1.1');
+    expect(rendered).toContain('create-nx-workspace@23.2.1');
     expect(rendered).toContain(
       `@megamono/plugin@${compatibility.scaffoldPackages['@megamono/plugin']}`,
     );
-    expect(rendered).toContain('@nx/next@23.1.1');
-    expect(rendered).toContain('@nx/eslint@23.1.1');
-    expect(rendered).toContain('@nx/playwright@23.1.1');
+    expect(rendered).toContain('@nx/next@23.2.1');
+    expect(rendered).toContain('@nx/eslint@23.2.1');
+    expect(rendered).toContain('@nx/playwright@23.2.1');
     expect(rendered).toContain('@playwright/test@1.64.1');
     expect(rendered).toContain('@megamono/plugin:app');
     expect(rendered).toContain('--type=site');
@@ -544,20 +583,20 @@ describe('createPlan', () => {
       createPlan(options('/workspace', { apps: ['api'], verify: 'build' })),
     );
 
-    expect(rendered).toContain('@nx/eslint@23.1.1');
-    expect(rendered).toContain('@nx/jest@23.1.1');
-    expect(rendered).toContain('@swc/jest@0.2.38');
+    expect(rendered).toContain('@nx/eslint@23.2.1');
+    expect(rendered).toContain('@nx/jest@23.2.1');
+    expect(rendered).toContain('@swc/jest@0.2.39');
     expect(rendered).toContain('@types/jest@30.0.0');
-    expect(rendered).toContain('jest@30.3.0');
-    expect(rendered).toContain('jest-environment-node@30.3.0');
-    expect(rendered).toContain('jest-util@30.3.0');
-    expect(rendered).toContain('ts-jest@29.4.7');
+    expect(rendered).toContain('jest@30.5.2');
+    expect(rendered).toContain('jest-environment-node@30.5.2');
+    expect(rendered).toContain('jest-util@30.5.1');
+    expect(rendered).toContain('ts-jest@29.4.15');
     expect(rendered).toContain('@megamono/plugin:app');
     expect(rendered).toContain('--type=api');
     expect(rendered).toContain('--name=api');
     expect(rendered).toContain('--scope=acme-tools');
     expect(rendered).toContain('--port=43016');
-    expect(rendered).toContain('ts-node@10.9.1');
+    expect(rendered).toContain('ts-node@10.9.2');
     expect(rendered).toContain('acme-tools-api-e2e:e2e');
   });
 
@@ -585,8 +624,10 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
+      'validate-bootstrap-toolchain',
       'generate-desktop',
       'initialize-megamono',
+      'configure-workspace-identity',
       'commit-workspace',
     ]);
     const rendered = renderPlan(plan);
@@ -608,8 +649,10 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
+      'validate-bootstrap-toolchain',
       'generate-apple',
       'initialize-megamono',
+      'configure-workspace-identity',
       'sync-workspace',
       'format',
       'validate-docs',
@@ -665,8 +708,10 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
+      'validate-bootstrap-toolchain',
       'generate-worker',
       'initialize-megamono',
+      'configure-workspace-identity',
       'sync-workspace',
       'format',
       'validate-docs',
@@ -679,7 +724,7 @@ describe('createPlan', () => {
     expect(rendered).toContain(
       `@megamono/nx-cloudflare@${compatibility.scaffoldPackages['@megamono/nx-cloudflare']}`,
     );
-    expect(rendered).toContain('wrangler@4.125.0');
+    expect(rendered).toContain('wrangler@4.153.0');
     expect(rendered).toContain('@megamono/plugin:app');
     expect(rendered).toContain('--type=worker');
     expect(rendered).toContain('--scope=acme-tools');
@@ -697,10 +742,12 @@ describe('createPlan', () => {
       'create-nx-workspace',
       'configure-package-manager',
       'install-plugins',
+      'validate-bootstrap-toolchain',
       'generate-desktop',
       'generate-mobile',
       'generate-worker',
       'initialize-megamono',
+      'configure-workspace-identity',
       'commit-workspace',
     ]);
     expect(renderPlan(plan)).toContain('--platforms=mobile,rust,worker');
@@ -742,7 +789,7 @@ describe('createPlan', () => {
         '--save-dev',
         '--save-exact',
         'typescript@6.0.3',
-        'wrangler@4.125.0',
+        'wrangler@4.153.0',
       ]),
     });
     expect(registryInstall).not.toEqual(
@@ -786,6 +833,184 @@ describe('createPlan', () => {
 });
 
 describe('executePlan', () => {
+  it('retains org/source when org is the explicitly selected workspace scope', async () => {
+    const cwd = await fixture();
+    const plan = createPlan(
+      options(cwd, { name: 'Org', apps: [], verify: 'none' }),
+    );
+    let initialized = false;
+    await executePlan(plan, async () => {
+      if (initialized) return;
+      initialized = true;
+      await mkdir(plan.options.stagingDirectory);
+      await writeFile(
+        resolve(plan.options.stagingDirectory, 'package.json'),
+        JSON.stringify({
+          name: '@org/source',
+          exports: { '.': { '@org/source': './src/index.ts' } },
+        }),
+      );
+    });
+    const manifest = JSON.parse(
+      await readFile(resolve(plan.options.destination, 'package.json'), 'utf8'),
+    );
+    expect(manifest.name).toBe('@org/source');
+    expect(manifest.exports['.']).toEqual({ '@org/source': './src/index.ts' });
+  });
+
+  it('pins the bootstrap toolchain and normalizes only generated identity fields', async () => {
+    const cwd = await fixture();
+    const plan = createPlan(options(cwd, { apps: [], verify: 'none' }));
+    let initialized = false;
+    const runner: CommandRunner = async ({
+      command,
+      args,
+      cwd: commandCwd,
+    }) => {
+      if (!initialized) {
+        initialized = true;
+        await mkdir(resolve(plan.options.stagingDirectory, 'node_modules/nx'), {
+          recursive: true,
+        });
+        await mkdir(
+          resolve(plan.options.stagingDirectory, 'node_modules/@nx/js'),
+          { recursive: true },
+        );
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'package.json'),
+          JSON.stringify({
+            name: '@org/source',
+            description: 'Keep @org/source in ordinary text',
+            engines: { npm: '>=11' },
+            devDependencies: { nx: '24.0.0', '@nx/js': '24.0.0' },
+            exports: {
+              '.': {
+                '@org/source': './src/index.ts',
+                default: './dist/index.js',
+              },
+            },
+          }),
+        );
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'tsconfig.base.json'),
+          '{\n // Preserve generated JSONC comments\n "compilerOptions": {"customConditions": [/* keep "@org/source" and ] */ "@org/source", "development"], "paths": {"@org/source": ["keep.ts"]}}\n}\n',
+        );
+        await writeFile(
+          resolve(
+            plan.options.stagingDirectory,
+            'node_modules/nx/package.json',
+          ),
+          JSON.stringify({ version: compatibility.scaffoldPackages.nx }),
+        );
+        await writeFile(
+          resolve(
+            plan.options.stagingDirectory,
+            'node_modules/@nx/js/package.json',
+          ),
+          JSON.stringify({ version: compatibility.scaffoldPackages.nx }),
+        );
+      } else if (command === 'node') {
+        const manifest = JSON.parse(
+          await readFile(resolve(commandCwd, 'package.json'), 'utf8'),
+        );
+        expect(manifest.devDependencies).toEqual({
+          nx: '23.2.1',
+          '@nx/js': '23.2.1',
+        });
+        execFileSync(command, [...args], { cwd: commandCwd });
+      } else if (args.includes('@megamono/plugin:workspace-init')) {
+        await mkdir(resolve(commandCwd, 'libs/later'), { recursive: true });
+        await writeFile(
+          resolve(commandCwd, 'libs/later/package.json'),
+          JSON.stringify({
+            name: '@acme/later',
+            exports: {
+              '.': {
+                '@org/source': './src/index.ts',
+                default: './dist/index.js',
+              },
+            },
+          }),
+        );
+      }
+    };
+    await executePlan(plan, runner);
+    const manifest = JSON.parse(
+      await readFile(resolve(plan.options.destination, 'package.json'), 'utf8'),
+    );
+    expect(manifest).toMatchObject({
+      name: '@acme-tools/source',
+      description: 'Keep @org/source in ordinary text',
+      engines: { npm: '>=11', node: '>=24 <25' },
+      exports: {
+        '.': {
+          '@acme-tools/source': './src/index.ts',
+          default: './dist/index.js',
+        },
+      },
+    });
+    expect(
+      await readFile(resolve(plan.options.destination, '.nvmrc'), 'utf8'),
+    ).toBe('24.22.1\n');
+    const config = await readFile(
+      resolve(plan.options.destination, 'tsconfig.base.json'),
+      'utf8',
+    );
+    expect(config).toContain('// Preserve generated JSONC comments');
+    expect(config).toContain(
+      '"customConditions": [/* keep "@org/source" and ] */ "@acme-tools/source", "development"]',
+    );
+    expect(config).toContain('"paths": {"@org/source": ["keep.ts"]}');
+    const generated = JSON.parse(
+      await readFile(
+        resolve(plan.options.destination, 'libs/later/package.json'),
+        'utf8',
+      ),
+    );
+    expect(generated.exports['.']).toEqual({
+      '@acme-tools/source': './src/index.ts',
+      default: './dist/index.js',
+    });
+  });
+
+  it('fails before any app generator when the installed Nx ignores the exact pin', async () => {
+    const cwd = await fixture();
+    const plan = createPlan(options(cwd, { apps: ['api'], verify: 'none' }));
+    let initialized = false;
+    const generated: string[] = [];
+    await expect(
+      executePlan(plan, async ({ command, args, cwd: commandCwd }) => {
+        if (!initialized) {
+          initialized = true;
+          await mkdir(
+            resolve(plan.options.stagingDirectory, 'node_modules/nx'),
+            { recursive: true },
+          );
+          await writeFile(
+            resolve(plan.options.stagingDirectory, 'package.json'),
+            '{}',
+          );
+          await writeFile(
+            resolve(
+              plan.options.stagingDirectory,
+              'node_modules/nx/package.json',
+            ),
+            '{"version":"24.0.0"}',
+          );
+        }
+        if (command === 'node')
+          execFileSync(command, [...args], { cwd: commandCwd, stdio: 'pipe' });
+        if (args.includes('@megamono/plugin:app')) generated.push('app');
+      }),
+    ).rejects.toThrow(
+      'Bootstrap toolchain mismatch: nx@24.0.0; expected 23.2.1',
+    );
+    expect(generated).toEqual([]);
+    expect(await readRecovery(plan.options.stagingDirectory)).toContain(
+      'install-plugins',
+    );
+  });
+
   it('does not create staging or destination during a dry run', async () => {
     const cwd = await fixture();
     const plan = createPlan(options(cwd, { dryRun: true }));
@@ -841,7 +1066,7 @@ describe('executePlan', () => {
           'utf8',
         ),
       ),
-    ).toMatchObject({ private: true, packageManager: 'npm@11.17.0' });
+    ).toMatchObject({ private: true, packageManager: 'npm@11.21.1' });
     await expect(
       readFile(resolve(plan.options.destination, 'package-lock.json'), 'utf8'),
     ).resolves.toBe('{}');
@@ -924,16 +1149,17 @@ describe('executePlan', () => {
     await executePlan(plan, runner, undefined, async () => store);
 
     expect(invocations.slice(0, 4)).toEqual([
-      expect.stringContaining('create-nx-workspace@23.1.1'),
+      expect.stringContaining('create-nx-workspace@23.2.1'),
       expect.stringContaining(
-        'npm install --save-dev --save-exact @nx/eslint@23.1.1 @nx/jest@23.1.1 @nx/nest@23.1.1',
+        'npm install --save-dev --save-exact @nx/eslint@23.2.1 @nx/jest@23.2.1 @nx/nest@23.2.1',
       ),
       `yalc add @megamono/plugin@${compatibility.scaffoldPackages['@megamono/plugin']} --dev --no-pure`,
       'npm install',
     ]);
-    expect(invocations[4]).toContain('@megamono/plugin:app');
-    expect(invocations[4]).toContain('--type=api');
-    expect(invocations[5]).toContain('@megamono/plugin:workspace-init');
+    expect(invocations[4]).toContain('Bootstrap toolchain mismatch');
+    expect(invocations[5]).toContain('@megamono/plugin:app');
+    expect(invocations[5]).toContain('--type=api');
+    expect(invocations[6]).toContain('@megamono/plugin:workspace-init');
     expect(
       JSON.parse(
         await readFile(
@@ -941,7 +1167,11 @@ describe('executePlan', () => {
           'utf8',
         ),
       ),
-    ).toEqual({ packageManager: 'npm@11.17.0' });
+    ).toMatchObject({
+      packageManager: 'npm@11.21.1',
+      name: '@acme-tools/source',
+      engines: { node: '>=24 <25' },
+    });
   });
 
   it.each(['prisma', 'drizzle', 'none'])(
@@ -988,6 +1218,64 @@ describe('executePlan', () => {
     },
   );
 
+  it('drops pre-approved builds the final lockfile does not install', async () => {
+    const cwd = await fixture();
+    const plan = createPlan(
+      options(cwd, { apps: ['site'], packageManager: 'pnpm', verify: 'none' }),
+    );
+    expect(plan.steps.map((step) => step.id).slice(-2)).toEqual([
+      'prune-build-approvals',
+      'commit-workspace',
+    ]);
+    let first = true;
+    const runner: CommandRunner = async () => {
+      if (!first) return;
+      first = false;
+      await mkdir(plan.options.stagingDirectory);
+      await writeFile(
+        resolve(plan.options.stagingDirectory, 'package.json'),
+        '{}',
+      );
+      await writeFile(
+        resolve(plan.options.stagingDirectory, 'pnpm-workspace.yaml'),
+        "packages:\n  - 'packages/*'\nallowBuilds:\n  sharp: false\n",
+      );
+      await writeFile(
+        resolve(plan.options.stagingDirectory, 'pnpm-lock.yaml'),
+        [
+          "lockfileVersion: '9.0'",
+          'importers:',
+          '  .:',
+          '    devDependencies:',
+          '      nx:',
+          '        specifier: 23.2.1',
+          'packages:',
+          "  '@parcel/watcher@2.5.1':",
+          '    resolution: {}',
+          "  '@swc/core@1.16.20':",
+          '    resolution: {}',
+          '  esbuild@0.25.12:',
+          '    resolution: {}',
+          '  nx@23.2.1:',
+          '    resolution: {}',
+          '  unrs-resolver@1.12.2:',
+          '    resolution: {}',
+          '',
+        ].join('\n'),
+      );
+    };
+    await executePlan(plan, runner);
+    const policy = await readFile(
+      resolve(plan.options.destination, 'pnpm-workspace.yaml'),
+      'utf8',
+    );
+    expect(policy).toContain('"@parcel/watcher": true');
+    expect(policy).toContain('nx: true');
+    expect(policy).toContain('sharp: false');
+    expect(policy).not.toContain('workerd');
+    expect(policy).not.toContain('less');
+  });
+
   it('commits a staged workspace over an empty destination', async () => {
     const cwd = await fixture();
     const plan = createPlan(
@@ -1021,7 +1309,11 @@ describe('executePlan', () => {
           'utf8',
         ),
       ),
-    ).toEqual({ packageManager: 'npm@11.17.0' });
+    ).toMatchObject({
+      packageManager: 'npm@11.21.1',
+      name: '@acme-tools/source',
+      engines: { node: '>=24 <25' },
+    });
     expect(
       JSON.parse(
         await readFile(
@@ -1052,6 +1344,122 @@ describe('executePlan', () => {
     await expect(readFile(plan.options.destination)).rejects.toMatchObject({
       code: 'ENOENT',
     });
+  });
+
+  it('resumes a failed creation from the first incomplete step', async () => {
+    const cwd = await fixture();
+    const input = {
+      name: 'Acme Tools',
+      apps: ['api'],
+      cwd,
+      platform: 'darwin' as const,
+      packageManager: 'npm',
+      verify: 'none',
+    };
+    const plan = createPlan(normalizeCreateOptions(input));
+    const ran: string[] = [];
+    const failing: CommandRunner = async ({ args }) => {
+      ran.push(args.join(' '));
+      if (ran.length === 1) {
+        await mkdir(plan.options.stagingDirectory);
+        await writeFile(
+          resolve(plan.options.stagingDirectory, 'package.json'),
+          '{}',
+        );
+        return;
+      }
+      if (args.includes('@megamono/plugin:app'))
+        throw new Error('forced generator failure');
+    };
+    await expect(createMegamono(input, failing)).rejects.toMatchObject({
+      exitCode: 1,
+    });
+    const recovery = await readRecovery(plan.options.stagingDirectory);
+    expect(recovery).toContain('create-megamono "Acme Tools" --resume');
+    const state = JSON.parse(
+      await readFile(
+        resolve(plan.options.stagingDirectory, CREATION_STATE_FILE),
+        'utf8',
+      ),
+    );
+    expect(state.completed).toEqual([
+      'create-nx-workspace',
+      'configure-package-manager',
+      'install-plugins',
+      'validate-bootstrap-toolchain',
+    ]);
+    await expect(createMegamono(input, failing)).rejects.toThrow(
+      /Rerun with --resume/,
+    );
+
+    const resumed: string[] = [];
+    const resumedPlan = await createMegamono(
+      { name: 'Acme Tools', cwd, resume: true },
+      async ({ args }) => {
+        resumed.push(args.join(' '));
+      },
+    );
+    expect(resumed[0]).toContain('@megamono/plugin:app');
+    expect(resumed.some((args) => args.includes('create-nx-workspace'))).toBe(
+      false,
+    );
+    expect(renderPlan(resumedPlan)).toContain('1. [parent] "npm"');
+    expect(renderPlan(resumedPlan).split('\n')[0]).toMatch(
+      /\(completed; skipped\)$/,
+    );
+    await expect(
+      readFile(resolve(plan.options.destination, CREATION_STATE_FILE)),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readRecovery(plan.options.destination)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    expect(
+      JSON.parse(
+        await readFile(
+          resolve(plan.options.destination, 'package.json'),
+          'utf8',
+        ),
+      ),
+    ).toMatchObject({ name: '@acme-tools/source' });
+  });
+
+  it('refuses to resume without recorded progress or with a drifted plan', async () => {
+    const cwd = await fixture();
+    await expect(
+      createMegamono({ name: 'Acme Tools', cwd, resume: true }),
+    ).rejects.toThrow(/No resumable creation state/);
+    const input = {
+      name: 'Acme Tools',
+      apps: ['api'],
+      cwd,
+      platform: 'darwin' as const,
+      verify: 'none',
+    };
+    await expect(
+      createMegamono(input, async () => {
+        throw new Error('scaffold failed');
+      }),
+    ).rejects.toMatchObject({ exitCode: 1 });
+    await expect(
+      createMegamono({ name: 'Acme Tools', cwd, resume: true }),
+    ).rejects.toThrow(/No step completed/);
+    const statePath = resolve(
+      cwd,
+      'megamono-acme-tools-staging',
+      CREATION_STATE_FILE,
+    );
+    const state = JSON.parse(await readFile(statePath, 'utf8'));
+    await writeFile(
+      statePath,
+      JSON.stringify({
+        ...state,
+        steps: ['create-nx-workspace', 'something-else'],
+        completed: ['create-nx-workspace'],
+      }),
+    );
+    await expect(
+      createMegamono({ name: 'Acme Tools', cwd, resume: true }),
+    ).rejects.toThrow(/recorded creation plan differs/);
   });
 
   it('configures Springbar against the committed destination as the last step', async () => {

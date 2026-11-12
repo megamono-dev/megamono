@@ -1,4 +1,6 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
+import { format } from 'prettier';
+import { parse as parseYaml } from 'yaml';
 import {
   hashArtifactBytes,
   readArtifactRegistry,
@@ -100,6 +102,63 @@ describe('workspace-eject generator', () => {
       readArtifactRegistry(tree).artifacts.map(({ state }) => state),
     ).toEqual(['ejected', 'ejected']);
   });
+
+  it.each([
+    ['.prettierrc', '{"singleQuote": true}'],
+    ['.prettierrc', 'singleQuote: true\nprintWidth: 100\n'],
+    ['.prettierrc.yaml', 'useTabs: true\n'],
+  ])(
+    'changes only the state line of a Prettier-formatted registry (%s)',
+    async (configPath, configSource) => {
+      const tree = createTreeWithEmptyWorkspace();
+      tree.write(configPath, configSource);
+      tree.write('.github/workflows/megamono-release.yml', 'name: Release\n');
+      const workflow = installArtifact(
+        '.github/workflows/megamono-release.yml',
+        {
+          id: 'release.workflow',
+          module: 'release',
+          mode: 'managed',
+          startDelimiter: undefined,
+          endDelimiter: undefined,
+        },
+      ).artifact;
+      const skill = installArtifact('.agents/skills/docs-placement', {
+        id: 'skill.docs-placement',
+        module: 'skills',
+        mode: 'managed',
+        startDelimiter: undefined,
+        endDelimiter: undefined,
+        files: ['SKILL.md', 'references/triggers.md'],
+      }).artifact;
+      writeArtifactRegistry(tree, {
+        schemaVersion: 1,
+        artifacts: [workflow, skill],
+      });
+      const before = tree.read('.megamono/artifacts.json', 'utf8') ?? '';
+      const prettierConfig = configSource.trimStart().startsWith('{')
+        ? JSON.parse(configSource)
+        : parseYaml(configSource);
+      expect(await format(before, { ...prettierConfig, parser: 'json' })).toBe(
+        before,
+      );
+      expect(before).toMatch(
+        /"files": \["SKILL\.md", "references\/triggers\.md"\]/,
+      );
+
+      await workspaceEjectGenerator(tree, { artifact: workflow.id });
+
+      const after = tree.read('.megamono/artifacts.json', 'utf8') ?? '';
+      const changed = after
+        .split('\n')
+        .map((line, index) => [before.split('\n')[index], line])
+        .filter(([previous, line]) => previous !== line);
+      expect(after.split('\n')).toHaveLength(before.split('\n').length);
+      expect(changed).toHaveLength(1);
+      expect(changed[0][0]).toMatch(/"state": "managed",$/);
+      expect(changed[0][1]).toMatch(/"state": "ejected",$/);
+    },
+  );
 
   it('refuses unknown, non-ejectable, and malformed sections before mutation', async () => {
     const tree = createTreeWithEmptyWorkspace();

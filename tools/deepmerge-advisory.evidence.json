@@ -1,0 +1,255 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-04T19:09:02.737Z",
+  "scope": "Observed provider disagreement; no advisory exception, package patch, or release admission change.",
+  "records": {
+    "cve": {
+      "url": "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2026/93xxx/CVE-2026-93753.json",
+      "checkedAt": "2026-11-04T19:09:02.590Z",
+      "status": 200,
+      "rawSha256": "99aac8731934595bfb682e0acca0bb6812dcc12b00a6201a5bd44cb10e1d8499",
+      "body": {
+        "dataType": "CVE_RECORD",
+        "dataVersion": "5.2",
+        "cveMetadata": {
+          "cveId": "CVE-2026-93753",
+          "assignerOrgId": "83251b91-4cc7-4094-a5c7-464a1b83ea10",
+          "state": "REJECTED",
+          "assignerShortName": "VulnCheck",
+          "dateReserved": "2026-09-18T16:30:18.853Z",
+          "datePublished": "2026-09-18T17:51:37.794Z",
+          "dateUpdated": "2026-11-02T16:33:19.357Z",
+          "dateRejected": "2026-11-02T16:33:19.357Z"
+        },
+        "containers": {
+          "cna": {
+            "rejectedReasons": [
+              {
+                "lang": "en",
+                "value": "This CVE ID has been rejected because it does not describe a security vulnerability."
+              }
+            ],
+            "providerMetadata": {
+              "orgId": "83251b91-4cc7-4094-a5c7-464a1b83ea10",
+              "shortName": "VulnCheck",
+              "dateUpdated": "2026-11-02T16:33:19.357Z"
+            }
+          }
+        }
+      }
+    },
+    "github": {
+      "url": "https://api.github.com/advisories/GHSA-gcqx-w48m-w2h4",
+      "checkedAt": "2026-11-04T19:09:02.737Z",
+      "status": 200,
+      "rawSha256": "129678c2a239966df96de51652fed82705e52bf32828c008c5a37e0bce39bf78",
+      "body": {
+        "ghsa_id": "GHSA-gcqx-w48m-w2h4",
+        "cve_id": "CVE-2026-93753",
+        "url": "https://api.github.com/advisories/GHSA-gcqx-w48m-w2h4",
+        "html_url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
+        "summary": "deepmerge mergeObject() allows prototype poisoning of returned objects",
+        "description": "deepmerge through 4.3.1 contains a prototype poisoning vulnerability in the mergeObject() function that fails to properly validate keys being written to target objects. Attackers can supply malicious source objects in merge operations to inject attacker-controlled properties into the returned object's prototype, causing applications to inherit unintended values when accessing properties without own-property checks.",
+        "type": "reviewed",
+        "severity": "low",
+        "repository_advisory_url": null,
+        "source_code_location": "https://github.com/TehShrike/deepmerge",
+        "identifiers": [
+          {
+            "value": "GHSA-gcqx-w48m-w2h4",
+            "type": "GHSA"
+          },
+          {
+            "value": "CVE-2026-93753",
+            "type": "CVE"
+          }
+        ],
+        "references": [
+          "https://nvd.nist.gov/vuln/detail/CVE-2026-93753",
+          "https://github.com/TehShrike/deepmerge/issues/273",
+          "https://github.com/TehShrike/deepmerge/blob/5b87756a5671635679001cbac72aa42f23472c81/index.js#L39-L60",
+          "https://www.vulncheck.com/advisories/deepmerge-through-4.3.1-prototype-poisoning-via-mergeobject",
+          "https://github.com/advisories/GHSA-gcqx-w48m-w2h4"
+        ],
+        "published_at": "2026-09-18T18:31:44Z",
+        "updated_at": "2026-10-27T21:34:58Z",
+        "github_reviewed_at": "2026-10-27T21:34:55Z",
+        "nvd_published_at": "2026-09-18T18:18:34Z",
+        "withdrawn_at": null,
+        "vulnerabilities": [
+          {
+            "package": {
+              "ecosystem": "npm",
+              "name": "deepmerge"
+            },
+            "vulnerable_version_range": ">= 4.2.0, <= 4.3.1",
+            "first_patched_version": null,
+            "vulnerable_functions": []
+          }
+        ],
+        "cvss_severities": {
+          "cvss_v3": {
+            "vector_string": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+            "score": 5.3
+          },
+          "cvss_v4": {
+            "vector_string": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N/E:U",
+            "score": 2.7
+          }
+        },
+        "cwes": [
+          {
+            "cwe_id": "CWE-1321",
+            "name": "Improperly Controlled Modification of Object Prototype Attributes"
+          }
+        ],
+        "credits": [],
+        "comments": 0,
+        "cvss": {
+          "vector_string": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+          "score": 5.3
+        },
+        "epss": {
+          "percentage": 0.00514,
+          "percentile": 0.43513
+        }
+      }
+    },
+    "npm": {
+      "url": "https://registry.npmjs.org/deepmerge/latest",
+      "checkedAt": "2026-11-04T19:09:02.529Z",
+      "status": 200,
+      "rawSha256": "e59831a9bf2293e70f9c296253e7fad50116bc5bbea8078bcb2e3a1486014da0",
+      "body": {
+        "bugs": {
+          "url": "https://github.com/TehShrike/deepmerge/issues"
+        },
+        "dist": {
+          "shasum": "44b5f2147cd3b00d4b56137685966f26fd25dd4a",
+          "tarball": "https://registry.npmjs.org/deepmerge/-/deepmerge-4.3.1.tgz",
+          "fileCount": 11,
+          "integrity": "sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==",
+          "signatures": [
+            {
+              "sig": "MEUCIQDN993WZ4bZkA9ji9rC0yXDb/eFJLDqMXftQaUQp3hA9AIgOqjV7vLLdNtIfYCLlcugHmhK6t3rgYR+AbGZf0GzGPI=",
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA"
+            }
+          ],
+          "unpackedSize": 31157,
+          "npm-signature": "-----BEGIN PGP SIGNATURE-----\r\nVersion: OpenPGP.js v4.10.10\r\nComment: https://openpgpjs.org\r\n\r\nwsFzBAEBCAAGBQJkE58wACEJED1NWxICdlZqFiEECWMYAoorWMhJKdjhPU1b\r\nEgJ2VmqwgA//SUBIsWdXabo9mcwaFaK0sg1UJMFXp+Z1PLA0FB98BZ7Kw+23\r\nXByEFVHf5SH2X7EG8VHMMCa4mdsqWUNP6Qz7UGa1oQebTXnTN20VhkBaAdUT\r\n2Hr61AwJHMNGaK098Vx4rn8OBLh1SDN9Q/FKIRU1M3PDo8p8dfsCs98WhLmj\r\nUtQzfb8AXRUmYf6A6vJaIwmShw3pJVU8a7JLFcl9Rgx7L5L6h/xjz2oNEb42\r\nwBYz+K1R/PvbhF2Ejkjmj5R0NSr8wSMmizK29uGXvtJYvon2kIqNPyPfaCaV\r\nVBCiHvtJdV4xCRUduPkXlHPMrgC0Xp1G+AoJn/Banx1OZFtLDjZa/ZBX86Am\r\nwPRAqr5ZiCaWzgC3Q8o1/qRsSrpdAO7OWRfzGVBqf10H4HdCvcnZzeyeSXQw\r\nCEnNT+zEsoe08upOGW5CCijrr8hq1Pj7LEtfyZr7nGmkWl1+bG2f6XB3VbdK\r\nRzWM5rcNRKJcDaCNMRXrzyKZ7eutn9Mzj70fRfUR1s5oqz5ruGAMHD8D8kx7\r\nsR/9P1u1a8E00oiQGMKHMIyaSVEvEtGGgLoJ8MXIJ+qArhasiWIzMY3eFcAf\r\n6z4MRfo0Nf6/m6WM+mMdwsitug9dVzhPa4+FFWWNNuhO0aVkXr9X2+A4Fjeb\r\nOUwt3H4PdpOegx1dVu7/IEYNFFEN0HmuZ1w=\r\n=A4WO\r\n-----END PGP SIGNATURE-----\r\n"
+        },
+        "main": "dist/cjs.js",
+        "name": "deepmerge",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "gitHead": "5b87756a5671635679001cbac72aa42f23472c81",
+        "license": "MIT",
+        "scripts": {
+          "size": "npm run build && uglifyjs --compress --mangle -- ./dist/umd.js | gzip -c | wc -c",
+          "test": "npm run build && tape test/*.js && jsmd readme.md && npm run test:typescript",
+          "build": "rollup -c",
+          "test:typescript": "tsc --noEmit test/typescript.ts && ts-node test/typescript.ts"
+        },
+        "_npmUser": {
+          "name": "tehshrike",
+          "email": "me@JoshDuff.com"
+        },
+        "homepage": "https://github.com/TehShrike/deepmerge",
+        "keywords": ["merge", "deep", "extend", "copy", "clone", "recursive"],
+        "repository": {
+          "url": "git://github.com/TehShrike/deepmerge.git",
+          "type": "git"
+        },
+        "_npmVersion": "8.6.0",
+        "description": "A library for deep (recursive) merging of Javascript objects",
+        "directories": {},
+        "maintainers": [
+          {
+            "name": "tehshrike",
+            "email": "me@JoshDuff.com"
+          }
+        ],
+        "_nodeVersion": "16.8.0",
+        "_hasShrinkwrap": false,
+        "devDependencies": {
+          "jsmd": "^1.0.2",
+          "tape": "^4.11.0",
+          "rollup": "^1.23.1",
+          "ts-node": "7.0.1",
+          "uglify-js": "^3.6.1",
+          "typescript": "=2.2.2",
+          "@types/node": "^8.10.54",
+          "is-plain-object": "^5.0.0",
+          "is-mergeable-object": "1.1.0",
+          "rollup-plugin-commonjs": "^10.1.0",
+          "rollup-plugin-node-resolve": "^5.2.0"
+        },
+        "_npmOperationalInternal": {
+          "tmp": "tmp/deepmerge_4.3.1_1679007536333_0.9033742187586644",
+          "host": "s3://npm-registry-packages"
+        },
+        "_id": "deepmerge@4.3.1",
+        "version": "4.3.1"
+      }
+    },
+    "npmAdvisory": {
+      "url": "https://registry.npmjs.org/-/npm/v1/security/advisories/bulk",
+      "method": "POST",
+      "body": {
+        "deepmerge": [
+          {
+            "id": 1243505,
+            "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
+            "title": "deepmerge mergeObject() allows prototype poisoning of returned objects",
+            "severity": "low",
+            "vulnerable_versions": ">=4.2.0 <=4.3.1",
+            "cwe": ["CWE-1321"],
+            "cvss": {
+              "score": 5.3,
+              "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+            }
+          }
+        ]
+      },
+      "checkedAt": "2026-11-04T19:09:02.596Z",
+      "status": 200,
+      "rawSha256": "868d602c806d21019470fb54bb7cd977799f2cb9fc425325385d1ae8fcc36cb8",
+      "requestBody": {
+        "deepmerge": ["4.3.1"]
+      }
+    }
+  },
+  "workspaceAudit": {
+    "checkedAt": "2026-11-04T19:11:22.724Z",
+    "command": [
+      "npm",
+      "audit",
+      "--audit-level=low",
+      "--registry=https://registry.npmjs.org",
+      "--json"
+    ],
+    "npm": "11.21.1",
+    "node": "v24.22.1",
+    "exitCode": 1,
+    "rawReportSha256": "847fd533aa8bc8f64b564a639d16526cce49d37ec8fe06af6c35c6f7d5330298",
+    "lockfileSha256": "6130f59177ad5f2caad3e57151f9cc3b7fd65081cb1a96ac7c3f38186f97d3c0",
+    "counts": {
+      "info": 0,
+      "low": 23,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 23
+    },
+    "underlyingAdvisories": [
+      {
+        "package": "deepmerge",
+        "source": 1243505,
+        "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
+        "severity": "low"
+      }
+    ],
+    "interpretation": "23 affected package entries, one underlying advisory still returned by npm. CVE rejection did not change npm audit results or repository admission policy."
+  }
+}

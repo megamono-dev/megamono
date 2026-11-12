@@ -89,6 +89,8 @@ export interface CreateMegamonoInput {
   verify?: string;
   cleanupOnFailure?: boolean;
   dryRun?: boolean;
+  /** Continue a failed creation from its staged state instead of starting over. */
+  resume?: boolean;
   localPackages?: string;
   packageManager?: string;
   cwd?: string;
@@ -133,7 +135,9 @@ export type PlanStep =
       kind: 'configure';
       id:
         | 'configure-package-manager'
+        | 'configure-workspace-identity'
         | 'configure-publishable-packages'
+        | 'prune-build-approvals'
         | 'dehydrate-workspace';
     }
   | { kind: 'commit'; id: 'commit-workspace' }
@@ -143,6 +147,20 @@ export interface CreationPlan {
   options: NormalizedCreateOptions;
   steps: PlanStep[];
   springbarResult?: SpringbarSetupResult;
+  /** Step IDs already completed by an earlier, failed run (set by --resume). */
+  resumedSteps?: readonly string[];
+}
+
+/** Machine-readable twin of MEGAMONO-RECOVERY.md, read by --resume. */
+export const CREATION_STATE_FILE = '.megamono-create-state.json';
+const RECOVERY_FILE = 'MEGAMONO-RECOVERY.md';
+
+interface CreationState {
+  schemaVersion: 1;
+  options: NormalizedCreateOptions;
+  steps: string[];
+  completed: string[];
+  failure: string;
 }
 
 export interface CommandInvocation {
@@ -165,6 +183,8 @@ export class CreateMegamonoError extends Error {
 }
 
 interface CompatibilityRegistry {
+  toolchains: { node: string; nx: string };
+  runtimePins: { node: string };
   packageManagers: Record<PackageManager, string>;
   pnpmAllowBuilds: string[];
   databaseAdapters: Record<string, { pnpmAllowBuilds?: string[] }>;
@@ -586,7 +606,7 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     { kind: 'configure', id: 'configure-package-manager' },
   ];
 
-  const plugins = new Set<string>(['@megamono/plugin', 'typescript']);
+  const plugins = new Set<string>(['@megamono/plugin', 'nx', 'typescript']);
   if (options.packages.length) {
     plugins.add('@nx/js');
     plugins.add('@nx/eslint');
@@ -664,6 +684,14 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       ),
     );
   }
+
+  steps.push({
+    kind: 'command',
+    id: 'validate-bootstrap-toolchain',
+    command: 'node',
+    args: ['-e', bootstrapToolchainCheck()],
+    cwd: 'staging',
+  });
 
   for (const app of options.appInstances) {
     const port =
@@ -775,6 +803,8 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
     );
   }
 
+  steps.push({ kind: 'configure', id: 'configure-workspace-identity' });
+
   if (options.verify !== 'none') {
     steps.push(
       commandStep(
@@ -853,6 +883,8 @@ export function createPlan(options: NormalizedCreateOptions): CreationPlan {
       );
     }
   }
+  if (options.packageManager === 'pnpm')
+    steps.push({ kind: 'configure', id: 'prune-build-approvals' });
   if (!options.install) {
     steps.push({ kind: 'configure', id: 'dehydrate-workspace' });
   }
@@ -965,9 +997,12 @@ export async function preflightPlan(
   yalcStoreResolver: YalcStoreResolver = resolveYalcStore,
 ): Promise<void> {
   const { destination, stagingDirectory } = plan.options;
-  if (await pathExists(stagingDirectory)) {
+  if (plan.resumedSteps === undefined && (await pathExists(stagingDirectory))) {
+    const resumable = await pathExists(
+      resolve(stagingDirectory, CREATION_STATE_FILE),
+    );
     throw new CreateMegamonoError(
-      `Staging directory already exists: ${stagingDirectory}. Recover or remove it before retrying.`,
+      `Staging directory already exists: ${stagingDirectory}. ${resumable ? 'Rerun with --resume to continue from the first incomplete step, or remove it to start over.' : 'Recover or remove it before retrying.'}`,
       3,
     );
   }
@@ -1016,24 +1051,38 @@ function renderCommand(step: Extract<PlanStep, { kind: 'command' }>): string {
 }
 
 export function renderPlan(plan: CreationPlan): string {
+  const resumed = new Set(plan.resumedSteps ?? []);
   return plan.steps
     .map((step, index) => {
-      if (step.kind === 'commit') {
-        return `${index + 1}. commit ${plan.options.stagingDirectory} -> ${plan.options.destination}`;
-      }
-      if (step.kind === 'configure') {
-        if (step.id === 'configure-publishable-packages')
-          return `${index + 1}. [staging] configure ${plan.options.packageAccess} npm package access (no publication)`;
-        if (step.id === 'configure-package-manager')
-          return `${index + 1}. [staging] record ${plan.options.packageManager} and configure package-manager policy`;
-        return `${index + 1}. [staging] remove bootstrap node_modules for an install-free destination`;
-      }
-      if (step.kind === 'springbar') {
-        return `${index + 1}. [destination] Springbar MCP inspect_candidates -> setup_workspace`;
-      }
-      return `${index + 1}. [${step.cwd}] ${renderCommand(step)}`;
+      const line = renderPlanStep(plan, step, index);
+      return resumed.has(step.id) ? `${line} (completed; skipped)` : line;
     })
     .join('\n');
+}
+
+function renderPlanStep(
+  plan: CreationPlan,
+  step: PlanStep,
+  index: number,
+): string {
+  if (step.kind === 'commit') {
+    return `${index + 1}. commit ${plan.options.stagingDirectory} -> ${plan.options.destination}`;
+  }
+  if (step.kind === 'configure') {
+    if (step.id === 'configure-publishable-packages')
+      return `${index + 1}. [staging] configure ${plan.options.packageAccess} npm package access (no publication)`;
+    if (step.id === 'configure-package-manager')
+      return `${index + 1}. [staging] record ${plan.options.packageManager}, pin the bootstrap toolchain, and configure package-manager policy`;
+    if (step.id === 'configure-workspace-identity')
+      return `${index + 1}. [staging] normalize the workspace source condition and Node runtime declaration`;
+    if (step.id === 'prune-build-approvals')
+      return `${index + 1}. [staging] drop pre-approved pnpm builds for packages the lockfile does not install`;
+    return `${index + 1}. [staging] remove bootstrap node_modules for an install-free destination`;
+  }
+  if (step.kind === 'springbar') {
+    return `${index + 1}. [destination] Springbar MCP inspect_candidates -> setup_workspace`;
+  }
+  return `${index + 1}. [${step.cwd}] ${renderCommand(step)}`;
 }
 
 function requiredScaffoldVersion(name: string): string {
@@ -1047,11 +1096,149 @@ function requiredScaffoldVersion(name: string): string {
   return version;
 }
 
+/** Run before any Megamono generator can consume a drifted Nx installation. */
+function bootstrapToolchainCheck(): string {
+  const baseline = requiredScaffoldVersion('nx');
+  return `const manifest = require('./package.json');
+const baseline = ${JSON.stringify(baseline)};
+const packages = new Set(['nx', ...Object.keys({...manifest.dependencies, ...manifest.devDependencies}).filter(name => name.startsWith('@nx/'))]);
+for (const name of packages) {
+  const actual = require(name + '/package.json').version;
+  const expected = baseline;
+  if (actual !== expected) throw new Error('Bootstrap toolchain mismatch: ' + name + '@' + actual + '; expected ' + expected + ' from compatibility.json (Nx ${compatibility.toolchains.nx}). Reinstall the exact bootstrap pins before running Megamono generators.');
+}
+`;
+}
+
+function rewriteSourceConditions(source: string, condition: string): string {
+  // Tokenize just enough JSONC to retain comments and unrelated string values.
+  const tokens = [
+    ...source.matchAll(
+      /"(?:\\.|[^"\\])*"|\/\/[^\r\n]*|\/\*[\s\S]*?\*\/|[{}[\]:,]/g,
+    ),
+  ].filter((token) => !token[0].startsWith('//') && !token[0].startsWith('/*'));
+  const replacements: { start: number; end: number }[] = [];
+  for (let index = 0; index < tokens.length; index++) {
+    if (
+      tokens[index][0] !== '"customConditions"' ||
+      tokens[index + 1]?.[0] !== ':' ||
+      tokens[index + 2]?.[0] !== '['
+    )
+      continue;
+    let depth = 1;
+    for (let member = index + 3; member < tokens.length && depth; member++) {
+      const token = tokens[member];
+      if (token[0] === '[' || token[0] === '{') depth++;
+      else if (token[0] === ']' || token[0] === '}') depth--;
+      else if (
+        depth === 1 &&
+        token[0].startsWith('"') &&
+        JSON.parse(token[0]) === '@org/source'
+      )
+        replacements.push({
+          start: token.index,
+          end: token.index + token[0].length,
+        });
+    }
+  }
+  for (const replacement of replacements.reverse())
+    source =
+      source.slice(0, replacement.start) +
+      JSON.stringify(condition) +
+      source.slice(replacement.end);
+  return source;
+}
+
+/** Only fresh scaffold identity fields are normalized, never arbitrary text. */
+async function configureWorkspaceIdentity(plan: CreationPlan): Promise<void> {
+  const root = plan.options.stagingDirectory;
+  const condition = `@${plan.options.scope}/source`;
+  const rewriteExports = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(rewriteExports);
+    if (!value || typeof value !== 'object') return value;
+    const entries = Object.entries(value);
+    if (
+      condition !== '@org/source' &&
+      entries.some(([key]) => key === '@org/source') &&
+      entries.some(([key]) => key === condition)
+    )
+      throw new CreateMegamonoError(
+        `Generated exports contain conflicting source conditions: @org/source and ${condition}.`,
+        3,
+      );
+    return Object.fromEntries(
+      entries.map(([key, target]) => [
+        key === '@org/source' ? condition : key,
+        rewriteExports(target),
+      ]),
+    );
+  };
+  const excluded = new Set([
+    'node_modules',
+    '.git',
+    '.nx',
+    '.yalc',
+    'dist',
+    '.output',
+    '.wxt',
+  ]);
+  const walk = async (directory: string): Promise<void> => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.isSymbolicLink()) continue;
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (!excluded.has(entry.name)) await walk(path);
+      } else if (entry.isFile() && entry.name === 'package.json') {
+        const source = await readFile(path, 'utf8');
+        const manifest = JSON.parse(source);
+        if (directory === root) {
+          manifest.name = condition;
+          manifest.engines = {
+            ...manifest.engines,
+            node: compatibility.toolchains.node,
+          };
+        }
+        if (manifest.exports !== undefined)
+          manifest.exports = rewriteExports(manifest.exports);
+        const updated = `${JSON.stringify(manifest, null, 2)}\n`;
+        if (source !== updated) await writeFile(path, updated, 'utf8');
+      } else if (
+        entry.isFile() &&
+        /^tsconfig(?:\.[^.]+)*\.json$/.test(entry.name)
+      ) {
+        const source = await readFile(path, 'utf8');
+        // Nx emits JSONC. Restrict edits to string entries of customConditions;
+        // comments, paths, and ordinary strings remain byte-for-byte intact.
+        const updated = rewriteSourceConditions(source, condition);
+        if (source !== updated) await writeFile(path, updated, 'utf8');
+      }
+    }
+  };
+  await walk(root);
+  await writeFile(
+    resolve(root, '.nvmrc'),
+    `${compatibility.runtimePins.node}\n`,
+    'utf8',
+  );
+}
+
 async function configurePackageManager(plan: CreationPlan): Promise<void> {
   const packagePath = resolve(plan.options.stagingDirectory, 'package.json');
   const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as {
     packageManager?: string;
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
   };
+  const nxVersion = requiredScaffoldVersion('nx');
+  for (const field of ['dependencies', 'devDependencies'] as const) {
+    const declarations = packageJson[field];
+    for (const name of Object.keys(declarations ?? {})) {
+      if (name === 'nx' || name.startsWith('@nx/'))
+        if (declarations)
+          declarations[name] =
+            compatibility.scaffoldPackages[name] ?? nxVersion;
+    }
+  }
   packageJson.packageManager = `${plan.options.packageManager}@${compatibility.packageManagers[plan.options.packageManager]}`;
   await writeFile(
     packagePath,
@@ -1059,55 +1246,122 @@ async function configurePackageManager(plan: CreationPlan): Promise<void> {
     'utf8',
   );
 
+  await configureWorkspaceIdentity(plan);
+
   if (plan.options.packageManager !== 'pnpm') return;
-  const workspacePath = resolve(
-    plan.options.stagingDirectory,
-    'pnpm-workspace.yaml',
-  );
-  const source = await readFile(workspacePath, 'utf8');
-  const newline = source.includes('\r\n') ? '\r\n' : '\n';
-  const lines = source.split(/\r?\n/);
-  let allowBuildsIndex = lines.findIndex((line) =>
-    /^allowBuilds:\s*$/.test(line),
-  );
-  if (allowBuildsIndex === -1) {
-    while (lines.at(-1) === '') lines.pop();
-    lines.push('', 'allowBuilds:');
-    allowBuildsIndex = lines.length - 1;
+  const policy = await readAllowBuilds(plan);
+  for (const name of megamonoBuildApprovals(plan)) {
+    // Existing decisions belong to the scaffold/policy, including explicit denial.
+    if (!policy.entries.has(name)) policy.entries.set(name, 'true');
   }
-  let end = allowBuildsIndex + 1;
-  while (end < lines.length && /^\s+\S/.test(lines[end])) end += 1;
-  const entries = new Map<string, string>();
-  for (const line of lines.slice(allowBuildsIndex + 1, end)) {
-    const match = line.match(/^\s{2}([^:#]+):\s*(.+)$/);
-    if (match) {
-      const rawKey = match[1].trim();
-      const key = rawKey.startsWith('"')
-        ? JSON.parse(rawKey)
-        : rawKey.replace(/^'(.*)'$/, '$1');
-      entries.set(key, match[2].trim());
-    }
-  }
-  const builds = [
+  await writeAllowBuilds(policy);
+}
+
+function megamonoBuildApprovals(plan: CreationPlan): string[] {
+  return [
     ...compatibility.pnpmAllowBuilds,
     ...(compatibility.databaseAdapters[plan.options.databaseAdapter]
       ?.pnpmAllowBuilds ?? []),
   ];
-  for (const name of builds) {
-    // Existing decisions belong to the scaffold/policy, including explicit denial.
-    if (!entries.has(name)) entries.set(name, 'true');
+}
+
+interface AllowBuildsPolicy {
+  path: string;
+  lines: string[];
+  newline: string;
+  start: number;
+  end: number;
+  entries: Map<string, string>;
+}
+
+async function readAllowBuilds(plan: CreationPlan): Promise<AllowBuildsPolicy> {
+  const path = resolve(plan.options.stagingDirectory, 'pnpm-workspace.yaml');
+  const source = await readFile(path, 'utf8');
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.split(/\r?\n/);
+  let start = lines.findIndex((line) => /^allowBuilds:\s*$/.test(line));
+  if (start === -1) {
+    while (lines.at(-1) === '') lines.pop();
+    lines.push('', 'allowBuilds:');
+    start = lines.length - 1;
   }
+  let end = start + 1;
+  while (end < lines.length && /^\s+\S/.test(lines[end])) end += 1;
+  const entries = new Map<string, string>();
+  for (const line of lines.slice(start + 1, end)) {
+    const entry = allowBuildsEntry(line);
+    if (entry) entries.set(entry[0], entry[1]);
+  }
+  return { path, lines, newline, start, end, entries };
+}
+
+function allowBuildsEntry(line: string): [string, string] | undefined {
+  const match = line.match(/^\s{2}([^:#]+):\s*(.+)$/);
+  if (!match) return undefined;
+  const rawKey = match[1].trim();
+  const key = rawKey.startsWith('"')
+    ? JSON.parse(rawKey)
+    : rawKey.replace(/^'(.*)'$/, '$1');
+  return [key, match[2].trim()];
+}
+
+async function writeAllowBuilds(policy: AllowBuildsPolicy): Promise<void> {
+  const lines = [...policy.lines];
   lines.splice(
-    allowBuildsIndex + 1,
-    end - allowBuildsIndex - 1,
-    ...[...entries]
+    policy.start + 1,
+    policy.end - policy.start - 1,
+    ...[...policy.entries]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([name, value]) => {
         const key = /^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.stringify(name);
         return `  ${key}: ${value}`;
       }),
   );
-  await writeFile(workspacePath, lines.join(newline), 'utf8');
+  await writeFile(policy.path, lines.join(policy.newline), 'utf8');
+}
+
+/** Package names the pnpm lockfile resolves (packages/snapshots keys). */
+export function lockfilePackageNames(lockfile: string): Set<string> {
+  const names = new Set<string>();
+  for (const match of lockfile.matchAll(
+    /^ {2}['"]?((?:@[^@'"\s/]+\/)?[^@'"\s/:]+)@/gm,
+  ))
+    names.add(match[1]);
+  return names;
+}
+
+/**
+ * Bootstrap pre-approves every build Megamono may need before anything is
+ * installed. Once the final install has settled, drop the approvals Megamono
+ * added for packages the lockfile does not contain (for example workerd when
+ * no Worker app exists). Denials and other decisions are kept.
+ */
+async function pruneBuildApprovals(plan: CreationPlan): Promise<void> {
+  let lockfile: string;
+  try {
+    lockfile = await readFile(
+      resolve(plan.options.stagingDirectory, 'pnpm-lock.yaml'),
+      'utf8',
+    );
+  } catch {
+    return;
+  }
+  const installed = lockfilePackageNames(lockfile);
+  if (installed.size === 0) return;
+  const policy = await readAllowBuilds(plan);
+  const stale = new Set(
+    megamonoBuildApprovals(plan).filter(
+      (name) => policy.entries.get(name) === 'true' && !installed.has(name),
+    ),
+  );
+  if (stale.size === 0) return;
+  // Remove only the stale lines so formatting applied by later steps survives.
+  const lines = policy.lines.filter((line, index) => {
+    if (index <= policy.start || index >= policy.end) return true;
+    const entry = allowBuildsEntry(line);
+    return !entry || !stale.has(entry[0]);
+  });
+  await writeFile(policy.path, lines.join(policy.newline), 'utf8');
 }
 
 async function writeRecovery(
@@ -1128,18 +1382,118 @@ async function writeRecovery(
       ? completed.map((step) => `- ${step}`)
       : ['- none']),
     '',
-    'The requested destination was not populated. Inspect this staging directory, then move or remove it before retrying.',
+    'The requested destination was not populated. Inspect this staging directory, then either:',
+    '',
+    `- rerun \`create-megamono ${/^[\w.-]+$/.test(plan.options.name) ? plan.options.name : JSON.stringify(plan.options.name)} --resume\`${plan.options.destination === resolve(dirname(plan.options.stagingDirectory), plan.options.scope) ? '' : ` with \`--directory=${plan.options.destination}\``} from ${dirname(plan.options.destination)} to rerun the failed step and continue with the recorded options, or`,
+    '- move or remove this directory before starting over.',
+    '',
+    `${CREATION_STATE_FILE} records the options and completed steps for --resume; edit neither file by hand.`,
     '',
   ].join('\n');
+  const state: CreationState = {
+    schemaVersion: 1,
+    options: { ...plan.options, dryRun: false },
+    steps: plan.steps.map((step) => step.id),
+    completed: [...completed],
+    failure: message,
+  };
   await writeFile(
-    resolve(plan.options.stagingDirectory, 'MEGAMONO-RECOVERY.md'),
+    resolve(plan.options.stagingDirectory, CREATION_STATE_FILE),
+    `${JSON.stringify(state, null, 2)}\n`,
+    'utf8',
+  );
+  await writeFile(
+    resolve(plan.options.stagingDirectory, RECOVERY_FILE),
     body,
     'utf8',
   );
 }
 
+/**
+ * Rebuild the plan recorded by a failed run. Options come from the state file,
+ * so a resumed run cannot silently diverge from the staged workspace.
+ */
+export async function loadResumePlan(
+  input: Pick<CreateMegamonoInput, 'name' | 'directory' | 'cwd' | 'dryRun'>,
+): Promise<CreationPlan> {
+  const name = input.name?.trim();
+  if (!name)
+    throw new CreateMegamonoError('--resume requires the workspace name.', 2);
+  const scope = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const cwd = resolve(input.cwd ?? process.cwd());
+  const destination = resolve(cwd, input.directory ?? scope);
+  const stagingDirectory = resolve(
+    dirname(destination),
+    `megamono-${scope}-staging`,
+  );
+  let state: CreationState;
+  try {
+    state = JSON.parse(
+      await readFile(resolve(stagingDirectory, CREATION_STATE_FILE), 'utf8'),
+    ) as CreationState;
+  } catch (error) {
+    throw new CreateMegamonoError(
+      `No resumable creation state in ${stagingDirectory}${error instanceof Error && 'code' in error && error.code === 'ENOENT' ? '' : ` (${error instanceof Error ? error.message : String(error)})`}. Only failures recorded by this version of create-megamono can be resumed.`,
+      3,
+    );
+  }
+  if (
+    state.schemaVersion !== 1 ||
+    !state.options ||
+    !Array.isArray(state.steps) ||
+    !Array.isArray(state.completed)
+  )
+    throw new CreateMegamonoError(
+      `Unsupported creation state in ${stagingDirectory}.`,
+      3,
+    );
+  if (
+    state.options.stagingDirectory !== stagingDirectory ||
+    state.options.destination !== destination
+  )
+    throw new CreateMegamonoError(
+      `Recorded destination ${state.options.destination} does not match ${destination}. Resume from the original directory with the original name and --directory.`,
+      3,
+    );
+  const plan = createPlan({
+    ...state.options,
+    cleanupOnFailure: false,
+    dryRun: input.dryRun ?? false,
+  });
+  const steps = plan.steps.map((step) => step.id);
+  if (JSON.stringify(steps) !== JSON.stringify(state.steps))
+    throw new CreateMegamonoError(
+      'The recorded creation plan differs from the plan this create-megamono version produces. Resume with the version that started the creation, or remove the staging directory and start over.',
+      3,
+    );
+  const prefix = steps.slice(0, state.completed.length);
+  if (JSON.stringify(prefix) !== JSON.stringify(state.completed))
+    throw new CreateMegamonoError(
+      `Recorded completed steps are not a prefix of the plan in ${stagingDirectory}.`,
+      3,
+    );
+  if (state.completed.length === 0)
+    throw new CreateMegamonoError(
+      `No step completed before the failure (${state.failure}). Remove ${stagingDirectory} and rerun without --resume.`,
+      3,
+    );
+  if (state.completed.includes('commit-workspace'))
+    throw new CreateMegamonoError(
+      `The workspace was already committed to ${destination}; nothing to resume.`,
+      3,
+    );
+  plan.resumedSteps = state.completed;
+  return plan;
+}
+
 async function commitWorkspace(plan: CreationPlan): Promise<void> {
   const { destination, stagingDirectory } = plan.options;
+  // Recovery state describes the staging directory, never the committed workspace.
+  for (const file of [CREATION_STATE_FILE, RECOVERY_FILE])
+    await rm(resolve(stagingDirectory, file), { force: true });
   let removedEmptyDestination = false;
   if (await pathExists(destination)) {
     await rmdir(destination);
@@ -1163,6 +1517,61 @@ async function removeInstalledDependencies(directory: string): Promise<void> {
       await removeInstalledDependencies(path);
     }
   }
+}
+
+type PluginRegistration =
+  | string
+  | {
+      plugin: string;
+      options?: unknown;
+      include?: string[];
+      exclude?: string[];
+    };
+
+/**
+ * App generation scopes @nx/eslint/plugin to each generated app. @nx/js:library
+ * then sees a registration and adds no lint target, although no registration
+ * includes the package. Extend inference to the generated packages so they get
+ * project-relative `eslint .` targets instead of silently losing lint.
+ */
+function coverPackageLint(
+  nx: { plugins?: PluginRegistration[] },
+  packages: readonly string[],
+): void {
+  const registrations = (nx.plugins ?? []).filter(
+    (entry) =>
+      (typeof entry === 'string' ? entry : entry.plugin) ===
+      '@nx/eslint/plugin',
+  );
+  if (
+    registrations.length === 0 ||
+    registrations.some(
+      (entry) =>
+        typeof entry === 'string' || (!entry.include && !entry.exclude),
+    )
+  )
+    return;
+  const included = new Set(
+    registrations.flatMap((entry) =>
+      typeof entry === 'string' ? [] : (entry.include ?? []),
+    ),
+  );
+  const include = packages
+    .map((name) => `packages/${name}/**/*`)
+    .filter((glob) => !included.has(glob));
+  if (include.length === 0) return;
+  const representative = registrations[0] as Exclude<
+    PluginRegistration,
+    string
+  >;
+  nx.plugins = [
+    ...(nx.plugins ?? []),
+    {
+      plugin: '@nx/eslint/plugin',
+      ...(representative.options ? { options: representative.options } : {}),
+      include,
+    },
+  ];
 }
 
 export async function configurePublishablePackages(
@@ -1198,6 +1607,7 @@ export async function configurePublishablePackages(
   await writeFile(rootPath, `${JSON.stringify(root, null, 2)}\n`);
   const nxPath = resolve(plan.options.stagingDirectory, 'nx.json');
   const nx = JSON.parse(await readFile(nxPath, 'utf8'));
+  coverPackageLint(nx, plan.options.packages);
   const projects = plan.options.packages.map(
     (name) => `${plan.options.scope}-${name}`,
   );
@@ -1228,15 +1638,19 @@ export async function executePlan(
 ): Promise<void> {
   await preflightPlan(plan, yalcStoreResolver);
   if (plan.options.dryRun) return;
-  const completed: string[] = [];
+  const completed: string[] = [...(plan.resumedSteps ?? [])];
   try {
-    for (const step of plan.steps) {
+    for (const step of plan.steps.slice(completed.length)) {
       if (step.kind === 'commit') await commitWorkspace(plan);
       else if (step.kind === 'configure') {
         if (step.id === 'configure-package-manager')
           await configurePackageManager(plan);
+        else if (step.id === 'configure-workspace-identity')
+          await configureWorkspaceIdentity(plan);
         else if (step.id === 'configure-publishable-packages')
           await configurePublishablePackages(plan);
+        else if (step.id === 'prune-build-approvals')
+          await pruneBuildApprovals(plan);
         else await removeInstalledDependencies(plan.options.stagingDirectory);
       } else if (step.kind === 'springbar') {
         const intent = createSpringbarIntent(
@@ -1286,7 +1700,9 @@ export async function createMegamono(
   springbarConfigurator: SpringbarConfigurator = configureSpringbarWithMcp,
   yalcStoreResolver: YalcStoreResolver = resolveYalcStore,
 ): Promise<CreationPlan> {
-  const plan = createPlan(normalizeCreateOptions(input));
+  const plan = input.resume
+    ? await loadResumePlan(input)
+    : createPlan(normalizeCreateOptions(input));
   await executePlan(plan, runner, springbarConfigurator, yalcStoreResolver);
   return plan;
 }

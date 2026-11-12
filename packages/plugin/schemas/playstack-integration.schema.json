@@ -25,10 +25,26 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["id", "kind", "source", "target", "ejectable", "sha256"],
+              "required": [
+                "id",
+                "kind",
+                "source",
+                "target",
+                "ejectable",
+                "sha256"
+              ],
               "properties": {
                 "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
-                "kind": { "enum": ["module", "provider", "policy", "controller", "health", "test"] },
+                "kind": {
+                  "enum": [
+                    "module",
+                    "provider",
+                    "policy",
+                    "controller",
+                    "health",
+                    "test"
+                  ]
+                },
                 "source": { "type": "string", "pattern": "^templates/" },
                 "target": { "type": "string", "minLength": 1 },
                 "description": { "type": "string" },
@@ -50,11 +66,20 @@
                   "required": ["export", "registration"],
                   "properties": {
                     "export": { "type": "string" },
-                    "registration": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true }
+                    "registration": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "minItems": 1,
+                      "uniqueItems": true
+                    }
                   }
                 }
               },
-              "providerTokens": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "providerTokens": {
+                "type": "array",
+                "items": { "type": "string" },
+                "uniqueItems": true
+              },
               "databaseArtifacts": {
                 "type": "array",
                 "items": {
@@ -64,7 +89,12 @@
                   "properties": {
                     "package": { "type": "string", "pattern": "^@playstack/" },
                     "required": { "type": "boolean" },
-                    "formats": { "type": "array", "items": { "enum": ["prisma", "drizzle"] }, "minItems": 1, "uniqueItems": true },
+                    "formats": {
+                      "type": "array",
+                      "items": { "enum": ["prisma", "drizzle"] },
+                      "minItems": 1,
+                      "uniqueItems": true
+                    },
                     "when": { "type": "string" }
                   }
                 }
@@ -77,7 +107,11 @@
                   "required": ["key", "required", "secret"],
                   "properties": {
                     "key": { "type": "string" },
-                    "suggestedNames": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+                    "suggestedNames": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "uniqueItems": true
+                    },
                     "required": { "type": "boolean" },
                     "secret": { "type": "boolean" },
                     "when": { "type": "string" }
@@ -92,7 +126,12 @@
                   "required": ["id", "methods", "path", "rawBody"],
                   "properties": {
                     "id": { "type": "string" },
-                    "methods": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+                    "methods": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "minItems": 1,
+                      "uniqueItems": true
+                    },
                     "path": { "type": "string" },
                     "rawBody": { "type": "boolean" },
                     "authentication": { "type": "string" }
@@ -128,7 +167,11 @@
                   "type": "object",
                   "additionalProperties": false,
                   "required": ["id", "kind"],
-                  "properties": { "id": { "type": "string" }, "kind": { "type": "string" }, "when": { "type": "string" } }
+                  "properties": {
+                    "id": { "type": "string" },
+                    "kind": { "type": "string" },
+                    "when": { "type": "string" }
+                  }
                 }
               },
               "decisions": {
@@ -141,7 +184,11 @@
                     "key": { "type": "string" },
                     "prompt": { "type": "string" },
                     "required": { "type": "boolean" },
-                    "options": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+                    "options": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "uniqueItems": true
+                    },
                     "when": { "type": "string" }
                   }
                 }

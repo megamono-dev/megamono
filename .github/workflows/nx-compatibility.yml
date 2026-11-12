@@ -5,23 +5,31 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/nx-compatibility.yml'
-      - 'package-lock.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - 'packages/plugin/**'
       - 'packages/nx-apple/**'
       - 'packages/nx-cargo/**'
       - 'packages/nx-cloudflare/**'
       - 'packages/nx-extension/**'
       - 'packages/nx-render/**'
+      - 'packages/nx-laravel/**'
+      - 'packages/nx-phpnative/**'
   pull_request:
     paths:
       - '.github/workflows/nx-compatibility.yml'
-      - 'package-lock.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - 'packages/plugin/**'
       - 'packages/nx-apple/**'
       - 'packages/nx-cargo/**'
       - 'packages/nx-cloudflare/**'
       - 'packages/nx-extension/**'
       - 'packages/nx-render/**'
+      - 'packages/nx-laravel/**'
+      - 'packages/nx-phpnative/**'
   merge_group:
   schedule:
     - cron: '43 8 * * 1'
@@ -56,23 +64,57 @@ jobs:
           - nx: 22.2.3
             typescript: 5.9.3
             node: 22
-          - nx: 23.1.1
+          - nx: 23.3.1
+            typescript: 6.0.3
+            node: 24
+          - nx: 24.0.4
             typescript: 6.0.3
             node: 24
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.9
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build packed fixture prerequisites on the authoring runtime
+        run: pnpm exec nx run-many -t build --projects=@megamono/plugin,nx-apple,nx-cargo,nx-cloudflare,nx-extension,nx-render,nx-laravel,nx-phpnative --output-style=static
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
-          cache: npm
-      - name: Use the repository npm version
+          # The authoring cache was restored on Node 24. Auto-detection here
+          # would execute pnpm 11 under the older consumer runtime.
+          package-manager-cache: false
+      - name: Use the npm consumer CLI
         shell: bash
-        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
-      - run: npm ci
-      - run: npm exec nx -- run @megamono/plugin:e2e-nx-compatibility --output-style=static
+        run: npm install --global npm@11.21.1
+      # Keep Node 20/22 consumer coverage independent of the private repository
+      # authoring floor and pnpm 11 engine requirements.
+      - name: Qualify the Node 20/22 packed consumer
+        if: matrix.node != 24
+        run: node packages/plugin/e2e/nx-compatibility.e2e.mjs
         env:
           MEGAMONO_NX_VERSION: ${{ matrix.nx }}
           MEGAMONO_TYPESCRIPT_VERSION: ${{ matrix.typescript }}
+      - name: Qualify the packed consumer
+        if: matrix.node == 24
+        run: pnpm exec nx run @megamono/plugin:e2e-nx-compatibility --output-style=static
+        env:
+          MEGAMONO_NX_VERSION: ${{ matrix.nx }}
+          MEGAMONO_TYPESCRIPT_VERSION: ${{ matrix.typescript }}
+      - name: Qualify the Node 22 packed Laravel and NativePHP plugins
+        if: matrix.node == 22 && startsWith(matrix.nx, '22.')
+        run: node packages/nx-phpnative/e2e/consumer.mjs
+        env:
+          MEGAMONO_TEST_NX_VERSION: ${{ matrix.nx }}
+      - name: Qualify packed Laravel and NativePHP plugins
+        if: matrix.node == 24 && (startsWith(matrix.nx, '23.') || startsWith(matrix.nx, '24.'))
+        run: pnpm exec nx run nx-phpnative:e2e-php-consumer --output-style=static
+        env:
+          MEGAMONO_TEST_NX_VERSION: ${{ matrix.nx }}
 
   portfolio:
     name: Mixed portfolio / Node ${{ matrix.node }}
@@ -83,15 +125,29 @@ jobs:
         node: [22, 24]
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.9
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build packed fixture prerequisites on the authoring runtime
+        run: pnpm exec nx run-many -t build --projects=@megamono/plugin,nx-apple,nx-cargo,nx-cloudflare,nx-extension,nx-render --output-style=static
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
-          cache: npm
-      - name: Use the repository npm version
+          package-manager-cache: false
+      - name: Use the npm consumer CLI
         shell: bash
-        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
-      - run: npm ci
-      - run: npm exec nx -- run @megamono/plugin:e2e-portfolio-compatibility --output-style=static
+        run: npm install --global npm@11.21.1
+      - name: Qualify the Node 22 packed portfolio
+        if: matrix.node == 22
+        run: node packages/plugin/e2e/portfolio-compatibility.e2e.mjs
+      - name: Qualify the packed portfolio
+        if: matrix.node == 24
+        run: pnpm exec nx run @megamono/plugin:e2e-portfolio-compatibility --output-style=static
 
   future:
     name: Nx next canary
@@ -100,15 +156,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.9
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
-      - name: Use the repository npm version
+          cache: pnpm
+      - name: Use the npm consumer and publishing CLI
         shell: bash
-        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
-      - run: npm ci
-      - run: npm exec nx -- run @megamono/plugin:e2e-nx-compatibility --output-style=static
+        run: npm install --global npm@11.21.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec nx run @megamono/plugin:e2e-nx-compatibility --output-style=static
         env:
           MEGAMONO_NX_VERSION: next
           MEGAMONO_TYPESCRIPT_VERSION: next

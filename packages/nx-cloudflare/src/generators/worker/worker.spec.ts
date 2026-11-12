@@ -42,7 +42,7 @@ describe('workerGenerator', () => {
       JSON.parse(tree.read('package.json', 'utf8') ?? '{}').devDependencies,
     ).toMatchObject({
       '@megamono/nx-cloudflare': '0.0.1',
-      wrangler: '4.125.0',
+      wrangler: '4.153.0',
     });
   });
 

@@ -2,12 +2,26 @@ import { readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { createRequire } from 'node:module';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import type { ProjectGraph } from '@nx/devkit';
+import { readJsonFile, type ProjectGraph } from '@nx/devkit';
 import { valid as validVersion } from 'semver';
 import { repositoryOwnedGraph } from './repository-graph';
+import {
+  inspectWorkspaceDependencies,
+  type WorkspaceDependencyInspection,
+} from './workspace-dependency-health';
 import { renderPrismaFindings } from './render-prisma-health';
+import {
+  expoReadinessFindings,
+  inspectExpoProjects,
+  type ExpoProjectInspection,
+} from './expo-readiness';
 import type { MegamonoConfig } from './config';
+import {
+  warningIdentityEvidence,
+  warningIdentityFingerprint,
+} from './identity-baseline';
 import type { RepositoryDocument } from './docs';
 import { inspectManagedSkills } from './managed-skills';
 import {
@@ -44,6 +58,7 @@ export interface HealthSuppressionResult {
 }
 
 export interface RepositoryHealthReport {
+  readonly dependencyInspection?: WorkspaceDependencyInspection;
   readonly schemaVersion: 1;
   readonly purpose: 'advisory';
   readonly readiness: 'not-assessed';
@@ -61,6 +76,18 @@ export interface RepositoryHealthReport {
     readonly passed: boolean | null;
   };
   readonly reductions?: readonly string[];
+  readonly platforms?: {
+    readonly expo: readonly ExpoProjectInspection[];
+  };
+  readonly dependencyPolicy?: {
+    readonly assessment: 'not-assessed';
+    readonly warningBaseline?: NonNullable<
+      MegamonoConfig['adoption']['warningBaseline']
+    >;
+    readonly boundaryAllowances: NonNullable<
+      MegamonoConfig['conventions']['boundaryAllowances']
+    >;
+  };
   readonly findings: readonly (HealthFinding & {
     readonly severity: 'warning';
     readonly category: 'adoption-debt' | HealthCheck;
@@ -83,6 +110,9 @@ export class HealthGraphError extends Error {
 
 export interface HealthGitState {
   readonly available: boolean;
+  readonly integrationBase?: string;
+  readonly branchComparisonIssue?:
+    'integration-base-unavailable' | 'git-ancestry-unavailable';
   readonly branches: Readonly<Record<string, 'active' | 'merged' | 'missing'>>;
   readonly lastChanged: Readonly<Record<string, string>>;
 }
@@ -180,23 +210,174 @@ const executeFile = promisify(execFile);
 async function gitOutput(
   workspaceRoot: string,
   args: readonly string[],
-): Promise<{ readonly stdout: string; readonly code: number }> {
+): Promise<{
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly code: number;
+}> {
   try {
     const result = await executeFile('git', [...args], {
       cwd: workspaceRoot,
       encoding: 'utf8',
     });
-    return { stdout: result.stdout.trim(), code: 0 };
+    return {
+      stdout: result.stdout.trim(),
+      stderr: result.stderr.trim(),
+      code: 0,
+    };
   } catch (error) {
     const failure = error as {
       readonly code?: unknown;
       readonly stdout?: unknown;
+      readonly stderr?: unknown;
     };
     return {
       stdout: typeof failure.stdout === 'string' ? failure.stdout.trim() : '',
-      code: typeof failure.code === 'number' ? failure.code : 1,
+      stderr: typeof failure.stderr === 'string' ? failure.stderr.trim() : '',
+      // A spawn failure is not Git's ordinary negative-result exit status.
+      code: typeof failure.code === 'number' ? failure.code : -1,
     };
   }
+}
+
+interface HealthBranch {
+  readonly reference: string;
+  readonly commit: string;
+  readonly name: string;
+}
+
+function healthBranchName(reference: string): string {
+  return reference.startsWith('refs/heads/')
+    ? reference.slice('refs/heads/'.length)
+    : reference.slice('refs/remotes/'.length).split('/').slice(1).join('/');
+}
+
+async function resolveHealthBranch(
+  workspaceRoot: string,
+  references: readonly string[],
+): Promise<HealthBranch | undefined> {
+  for (const reference of references) {
+    // rev-parse accepts expressions such as refs/heads/main~1. Only a literal
+    // branch ref may select integration; validation must precede parsing.
+    const format = await gitOutput(workspaceRoot, [
+      'check-ref-format',
+      reference,
+    ]);
+    if (format.code === 1 && !format.stderr) continue;
+    if (format.code !== 0 || format.stderr)
+      throw new Error('Git branch comparison is unavailable');
+    const symbolic = await gitOutput(workspaceRoot, [
+      'symbolic-ref',
+      '--quiet',
+      reference,
+    ]);
+    if (symbolic.stderr || (symbolic.code !== 0 && symbolic.code !== 1))
+      throw new Error('Git branch comparison is unavailable');
+    const canonical = symbolic.code === 0 ? symbolic.stdout : reference;
+    if (
+      !canonical.startsWith('refs/heads/') &&
+      !canonical.startsWith('refs/remotes/')
+    )
+      throw new Error('Git integration reference is not a branch');
+    const resolved = await gitOutput(workspaceRoot, [
+      'rev-parse',
+      '--verify',
+      '--quiet',
+      `${canonical}^{commit}`,
+    ]);
+    if (
+      resolved.code === 0 &&
+      !resolved.stderr &&
+      /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(resolved.stdout)
+    )
+      return {
+        reference: canonical,
+        commit: resolved.stdout,
+        name: healthBranchName(canonical),
+      };
+    if (resolved.code !== 1 || resolved.stderr)
+      throw new Error('Git branch comparison is unavailable');
+  }
+  return undefined;
+}
+
+async function healthIntegrationBase(
+  workspaceRoot: string,
+): Promise<HealthBranch | undefined> {
+  let nx: {
+    defaultBase?: unknown;
+    affected?: { defaultBase?: unknown };
+    extends?: unknown;
+  };
+  try {
+    nx = readJsonFile(join(workspaceRoot, 'nx.json'));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+      throw new HealthConfigurationError(
+        'Unable to read the integration branch from nx.json.',
+      );
+    nx = {};
+  }
+  if (nx.extends !== undefined) {
+    if (typeof nx.extends !== 'string' || !nx.extends)
+      throw new HealthConfigurationError(
+        'nx.json extends must name a readable Nx preset.',
+      );
+    try {
+      // Match Nx's preset-then-root overlay without importing private Nx APIs.
+      // Resolution is local JSON only, including Nx's standalone installation.
+      const preset = createRequire(join(workspaceRoot, 'nx.json')).resolve(
+        nx.extends,
+        {
+          paths: [join(workspaceRoot, '.nx', 'installation'), workspaceRoot],
+        },
+      );
+      nx = { ...readJsonFile(preset), ...nx };
+    } catch {
+      throw new HealthConfigurationError(
+        'Unable to read the integration branch from the extended Nx preset.',
+      );
+    }
+  }
+  // affected.defaultBase is Nx's supported older configuration, not a second
+  // Megamono setting. An explicit missing branch must not select another base.
+  const configured = nx.defaultBase ?? nx.affected?.defaultBase;
+  if (configured !== undefined) {
+    if (typeof configured !== 'string' || !configured.trim())
+      throw new HealthConfigurationError(
+        'nx.json defaultBase must name an integration branch.',
+      );
+    return resolveHealthBranch(
+      workspaceRoot,
+      configured.startsWith('refs/heads/') ||
+        configured.startsWith('refs/remotes/')
+        ? [configured]
+        : [
+            `refs/heads/${configured}`,
+            `refs/remotes/${configured}`,
+            `refs/remotes/origin/${configured}`,
+          ],
+    );
+  }
+  const remote = await gitOutput(workspaceRoot, [
+    'symbolic-ref',
+    '--quiet',
+    'refs/remotes/origin/HEAD',
+  ]);
+  if (
+    remote.code === 0 &&
+    !remote.stderr &&
+    remote.stdout.startsWith('refs/remotes/origin/')
+  )
+    return resolveHealthBranch(workspaceRoot, [remote.stdout]);
+  if (remote.code !== 1 || remote.stderr)
+    throw new Error('Git default branch is unavailable');
+  return resolveHealthBranch(workspaceRoot, [
+    'refs/heads/main',
+    'refs/remotes/origin/main',
+    'refs/heads/master',
+    'refs/remotes/origin/master',
+  ]);
 }
 
 export async function collectHealthGitState(
@@ -215,6 +396,23 @@ export async function collectHealthGitState(
   const plans = documents.filter(
     ({ archived, data }) => data.type === 'plan' && !archived,
   );
+  let base: HealthBranch | undefined;
+  let branchComparisonIssue: HealthGitState['branchComparisonIssue'];
+  const shallow = await gitOutput(workspaceRoot, [
+    'rev-parse',
+    '--is-shallow-repository',
+  ]);
+  if (plans.some((plan) => plan.data.branch)) {
+    try {
+      base = await healthIntegrationBase(workspaceRoot);
+      if (!base) branchComparisonIssue = 'integration-base-unavailable';
+      else if (shallow.code !== 0 || shallow.stdout !== 'false')
+        branchComparisonIssue = 'git-ancestry-unavailable';
+    } catch (error) {
+      if (error instanceof HealthConfigurationError) throw error;
+      branchComparisonIssue = 'git-ancestry-unavailable';
+    }
+  }
   for (const plan of plans) {
     const path = relative(workspaceRoot, plan.absolutePath);
     if (path && !path.startsWith('..')) {
@@ -231,35 +429,54 @@ export async function collectHealthGitState(
     }
     const branch = plan.data.branch;
     if (!branch || branches[branch]) continue;
-    let reference: string | undefined;
-    for (const candidate of [
-      `refs/heads/${branch}`,
-      `refs/remotes/origin/${branch}`,
-    ]) {
-      const resolved = await gitOutput(workspaceRoot, [
-        'rev-parse',
-        '--verify',
-        '--quiet',
-        candidate,
+    let resolved: HealthBranch | undefined;
+    try {
+      resolved = await resolveHealthBranch(workspaceRoot, [
+        `refs/heads/${branch}`,
+        `refs/remotes/origin/${branch}`,
       ]);
-      if (resolved.code === 0) {
-        reference = candidate;
-        break;
-      }
+    } catch {
+      branchComparisonIssue = 'git-ancestry-unavailable';
+      continue;
     }
-    if (!reference) {
+    if (!resolved) {
       branches[branch] = 'missing';
+      continue;
+    }
+    if (!base) continue;
+    // The integration branch itself is not a completed feature, including
+    // local and remote representations of the selected branch.
+    if (resolved.name === base.name) {
+      branches[branch] = 'active';
       continue;
     }
     const merged = await gitOutput(workspaceRoot, [
       'merge-base',
       '--is-ancestor',
-      reference,
-      'HEAD',
+      resolved.commit,
+      base.commit,
     ]);
-    branches[branch] = merged.code === 0 ? 'merged' : 'active';
+    // Older Git can emit a missing-object error but still exit 1. Only a clean
+    // negative comparison establishes unmerged ancestry; diagnostics mean that
+    // the history could not be assessed, regardless of the numeric exit code.
+    if (merged.code === 0 && !merged.stderr) branches[branch] = 'merged';
+    else if (
+      merged.code === 1 &&
+      !merged.stderr &&
+      shallow.code === 0 &&
+      !shallow.stderr &&
+      shallow.stdout === 'false'
+    )
+      branches[branch] = 'active';
+    else branchComparisonIssue = 'git-ancestry-unavailable';
   }
-  return { available: true, branches, lastChanged };
+  return {
+    available: true,
+    branches,
+    lastChanged,
+    ...(base ? { integrationBase: base.reference } : {}),
+    ...(branchComparisonIssue ? { branchComparisonIssue } : {}),
+  };
 }
 
 async function readJson<T>(path: string): Promise<T | undefined> {
@@ -279,6 +496,13 @@ async function readText(path: string): Promise<string | undefined> {
     throw error;
   }
 }
+
+/** pnpm/Yarn workspace shorthands and the range prefix each packs to. */
+const workspaceShorthands = new Map([
+  ['workspace:*', ''],
+  ['workspace:^', '^'],
+  ['workspace:~', '~'],
+]);
 
 function compareVersions(left: string, right: string): number {
   const a = left.split('.').map(Number);
@@ -782,26 +1006,39 @@ async function dependencyAlignmentFindings(
   for (const [key, consumers] of [...declarations].sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
-    const ranges = [...new Set(consumers.map(({ range }) => range))].sort();
-    if (ranges.length < 2) continue;
+    const declaredRanges = [
+      ...new Set(consumers.map(({ range }) => range)),
+    ].sort();
+    if (declaredRanges.length < 2) continue;
     // These shorthand forms resolve to the same local package today, although
     // they deliberately produce different ranges when packed. Do not rewrite
     // publication intent or assume an alias/missing/ambiguous package resolves.
     const localVersions = workspacePackages.get(key);
-    if (
+    const localVersion =
       localVersions?.length === 1 &&
       localVersions[0] &&
-      validVersion(localVersions[0]) &&
-      consumers.every(
-        ({ ecosystem, range }) =>
-          ecosystem === 'npm' &&
-          ['workspace:*', 'workspace:^', 'workspace:~'].includes(range),
-      )
-    )
-      continue;
+      validVersion(localVersions[0])
+        ? localVersions[0]
+        : undefined;
+    const shorthand = ({ ecosystem, range }: DependencyDeclaration) =>
+      ecosystem === 'npm' && workspaceShorthands.has(range);
+    if (localVersion && consumers.every(shorthand)) continue;
+    // Next to plain ranges, compare a shorthand as the range it packs to
+    // (`workspace:*` -> the exact local version, `workspace:^` -> `^version`),
+    // so `workspace:*` and an exact pin of the same version are one range.
+    const effective = consumers.map((consumer) =>
+      localVersion && shorthand(consumer)
+        ? {
+            ...consumer,
+            range: `${workspaceShorthands.get(consumer.range)}${localVersion}`,
+          }
+        : consumer,
+    );
+    const ranges = [...new Set(effective.map(({ range }) => range))].sort();
+    if (ranges.length < 2) continue;
     const installedRanges = [
       ...new Set(
-        consumers
+        effective
           .filter(({ kind }) => kind !== 'peerDependency')
           .map(({ range }) => range),
       ),
@@ -859,6 +1096,24 @@ function specDriftFindings(
     else documented.add(project);
   }
   const findings: HealthFinding[] = [];
+  for (const entry of config.adoption.warningBaseline?.entries ?? []) {
+    findings.push({
+      check: 'spec-drift',
+      fingerprint: `adoption-warning-baseline:${warningIdentityFingerprint(entry.identity)}`,
+      state: 'identity-baseline',
+      confidence: 'complete',
+      summary: `Reviewed ${entry.identity.constraint} warning debt: ${entry.identity.source} → ${entry.identity.target}.`,
+      evidence: [
+        'megamono.json',
+        ...warningIdentityEvidence(entry.identity),
+        `reason: ${entry.reason}`,
+        `review: ${entry.reviewReference}`,
+        `revision: ${entry.revision}`,
+      ],
+      recommendation:
+        'Run the structural checker to compare active identities. Explicitly review and prune resolved entries; the baseline is never updated automatically.',
+    });
+  }
   for (const ratchet of config.adoption.ratchets) {
     const override = config.conventions.rules[ratchet.rule];
     if (
@@ -1202,7 +1457,13 @@ async function stalePlanFindings(
         state: `branch-${branchState}`,
         confidence: 'complete',
         summary: `Plan ${document.data.id} references ${branchState} branch ${branch}.`,
-        evidence: [document.relativePath, `branch: ${branch}`],
+        evidence: [
+          document.relativePath,
+          `branch: ${branch}`,
+          ...(git.integrationBase
+            ? [`integration base: ${git.integrationBase}`]
+            : []),
+        ],
         recommendation: 'Complete or abort the plan and archive it.',
       });
     }
@@ -1468,6 +1729,12 @@ export async function runRepositoryHealth(options: {
         options.config,
       )
     : [];
+  const expo = shouldRun('spec-drift')
+    ? inspectExpoProjects(options.workspaceRoot, options.graph)
+    : [];
+  const dependencyInspection = shouldRun('dependency-alignment')
+    ? inspectWorkspaceDependencies(options.workspaceRoot, options.graph)
+    : { findings: [], inspection: undefined };
   const findings = (
     await Promise.all([
       shouldRun('dependency-alignment')
@@ -1477,6 +1744,7 @@ export async function runRepositoryHealth(options: {
               options.graph,
             )),
             ...cloudflare.dependencyAlignment,
+            ...dependencyInspection.findings,
           ]
         : [],
       shouldRun('spec-drift')
@@ -1495,6 +1763,7 @@ export async function runRepositoryHealth(options: {
               options.config,
             ),
             ...databaseDrift,
+            ...expoReadinessFindings(expo),
           ]
         : [],
       shouldRun('stale-plans')
@@ -1529,6 +1798,23 @@ export async function runRepositoryHealth(options: {
     schemaVersion: 1,
     purpose: 'advisory',
     readiness: 'not-assessed',
+    ...(dependencyInspection.inspection
+      ? { dependencyInspection: dependencyInspection.inspection }
+      : {}),
+    ...(options.config.adoption.warningBaseline !== undefined ||
+    options.config.conventions.boundaryAllowances !== undefined
+      ? {
+          dependencyPolicy: {
+            assessment: 'not-assessed' as const,
+            ...(options.config.adoption.warningBaseline
+              ? { warningBaseline: options.config.adoption.warningBaseline }
+              : {}),
+            boundaryAllowances:
+              options.config.conventions.boundaryAllowances ?? [],
+          },
+        }
+      : {}),
+    ...(expo.length ? { platforms: { expo } } : {}),
     coverage: Object.fromEntries(
       HEALTH_CHECKS.map((check) => [
         check,
@@ -1544,9 +1830,20 @@ export async function runRepositoryHealth(options: {
                     reason:
                       'docs-not-adopted; only configuration and adoption-debt checks ran',
                   }
-                : check === 'stale-plans' && !gitState.available
-                  ? { status: 'partial', reason: 'git-history-unavailable' }
-                  : { status: 'completed' },
+                : check === 'dependency-alignment' &&
+                    dependencyInspection.inspection?.limitations.length
+                  ? {
+                      status: 'partial',
+                      reason: 'dependency-resolution-incomplete',
+                    }
+                  : check === 'stale-plans' && !gitState.available
+                    ? { status: 'partial', reason: 'git-history-unavailable' }
+                    : check === 'stale-plans' && gitState.branchComparisonIssue
+                      ? {
+                          status: 'partial',
+                          reason: gitState.branchComparisonIssue,
+                        }
+                      : { status: 'completed' },
       ]),
     ) as RepositoryHealthReport['coverage'],
     ...(!docsEnabled
@@ -1560,7 +1857,10 @@ export async function runRepositoryHealth(options: {
       ...finding,
       severity: 'warning',
       category:
-        finding.state === 'adoption-ratchet' ? 'adoption-debt' : finding.check,
+        finding.state === 'adoption-ratchet' ||
+        finding.state === 'identity-baseline'
+          ? 'adoption-debt'
+          : finding.check,
     })),
     intentional: suppressed.intentional,
     summary: {

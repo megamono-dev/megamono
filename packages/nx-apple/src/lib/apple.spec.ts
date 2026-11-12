@@ -65,7 +65,10 @@ describe('Apple createNodes compatibility', () => {
 describe('Apple manifest parsers', () => {
   it('isolates SwiftPM caches and scratch output outside the repository', () => {
     expect(
-      swiftPackageDumpArguments('/workspace/Packages/Core', '/tmp/megamono-cache'),
+      swiftPackageDumpArguments(
+        '/workspace/Packages/Core',
+        '/tmp/megamono-cache',
+      ),
     ).toEqual([
       'package',
       '--cache-path',
@@ -116,10 +119,9 @@ async function fixture() {
       recursive: true,
     }),
     mkdir(resolve(root, 'Apps/Portfolio.xcodeproj'), { recursive: true }),
-    mkdir(
-      resolve(root, 'Apps/Portfolio.xcodeproj/project.xcworkspace'),
-      { recursive: true },
-    ),
+    mkdir(resolve(root, 'Apps/Portfolio.xcodeproj/project.xcworkspace'), {
+      recursive: true,
+    }),
     mkdir(resolve(root, 'Apps/Synth/Synth.xcodeproj'), { recursive: true }),
     mkdir(resolve(root, 'Packages/Core'), { recursive: true }),
   ]);

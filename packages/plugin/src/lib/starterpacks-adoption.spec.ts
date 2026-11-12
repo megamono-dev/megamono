@@ -169,9 +169,7 @@ describe('Starterpacks-shaped mature workspace adoption', () => {
         name: null,
         schema: 'libs/prisma/schema/prisma/schema.prisma',
         project: 'prisma-primary',
-        derivatives: [
-          'libs/prisma/schema/src/generated/prisma/schema.prisma',
-        ],
+        derivatives: ['libs/prisma/schema/src/generated/prisma/schema.prisma'],
       }),
     ]);
     expect(renderWorkspaceInitSurvey(survey)).toContain(

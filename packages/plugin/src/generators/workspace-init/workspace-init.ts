@@ -1,7 +1,11 @@
+import { minVersion } from 'semver';
 import { designHandoffFiles } from '../../lib/docs-design';
 import {
+  appendEslintFlatConfig,
   prependEslintFlatConfig,
   locateEslintFlatConfig,
+  wrapEslintBoundaryAllowances,
+  hasBoundaryAllowanceEslintActivation,
 } from '../../lib/eslint-flat-config';
 import {
   addDependenciesToPackageJson,
@@ -12,6 +16,7 @@ import {
   logger,
   runTasksInSerial,
   updateProjectConfiguration,
+  readJson,
   updateJson,
   type GeneratorCallback,
   type ProjectGraph,
@@ -83,6 +88,7 @@ import {
   type PackageManager,
 } from '../../lib/package-manager';
 import { workspaceInitDependencyAssessments } from '../../lib/dependency-compatibility';
+import { wireExpoValidation } from '../../lib/expo-validation';
 
 const compatibility = JSON.parse(
   readFileSync(join(__dirname, '../../../compatibility.json'), 'utf8'),
@@ -703,7 +709,9 @@ interface WorkflowToolchain {
 
 interface ReleaseProject {
   readonly name: string;
-  readonly outputPath: string;
+  readonly packageName: string;
+  /** Publish candidates in order: an explicit build output, then the project root. */
+  readonly directories: readonly string[];
 }
 
 function releaseProjects(tree: Tree): readonly ReleaseProject[] {
@@ -724,12 +732,18 @@ function releaseProjects(tree: Tree): readonly ReleaseProject[] {
       ) {
         return [];
       }
+      // Inferred (@nx/js/typescript) and TS-solution builds keep the manifest
+      // at the project root and emit into it; only an explicit output that
+      // receives its own package.json is published from the output path.
       const configuredOutput = project.targets?.build?.options?.outputPath;
-      const outputPath =
-        typeof configuredOutput === 'string'
-          ? configuredOutput
-          : `dist/${project.root}`;
-      return [{ name, outputPath }];
+      const directories = [
+        ...(typeof configuredOutput === 'string' &&
+        configuredOutput.replace(/\/+$/, '') !== project.root
+          ? [configuredOutput.replace(/\/+$/, '')]
+          : []),
+        project.root,
+      ];
+      return [{ name, packageName: manifest.name, directories }];
     })
     .sort((left, right) => left.name.localeCompare(right.name));
 }
@@ -747,7 +761,7 @@ function renderYalcPublisher(
   return `#!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { access } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -775,11 +789,23 @@ function run(command, args, cwd = root) {
 try {
   await run(yalc, ['--version']);
   await run(packageManager, [...${JSON.stringify(managerArgs[packageManager])}, ...projects.map(({ name }) => name), '--output-style=static']);
-  for (const { name, outputPath } of projects) {
-    const directory = join(root, outputPath);
-    await access(join(directory, 'package.json'));
-    process.stdout.write(\`\\nPublishing \${name} from \${outputPath} to yalc...\\n\`);
-    await run(yalc, ['publish'], directory);
+  for (const { name, packageName, directories } of projects) {
+    // Publish from the first candidate holding this package's own manifest.
+    let selected;
+    for (const candidate of directories) {
+      try {
+        const manifest = JSON.parse(await readFile(join(root, candidate, 'package.json'), 'utf8'));
+        if (manifest.name === packageName && manifest.private !== true) {
+          selected = candidate;
+          break;
+        }
+      } catch {
+        // Try the next candidate.
+      }
+    }
+    if (!selected) throw new Error(\`No publishable package.json for \${packageName} in \${directories.join(' or ')} after building \${name}.\`);
+    process.stdout.write(\`\\nPublishing \${name} from \${selected} to yalc...\\n\`);
+    await run(yalc, ['publish'], join(root, selected));
   }
 } catch (error) {
   process.stderr.write(\`\${error instanceof Error ? error.message : String(error)}\\n\`);
@@ -787,6 +813,22 @@ try {
 }
 `;
 }
+
+/**
+ * Registry auth for the generated release workflow. `nx release publish` runs
+ * `npm publish` for npm and Yarn (Classic and Berry), `pnpm publish` for pnpm
+ * and `bun publish` for Bun, so a token in the runner's user `.npmrc` reaches
+ * every manager; Yarn Berry's own commands and Bun additionally read the
+ * environment variables exported here.
+ */
+const RELEASE_TOKEN_ENVIRONMENT: Readonly<
+  Record<PackageManager, readonly string[]>
+> = {
+  npm: [],
+  pnpm: [],
+  yarn: ['YARN_NPM_AUTH_TOKEN'],
+  bun: ['NPM_CONFIG_TOKEN'],
+};
 
 function renderReleaseWorkflow(
   projects: readonly ReleaseProject[],
@@ -801,27 +843,83 @@ function renderReleaseWorkflow(
   const install = frozenInstall(packageManager, toolchain);
   const nx = adapter.nx;
   const projectSelection = projects.map(({ name }) => name).join(',');
-  return `name: Megamono package prerelease
+  const tokenExports = RELEASE_TOKEN_ENVIRONMENT[packageManager]
+    .map((name) => `\n            echo "${name}=$NPM_TOKEN" >> "$GITHUB_ENV"`)
+    .join('');
+  const bunNote =
+    packageManager === 'bun'
+      ? `
+#   bun publish cannot use trusted publishing; Nx 23 retries an unauthenticated bun publish with
+#   npm publish, older Nx versions need NPM_TOKEN.`
+      : '';
+  return `name: Megamono package release
+
+# Megamono artifact release.workflow (.megamono/artifacts.json): plugin upgrades replace this file while
+# it is unmodified. Run workspace-eject before editing it.
+#
+# Run it from Actions -> "Megamono package release" -> Run workflow. Leave "dry_run" on to rehearse.
+#   - publish-current: publish the versions already in package.json. Use it for a first release and
+#     to retry a bump-and-publish run whose publish step failed.
+#   - bump-and-publish: \`nx release version\` with a commit and tags, push them, then publish.
+#
+# Registry credentials, whichever is available:
+#   - npm trusted publishing (preferred): on npmjs.com, each package -> Settings -> Trusted publishing
+#     -> GitHub Actions, this repository, workflow megamono-release.yml, environment npm-next. npm
+#     offers it only once a package exists, so a first publish needs a token. Provenance is added
+#     automatically when the repository is public.
+#   - NPM_TOKEN: a granular npm token with publish rights, stored as a secret on the npm-next
+#     environment or the repository. Remove it once trusted publishing works.${bunNote}
 
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: publish-current, or bump-and-publish
+        required: true
+        default: publish-current
+        type: choice
+        options:
+          - publish-current
+          - bump-and-publish
       specifier:
-        description: Semver keyword or exact version
+        description: 'bump-and-publish only: semver keyword or exact version'
         required: true
         default: prerelease
         type: string
       preid:
-        description: Prerelease identifier
+        description: 'bump-and-publish only: prerelease identifier'
         required: true
         default: next
         type: string
+      dist_tag:
+        description: npm dist-tag
+        required: true
+        default: next
+        type: string
+      dry_run:
+        description: Rehearse without pushing or publishing
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: write
+  id-token: write
+
+concurrency:
+  group: megamono-release
+  cancel-in-progress: false
+
+# Inputs reach scripts only through the environment, never interpolated into \`run\`.
+env:
+  MODE: \${{ inputs.mode }}
+  SPECIFIER: \${{ inputs.specifier }}
+  PREID: \${{ inputs.preid }}
+  DIST_TAG: \${{ inputs.dist_tag }}
+  DRY_RUN: \${{ inputs.dry_run }}
 
 jobs:
-  prerelease:
+  release:
     runs-on: ubuntu-latest
     environment: npm-next
     steps:
@@ -830,16 +928,45 @@ jobs:
           fetch-depth: 0
 ${packageManagerSetup}
       - run: ${install}
-      - run: ${nx} run-many -t lint test build -p ${projectSelection} --output-style=static
-      - name: Preview version changes
-        run: ${nx} release version "\${{ inputs.specifier }}" --preid "\${{ inputs.preid }}" --dry-run
+      - run: ${nx} run-many -t lint test -p ${projectSelection} --output-style=static
+      - name: Set the git identity for the release commit and tags
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
       - name: Version packages
-        run: ${nx} release version "\${{ inputs.specifier }}" --preid "\${{ inputs.preid }}" --git-commit --git-tag
-      - name: Publish next prerelease
+        if: \${{ inputs.mode == 'bump-and-publish' }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" != branch ]; then
+            echo "bump-and-publish pushes a release commit, so run it from a branch, not $GITHUB_REF_TYPE $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+          flags=(--git-commit --git-tag)
+          if [ "$DRY_RUN" = true ]; then flags+=(--dry-run); fi
+          ${nx} release version "$SPECIFIER" --preid "$PREID" "\${flags[@]}"
+      - run: ${nx} run-many -t build -p ${projectSelection} --output-style=static
+      # Pushed before publishing, so a failed publish can be retried with publish-current.
+      - name: Push the release commit and tags
+        if: \${{ inputs.mode == 'bump-and-publish' && !inputs.dry_run }}
+        run: git push --follow-tags origin "HEAD:refs/heads/$GITHUB_REF_NAME"
+      - name: Configure registry credentials
         env:
-          NODE_AUTH_TOKEN: \${{ secrets.NPM_TOKEN }}
-        run: ${nx} release publish --tag next
-      - run: git push --follow-tags origin HEAD
+          NPM_TOKEN: \${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> "$HOME/.npmrc"${tokenExports}
+            echo 'Publishing with NPM_TOKEN.'
+          else
+            echo 'No NPM_TOKEN: publishing through npm trusted publishing.'
+          fi
+          # Trusted publishing needs npm 11.5.1 or newer.
+          if ! node -e 'const [major, minor, patch] = process.argv[1].split(".").map(Number); process.exit(major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1))) ? 0 : 1)' "$(npm --version)"; then
+            npm install --global npm@^11.5.1
+          fi
+      - name: Publish packages
+        run: |
+          flags=(--tag "$DIST_TAG")
+          if [ "$DRY_RUN" = true ]; then flags+=(--dry-run); fi
+          ${nx} release publish "\${flags[@]}"
 `;
 }
 
@@ -995,6 +1122,7 @@ ${packageManagerSetup}
 ${platforms.has('android') ? '      - uses: actions/setup-java@v5\n        with:\n          distribution: temurin\n          java-version: 17\n      - uses: android-actions/setup-android@v3\n        with:\n          packages: platform-tools\n      - run: sdkmanager "platforms;android-36" "build-tools;35.0.0"\n' : ''}\
 ${platforms.has('rust') ? '      - uses: dtolnay/rust-toolchain@stable\n' : ''}${platforms.has('php') ? '      - uses: shivammathur/setup-php@v2\n        with:\n          php-version: 8.4\n' : ''}      - run: ${install}
 ${includeDocs ? `      - run: ${nx} run megamono-docs:validate --output-style=static\n` : ''}
+${platforms.has('mobile') ? `      - run: ${nx} affected -t expo-doctor --exclude=tag:platform:apple --output-style=static\n` : ''}\
       - run: ${nx} affected -t lint test build --exclude=tag:platform:apple --output-style=static`,
         ]
       : []),
@@ -1059,7 +1187,7 @@ interface EslintWiringResult {
   readonly rules: boolean;
 }
 
-function wireEslintConfig(tree: Tree): EslintWiringResult {
+function wireEslintConfig(tree: Tree, policyVersion = 1): EslintWiringResult {
   const path = 'eslint.config.mjs';
   let current = tree.read(path, 'utf8') ?? 'export default [\n];\n';
   if (!tree.exists(path)) tree.write(path, current);
@@ -1160,16 +1288,107 @@ function wireEslintConfig(tree: Tree): EslintWiringResult {
   };
   const imports = ensureImports();
   const rules = ensureRules();
+  if (policyVersion === 2) {
+    const wrapped = wrapEslintBoundaryAllowances(tree.read(path, 'utf8') ?? '');
+    if (wrapped === undefined || !hasBoundaryAllowanceEslintActivation(wrapped))
+      throw new WorkspaceInitError(
+        'conflict',
+        'Version 2 requires canonical Megamono ESLint imports, createConfig entry, and boundary policy wrapper. Review customized or ejected wiring before adoption.',
+      );
+    if (wrapped !== tree.read(path, 'utf8')) tree.write(path, wrapped);
+  }
   return { imports, rules };
+}
+
+/**
+ * Fresh workspaces only: allow `interface A extends B {}`, the declaration
+ * merging pattern feature modules use to extend shared contracts. The block is
+ * repository-owned (not a managed section) and needs typescript-eslint, which
+ * the Nx TypeScript flat config registers for the same files. Later severity-only
+ * entries keep these options.
+ */
+export const DECLARATION_MERGING_ESLINT_BLOCK = `  {
+    files: ['**/*.ts', '**/*.tsx', '**/*.cts', '**/*.mts'],
+    // Feature modules extend shared contracts by declaration merging.
+    rules: {
+      '@typescript-eslint/no-empty-interface': [
+        'error',
+        { allowSingleExtends: true },
+      ],
+      '@typescript-eslint/no-empty-object-type': [
+        'error',
+        { allowInterfaces: 'with-single-extends' },
+      ],
+    },
+  },`;
+
+/**
+ * Fresh workspaces only. Next 16's Turbopack cannot map a library's
+ * nodenext-style `./x.js` specifier to `./x.ts` source, so generated libraries
+ * import `./x.ts`; tsc rewrites it to `.js` in emitted JavaScript. Every
+ * project extends the base config, so apps that typecheck library source (Next
+ * build) accept the same specifiers. Requires TypeScript 5.7+.
+ */
+function enableTypeScriptImportExtensions(tree: Tree): void {
+  const path = tree.exists('tsconfig.base.json')
+    ? 'tsconfig.base.json'
+    : 'tsconfig.json';
+  if (!tree.exists(path)) return;
+  const manifest = readJson(tree, 'package.json');
+  const declared =
+    manifest.devDependencies?.typescript ?? manifest.dependencies?.typescript;
+  const version = typeof declared === 'string' ? minVersion(declared) : null;
+  if (!version || version.compare('5.7.0') < 0) return;
+  updateJson(tree, path, (value) =>
+    value.compilerOptions?.rewriteRelativeImportExtensions !== undefined
+      ? value
+      : {
+          ...value,
+          compilerOptions: {
+            ...value.compilerOptions,
+            rewriteRelativeImportExtensions: true,
+          },
+        },
+  );
+}
+
+function addDeclarationMergingDefaults(tree: Tree): void {
+  const path = 'eslint.config.mjs';
+  const source = tree.read(path, 'utf8');
+  if (
+    !source ||
+    !source.includes("configs['flat/typescript']") ||
+    source.includes('no-empty-object-type') ||
+    source.includes('no-empty-interface')
+  )
+    return;
+  const updated = appendEslintFlatConfig(
+    source,
+    DECLARATION_MERGING_ESLINT_BLOCK,
+  );
+  if (updated !== undefined) tree.write(path, updated);
 }
 
 function delimiterCount(source: string, delimiter: string): number {
   return source.split(delimiter).length - 1;
 }
 
-function preflightEslintConfig(tree: Tree): void {
+function preflightEslintConfig(tree: Tree, policyVersion = 1): void {
   const current = tree.read('eslint.config.mjs', 'utf8');
   if (!current) return;
+  if (
+    policyVersion === 2 &&
+    (current.includes(ESLINT_RULES_START) ||
+      artifactIsEjected(tree, 'lint.eslint-rules') ||
+      artifactIsEjected(tree, 'lint.eslint-imports'))
+  ) {
+    const wrapped = wrapEslintBoundaryAllowances(current);
+    if (wrapped === undefined || !hasBoundaryAllowanceEslintActivation(wrapped))
+      throw new WorkspaceInitError(
+        'conflict',
+        'Version 2 requires canonical Megamono ESLint imports and createConfig wiring; customized policy activation must be reviewed before initialization.',
+      );
+  }
   for (const [id, start, end] of [
     ['lint.eslint-imports', ESLINT_IMPORTS_START, ESLINT_IMPORTS_END],
     ['lint.eslint-rules', ESLINT_RULES_START, ESLINT_RULES_END],
@@ -1471,6 +1690,29 @@ export async function workspaceInitGenerator(
     only = await promptForModules();
   }
   const requestedModules = parseWorkspaceInitModules(only);
+  const expoGraph =
+    requestedModules.includes('ci') &&
+    tree.root !== '/virtual' &&
+    (workspaceSurvey.inventory.projects.some((project) =>
+      project.frameworks.some((framework) => framework.value === 'expo'),
+    ) ||
+      [...getProjects(tree).values()].some(
+        (project) =>
+          tree.exists(`${project.root}/metro.config.js`) &&
+          ['app.json', 'app.config.js', 'app.config.ts'].some((file) =>
+            tree.exists(`${project.root}/${file}`),
+          ),
+      ))
+      ? await createProjectGraphAsync({ exitOnError: false })
+      : undefined;
+  const resolvedExpoProjects = expoGraph
+    ? Object.fromEntries(
+        Object.entries(expoGraph.nodes).map(([name, node]) => [
+          name,
+          node.data,
+        ]),
+      )
+    : undefined;
   const lintCanWire =
     !requestedModules.includes('lint') ||
     workspaceSurvey.existing.eslint.some((path) =>
@@ -1482,6 +1724,7 @@ export async function workspaceInitGenerator(
   let defaultPlatform = options.defaultPlatform;
   let adoptionPlan = createWorkspaceInitPlan(tree, {
     ...options,
+    resolvedExpoProjects,
     yes: false,
     only: requestedModules,
     profile: undefined,
@@ -1505,6 +1748,7 @@ export async function workspaceInitGenerator(
     defaultPlatform = await promptForDefaultPlatform();
     adoptionPlan = createWorkspaceInitPlan(tree, {
       ...options,
+      resolvedExpoProjects,
       yes: false,
       only: requestedModules,
       profile: undefined,
@@ -1523,7 +1767,7 @@ export async function workspaceInitGenerator(
     throw new WorkspaceInitError('conflict', adoptionPlan.conflicts.join(' '));
   }
   if (requestedModules.includes('lint') && lintCanWire)
-    preflightEslintConfig(tree);
+    preflightEslintConfig(tree, existingConfig?.version);
   logger.info(renderWorkspaceInitPlan(adoptionPlan, outputFormat));
   const inferenceNames =
     requestedModules.includes('inference') &&
@@ -1597,6 +1841,21 @@ export async function workspaceInitGenerator(
   // Formatting must not rewrite caller-owned handoff assets, including files
   // already changed in the Tree by a composing generator.
   const existingDesignAssets = new Map<string, Buffer>();
+  const existingExpoConfigs = new Map<string, Buffer>();
+  for (const project of getProjects(tree).values()) {
+    for (const file of [
+      'metro.config.js',
+      'metro.config.cjs',
+      'metro.config.mjs',
+      'metro.config.ts',
+      'app.config.js',
+      'app.config.ts',
+    ]) {
+      const path = `${project.root}/${file}`.replace(/^\.\//, '');
+      const bytes = tree.read(path);
+      if (bytes) existingExpoConfigs.set(path, bytes);
+    }
+  }
   for (const { path, type } of tree.listChanges()) {
     if (type === 'DELETE' || !path.startsWith(`${docsRoot}/design/`)) continue;
     const bytes = tree.read(path);
@@ -1712,6 +1971,7 @@ export async function workspaceInitGenerator(
   if (
     modules.has('lint') &&
     !options.bootstrap &&
+    existingConfig?.version !== 2 &&
     !existingConfig?.adoption.modules.includes('lint')
   ) {
     const graph =
@@ -1817,6 +2077,14 @@ export async function workspaceInitGenerator(
         configuredPlatforms.add(tag.slice('platform:'.length));
       }
     }
+  }
+  if (modules.has('ci')) {
+    const expo = wireExpoValidation(tree, resolvedExpoProjects);
+    if (expo.length > 0) configuredPlatforms.add('mobile');
+    if (expo.length > 0)
+      logger.warn(
+        'Expo validation uses a locally installed expo-doctor compatible with each app SDK and Node version. Megamono does not install or upgrade it. Run each app’s expo-doctor target before building; direct EAS commands need their own checks.',
+      );
   }
   const coreProjectCanUpdate = managedArtifactCanUpdate(
     tree,
@@ -2071,10 +2339,13 @@ export async function workspaceInitGenerator(
       ...(existingConfig?.adoption ?? DEFAULT_MEGAMONO_CONFIG.adoption),
       modules: parseWorkspaceInitModules([...adoptedModules]),
       reductions,
-      ratchets: ADOPTION_STRUCTURAL_RULES.flatMap((rule) => {
-        const ratchet = ratchets.get(rule);
-        return ratchet ? [ratchet] : [];
-      }),
+      ratchets:
+        existingConfig?.version === 2
+          ? existingConfig.adoption.ratchets
+          : ADOPTION_STRUCTURAL_RULES.flatMap((rule) => {
+              const ratchet = ratchets.get(rule);
+              return ratchet ? [ratchet] : [];
+            }),
       inference: modules.has('inference')
         ? inferenceSupported
           ? inference
@@ -2163,8 +2434,11 @@ export async function workspaceInitGenerator(
   await applyDocsAdoptionMap(tree, docsAdoptionEntries);
   const eslintWiring =
     modules.has('lint') && lintCanWire
-      ? wireEslintConfig(tree)
+      ? wireEslintConfig(tree, config.version)
       : { imports: false, rules: false };
+  if (options.bootstrap && modules.has('lint') && lintCanWire)
+    addDeclarationMergingDefaults(tree);
+  if (options.bootstrap) enableTypeScriptImportExtensions(tree);
   const docsLoaderTemplate = renderContentCollectionsConfig(docsRoot);
   const docsLoaderCanUpdate =
     modules.has('docs') && docsContract.loaderMode === 'create'
@@ -2472,6 +2746,7 @@ export async function workspaceInitGenerator(
     : () => undefined;
   await formatFiles(tree);
   for (const [path, bytes] of existingDesignAssets) tree.write(path, bytes);
+  for (const [path, bytes] of existingExpoConfigs) tree.write(path, bytes);
 
   registerFileArtifact(
     tree,

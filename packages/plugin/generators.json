@@ -20,6 +20,11 @@
       "schema": "./dist/generators/library/schema.json",
       "description": "Add an internal or publishable TypeScript library"
     },
+    "library-entrypoint": {
+      "factory": "./dist/generators/library-entrypoint/library-entrypoint",
+      "schema": "./dist/generators/library-entrypoint/schema.json",
+      "description": "Add a subpath export to a library and optionally declare it side-effect free"
+    },
     "database": {
       "factory": "./dist/generators/database/database",
       "schema": "./dist/generators/database/schema.json",
@@ -94,6 +99,11 @@
       "factory": "./dist/generators/playstack-integrate/playstack-integrate",
       "schema": "./dist/generators/playstack-integrate/schema.json",
       "description": "Materialize package-authored application integration wiring"
+    },
+    "adoption-policy": {
+      "factory": "./dist/generators/adoption-policy/adoption-policy",
+      "schema": "./dist/generators/adoption-policy/schema.json",
+      "description": "Report or apply a reviewed exact adoption policy"
     }
   }
 }

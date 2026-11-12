@@ -34,3 +34,51 @@ test('next and latest versions synchronize both scaffold registries without chan
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('checks and synchronizes complete canonical SDK metadata without requiring a release version change', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'megamono-registry-sync-'));
+  const put = async (file, value) => {
+    await mkdir(dirname(join(root, file)), { recursive: true });
+    await writeFile(join(root, file), JSON.stringify(value, null, 2));
+  };
+  try {
+    const canonical = {
+      scaffoldPackages: { '@megamono/plugin': '0.1.0', nx: '23.2.1' },
+      expoSdks: {
+        schemaVersion: 1,
+        defaultVersion: '57.0.31',
+        snapshots: { 57: { requirements: { react: '19.2.3' } } },
+      },
+    };
+    await put(compatibilityFiles[0], canonical);
+    await put(compatibilityFiles[1], {
+      scaffoldPackages: canonical.scaffoldPackages,
+      obsoleteSection: true,
+    });
+    await put('packages/plugin/package.json', {
+      name: '@megamono/plugin',
+      version: '0.1.0',
+    });
+    const before = await Promise.all(
+      compatibilityFiles.map((file) => readFile(join(root, file), 'utf8')),
+    );
+    await assert.rejects(
+      syncReleasePins(root, true),
+      /compatibility registry differs from canonical/,
+    );
+    assert.deepEqual(
+      await Promise.all(
+        compatibilityFiles.map((file) => readFile(join(root, file), 'utf8')),
+      ),
+      before,
+    );
+    await syncReleasePins(root);
+    await syncReleasePins(root, true);
+    assert.equal(
+      await readFile(join(root, compatibilityFiles[1]), 'utf8'),
+      before[0],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

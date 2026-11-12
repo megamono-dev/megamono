@@ -1,0 +1,325 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-10T18:13:05.222031+00:00",
+  "repository": "megamono-dev/megamono",
+  "previousEvidence": "browsersweet-remediation-20261110.evidence.json",
+  "sourceReport": {
+    "repository": "browsersweet-int",
+    "branch": "feat/extension",
+    "path": "docs/research/20261109-megamono-and-playstack-upstream-issues.md",
+    "sha256": "d916562d0f54a5b1736a93527e89512254e99242cfd7e1884989da24af914499",
+    "reviewedMegamonoVersion": "0.1.0-next.0"
+  },
+  "baseSourceRevision": "c7745fb",
+  "qualifiedSourceRevision": "ffb994c909dcda328c1dd66f964e345e6213675e",
+  "scope": "Follow-up Megamono source and scaffold work for Browser Sweet. No existing adopter migration, hosted CI, public npm/shared Yalc publication, Playstack source changes, browser-runtime admission or deployment qualification is implied.",
+  "status": "locally-qualified",
+  "items": [
+    {
+      "id": "M10",
+      "status": "implemented",
+      "assessment": "All six documentation generator schemas describe the generator/options and required versus inferred values. Invalid input, unknown topics and unresolved references fail before record creation; valid planned documentation namespaces remain supported."
+    },
+    {
+      "id": "M11",
+      "status": "implemented",
+      "assessment": "New docs/content declarations use ^4.6.5. Existing broad declarations admitting unsupported versions are review conflicts before writes; declarations are not silently rewritten."
+    },
+    {
+      "id": "M13",
+      "status": "implemented-locally-qualified",
+      "assessment": "Explicit package-level runtimeEntries plus independent accepted-decision authority attest renderer/worker roots. Only observed static/dynamic renderer-only uses can consume web projects. Worker/unclassified reachability, Node built-ins, implicit edges and other boundaries remain restricted."
+    },
+    {
+      "id": "M18",
+      "status": "implemented",
+      "assessment": "Localization rule skips spec/test files and __tests__ by default and supports explicit gitignore-style ignorePatterns plus ignoreTests:false. Dev/story files are not silently excluded."
+    },
+    {
+      "id": "M19",
+      "status": "partially-addressed",
+      "assessment": "Health adds advisory per-application installed React/Chakra/Emotion evidence, deduplicating real installations and distinguishing unavailable assessment. This is Node resolution evidence rather than browser bundle or provider-context admission."
+    },
+    {
+      "id": "M20",
+      "status": "implemented",
+      "assessment": "Localization diagnostics describe message catalogs/localization calls accurately and state that inline-literal checks do not prove translation completeness. No i18n dependency is installed automatically."
+    },
+    {
+      "id": "M21",
+      "status": "partially-addressed",
+      "assessment": "Health identifies undeclared static/dynamic imports between named owned workspace packages, even when root dependencies are hoisted. This advisory does not add a new structural-check error or modify warning budgets."
+    },
+    {
+      "id": "M26",
+      "status": "implemented-locally-qualified",
+      "assessment": "Explicit React flat-config APIs use the imported installed Hooks preset and preserve configuration/plugin identity. Newly generated web/site and web UI libraries receive scoped source rules; existing projects and Expo are not migrated."
+    }
+  ],
+  "extensionContract": {
+    "location": "package.json#megamono.extension.runtimeEntries",
+    "schema": "packages/plugin/schemas/extension-runtime.schema.json",
+    "version": 1,
+    "required": ["version", "renderers", "workers", "rationale", "decision"],
+    "decisionAuthority": "Independent accepted repository decision lookup, including when optional docs checking is skipped.",
+    "completeMeaning": "Source consistency under author-attested complete roots. Dynamic WXT configuration and hooks are not executed or automatically proven.",
+    "report": "Checker JSON extensionRuntime includes project, contract, complete and applied source/target/dependencyKind evidence.",
+    "rendererScope": "Literal HTML-backed renderer roots only. WXT content scripts and dynamically discovered entries are not automatically renderer-qualified; unclassified production roots retain worker restrictions."
+  },
+  "notCompleted": [
+    {
+      "id": "M16",
+      "assessment": "Known non-runtime files may be omitted from extension entry inventory, but are traced if runtime-reachable. This is not a general scripts/config/tests Node-platform exemption."
+    },
+    {
+      "id": "M24",
+      "assessment": "Bundle attribution, safe subpath exports and side-effect policy remain open. No blanket sideEffects:false or browser-bundle completeness claim was added."
+    }
+  ],
+  "qualification": {
+    "focusedCheckpoints": [
+      {
+        "id": "health-react-and-helper",
+        "status": "passed-at-reported-checkpoint",
+        "testsPassed": 84
+      },
+      {
+        "id": "app-and-library",
+        "status": "passed-at-reported-checkpoint",
+        "testsPassed": 69
+      },
+      {
+        "id": "extension-boundary",
+        "status": "passed",
+        "testsPassed": 108,
+        "breakdown": {
+          "extensionRuntime": 45,
+          "structural": 25,
+          "eslint": 38
+        }
+      },
+      {
+        "id": "docs-and-dependency-baseline",
+        "status": "passed",
+        "coveredTests": 32,
+        "note": "Four-file focused suite: 31 passed, then the dependency suite: 12 passed after adding one atomic adoption case; 32 distinct covered cases."
+      },
+      {
+        "id": "docs-cli-help",
+        "status": "passed",
+        "note": "Real docs-research Nx help reports meaningful generator/options text, explicit required wording and no undefined descriptions."
+      }
+    ],
+    "fullPluginSuite": {
+      "status": "passed",
+      "filesPassed": 87,
+      "testsPassed": 1144,
+      "testsSkipped": 1,
+      "testsTotal": 1145,
+      "durationSeconds": 483.44,
+      "log": "/private/tmp/megamono-followup-full-plugin-details.log",
+      "taskLog": "/private/tmp/megamono-followup-full-plugin.log"
+    },
+    "sharedBuildAndLint": {
+      "status": "passed",
+      "buildLog": "/private/tmp/megamono-lint-web-plugin-final-build-20261110.log",
+      "lintLog": "/private/tmp/megamono-followup-plugin-lint.log",
+      "lintErrors": 0,
+      "lintWarnings": 3,
+      "lintWarningNote": "Pre-existing no-non-null-assertion warnings in app.spec.ts at lines 637, 1065 and 1070.",
+      "lintDetailsLog": "/private/tmp/megamono-followup-plugin-lint-details.log"
+    },
+    "freshConsumer": {
+      "status": "passed",
+      "webScaffold": {
+        "status": "passed",
+        "durationSeconds": 182,
+        "log": "/private/tmp/megamono-lint-packed-web-consumer-20261110.log",
+        "checks": [
+          "Clean isolated pnpm install of packed package",
+          "Actual ESLint Hooks misuse rejected",
+          "Intentional theme source type error rejected",
+          "Next production build",
+          "Peer singleton consumer probes",
+          "Injected PORT respected",
+          "Startup from workspace root and app directory"
+        ],
+        "generatedSiteLintExtension": {
+          "status": "passed",
+          "durationSeconds": 120,
+          "log": "/private/tmp/megamono-lint-packed-web-full-lint-20261110.log",
+          "qualifiedSourceRevision": "ffb994c909dcda328c1dd66f964e345e6213675e",
+          "note": "Expanded consumer executes complete generated fixture-site:lint before the Next production build, plus all initial clean-install, actual Hooks misuse, intentional theme type error, singleton, workspace/app-directory PORT and shutdown checks. No production-source fix was needed."
+        }
+      },
+      "adoptionPolicy": {
+        "status": "passed",
+        "durationSeconds": 9.9,
+        "log": "/private/tmp/megamono-extension-runtime-packed-final.log",
+        "checks": [
+          "Clean frozen pnpm reinstall of packed package",
+          "TypeScript consumer build and public schema export",
+          "Actual registered checker JSON renderer-positive applied evidence",
+          "Worker-negative check without applied exemptions",
+          "Missing accepted decision rejected despite skipDocs:true",
+          "Canonical empty artifact registry with ownership validation enabled"
+        ]
+      }
+    },
+    "hostedCI": {
+      "status": "not-run"
+    },
+    "adopterRuntimeAndDeployment": {
+      "status": "not-assessed"
+    },
+    "creatorFullSuite": {
+      "status": "passed",
+      "testsPassed": 105,
+      "log": "/private/tmp/megamono-followup-creator-test.log"
+    },
+    "releasePolicyAndRegistrySync": {
+      "status": "passed",
+      "packages": 10,
+      "log": "/private/tmp/megamono-followup-release-check.log"
+    },
+    "earlierConsumerAttempts": [
+      {
+        "order": 1,
+        "status": "environment-failure-before-assertions",
+        "log": "/private/tmp/megamono-extension-runtime-packed.log",
+        "cause": "Sandbox npm registry DNS ENOTFOUND exhausted the 240-second install deadline; no product assertion result.",
+        "resolution": "One justified network-enabled retry."
+      },
+      {
+        "order": 2,
+        "status": "synthetic-fixture-metadata-failure",
+        "log": "/private/tmp/megamono-extension-runtime-packed-network.log",
+        "cause": "Real checker correctly rejected the synthetic consumer missing its canonical .megamono/artifacts.json registry (artifact-registry-missing).",
+        "resolution": "Added the minimal valid empty fixture registry, retained ownership validation and reran successfully without product source changes."
+      }
+    ],
+    "dependencyAudit": {
+      "status": "reviewed-existing-finding",
+      "log": "/private/tmp/megamono-hooks-audit-20261110.json",
+      "vulnerabilities": {
+        "info": 0,
+        "low": 1,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0
+      },
+      "findings": [
+        {
+          "package": "deepmerge",
+          "version": "4.3.1",
+          "severity": "low",
+          "advisory": "GHSA-gcqx-w48m-w2h4",
+          "assessment": "Previously recorded transitive tooling finding remains; this audit is not a zero-finding result. No new exception was added."
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "Existing adopter projects and their policies are not migrated or approved automatically.",
+    "Installed module inspection is resolve-only, does not execute inspected JavaScript, and does not use ambient NODE_PATH fallback.",
+    "Missing/malformed dependency evidence produces partial advisory coverage rather than a complete runtime assessment.",
+    "No broad platform exception, warning-budget increase or dependency audit exception was added.",
+    "Remaining first-wave issues retain their previous status unless explicitly listed in this follow-up."
+  ],
+  "implementationRevisions": {
+    "docsAndZod": "7047da9",
+    "workspaceHealth": "d7d7558",
+    "reactLint": "764964d",
+    "productionSource": "2dfd9a4",
+    "freshWebFixture": "f4196dd",
+    "packedPolicyFixture": "2ca725c",
+    "fullGeneratedSiteLintFixture": "ffb994c"
+  },
+  "localEvidenceReceipts": [
+    {
+      "path": "/private/tmp/megamono-followup-full-plugin-details.log",
+      "sha256": "d888ce30d124834cc0916a89d543cfc535e61d0e8a935d889cec0d5c7ffbf520",
+      "bytes": 1204292
+    },
+    {
+      "path": "/private/tmp/megamono-followup-full-plugin.log",
+      "sha256": "2351dddad61d169801729ad4f86307b0de9899c368a6b431d373f59b3e78e50c",
+      "bytes": 540
+    },
+    {
+      "path": "/private/tmp/megamono-followup-creator-test.log",
+      "sha256": "56f780feb1d2e7240b245d8b6d8c1cef2cbc9729f4bafa9ead72198225274b94",
+      "bytes": 1573
+    },
+    {
+      "path": "/private/tmp/megamono-followup-plugin-lint.log",
+      "sha256": "5cc5cee92e95dc9dc3bfec2ad0ec9592d21429001df53210c67c5f0227d861d6",
+      "bytes": 203
+    },
+    {
+      "path": "/private/tmp/megamono-followup-plugin-lint-details.log",
+      "sha256": "1297ce3fe30e1230899bfff8c4f4f6b40efb00b43dd5ae6e893e2e5daed6842b",
+      "bytes": 704
+    },
+    {
+      "path": "/private/tmp/megamono-followup-release-check.log",
+      "sha256": "766771db06c79c39f753bcd5e0aefa94122edfb13e3b0f707d4bda44c3b3fc34",
+      "bytes": 141
+    },
+    {
+      "path": "/private/tmp/megamono-lint-web-plugin-final-build-20261110.log",
+      "sha256": "3c88a8544b40e92c0116c3820bbf377faf86156aad144e3a7ef84697500f4896",
+      "bytes": 854
+    },
+    {
+      "path": "/private/tmp/megamono-lint-packed-web-consumer-20261110.log",
+      "sha256": "30d6281fbb9d5412cca5ac78c37829efdcc8bdc2f90441d33c34dfce4a23a11f",
+      "bytes": 2222
+    },
+    {
+      "path": "/private/tmp/megamono-extension-runtime-packed.log",
+      "sha256": "5f603a17fa82606ba95bbec32cddca34614e49cd54103a6d9750d2b41550b4e2",
+      "bytes": 34615
+    },
+    {
+      "path": "/private/tmp/megamono-extension-runtime-packed-network.log",
+      "sha256": "84e47e6fb7b9b3eccdce53ef7f25eea5db092493e9ee6c32256eddf1da2c980a",
+      "bytes": 5450
+    },
+    {
+      "path": "/private/tmp/megamono-extension-runtime-packed-final.log",
+      "sha256": "ee7bdc039123414c50d33e447553a3f7fe655fa7fef5c803078042fb337d9ff4",
+      "bytes": 4809
+    },
+    {
+      "path": "/private/tmp/megamono-hooks-audit-20261110.json",
+      "sha256": "fbac2ef869b0cff7ef06f35f003813834e1a62ccb4f12bf655214b8f4842a7a3",
+      "bytes": 11396
+    },
+    {
+      "path": "/private/tmp/megamono-docs-schema-baseline-focused.log",
+      "sha256": "c30c617793098c5037a3a0496aa1e835baa9872dae18ec5d3eb570433c93fd7e",
+      "bytes": 204397
+    },
+    {
+      "path": "/private/tmp/megamono-zod-adoption-atomic.log",
+      "sha256": "d5bb1c55c2c7ed540730d60c076cf738dc60e77f19d63abc96ddbd82a507c494",
+      "bytes": 4472
+    },
+    {
+      "path": "/private/tmp/megamono-docs-help-after.log",
+      "sha256": "2bfc9914f63cba2a452d82db0ea103999925aed95ae89bfd5e03ac50657b99b6",
+      "bytes": 1847
+    },
+    {
+      "path": "/private/tmp/megamono-workspace-health-independent-tests.log",
+      "sha256": "2f69a199b1fedaed3a0b1edfc451f9b88be6434d4afbc4d5d0816206a80e53ab",
+      "bytes": 2833
+    },
+    {
+      "path": "/private/tmp/megamono-lint-packed-web-full-lint-20261110.log",
+      "sha256": "a63a5458d14d5ebc764463ddfc557b516326ce107afbb027226a27ee5b081ede",
+      "bytes": 2385
+    }
+  ]
+}

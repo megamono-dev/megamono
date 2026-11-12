@@ -1,19 +1,22 @@
 {
   "name": "@megamono/nx-cloudflare",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "license": "MIT",
-  "description": "Nx plugin inferring Cloudflare Worker projects, binding graph edges, and targets from Wrangler configuration.",
+  "description": "Nx plugin for Cloudflare Workers: generate applications, discover Wrangler projects and binding dependencies, and run development and deployment targets.",
   "keywords": [
     "megamono",
     "nx",
     "nx-plugin",
+    "monorepo",
     "cloudflare",
+    "cloudflare-workers",
     "workers",
     "wrangler",
-    "durable-objects"
+    "durable-objects",
+    "serverless"
   ],
   "author": "Ryan Hefner",
-  "homepage": "https://github.com/megamono-dev/megamono/tree/main/packages/nx-cloudflare#readme",
+  "homepage": "https://megamono.com/docs/platforms/cloudflare",
   "bugs": {
     "url": "https://github.com/megamono-dev/megamono/issues"
   },
@@ -87,12 +90,12 @@
   "dependencies": {
     "jsonc-parser": "3.3.1",
     "semver": "7.8.5",
-    "smol-toml": "^1.8.0",
-    "tslib": "^2.3.0"
+    "smol-toml": "^1.9.1",
+    "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "@nx/devkit": ">=18 <24",
-    "nx": ">=18 <24",
+    "@nx/devkit": ">=18 <25",
+    "nx": ">=18 <25",
     "wrangler": ">=4.105 <5"
   },
   "peerDependenciesMeta": {

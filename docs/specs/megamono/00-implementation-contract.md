@@ -13,6 +13,8 @@ projects:
   - nx-cargo
   - nx-cloudflare
   - nx-extension
+  - nx-laravel
+  - nx-phpnative
   - nx-render
 topics: [architecture, generators, nx, release]
 summary: Canonical package map, compatibility baseline, command contract, and definition of done for Megamono v1.
@@ -44,9 +46,9 @@ Megamono distinguishes a pinned scaffold baseline from a broader adoption range.
 | pnpm                               | `>=11 <12`; exactly pinned compatibility option  | `>=8 <12`; detected and preserved       |
 | Yarn                               | `>=1.22 <5`; exactly pinned compatibility option | `>=1.22 <5`; detected and preserved     |
 | Bun                                | `>=1.1 <2`; exactly pinned compatibility option  | `>=1.1 <2`; detected and preserved      |
-| Nx core adoption                   | `>=23.1 <24`                                     | `>=17 <24`                              |
+| Nx core adoption                   | `>=23.1 <24`                                     | `>=17 <25`                              |
 | TypeScript                         | `>=6.0 <6.1`                                     | `>=5.2 <7`                              |
-| Platform/deployment inference      | `>=23.1 <24`                                     | `>=18 <24`                              |
+| Platform/deployment inference      | `>=23.1 <24`                                     | `>=18 <25`                              |
 | Optional Playstack handoff         | Node `>=20`; ESLint `^9` when lint is selected   | Same per-capability gate                |
 | Operating systems for core tooling | macOS and Linux                                  | Any Node-supported host                 |
 | Windows                            | Unsupported for new-workspace bootstrap in v1    | Supported for platform-neutral adoption |
@@ -236,7 +238,7 @@ Repository maintenance also exposes `megamono:import`. Import is an executor rat
 
 ## Nx plugin API contract
 
-Language plugins bridge the Nx 18–23 discovery transition:
+Language plugins bridge the Nx 18–24 discovery transition:
 
 - `createDependencies` parses local manifest dependencies and emits static project-graph edges.
 - `createNodes` accepts Nx 18/19's async single-file callback and Nx 20+ batched files at runtime.
@@ -280,9 +282,9 @@ Each published package must pass:
 - For language plugins, fixtures for workspace roots, leaf projects, local dependencies, renamed targets, missing toolchains, malformed manifests, and cycles.
 - Graph assertions using `NX_DAEMON=false NX_CACHE_PROJECT_GRAPH=false nx graph --file=...` plus one `nx affected` assertion per dependency-edge kind.
 
-The compatibility suite installs packed output—not workspace source aliases—against stable anchors for every supported Nx major, 17 through 23. Nx 17 exercises `@megamono/plugin`; Nx 18 onward also exercise the inference plugins. Each fixture runs init twice, adds and reruns named Prisma and Drizzle targets, checks target metadata capability gates, compiles a consumer TypeScript import, and runs core graph/check behavior. Nx 18 onward also add a Cloudflare binding fixture, while Nx 18–23 add the supported inference surfaces exercised by that anchor. Survey fixtures assert that unresolved project and documentation classifications produce stable, copy-ready adoption-map templates without writing them. A separately packed pnpm 11 portfolio fixture runs on Node 22 and 24 with the Nx 22.2/TypeScript 5.9 adoption anchor. It combines Next, Nest, Expo/React Native, root Prisma with migrations, Docker, SwiftPM with ignored `.build` checkouts, Xcode with multiple named scheme targets, mature CI/release workflows, Content Collections, and a numbered specification corpus. The fixture first proves that `agents,skills` adoption and `megamono:check` succeed without docs or lint, then expands the same workspace, so mixed-repository and partial-module adoption cannot regress. A sanitized Starterpacks-shaped fixture separately covers Nx 22 with Yarn 1, nested Pages Router and Nest applications, two existing Prisma schemas, Redis-backed Next caching, a BullMQ worker, Procfile-only Render evidence, generated output, and unrelated ignored local artifacts. It verifies both inventory completeness and a conflict-free `minimal` adoption profile without copying private product code.
+The compatibility suite installs packed output—not workspace source aliases—against stable anchors for every supported Nx major, 17 through 24. Nx 17 exercises `@megamono/plugin`; Nx 18 onward also exercise the inference plugins. Each fixture runs init twice, adds and reruns named Prisma and Drizzle targets, checks target metadata capability gates, compiles a consumer TypeScript import, and runs core graph/check behavior. Nx 18 onward also add a Cloudflare binding fixture, while Nx 18–24 add the supported inference surfaces exercised by that anchor. Survey fixtures assert that unresolved project and documentation classifications produce stable, copy-ready adoption-map templates without writing them. A separately packed pnpm 11 portfolio fixture runs on Node 22 and 24 with the Nx 22.2/TypeScript 5.9 adoption anchor. It combines Next, Nest, Expo/React Native, root Prisma with migrations, Docker, SwiftPM with ignored `.build` checkouts, Xcode with multiple named scheme targets, mature CI/release workflows, Content Collections, and a numbered specification corpus. The fixture first proves that `agents,skills` adoption and `megamono:check` succeed without docs or lint, then expands the same workspace, so mixed-repository and partial-module adoption cannot regress. A sanitized Starterpacks-shaped fixture separately covers Nx 22 with Yarn 1, nested Pages Router and Nest applications, two existing Prisma schemas, Redis-backed Next caching, a BullMQ worker, Procfile-only Render evidence, generated output, and unrelated ignored local artifacts. It verifies both inventory completeness and a conflict-free `minimal` adoption profile without copying private product code.
 
-A scheduled and manually dispatchable `nx@next` plus `typescript@next` canary is non-blocking until that future line enters the declared peer range. Nx 24 is not supported merely because the canary starts: promotion requires replacing any removed/deprecated executor configuration exposed by the canary, updating peer and engine ranges, adding a stable Nx 24 anchor, and making the full packed matrix blocking for that line.
+A scheduled and manually dispatchable `nx@next` plus `typescript@next` canary is non-blocking until that future line enters the declared peer range. Nx 24 adoption is gated by a stable 24.0.4 anchor in the blocking packed matrix, including the Laravel/NativePHP consumer on Node 24. New workspaces retain the pinned Nx 23 scaffold baseline. A successful future canary does not widen supported ranges; promoting another major requires replacing any removed/deprecated executor configuration, updating peer and engine ranges, and adding a blocking stable anchor.
 
 ## Cross-product contracts
 
@@ -312,7 +314,7 @@ A spec is build-ready when it has `status: accepted`, no unresolved decision tha
 - Packed npm and pnpm fixtures prove named Prisma and Drizzle database projects use the shared create/add primitive, validate in their native formats, retain the canonical `type:data` graph contract, and keep Playstack artifact targets inside their selected Nx projects.
 - Registry and yalc Playstack fixtures prove init-only options are consumed rather than forwarded, concise capabilities receive explicit Nx-resolved web/API roots, ambiguous automation refuses before Playstack mutation, explicit yalc packages install their complete local closure without registry fallback, `@playstack/cli` remains a dev dependency, the local `playstack` binary performs configuration, survey writes nothing, missing closure artifacts fail before workspace-init, and a post-init failure reports completed commands plus an exact recovery command.
 - Generator fixtures prove deterministic planning, dry-run parity, idempotency, conflict handling, stable exit codes, and absence of secret values.
-- Language-plugin fixtures prove the Nx 18–23 API bridge, deterministic project discovery, and affected graph propagation.
+- Language-plugin fixtures prove the Nx 18–24 API bridge, deterministic project discovery, and affected graph propagation.
 - Apple discovery ignores Xcode's generated `<name>.xcodeproj/project.xcworkspace` bundle and indexes the owning `.xcodeproj` only; standalone `.xcworkspace` manifests remain independently discoverable.
 - Gated generators are absent from the published collection until their external contract fixtures pass.
 - No repository-shaping path has a runtime dependency on Playstack, an

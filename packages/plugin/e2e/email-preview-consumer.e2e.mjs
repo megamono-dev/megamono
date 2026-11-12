@@ -107,8 +107,8 @@ try {
     type: 'module',
     dependencies: {
       ...dependencies,
-      nx: '23.1.1',
-      '@nx/devkit': '23.1.1',
+      nx: '23.3.1',
+      '@nx/devkit': '23.3.1',
       typescript: '6.0.3',
       react: '19.2.4',
       'react-dom': '19.2.4',

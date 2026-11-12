@@ -28,8 +28,10 @@ const env = Object.fromEntries(
 );
 Object.assign(env, { NX_DAEMON: 'false', NX_ISOLATE_PLUGINS: 'false' });
 
-for (const solution of [false, true]) {
+for (const mode of ['path-alias', 'solution', 'composite-path-alias']) {
+  const solution = mode === 'solution';
   const root = mkdtempSync(join(tmpdir(), 'megamono-library-'));
+  let failed = false;
   env.npm_config_cache = join(root, '.npm-cache');
   try {
     const tree = createTreeWithEmptyWorkspace();
@@ -39,6 +41,9 @@ for (const solution of [false, true]) {
         ...readJson(tree, 'package.json'),
         workspaces: ['packages/*'],
       });
+      tree.write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n');
+    }
+    if (solution || mode === 'composite-path-alias') {
       writeJson(tree, 'tsconfig.base.json', {
         compilerOptions: {
           composite: true,
@@ -85,22 +90,75 @@ for (const solution of [false, true]) {
     assert.equal(manifest.private, false);
     assert.equal(manifest.publishConfig.access, 'restricted');
     const packed = JSON.parse(
-      execFileSync('npm', ['pack', '--dry-run', '--ignore-scripts', '--json'], {
-        cwd: join(root, packageRoot),
-        env,
-        encoding: 'utf8',
-        timeout: 30000,
-      }),
+      execFileSync(
+        'npm',
+        ['pack', '--ignore-scripts', '--json', '--pack-destination', root],
+        {
+          cwd: join(root, packageRoot),
+          env,
+          encoding: 'utf8',
+          timeout: 30000,
+        },
+      ),
     )[0];
     assert(packed.files.some((file) => file.path.endsWith('index.js')));
     assert(packed.files.some((file) => file.path.endsWith('index.d.ts')));
-    console.log(
-      `Library build and pack passed: ${solution ? 'TypeScript solution' : 'path-alias workspace'}`,
+    const packedPaths = new Set(packed.files.map((file) => file.path));
+    const entrypoints = (value) =>
+      typeof value === 'string'
+        ? [value]
+        : value && typeof value === 'object'
+          ? Object.values(value).flatMap(entrypoints)
+          : [];
+    for (const target of [
+      manifest.main,
+      manifest.module,
+      manifest.types,
+      ...entrypoints(manifest.exports),
+    ].filter(Boolean)) {
+      assert(
+        packedPaths.has(target.replace(/^\.\//, '')),
+        `Missing declared package entrypoint ${target} in ${mode} archive`,
+      );
+    }
+    const extracted = join(root, 'packed');
+    mkdirSync(extracted);
+    execFileSync(
+      'tar',
+      ['-xzf', join(root, packed.filename), '-C', extracted],
+      { env, stdio: 'pipe', timeout: 30000 },
     );
+    const consumer = join(root, 'consumer');
+    mkdirSync(join(consumer, 'node_modules/@fixture'), { recursive: true });
+    symlinkSync(
+      join(extracted, 'package'),
+      join(consumer, 'node_modules/@fixture/sdk'),
+      'dir',
+    );
+    if (manifest.type === 'module') {
+      execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '--eval',
+          "import { fixtureSdk } from '@fixture/sdk'; if (fixtureSdk() !== 'fixture-sdk') throw new Error('Packed SDK returned the wrong identifier');",
+        ],
+        { cwd: consumer, env, stdio: 'pipe', timeout: 30000 },
+      );
+    } else {
+      const installed = createRequire(join(consumer, 'probe.cjs'))(
+        '@fixture/sdk',
+      );
+      assert.equal(installed.fixtureSdk(), 'fixture-sdk');
+    }
+    console.log(`Library build and pack passed: ${mode}`);
   } catch (error) {
+    failed = true;
+    console.error(`Library fixture: ${root}`);
     console.error(error.stdout?.toString(), error.stderr?.toString());
     throw error;
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    if (!failed || process.env.MEGAMONO_KEEP_LIBRARY_FIXTURE !== 'true')
+      rmSync(root, { recursive: true, force: true });
   }
 }

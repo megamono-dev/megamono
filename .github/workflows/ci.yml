@@ -22,22 +22,26 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.9
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
-      - name: Use the repository npm version
+          cache: pnpm
+      - name: Use the npm consumer and publishing CLI
         shell: bash
-        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
-      - run: npm ci
-      - run: npm run release:check
-      - run: npm run release:test
+        run: npm install --global npm@11.21.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec nx run-many -t tooling-check tooling-test --projects=@megamono/workspace --output-style=static
+      - run: pnpm run release:check
+      - run: pnpm run release:test
       - uses: nrwl/nx-set-shas@v5
-      - run: npm exec nx -- run megamono:check --output-style=static
+      - run: pnpm exec nx run megamono:check --output-style=static
       - id: affected
         shell: bash
         run: |
-          if [ -n "$(npm exec nx -- show projects --affected --exclude=tag:platform:apple)" ]; then
+          if [ -n "$(pnpm exec nx show projects --affected --exclude=tag:platform:apple)" ]; then
             echo "linux=true" >> "$GITHUB_OUTPUT"
           else
             echo "linux=false" >> "$GITHUB_OUTPUT"
@@ -56,21 +60,32 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.9
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-      - name: Use the repository npm version
+      - name: Use the npm consumer and publishing CLI
         shell: bash
-        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
-      - run: npm ci
+        run: npm install --global npm@11.21.1
+      - run: pnpm install --frozen-lockfile
       - run: python -m pip install 'git-filter-repo>=2.47,<3'
-      - run: npm exec nx -- run megamono-docs:validate --output-style=static
-      - run: npm exec nx -- affected -t lint test build --exclude=tag:platform:apple --output-style=static
-      - run: npm exec nx -- affected -t e2e-ephemeral-survey e2e-integration-consumer e2e-prismark-consumer e2e-php-consumer e2e-governance --exclude=tag:platform:apple --output-style=static
+      - run: pnpm exec nx run megamono-docs:validate --output-style=static
+      - run: pnpm exec nx affected -t lint test build --exclude=tag:platform:apple --output-style=static
+      - run: pnpm exec nx affected -t e2e-ephemeral-survey e2e-integration-consumer e2e-prismark-consumer e2e-php-consumer e2e-governance e2e-adoption-policy-consumer e2e-web-scaffold e2e-expo-consumer e2e-expo-default-consumer --exclude=tag:platform:apple --output-style=static
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: expo-consumer-qualification
+          path: |
+            tmp/expo-consumer/
+            tmp/expo-default-consumer/
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
         with:

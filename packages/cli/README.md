@@ -1,5 +1,99 @@
 # `@megamono/cli`
 
+Explore, adopt, and maintain an Nx workspace with the `megamono` command.
+Megamono connects your applications, libraries, documentation, and checks so
+people and agents can work from the same repository structure.
+
+[Documentation](https://megamono.com/docs/cli) ·
+[Adoption guide](https://megamono.com/docs/workflows/adoption) ·
+[Requirements](https://megamono.com/docs/workflows/requirements)
+
+## When to use this package
+
+Use the CLI when you already have an Nx workspace and want to understand its
+structure, adopt Megamono gradually, add projects, or run repository checks.
+
+| Starting point                                    | Choose                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------ |
+| Create a new repository                           | [`create-megamono`](https://megamono.com/docs/cli/create-megamono) |
+| Explore or adopt an existing workspace            | `@megamono/cli` — this package                                     |
+| Call generators and executors directly through Nx | [`@megamono/plugin`](https://megamono.com/docs/generators)         |
+| Bring native or deployment tooling into Nx        | [Platform plugins](https://megamono.com/docs/platforms)            |
+
+The CLI is a development tool. Local commands work without a hosted account or
+Playstack. The public hosted service has not launched; hosted auth, accounts,
+and feedback submission require a separately configured service.
+
+## Get started
+
+Install the current public prerelease, then run a survey from your workspace root:
+
+```sh
+npm install --global @megamono/cli@next
+cd my-workspace
+megamono adopt
+```
+
+The survey reports projects, toolchains, existing workflows, and adoption choices
+without changing your repository. If a local plugin is missing, the survey may
+download matching tooling into temporary staging.
+
+To apply an adoption plan, first add the matching local plugin. These examples
+use npm; keep your repository's existing package manager if it uses another one.
+
+```sh
+git switch -c chore/adopt-megamono
+npm install --save-dev @megamono/plugin@next
+git add package.json package-lock.json
+git commit -m "chore: add Megamono workspace tooling"
+megamono adopt --profile=pilot --dry-run
+```
+
+The pilot selects lint, health, and project inference while preserving existing
+CI and release workflows. Review the plan and resolve any requested mappings,
+then apply it and run the structural check:
+
+```sh
+megamono adopt --profile=pilot --write --yes
+megamono health --profile=development
+```
+
+Review the diff and run your existing application tests before committing the
+adoption changes. Pin CLI and plugin versions together when evaluating a release.
+
+## Everyday commands
+
+| Task                                              | Command                                                  |
+| ------------------------------------------------- | -------------------------------------------------------- |
+| Survey the workspace                              | `megamono adopt`                                         |
+| Preview an application                            | `megamono add app web --dry-run`                         |
+| Preview a shared library                          | `megamono add library shared --dry-run`                  |
+| Run structural and package-source checks          | `megamono health --profile=ci`                           |
+| Inspect runtime dependencies in an existing build | `megamono verify runtime api --outputPath=dist/apps/api` |
+| Compare installed package artifacts               | `megamono diagnostics packages --json`                   |
+| Generate a sharing-safe local feedback report     | `megamono feedback --json`                               |
+| Show command-specific help                        | `megamono help adopt`                                    |
+
+Replace `api` and its output path with your project's name and build directory.
+Verification inspects an existing build; it does not build the application for you.
+Application and database writes require a clean feature branch; previews remain
+available before you apply changes.
+
+## Learn more
+
+- [Adopt an existing workspace](https://megamono.com/docs/workflows/adoption)
+- [Add applications and libraries](https://megamono.com/docs/generators)
+- [Run checks and tasks](https://megamono.com/docs/actions)
+- [Inspect package diagnostics](https://megamono.com/docs/cli/diagnostics)
+- [Report an issue](https://github.com/megamono-dev/megamono/issues)
+
+MIT licensed. See [LICENSE](./LICENSE).
+
+## Advanced reference
+
+<details>
+<summary>Survey isolation, artifact verification, integrations, and maintainer workflows</summary>
+
 Global command dispatcher for adopting Megamono in an existing Nx workspace.
 
 Surveys, health/verification targets, project discovery, and delegated dry runs
@@ -21,7 +115,7 @@ redirect Nx cache/workspace-data writes to their disposable staging directory
 and disable its daemon.
 
 Maintainers: `npm exec nx -- run @megamono/cli:e2e-isolated-yalc-survey` runs the
-packed CLI with real npm, Yalc and Nx 22.7.8/23.1.1 in two disposable consumers.
+packed CLI with real npm, Yalc and Nx 22.7.8/23.3.1 in two disposable consumers.
 It enforces a read-only private store, checks complete consumer/store snapshots
 (including node_modules and symlink identities), checks the real global Yalc
 installation registry hash, audits that only `yalc dir` ran, and checks staging
@@ -31,7 +125,7 @@ semantics; it does not mutate real adopters or qualify their application runtime
 Ordinary write/install commands retain the selected package manager.
 
 ```sh
-npm install --global @megamono/cli
+npm install --global @megamono/cli@next
 megamono adopt
 megamono adopt --survey --local-packages=yalc
 megamono adopt --profile=pilot --dry-run
@@ -185,8 +279,9 @@ megamono feedback --description='The generated target failed after adoption' \
 
 The CLI redacts bearer tokens, credential-bearing URLs, common secret query
 parameters and home-directory prefixes before they enter the payload. Review
-the names, hashes and description before sharing. To submit the payload to the
-configured hosted Megamono service, sign in first and opt in explicitly:
+the names, hashes and description before sharing. The public hosted service has
+not launched. If you have a compatible configured service, sign in and opt in
+explicitly to submit:
 
 ```sh
 megamono auth login
@@ -205,7 +300,8 @@ does not prove nested consumer alignment or production readiness.
 
 ### Hosted authentication
 
-Hosted authentication is optional and independent of repository discovery:
+Hosted authentication is for a separately configured compatible service.
+The public hosted service has not launched; repository commands do not require it:
 
 ```sh
 megamono auth login
@@ -225,12 +321,12 @@ Springbar environment, pass `--service-url=https://app.megamono.test` or set
 Hosted auth commands require Node.js 20 or newer; this does not narrow the
 Node.js 18.18 baseline for repository-only CLI operations.
 
-During the private-package validation phase, install the optional
-`@playstack/client-auth` peer alongside the CLI (or link both through Yalc).
-Once that client package is public, ordinary package-manager installation owns
-the peer in the same way.
-`npm run yalc:install-cli` installs the matching peer globally when it is
-available in the local Yalc store and otherwise leaves core commands usable.
+Hosted commands also require the compatible optional `@playstack/client-auth`
+peer. Its distribution and service configuration are separate from local
+workspace tooling. See the [hosted authentication reference](https://megamono.com/docs/cli/auth).
+For maintainers using local artifacts, `npm run yalc:install-cli` installs the
+matching peer globally when available in the Yalc store; core commands remain
+usable without it.
 
 Once initialized, repository modules and applications can be added through the
 same workspace-local generators used by `create-megamono`:
@@ -395,7 +491,7 @@ contract fixture with:
 npm exec nx -- run @megamono/cli:e2e-playstack-yalc
 ```
 
-# Machine-readable adoption surveys
+### Machine-readable adoption surveys
 
 `megamono adopt --survey --format=json` writes one survey JSON object to stdout.
 Nx banners, staging output, and warnings go to stderr, including when the plugin
@@ -415,3 +511,5 @@ Current CLI/plugin pairs transfer the completed report through a private
 temporary file before stdout serialization, avoiding Nx logger/exit truncation.
 The handoff is removed on success and failure; it is not a repository artifact.
 Older plugins fall back to validated stdout and fail closed if it is truncated.
+
+</details>

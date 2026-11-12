@@ -100,6 +100,16 @@ Generation shares the local Nx toolchain; this is not a clean bootstrap test of
 bootstrap target above for that workflow).
 TypeScript 7 requires a separate qualified lane before widening supported ranges.
 
+The plugin's `typescript >=5.2 <7` peer is not the only constraint: Nx 23 and
+24 (`nx`, `@nx/js`) call the workspace's `typescript` JavaScript API
+themselves, and `typescript@7` exposes no JavaScript compiler API, so a
+workspace that replaces `typescript` with 7 fails in Nx before Megamono runs.
+Nx's supported TypeScript 7 route keeps `typescript@6` and adds
+`@typescript/native-preview` with the `tsgo` compiler, which the current peer
+range already accepts. Revisit the plugin's own compiler API use (parsing,
+single-file binding, tsconfig and module resolution) once Nx supports
+TypeScript 7 directly.
+
 ## Portable Prisma and native-boundary composition
 
 Run `npm exec nx -- run @megamono/plugin:e2e-prismark-consumer` under Node 24.

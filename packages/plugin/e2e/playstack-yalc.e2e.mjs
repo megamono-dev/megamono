@@ -199,7 +199,7 @@ async function createFixture(
     devDependencies: {
       '@megamono/plugin': `file:${pluginTarball}`,
       eslint: '9.39.3',
-      nx: '23.1.1',
+      nx: '23.3.1',
       typescript: '6.0.3',
     },
   });

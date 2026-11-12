@@ -297,7 +297,7 @@ function isRepositoryInfrastructure(
   if (infrastructureDirectories.has(entry)) return true;
   if (workspaces.some((pattern) => globRoot(pattern) === entry)) return true;
   if (
-    /^(?:\.DS_Store|AGENTS\.md|CLAUDE\.md|README(?:\.[^.]+)?|LICENSE(?:\.[^.]+)?|package(?:-lock)?\.json|pnpm-(?:lock|workspace)\.yaml|nx\.json|project\.json|megamono\.json|opencode\.json|content-collections\.ts|tsconfig\.base\.json|eslint\.config\.[cm]?[jt]s|\.gitignore|\.gitattributes|\.editorconfig|\.npmrc|\.prettierignore|\.prettierrc(?:\..+)?)$/.test(
+    /^(?:\.DS_Store|AGENTS\.md|CLAUDE\.md|README(?:\.[^.]+)?|LICENSE(?:\.[^.]+)?|package(?:-lock)?\.json|pnpm-(?:lock|workspace)\.yaml|nx\.json|project\.json|megamono\.json|opencode\.json|content-collections\.ts|tsconfig\.base\.json|eslint\.config\.[cm]?[jt]s|\.gitignore|\.gitattributes|\.editorconfig|\.npmrc|\.prettierignore|\.prettierrc(?:\..+)?|\.oxfmtrc\.jsonc?|oxfmt\.config\.(?:ts|mts))$/.test(
       entry,
     )
   ) {

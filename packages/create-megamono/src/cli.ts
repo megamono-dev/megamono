@@ -14,6 +14,7 @@ import {
   WEB_STYLING_OPTIONS,
   createMegamono,
   renderPlan,
+  type CreationPlan,
   normalizeAppInstances,
   validatePackageNames,
   type CreateMegamonoInput,
@@ -58,6 +59,9 @@ Options:
   --service-runner=<id>    ${SERVICE_RUNNERS.join(', ')}
   --springbar              Shortcut for --service-runner=springbar; never starts services
   --dry-run               Print the plan without creating a workspace
+  --resume                Continue a failed creation from its staging directory,
+                          rerunning the failed step with the recorded options
+                          (pass only the name, --directory and --dry-run)
   --version [--json]      Print installed build identity
   --help, -h              Show help without prompts, installs, or writes
 
@@ -422,6 +426,18 @@ export async function resolveInteractive(
   }
 }
 
+function writePlanResult(plan: CreationPlan): void {
+  stdout.write(`${renderPlan(plan)}\n`);
+  if (plan.springbarResult) {
+    stdout.write(`${plan.springbarResult.message}\n`);
+    if (plan.springbarResult.retry) {
+      stdout.write(
+        `Springbar MCP retry payload:\n${JSON.stringify(plan.springbarResult.retry, null, 2)}\n`,
+      );
+    }
+  }
+}
+
 export async function main(
   argv: readonly string[] = process.argv.slice(2),
 ): Promise<number> {
@@ -455,6 +471,7 @@ export async function main(
         'package-manager': { type: 'string' },
         'cleanup-on-failure': { type: 'boolean', default: false },
         'dry-run': { type: 'boolean', default: false },
+        resume: { type: 'boolean', default: false },
         version: { type: 'boolean', default: false },
         json: { type: 'boolean', default: false },
       },
@@ -470,6 +487,36 @@ export async function main(
       throw new CreateMegamonoError('Expected a workspace name.', 2);
     }
     const positionalApps = parsed.positionals.slice(1);
+    if (parsed.values.resume) {
+      const extra = Object.keys(parsed.values).filter(
+        (key) =>
+          ![
+            'resume',
+            'directory',
+            'dry-run',
+            'cleanup-on-failure',
+            'version',
+            'json',
+          ].includes(key),
+      );
+      if (
+        extra.length > 0 ||
+        positionalApps.length > 0 ||
+        parsed.values['cleanup-on-failure']
+      )
+        throw new CreateMegamonoError(
+          `--resume reuses the options recorded by the failed run; pass only the workspace name, --directory and --dry-run${extra.length ? ` (received ${extra.map((key) => `--${key}`).join(', ')})` : ''}.`,
+          2,
+        );
+      const plan = await createMegamono({
+        name: parsed.positionals[0],
+        directory: parsed.values.directory,
+        dryRun: parsed.values['dry-run'],
+        resume: true,
+      });
+      writePlanResult(plan);
+      return 0;
+    }
     if (positionalApps.length > 0 && parsed.values.apps !== undefined) {
       throw new CreateMegamonoError(
         'Pass app descriptors positionally or with --apps, not both.',
@@ -518,16 +565,7 @@ export async function main(
       cleanupOnFailure: parsed.values['cleanup-on-failure'],
       dryRun: parsed.values['dry-run'],
     });
-    const plan = await createMegamono(input);
-    stdout.write(`${renderPlan(plan)}\n`);
-    if (plan.springbarResult) {
-      stdout.write(`${plan.springbarResult.message}\n`);
-      if (plan.springbarResult.retry) {
-        stdout.write(
-          `Springbar MCP retry payload:\n${JSON.stringify(plan.springbarResult.retry, null, 2)}\n`,
-        );
-      }
-    }
+    writePlanResult(await createMegamono(input));
     return 0;
   } catch (error) {
     const exitCode = error instanceof CreateMegamonoError ? error.exitCode : 1;

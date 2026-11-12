@@ -12,6 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
+import { resolveConsumerNpmCli } from '../../../tools/consumer-npm.mjs';
 
 const workspace = resolve(import.meta.dirname, '../../..');
 const require = createRequire(join(workspace, 'package.json'));
@@ -27,6 +28,7 @@ const env = {
   NX_DAEMON: 'false',
   NX_ISOLATE_PLUGINS: 'false',
   NX_WORKSPACE_DATA_DIRECTORY: join(root, '.nx-data'),
+  npm_config_cache: process.env.MEGAMONO_NPM_CACHE ?? join(root, 'npm-cache'),
 };
 delete env.NX_TASK_HASH;
 delete env.NX_TASK_TARGET_PROJECT;
@@ -41,10 +43,7 @@ const run = (command, args, cwd = root) =>
     maxBuffer: 16_000_000,
   });
 try {
-  assert(
-    process.env.npm_execpath?.endsWith('npm-cli.js'),
-    'Run this fixture through npm exec nx.',
-  );
+  const npmCli = resolveConsumerNpmCli();
   symlinkSync(
     join(workspace, 'node_modules'),
     join(root, 'node_modules'),
@@ -52,7 +51,7 @@ try {
   );
   const packed = JSON.parse(
     run(process.execPath, [
-      process.env.npm_execpath,
+      npmCli,
       'pack',
       join(workspace, 'packages/plugin'),
       '--ignore-scripts',

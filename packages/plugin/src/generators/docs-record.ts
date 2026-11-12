@@ -25,6 +25,8 @@ export interface RecordDefinition {
 }
 
 export function normalizeSlug(value: string, label = 'value'): string {
+  if (typeof value !== 'string' || !value.trim())
+    throw new Error(`${label} must be a nonempty string.`);
   const slug = value
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -118,9 +120,23 @@ export function validateCommonOptions(
 } {
   const config = readDocsGeneratorConfig(tree);
   const project = normalizeSlug(options.project, 'project');
+  if (typeof options.title !== 'string')
+    throw new Error('title must be a nonempty string.');
   const title = options.title.trim();
   if (!title) throw new Error('title must not be empty.');
-  const topics = options.topics ?? [];
+  const list = (
+    values: readonly string[] | undefined,
+    label: string,
+  ): readonly string[] => {
+    if (values === undefined) return [];
+    if (
+      !Array.isArray(values) ||
+      values.some((value) => typeof value !== 'string' || !value.trim())
+    )
+      throw new Error(`${label} must be a list of nonempty strings.`);
+    return values;
+  };
+  const topics = list(options.topics, 'topics');
   if (new Set(topics).size !== topics.length) {
     throw new Error('topics must not contain duplicates.');
   }
@@ -128,12 +144,15 @@ export function validateCommonOptions(
   for (const topic of topics) {
     if (!vocabulary.has(topic)) {
       throw new Error(
-        `Unknown topic ${topic}. Add it to megamono.json topics.extend.`,
+        `Unknown topic ${topic}. Choose a built-in topic or add it to megamono.json topics.extend before generating the record. Available topics: ${[...vocabulary].sort().join(', ')}.`,
       );
     }
   }
-  const references = options.references ?? [];
-  const externalReferences = options.externalReferences ?? [];
+  const references = list(options.references, 'references');
+  const externalReferences = list(
+    options.externalReferences,
+    'externalReferences',
+  );
   if (new Set(references).size !== references.length) {
     throw new Error('references must not contain duplicates.');
   }
@@ -178,13 +197,24 @@ export async function writeRecord(
       `Refusing to overwrite existing record ${definition.path}.`,
     );
   }
-  const duplicatePath = listMarkdownPaths(tree, '').find(
+  const paths = listMarkdownPaths(tree, '');
+  const duplicatePath = paths.find(
     (path) => readRecordId(tree, path) === definition.id,
   );
   if (duplicatePath) {
     throw new Error(
       `Document ID ${definition.id} already exists at ${duplicatePath}.`,
     );
+  }
+  const ids = new Set(
+    paths.map((path) => readRecordId(tree, path)).filter(Boolean),
+  );
+  const references = definition.data.references as readonly string[];
+  for (const reference of references ?? []) {
+    if (!ids.has(reference))
+      throw new Error(
+        `Document reference ${reference} does not resolve. Create or correct the referenced record before generating ${definition.id}.`,
+      );
   }
   tree.write(definition.path, content);
   return true;

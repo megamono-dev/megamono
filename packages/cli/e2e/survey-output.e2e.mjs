@@ -54,7 +54,7 @@ try {
   });
   await put(join(consumer, 'node_modules/nx/package.json'), {
     name: 'nx',
-    version: '23.1.1',
+    version: '23.3.1',
     bin: { nx: './bin/cli.js' },
   });
   const survey = {

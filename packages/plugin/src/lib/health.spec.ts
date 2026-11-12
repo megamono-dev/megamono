@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { ProjectGraph } from '@nx/devkit';
-import { DEFAULT_MEGAMONO_CONFIG, type MegamonoConfig } from './config';
+import {
+  DEFAULT_MEGAMONO_CONFIG,
+  megamonoConfigSchema,
+  type MegamonoConfig,
+} from './config';
 import type { RepositoryDocument } from './docs';
 import {
   collectHealthGitState,
@@ -88,6 +92,110 @@ describe('repository health', () => {
         status: 'completed',
       });
       expect(report.readiness).toBe('not-assessed');
+      expect(report).not.toHaveProperty('dependencyInspection');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+  it('integrates undeclared workspace imports as advisory dependency evidence', async () => {
+    const root = await mkdtemp(
+      join(tmpdir(), 'megamono-health-workspace-import-'),
+    );
+    try {
+      await mkdir(join(root, 'apps/app'), { recursive: true });
+      await mkdir(join(root, 'packages/util'), { recursive: true });
+      await writeFile(
+        join(root, 'package.json'),
+        JSON.stringify({ name: '@fixture/source' }),
+      );
+      await writeFile(
+        join(root, 'apps/app/package.json'),
+        JSON.stringify({ name: '@fixture/app' }),
+      );
+      await writeFile(
+        join(root, 'packages/util/package.json'),
+        JSON.stringify({ name: '@fixture/util', version: '1.0.0' }),
+      );
+      const graph = projectGraph();
+      graph.dependencies.app = [
+        { source: 'app', target: 'util', type: 'static' },
+      ];
+      const run = (config: MegamonoConfig = DEFAULT_MEGAMONO_CONFIG) =>
+        runRepositoryHealth({
+          workspaceRoot: root,
+          graph,
+          config,
+          documents: [],
+          checks: ['dependency-alignment'],
+        });
+      const report = await run();
+      expect(
+        report.findings.find(
+          (finding) => finding.state === 'undeclared-workspace-import',
+        ),
+      ).toMatchObject({
+        severity: 'warning',
+        category: 'dependency-alignment',
+        confidence: 'complete',
+      });
+      expect(report.dependencyInspection).toMatchObject({
+        packageEdges: 1,
+        runtimeAssessment: 'not-assessed',
+      });
+      expect(report.coverage['dependency-alignment']).toEqual({
+        status: 'completed',
+      });
+      const skipped = await run({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        health: {
+          ...DEFAULT_MEGAMONO_CONFIG.health,
+          checks: { 'dependency-alignment': false },
+        },
+      });
+      expect(skipped).not.toHaveProperty('dependencyInspection');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+  it('marks dependency coverage partial when owned singleton resolution is unavailable', async () => {
+    const root = await mkdtemp(
+      join(tmpdir(), 'megamono-health-incomplete-singleton-'),
+    );
+    try {
+      await mkdir(join(root, 'apps/app'), { recursive: true });
+      await writeFile(
+        join(root, 'package.json'),
+        JSON.stringify({ name: '@fixture/source' }),
+      );
+      await writeFile(
+        join(root, 'apps/app/package.json'),
+        JSON.stringify({
+          name: '@fixture/app',
+          dependencies: { react: '19.3.1' },
+        }),
+      );
+      const graph = projectGraph();
+      delete graph.nodes.util;
+      delete graph.dependencies.util;
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph,
+        config: DEFAULT_MEGAMONO_CONFIG,
+        documents: [],
+        checks: ['dependency-alignment'],
+      });
+      expect(report.coverage['dependency-alignment']).toEqual({
+        status: 'partial',
+        reason: 'dependency-resolution-incomplete',
+      });
+      expect(report.dependencyInspection?.singletons[0]).toMatchObject({
+        package: 'react',
+        status: 'incomplete',
+        unavailable: ['app'],
+      });
+      expect(report.dependencyInspection?.limitations.length).toBeGreaterThan(
+        0,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -120,6 +228,22 @@ describe('repository health', () => {
         );
         expect((await check()).findings).toEqual([]);
       }
+      // The root's workspace:* packs to the exact local version.
+      await writeFile(
+        join(root, 'apps/app/package.json'),
+        JSON.stringify({ dependencies: { '@acme/util': '0.5.0' } }),
+      );
+      expect((await check()).findings).toEqual([]);
+      await writeFile(
+        join(root, 'apps/app/package.json'),
+        JSON.stringify({ dependencies: { '@acme/util': '^0.5.0' } }),
+      );
+      expect((await check()).findings).toEqual([
+        expect.objectContaining({
+          state: 'alignable',
+          evidence: ['app: ^0.5.0', 'root: workspace:*'],
+        }),
+      ]);
       for (const range of ['workspace:^1.0.0', '^1.0.0', 'workspace:other@*']) {
         await writeFile(
           join(root, 'apps/app/package.json'),
@@ -343,6 +467,91 @@ describe('repository health', () => {
           fingerprint.startsWith('adoption-ratchet:'),
         ),
       ).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('exposes identity debt review evidence and configured allowances without claiming validation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-health-identity-'));
+    try {
+      const classification = {
+        dependencyKind: 'static',
+        source: { kind: 'lib', tags: ['scope:shared', 'type:util'] },
+        target: { kind: 'lib', tags: ['scope:shared', 'type:feature'] },
+      };
+      const entry = {
+        identity: {
+          rule: 'module-boundaries',
+          constraint: 'module-boundaries:type-direction',
+          source: 'legacy-consumer',
+          target: 'provider',
+          classification,
+        },
+        reason: 'Reviewed legacy debt',
+        reviewReference: 'review-123',
+        revision: 'c'.repeat(40),
+      };
+      const allowance = {
+        source: 'approved-consumer',
+        target: 'provider',
+        constraint: 'module-boundaries:type-direction',
+        classification,
+        rationale: 'Approved architecture',
+        decision: 'decision-20261105-approved-edge',
+      };
+      const config = megamonoConfigSchema.parse({
+        ...DEFAULT_MEGAMONO_CONFIG,
+        version: 2,
+        conventions: {
+          ...DEFAULT_MEGAMONO_CONFIG.conventions,
+          boundaryAllowances: [allowance],
+        },
+        adoption: {
+          warningBaseline: {
+            identityVersion: 1,
+            rules: ['module-boundaries'],
+            entries: [entry],
+          },
+        },
+      });
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph: projectGraph(),
+        config,
+        documents: [],
+        checks: ['spec-drift'],
+      });
+      expect(report.dependencyPolicy).toEqual({
+        assessment: 'not-assessed',
+        warningBaseline: config.adoption.warningBaseline,
+        boundaryAllowances: [allowance],
+      });
+      expect(report.findings).toContainEqual(
+        expect.objectContaining({
+          state: 'identity-baseline',
+          category: 'adoption-debt',
+          fingerprint: expect.stringMatching(
+            /^adoption-warning-baseline:[a-f0-9]{64}$/,
+          ),
+          evidence: expect.arrayContaining([
+            'review: review-123',
+            `revision: ${'c'.repeat(40)}`,
+            'source: legacy-consumer (lib; scope:shared, type:util)',
+          ]),
+        }),
+      );
+      expect(
+        report.findings.some(({ state }) => state === 'boundary-allowance'),
+      ).toBe(false);
+      const legacy = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph: projectGraph(),
+        config: DEFAULT_MEGAMONO_CONFIG,
+        documents: [],
+        checks: ['spec-drift'],
+      });
+      expect(legacy).not.toHaveProperty('dependencyPolicy');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -817,6 +1026,351 @@ describe('repository health', () => {
       expect(state.lastChanged[plan.data.id]).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  async function gitPlanFixture() {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-health-base-'));
+    const plan = document(root, {
+      id: 'plan-app-20260801-integration-base',
+      type: 'plan',
+      status: 'in-progress',
+      branch: 'feature/current',
+    });
+    const git = (args: readonly string[]) =>
+      executeFile('git', [...args], { cwd: root });
+    try {
+      await git(['init', '-b', 'main']);
+      await git(['config', 'user.email', 'fixture@example.com']);
+      await git(['config', 'user.name', 'Megamono Fixture']);
+      await git(['config', 'commit.gpgsign', 'false']);
+      await writeFile(plan.absolutePath, 'tracked plan');
+      await git(['add', '.']);
+      await git(['commit', '-m', 'Add plan']);
+      await git(['checkout', '-b', 'feature/current']);
+      await writeFile(join(root, 'feature.txt'), 'unmerged feature');
+      await git(['add', '.']);
+      await git(['commit', '-m', 'Implement feature']);
+      return { root, plan, git };
+    } catch (error) {
+      await rm(root, { recursive: true, force: true });
+      throw error;
+    }
+  }
+
+  it('keeps a checked-out unmerged plan active, then detects its actual integration', async () => {
+    const { root, plan, git } = await gitPlanFixture();
+    try {
+      expect(
+        (await collectHealthGitState(root, [plan])).branches['feature/current'],
+      ).toBe('active');
+      const report = await runRepositoryHealth({
+        workspaceRoot: root,
+        graph: projectGraph(),
+        config: DEFAULT_MEGAMONO_CONFIG,
+        documents: [plan],
+        checks: ['stale-plans'],
+      });
+      expect(
+        report.findings.some((finding) => finding.state === 'branch-merged'),
+      ).toBe(false);
+      await git(['checkout', 'main']);
+      await git(['merge', '--ff-only', 'feature/current']);
+      await git(['checkout', 'feature/current']);
+      expect(
+        (await collectHealthGitState(root, [plan])).branches['feature/current'],
+      ).toBe('merged');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not use detached feature HEAD as the integration base', async () => {
+    const { root, plan, git } = await gitPlanFixture();
+    try {
+      await git(['checkout', '--detach', 'feature/current']);
+      expect(
+        (await collectHealthGitState(root, [plan])).branches['feature/current'],
+      ).toBe('active');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['defaultBase', 'affected.defaultBase'])(
+    'honors the configured Nx %s integration branch in JSONC',
+    async (key) => {
+      const { root, plan, git } = await gitPlanFixture();
+      try {
+        await git(['branch', 'develop', 'main']);
+        await git(['update-ref', 'refs/heads/main', 'feature/current']);
+        const config =
+          key === 'defaultBase'
+            ? '"defaultBase": "develop",'
+            : '"affected": { "defaultBase": "develop" },';
+        await writeFile(
+          join(root, 'nx.json'),
+          `// Nx repository configuration\n{ ${config} }\n`,
+        );
+        const before = (await git(['status', '--porcelain'])).stdout;
+        expect(
+          (await collectHealthGitState(root, [plan])).branches[
+            'feature/current'
+          ],
+        ).toBe('active');
+        expect((await git(['status', '--porcelain'])).stdout).toBe(before);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('uses an available remote default and remote-only plan without treating integration itself as merged', async () => {
+    const { root, plan, git } = await gitPlanFixture();
+    try {
+      await git(['update-ref', 'refs/remotes/origin/trunk', 'main']);
+      await git([
+        'symbolic-ref',
+        'refs/remotes/origin/HEAD',
+        'refs/remotes/origin/trunk',
+      ]);
+      await git([
+        'update-ref',
+        'refs/remotes/origin/feature/current',
+        'feature/current',
+      ]);
+      await git(['checkout', '--detach', 'feature/current']);
+      await git(['branch', '-D', 'main', 'feature/current']);
+      const integration = { ...plan, data: { ...plan.data, branch: 'trunk' } };
+      const state = await collectHealthGitState(root, [plan, integration]);
+      expect(state.branches).toEqual({
+        'feature/current': 'active',
+        trunk: 'active',
+      });
+      expect(state.integrationBase).toBe('refs/remotes/origin/trunk');
+      expect(state.branchComparisonIssue).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps the local representation of a remote integration branch active', async () => {
+    const { root, plan, git } = await gitPlanFixture();
+    try {
+      await git(['update-ref', 'refs/remotes/origin/main', 'main']);
+      await git([
+        'symbolic-ref',
+        'refs/remotes/origin/HEAD',
+        'refs/remotes/origin/main',
+      ]);
+      const integration = { ...plan, data: { ...plan.data, branch: 'main' } };
+      expect(
+        (await collectHealthGitState(root, [integration])).branches.main,
+      ).toBe('active');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('supports the conventional master fallback without using the checked-out feature', async () => {
+    const { root, plan, git } = await gitPlanFixture();
+    try {
+      await git(['branch', '-m', 'main', 'master']);
+      expect(
+        (await collectHealthGitState(root, [plan])).branches['feature/current'],
+      ).toBe('active');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['configured-missing', 'undiscoverable'])(
+    'reports partial coverage for an %s integration base',
+    async (mode) => {
+      const { root, plan, git } = await gitPlanFixture();
+      try {
+        if (mode === 'configured-missing')
+          await writeFile(
+            join(root, 'nx.json'),
+            JSON.stringify({ defaultBase: 'missing/integration' }),
+          );
+        else await git(['branch', '-D', 'main']);
+        const state = await collectHealthGitState(root, [plan]);
+        expect(state.available).toBe(true);
+        expect(state.branches['feature/current']).toBeUndefined();
+        expect(state.branchComparisonIssue).toBe(
+          'integration-base-unavailable',
+        );
+        expect(state.lastChanged[plan.data.id]).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+        const report = await runRepositoryHealth({
+          workspaceRoot: root,
+          graph: projectGraph(),
+          config: DEFAULT_MEGAMONO_CONFIG,
+          documents: [plan],
+          checks: ['stale-plans'],
+          gitState: state,
+        });
+        expect(report.coverage['stale-plans']).toEqual({
+          status: 'partial',
+          reason: 'integration-base-unavailable',
+        });
+        expect(
+          report.findings.some((finding) => finding.state === 'branch-merged'),
+        ).toBe(false);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each(['main~1', 'refs/heads/main~1'])(
+    'does not resolve configured revision expression %s as an integration branch',
+    async (defaultBase) => {
+      const { root, plan, git } = await gitPlanFixture();
+      try {
+        await git(['update-ref', 'refs/heads/main', 'feature/current']);
+        await writeFile(join(root, 'nx.json'), JSON.stringify({ defaultBase }));
+        const state = await collectHealthGitState(root, [plan]);
+        expect(state.integrationBase).toBeUndefined();
+        expect(state.branches['feature/current']).toBeUndefined();
+        expect(state.branchComparisonIssue).toBe(
+          'integration-base-unavailable',
+        );
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each([false, true])(
+    'resolves an inherited integration base with root override=%s',
+    async (override) => {
+      const { root, plan, git } = await gitPlanFixture();
+      try {
+        await git(['branch', 'develop', 'main']);
+        await git(['update-ref', 'refs/heads/main', 'feature/current']);
+        await writeFile(
+          join(root, 'nx-base.json'),
+          JSON.stringify({ defaultBase: 'develop' }),
+        );
+        await writeFile(
+          join(root, 'nx.json'),
+          JSON.stringify({
+            extends: './nx-base.json',
+            ...(override ? { defaultBase: 'main' } : {}),
+          }),
+        );
+        const state = await collectHealthGitState(root, [plan]);
+        expect(state.integrationBase).toBe(
+          override ? 'refs/heads/main' : 'refs/heads/develop',
+        );
+        expect(state.branches['feature/current']).toBe(
+          override ? 'merged' : 'active',
+        );
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('refuses an unreadable inherited preset instead of guessing from main', async () => {
+    const { root, plan } = await gitPlanFixture();
+    try {
+      await writeFile(
+        join(root, 'nx.json'),
+        JSON.stringify({ extends: './missing-preset.json' }),
+      );
+      await expect(collectHealthGitState(root, [plan])).rejects.toBeInstanceOf(
+        HealthConfigurationError,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['origin/HEAD', 'refs/remotes/origin/HEAD'])(
+    'canonicalizes explicit integration alias %s',
+    async (defaultBase) => {
+      const { root, plan, git } = await gitPlanFixture();
+      try {
+        await git(['update-ref', 'refs/remotes/origin/main', 'main']);
+        await git([
+          'symbolic-ref',
+          'refs/remotes/origin/HEAD',
+          'refs/remotes/origin/main',
+        ]);
+        await writeFile(join(root, 'nx.json'), JSON.stringify({ defaultBase }));
+        const integration = { ...plan, data: { ...plan.data, branch: 'main' } };
+        const state = await collectHealthGitState(root, [integration]);
+        expect(state.integrationBase).toBe('refs/remotes/origin/main');
+        expect(state.branches.main).toBe('active');
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('does not mistake an ancestry error for an active branch', async () => {
+    const { root, plan, git } = await gitPlanFixture();
+    try {
+      await git(['checkout', 'main']);
+      await git(['merge', '--ff-only', 'feature/current']);
+      await writeFile(join(root, 'base.txt'), 'middle');
+      await git(['add', '.']);
+      await git(['commit', '-m', 'Intermediate base commit']);
+      const intermediate = (await git(['rev-parse', 'HEAD'])).stdout.trim();
+      await writeFile(join(root, 'base.txt'), 'new tip');
+      await git(['commit', '-am', 'Advance integration']);
+      // Remove only a loose commit object in this disposable repository. Ref
+      // tips still resolve, but real Git cannot prove their ancestry.
+      expect(intermediate).toMatch(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/);
+      await rm(
+        join(
+          root,
+          '.git',
+          'objects',
+          intermediate.slice(0, 2),
+          intermediate.slice(2),
+        ),
+      );
+      // Git versions differ here: Debian Git 2.39 exits 1 with a missing-object
+      // diagnostic, while newer versions can exit with a different error code.
+      // Verify that this fixture really caused an error, not a clean negative
+      // ancestor result, before checking Megamono's classification.
+      await expect(
+        git(['merge-base', '--is-ancestor', 'feature/current', 'main']),
+      ).rejects.toMatchObject({ stderr: expect.stringMatching(/\S/) });
+      const state = await collectHealthGitState(root, [plan]);
+      expect(state.branches['feature/current']).toBeUndefined();
+      expect(state.branchComparisonIssue).toBe('git-ancestry-unavailable');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('marks shallow history partial rather than claiming complete unmerged ancestry', async () => {
+    const { root, plan, git } = await gitPlanFixture();
+    const clone = await mkdtemp(join(tmpdir(), 'megamono-health-shallow-'));
+    try {
+      await git(['checkout', 'main']);
+      await executeFile('git', [
+        'clone',
+        '--depth',
+        '1',
+        '--no-single-branch',
+        `file://${root}`,
+        clone,
+      ]);
+      const clonedPlan = {
+        ...plan,
+        absolutePath: join(clone, `${plan.data.id}.md`),
+      };
+      const state = await collectHealthGitState(clone, [clonedPlan]);
+      expect(state.branchComparisonIssue).toBe('git-ancestry-unavailable');
+      expect(state.branches['feature/current']).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(clone, { recursive: true, force: true });
     }
   });
 

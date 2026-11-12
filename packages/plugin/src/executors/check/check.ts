@@ -1,14 +1,19 @@
 import { logger, type PromiseExecutor } from '@nx/devkit';
 import { readMegamonoConfig } from '../../lib/config';
-import { checkAdoptionRatchets } from '../../lib/adoption-ratchets';
+import {
+  adoptedStructuralRules,
+  checkAdoptionRatchets,
+} from '../../lib/adoption-ratchets';
+import { evaluateIdentityBaseline } from '../../lib/identity-baseline';
 import {
   formatDiagnostic,
   hasErrors,
   type Diagnostic,
 } from '../../lib/diagnostics';
 import { validateRepositoryDocs } from '../../lib/docs';
-import { checkWorkspaceStructure } from '../../lib/structural-check';
+import { analyzeWorkspaceStructure } from '../../lib/structural-check';
 import { checkProjectPreflights } from '../../lib/project-preflight';
+import { inspectWorkspaceDependencies } from '../../lib/workspace-dependency-health';
 import { validateInstalledSkills } from '../../lib/managed-skills';
 import { validateManagedArtifactRegistry } from '../../lib/managed-artifacts';
 import { validatePackageSources } from '../../lib/package-sources';
@@ -24,14 +29,18 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
       options.config ?? 'megamono.json',
     );
     const diagnostics: Diagnostic[] = [];
+    const rawDiagnostics: Diagnostic[] = [];
+    const add = (findings: readonly Diagnostic[]) => {
+      diagnostics.push(...findings);
+      rawDiagnostics.push(...findings);
+    };
     const acceptedDecisions = new Set<string>();
     const adoptedModules = new Set(config.adoption.modules);
     const packageSourceProfile =
       options.profile ??
       (options.ci || process.env.CI === 'true' ? 'ci' : undefined);
     if (options.ci && options.profile && options.profile !== 'ci') {
-      logger.error('--ci cannot be combined with a non-ci --profile.');
-      return { success: false };
+      throw new Error('--ci cannot be combined with a non-ci --profile.');
     }
     if (!options.skipDocs && adoptedModules.has('docs')) {
       const docs = await validateRepositoryDocs(
@@ -39,7 +48,7 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
         config,
         options.docsRoot,
       );
-      diagnostics.push(...docs.diagnostics);
+      add(docs.diagnostics);
       for (const document of docs.documents) {
         if (
           document.data.type === 'decision' &&
@@ -49,36 +58,136 @@ const runExecutor: PromiseExecutor<CheckExecutorSchema> = async (
         }
       }
     }
-    diagnostics.push(
-      ...(await checkWorkspaceStructure(
+    const structure = await analyzeWorkspaceStructure(
+      context.root,
+      context.projectGraph,
+      config,
+      acceptedDecisions,
+      adoptedStructuralRules(config),
+    );
+    diagnostics.push(...structure.diagnostics);
+    rawDiagnostics.push(...structure.rawDiagnostics);
+    add(await checkProjectPreflights(context.projectGraph));
+    // Advisory: reported as warnings outside structural rule budgets, so
+    // adopters see undeclared workspace imports and split UI singletons
+    // without a new failing rule.
+    add(
+      inspectWorkspaceDependencies(
         context.root,
         context.projectGraph,
-        config,
-        acceptedDecisions,
-        adoptedModules.has('lint')
-          ? undefined
-          : new Set(['megamono-dev-only', 'playstack-direction']),
-      )),
+      ).findings.map((finding) => ({
+        severity: 'warning' as const,
+        code: 'workspace-dependencies',
+        ...(finding.evidence[0]?.endsWith('package.json')
+          ? { path: finding.evidence[0] }
+          : {}),
+        message:
+          `${finding.summary}${finding.state === 'multiple-installed-singletons' ? ` (${finding.evidence.join('; ')})` : ''} ${finding.recommendation ?? ''}`.trim(),
+      })),
     );
-    diagnostics.push(...(await checkProjectPreflights(context.projectGraph)));
-    diagnostics.push(...validateInstalledSkills(context.root));
-    diagnostics.push(...validateManagedArtifactRegistry(context.root));
-    if (packageSourceProfile)
-      diagnostics.push(
-        ...(await validatePackageSources(context.root, config, {
-          profile: packageSourceProfile,
-        })),
+    add(validateInstalledSkills(context.root));
+    add(validateManagedArtifactRegistry(context.root));
+    const excludedNames = [
+      ...new Set(
+        (typeof options.excludeProjects === 'string'
+          ? [options.excludeProjects]
+          : (options.excludeProjects ?? [])
+        )
+          .flatMap((value) => value.split(','))
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (excludedNames.length && !packageSourceProfile)
+      throw new Error(
+        '--excludeProjects scopes package-source validation; select --profile (or --ci) as well.',
       );
+    const unknown = excludedNames.filter(
+      (name) => !context.projectGraph?.nodes[name],
+    );
+    if (unknown.length)
+      throw new Error(
+        `--excludeProjects names unknown projects: ${unknown.join(', ')}.`,
+      );
+    if (packageSourceProfile)
+      add(
+        await validatePackageSources(context.root, config, {
+          profile: packageSourceProfile,
+          excludedProjects: excludedNames.map((name) => ({
+            name,
+            root: context.projectGraph.nodes[name].data.root,
+          })),
+        }),
+      );
+    const baseline = evaluateIdentityBaseline(structure.diagnostics, config);
+    diagnostics.push(...baseline.errors);
     diagnostics.push(...checkAdoptionRatchets(diagnostics, config));
+    const success = !hasErrors(diagnostics);
+    if (options.json) {
+      logger.info(
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            purpose: 'validation',
+            success,
+            policy: {
+              warningBaseline: config.adoption.warningBaseline ?? null,
+              ratchets: config.adoption.ratchets,
+            },
+            raw: rawDiagnostics,
+            allowed: structure.allowed,
+            ...(structure.extensionRuntime
+              ? { extensionRuntime: structure.extensionRuntime }
+              : {}),
+            baselined: baseline.baselined,
+            new: baseline.new,
+            resolved: baseline.resolved,
+            errors: diagnostics.filter(
+              (diagnostic) => diagnostic.severity === 'error',
+            ),
+            diagnostics,
+          },
+          null,
+          2,
+        ),
+      );
+      return { success };
+    }
     for (const diagnostic of diagnostics) {
       const message = formatDiagnostic(diagnostic);
       if (diagnostic.severity === 'error') logger.error(message);
       else logger.warn(message);
     }
-    if (hasErrors(diagnostics)) return { success: false };
+    if (!success) return { success: false };
     if (options.verbose) logger.info('Megamono structural checks passed.');
     return { success: true };
   } catch (error) {
+    if (options.json) {
+      const diagnostic: Diagnostic = {
+        severity: 'error',
+        code: 'check-failed',
+        message: (error as Error).message,
+      };
+      logger.info(
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            purpose: 'validation',
+            success: false,
+            raw: [],
+            allowed: [],
+            baselined: [],
+            new: [],
+            resolved: [],
+            errors: [diagnostic],
+            diagnostics: [diagnostic],
+          },
+          null,
+          2,
+        ),
+      );
+      return { success: false };
+    }
     logger.error((error as Error).message);
     return { success: false };
   }

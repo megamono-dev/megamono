@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_MEGAMONO_CONFIG } from './config';
@@ -126,6 +126,56 @@ describe('package source contracts', () => {
     }
   });
 
+  it.each([
+    ['ci', 'error'],
+    ['release', 'error'],
+    ['migration', 'warning'],
+  ] as const)(
+    'distinguishes ignored Yalc residue from active dependencies in the %s profile without changing policy',
+    async (profile, severity) => {
+      const root = await mkdtemp(join(tmpdir(), 'megamono-yalc-residue-'));
+      try {
+        await writeFile(join(root, '.gitignore'), '.yalc/\nyalc.lock\n');
+        await mkdir(join(root, '.yalc'));
+        await writeFile(join(root, '.yalc/local-notes'), 'preserve local work');
+        await writeFile(join(root, 'yalc.lock'), '{}\n');
+        const manifest = JSON.stringify({
+          dependencies: { '@megamono/plugin': '^1.0.0' },
+        });
+        await writeFile(join(root, 'package.json'), manifest);
+        await writeFile(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n');
+
+        const diagnostics = await validatePackageSources(root, pnpmConfig, {
+          profile,
+        });
+        expect(diagnostics).toHaveLength(2);
+        for (const diagnostic of diagnostics) {
+          expect(diagnostic).toEqual(
+            expect.objectContaining({
+              severity,
+              code: 'package-sources-local-state',
+              message: expect.stringContaining(
+                'No Yalc dependency addresses were found in package manifests or package-manager source configuration',
+              ),
+            }),
+          );
+          expect(diagnostic.message).toContain('separate clean checkout');
+          if (profile !== 'migration')
+            expect(diagnostic.message).toContain('even when Git ignores it');
+        }
+        expect(await readFile(join(root, 'package.json'), 'utf8')).toBe(
+          manifest,
+        );
+        expect(await readFile(join(root, 'yalc.lock'), 'utf8')).toBe('{}\n');
+        expect(await readFile(join(root, '.yalc/local-notes'), 'utf8')).toBe(
+          'preserve local work',
+        );
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('allows an exact local fixture locator only in the ci profile', async () => {
     const root = await mkdtemp(join(tmpdir(), 'megamono-package-approved-'));
     try {
@@ -156,6 +206,40 @@ describe('package source contracts', () => {
       expect(
         await validatePackageSources(root, config, { profile: 'ci' }),
       ).toEqual([]);
+      await writeFile(
+        join(root, 'package.json'),
+        JSON.stringify({
+          devDependencies: {
+            '@megamono/plugin': 'file:.yalc/@megamono/plugin',
+          },
+          overrides: { '@playstack/core': 'file:.yalc/@playstack/core' },
+        }),
+      );
+      const mixedDiagnostics = await validatePackageSources(root, config, {
+        profile: 'ci',
+      });
+      expect(mixedDiagnostics).toHaveLength(2);
+      expect(mixedDiagnostics).toContainEqual(
+        expect.objectContaining({
+          severity: 'error',
+          code: 'package-sources-local-dependency',
+          message: expect.stringContaining('overrides.@playstack/core'),
+        }),
+      );
+      expect(mixedDiagnostics).toContainEqual(
+        expect.objectContaining({
+          severity: 'error',
+          code: 'package-sources-local-state',
+          message: expect.stringContaining(
+            'Yalc dependency addresses are present in package manifests or package-manager source configuration',
+          ),
+        }),
+      );
+      expect(
+        mixedDiagnostics.every(
+          ({ message }) => !message.includes('leftover local state'),
+        ),
+      ).toBe(true);
       expect(
         (
           await validatePackageSources(root, config, { profile: 'release' })
@@ -216,6 +300,112 @@ catalogs:
           ({ code }) => code === 'package-sources-local-dependency',
         ),
       ).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('scopes CI package-source policy to the projects a filtered install keeps', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'megamono-package-excluded-'));
+    try {
+      await mkdir(join(root, 'apps/api'), { recursive: true });
+      await mkdir(join(root, 'apps/site'), { recursive: true });
+      await writeFile(join(root, 'package.json'), JSON.stringify({}));
+      await writeFile(
+        join(root, 'apps/api/package.json'),
+        JSON.stringify({
+          dependencies: {
+            '@playstack/queues': '0.1.0',
+            '@local/tool': 'file:.yalc/@local/tool',
+          },
+        }),
+      );
+      await writeFile(
+        join(root, 'apps/site/package.json'),
+        JSON.stringify({ dependencies: { '@shared/ui': '1.0.0' } }),
+      );
+      await writeFile(
+        join(root, 'pnpm-workspace.yaml'),
+        `packages:
+  - apps/*
+overrides:
+  '@playstack/queues': file:.yalc/@playstack/queues
+  '@playstack/core': file:.yalc/@playstack/core
+  '@shared/ui': file:.yalc/@shared/ui
+`,
+      );
+      await writeFile(
+        join(root, 'pnpm-lock.yaml'),
+        `lockfileVersion: '9.0'
+importers:
+  .: {}
+  apps/api:
+    dependencies:
+      '@playstack/queues':
+        specifier: 0.1.0
+        version: file:.yalc/@playstack/queues
+  apps/site:
+    dependencies:
+      '@shared/ui':
+        specifier: 1.0.0
+        version: file:.yalc/@shared/ui
+packages: {}
+snapshots:
+  '@playstack/queues@file:.yalc/@playstack/queues':
+    dependencies:
+      '@playstack/core': file:.yalc/@playstack/core
+  '@playstack/core@file:.yalc/@playstack/core': {}
+  '@shared/ui@file:.yalc/@shared/ui': {}
+`,
+      );
+      const unscoped = await validatePackageSources(root, pnpmConfig, {
+        profile: 'ci',
+      });
+      expect(
+        unscoped.filter(({ severity }) => severity === 'error'),
+      ).toHaveLength(4);
+
+      const scoped = await validatePackageSources(root, pnpmConfig, {
+        profile: 'ci',
+        excludedProjects: [{ name: 'api', root: 'apps/api' }],
+      });
+      expect(
+        scoped
+          .filter(({ severity }) => severity === 'error')
+          .map(({ message }) => message),
+      ).toEqual([expect.stringContaining('overrides.@shared/ui')]);
+      expect(
+        scoped
+          .filter(({ code }) => code === 'package-sources-excluded-project')
+          .map(({ message }) => message.split(' uses ')[0]),
+      ).toEqual([
+        'dependencies.@local/tool',
+        'overrides.@playstack/queues',
+        'overrides.@playstack/core',
+      ]);
+      expect(
+        scoped.every(
+          ({ code, severity }) =>
+            code !== 'package-sources-excluded-project' ||
+            severity === 'warning',
+        ),
+      ).toBe(true);
+
+      await writeFile(join(root, 'pnpm-lock.yaml'), 'not: [valid');
+      expect(
+        (
+          await validatePackageSources(root, pnpmConfig, {
+            profile: 'ci',
+            excludedProjects: [{ name: 'api', root: 'apps/api' }],
+          })
+        ).filter(({ severity }) => severity === 'error'),
+      ).toHaveLength(3);
+      await expect(
+        validatePackageSources(root, pnpmConfig, {
+          profile: 'release',
+          excludedProjects: [{ name: 'api', root: 'apps/api' }],
+        }),
+      ).rejects.toThrow(/release/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

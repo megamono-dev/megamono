@@ -12,6 +12,7 @@ import { platformBoundary } from './rules/platform-boundary';
 
 const root = mkdtempSync(join(tmpdir(), 'megamono-eslint-'));
 const webRoot = join(root, 'apps/web');
+const e2eRoot = join(root, 'apps/browser-e2e');
 const internalDocsRoot = join(root, 'apps/internal-docs');
 const publicDocsRoot = join(root, 'apps/public-docs');
 const nodeRoot = join(root, 'packages/node-data');
@@ -28,6 +29,7 @@ writeFileSync(
 );
 for (const directory of [
   webRoot,
+  e2eRoot,
   internalDocsRoot,
   publicDocsRoot,
   nodeRoot,
@@ -40,6 +42,20 @@ writeFileSync(
   JSON.stringify({
     nx: {
       tags: ['platform:web', 'scope:site', 'type:app', 'visibility:public'],
+    },
+  }),
+);
+writeFileSync(
+  join(e2eRoot, 'package.json'),
+  JSON.stringify({
+    nx: {
+      tags: [
+        'platform:node',
+        'scope:site',
+        'type:app',
+        'visibility:internal',
+        'role:e2e',
+      ],
     },
   }),
 );
@@ -205,6 +221,18 @@ tester.run('platform-boundary', platformBoundary, {
   ],
   invalid: [
     {
+      filename: join(e2eRoot, 'src/flow.spec.js'),
+      code: "import { page } from '../../web/src/page.js';",
+      options: workspaceOption,
+      errors: [{ messageId: 'projectPlatform' }],
+    },
+    {
+      filename: join(e2eRoot, 'src/flow.spec.js'),
+      code: "const page = import('../../web/src/page.js');",
+      options: workspaceOption,
+      errors: [{ messageId: 'projectPlatform' }],
+    },
+    {
       filename: join(webRoot, 'src/page.js'),
       code: "/** @jest-environment node */\nimport fs from 'node:fs';",
       options: workspaceOption,
@@ -263,6 +291,101 @@ tester.run('platform-boundary', platformBoundary, {
       code: "import { data } from '../../../packages/node-data/src/index.js';",
       options: workspaceOption,
       errors: [{ messageId: 'projectPlatform' }],
+    },
+  ],
+});
+
+const appRouterRoot = join(root, 'apps/app-router');
+const webLibraryRoot = join(root, 'packages/web-library');
+mkdirSync(join(appRouterRoot, 'src/app/api/og'), { recursive: true });
+mkdirSync(join(webLibraryRoot, 'scripts'), { recursive: true });
+mkdirSync(join(webLibraryRoot, 'src'), { recursive: true });
+writeFileSync(join(appRouterRoot, 'next.config.js'), 'module.exports = {};\n');
+writeFileSync(
+  join(appRouterRoot, 'package.json'),
+  JSON.stringify({
+    nx: {
+      tags: ['platform:web', 'scope:site', 'type:app', 'visibility:public'],
+    },
+  }),
+);
+writeFileSync(
+  join(webLibraryRoot, 'package.json'),
+  JSON.stringify({ nx: { tags: ['platform:web', 'scope:site', 'type:ui'] } }),
+);
+const scriptsOption = [
+  { workspaceRoot: root, nodeFiles: ['scripts/**', '*.config.ts'] },
+];
+
+tester.run('platform-boundary server and tooling files', platformBoundary, {
+  valid: [
+    {
+      filename: join(appRouterRoot, 'src/app/api/og/route.ts'),
+      code: "import { readFile } from 'node:fs/promises';\nexport async function GET() { return new Response(await readFile('x')); }",
+      options: workspaceOption,
+    },
+    {
+      filename: join(appRouterRoot, 'src/app/api/og/route.ts'),
+      code: "import { helper } from '../../helper.js';",
+      options: workspaceOption,
+    },
+    {
+      filename: join(webLibraryRoot, 'scripts/export-png.ts'),
+      code: "import { deflateSync } from 'node:zlib';\nimport { draw } from '../src/draw.js';",
+      options: scriptsOption,
+    },
+    {
+      filename: join(webLibraryRoot, 'build.config.ts'),
+      code: "import path from 'node:path';",
+      options: scriptsOption,
+    },
+    {
+      filename: join(webLibraryRoot, 'src/tokens.spec.ts'),
+      code: "// @vitest-environment node\nimport { readFileSync } from 'node:fs';",
+      options: workspaceOption,
+    },
+    {
+      filename: join(webLibraryRoot, 'src/tokens.spec.ts'),
+      code: "/** @vitest-environment happy-dom */\nimport { readFileSync } from 'node:fs';",
+      options: workspaceOption,
+    },
+  ],
+  invalid: [
+    {
+      filename: join(appRouterRoot, 'src/app/api/og/route.ts'),
+      code: "export const runtime = 'edge';\nimport fs from 'node:fs';",
+      options: workspaceOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
+    },
+    {
+      filename: join(appRouterRoot, 'src/app/page.tsx'),
+      code: "import fs from 'node:fs';",
+      options: workspaceOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
+    },
+    {
+      filename: join(webLibraryRoot, 'scripts/export-png.ts'),
+      code: "import { deflateSync } from 'node:zlib';",
+      options: workspaceOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
+    },
+    {
+      filename: join(webLibraryRoot, 'src/draw.ts'),
+      code: "import { deflateSync } from 'node:zlib';",
+      options: scriptsOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
+    },
+    {
+      filename: join(webLibraryRoot, 'src/tokens.ts'),
+      code: "// @vitest-environment node\nimport { readFileSync } from 'node:fs';",
+      options: workspaceOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
+    },
+    {
+      filename: join(webLibraryRoot, 'src/tokens.spec.ts'),
+      code: "// @vitest-environment browser\nimport { readFileSync } from 'node:fs';",
+      options: workspaceOption,
+      errors: [{ messageId: 'nodeBuiltin' }],
     },
   ],
 });

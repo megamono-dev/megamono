@@ -8,10 +8,15 @@
       "additionalProperties": false,
       "required": ["localReferences"],
       "properties": {
-        "localReferences": { "enum": ["allow", "warn", "reject"] },
+        "localReferences": {
+          "enum": ["allow", "warn", "reject"]
+        },
         "approved": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "default": []
         }
       }
@@ -21,7 +26,9 @@
       "additionalProperties": false,
       "required": ["severity"],
       "properties": {
-        "severity": { "enum": ["off", "warning", "error"] },
+        "severity": {
+          "enum": ["off", "warning", "error"]
+        },
         "decision": {
           "type": "string",
           "pattern": "^decision-[0-9]{8}-[a-z0-9]+(?:-[a-z0-9]+)*$"
@@ -30,15 +37,172 @@
     },
     "structuralRuleOverride": {
       "allOf": [
-        { "$ref": "#/$defs/ruleOverride" },
+        {
+          "$ref": "#/$defs/ruleOverride"
+        },
         {
           "if": {
-            "properties": { "severity": { "const": "off" } },
+            "properties": {
+              "severity": {
+                "const": "off"
+              }
+            },
             "required": ["severity"]
           },
-          "then": { "required": ["decision"] }
+          "then": {
+            "required": ["decision"]
+          }
         }
       ]
+    },
+    "dependencyProjectClassification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "tags"],
+      "properties": {
+        "kind": {
+          "enum": ["app", "lib", "e2e"]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:type|scope|platform|role):[a-z0-9]+(?:[-:][a-z0-9]+)*$"
+          }
+        }
+      }
+    },
+    "dependencyClassification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dependencyKind", "source", "target"],
+      "properties": {
+        "dependencyKind": {
+          "enum": ["implicit", "static", "dynamic"]
+        },
+        "source": {
+          "$ref": "#/$defs/dependencyProjectClassification"
+        },
+        "target": {
+          "$ref": "#/$defs/dependencyProjectClassification"
+        }
+      }
+    },
+    "dependencyFindingIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule", "source", "target", "constraint", "classification"],
+      "properties": {
+        "rule": {
+          "const": "module-boundaries"
+        },
+        "source": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9@][a-zA-Z0-9@._/:-]*$"
+        },
+        "target": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9@][a-zA-Z0-9@._/:-]*$"
+        },
+        "constraint": {
+          "enum": [
+            "module-boundaries:type-direction",
+            "module-boundaries:scope-direction"
+          ]
+        },
+        "classification": {
+          "$ref": "#/$defs/dependencyClassification"
+        }
+      }
+    },
+    "boundaryAllowance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "target",
+        "constraint",
+        "classification",
+        "rationale",
+        "decision"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9@][a-zA-Z0-9@._/:-]*$"
+        },
+        "target": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9@][a-zA-Z0-9@._/:-]*$"
+        },
+        "constraint": {
+          "enum": [
+            "module-boundaries:type-direction",
+            "module-boundaries:scope-direction"
+          ]
+        },
+        "classification": {
+          "$ref": "#/$defs/dependencyClassification"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "decision": {
+          "type": "string",
+          "pattern": "^decision-[0-9]{8}-[a-z0-9]+(?:-[a-z0-9]+)*$"
+        }
+      }
+    },
+    "warningBaselineEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "reason", "reviewReference", "revision"],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/dependencyFindingIdentity"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "reviewReference": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+        }
+      }
+    },
+    "warningBaseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identityVersion", "rules", "entries"],
+      "properties": {
+        "identityVersion": {
+          "const": 1
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "const": "module-boundaries"
+          }
+        },
+        "entries": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/warningBaselineEntry"
+          }
+        }
+      }
     }
   },
   "type": "object",
@@ -48,12 +212,41 @@
       "not": {
         "required": ["databases", "prisma"]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "version": {
+            "const": 1
+          }
+        },
+        "required": ["version"]
+      },
+      "then": {
+        "properties": {
+          "conventions": {
+            "not": {
+              "required": ["boundaryAllowances"]
+            }
+          },
+          "adoption": {
+            "not": {
+              "required": ["warningBaseline"]
+            }
+          }
+        }
+      }
     }
   ],
   "required": ["version", "conventions"],
   "properties": {
-    "$schema": { "type": "string" },
-    "version": { "const": 1 },
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "enum": [1, 2],
+      "description": "Version 1 retains legacy behavior; version 2 explicitly enables reviewed adoption policy."
+    },
     "conventions": {
       "type": "object",
       "additionalProperties": false,
@@ -64,8 +257,12 @@
         "rules"
       ],
       "properties": {
-        "nestFeatureLibraries": { "type": "boolean" },
-        "docsLocation": { "const": "centralized" },
+        "nestFeatureLibraries": {
+          "type": "boolean"
+        },
+        "docsLocation": {
+          "const": "centralized"
+        },
         "packageManager": {
           "type": "string",
           "enum": ["pnpm", "npm"],
@@ -79,23 +276,35 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "router": { "const": "pages" },
-                "src": { "const": true },
+                "router": {
+                  "const": "pages"
+                },
+                "src": {
+                  "const": true
+                },
                 "ui": {
                   "const": "chakra",
                   "deprecated": true,
                   "description": "Legacy compatibility only; use scaffolding.web.styling."
                 },
-                "e2e": { "const": "playwright" }
+                "e2e": {
+                  "const": "playwright"
+                }
               }
             },
             "api": {
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "framework": { "const": "nest" },
-                "featureLibraries": { "const": true },
-                "e2e": { "const": "jest" }
+                "framework": {
+                  "const": "nest"
+                },
+                "featureLibraries": {
+                  "const": true
+                },
+                "e2e": {
+                  "const": "jest"
+                }
               }
             }
           }
@@ -104,16 +313,42 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "module-boundaries": { "$ref": "#/$defs/structuralRuleOverride" },
-            "docs-visibility-boundary": { "$ref": "#/$defs/ruleOverride" },
-            "no-deep-relative-imports": { "$ref": "#/$defs/ruleOverride" },
-            "require-tags": { "$ref": "#/$defs/structuralRuleOverride" },
-            "naming-convention": { "$ref": "#/$defs/structuralRuleOverride" },
-            "megamono-dev-only": { "$ref": "#/$defs/structuralRuleOverride" },
-            "playstack-direction": { "$ref": "#/$defs/structuralRuleOverride" },
-            "platform-boundary": { "$ref": "#/$defs/structuralRuleOverride" },
-            "no-bare-jsx-strings": { "$ref": "#/$defs/ruleOverride" }
+            "module-boundaries": {
+              "$ref": "#/$defs/structuralRuleOverride"
+            },
+            "docs-visibility-boundary": {
+              "$ref": "#/$defs/ruleOverride"
+            },
+            "no-deep-relative-imports": {
+              "$ref": "#/$defs/ruleOverride"
+            },
+            "require-tags": {
+              "$ref": "#/$defs/structuralRuleOverride"
+            },
+            "naming-convention": {
+              "$ref": "#/$defs/structuralRuleOverride"
+            },
+            "megamono-dev-only": {
+              "$ref": "#/$defs/structuralRuleOverride"
+            },
+            "playstack-direction": {
+              "$ref": "#/$defs/structuralRuleOverride"
+            },
+            "platform-boundary": {
+              "$ref": "#/$defs/structuralRuleOverride"
+            },
+            "no-bare-jsx-strings": {
+              "$ref": "#/$defs/ruleOverride"
+            }
           }
+        },
+        "boundaryAllowances": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/boundaryAllowance"
+          },
+          "description": "Version 2 only. Exact reviewed type/scope permissions; graph, decision, duplicate-key and stale-policy validation is performed by the checker."
         }
       }
     },
@@ -187,7 +422,10 @@
                 "type": "string",
                 "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
               },
-              "reason": { "type": "string", "minLength": 1 }
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
@@ -200,7 +438,9 @@
               "additionalProperties": false,
               "required": ["plugin", "manifests"],
               "properties": {
-                "plugin": { "const": "@megamono/nx-apple" },
+                "plugin": {
+                  "const": "@megamono/nx-apple"
+                },
                 "manifests": {
                   "type": "array",
                   "items": {
@@ -215,7 +455,9 @@
               "additionalProperties": false,
               "required": ["plugin", "manifests"],
               "properties": {
-                "plugin": { "const": "@megamono/nx-cargo" },
+                "plugin": {
+                  "const": "@megamono/nx-cargo"
+                },
                 "manifests": {
                   "type": "array",
                   "items": {
@@ -230,7 +472,9 @@
               "additionalProperties": false,
               "required": ["plugin", "manifests"],
               "properties": {
-                "plugin": { "const": "@megamono/nx-cloudflare" },
+                "plugin": {
+                  "const": "@megamono/nx-cloudflare"
+                },
                 "manifests": {
                   "type": "array",
                   "items": {
@@ -262,12 +506,44 @@
                   "no-bare-jsx-strings"
                 ]
               },
-              "initialCount": { "type": "integer", "minimum": 0 },
-              "targetSeverity": { "const": "error" }
+              "initialCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "targetSeverity": {
+                "const": "error"
+              }
+            }
+          }
+        },
+        "warningBaseline": {
+          "$ref": "#/$defs/warningBaseline"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["warningBaseline"]
+          },
+          "then": {
+            "properties": {
+              "ratchets": {
+                "not": {
+                  "contains": {
+                    "type": "object",
+                    "required": ["rule"],
+                    "properties": {
+                      "rule": {
+                        "const": "module-boundaries"
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
-      }
+      ]
     },
     "platforms": {
       "type": "array",
@@ -288,7 +564,9 @@
     },
     "ports": {
       "type": "object",
-      "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+      "propertyNames": {
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
       "additionalProperties": {
         "type": "integer",
         "minimum": 1024,
@@ -346,8 +624,14 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "cadence": { "enum": ["disabled", "weekly", "daily"] },
-        "stalePlanDays": { "type": "integer", "minimum": 7, "maximum": 365 },
+        "cadence": {
+          "enum": ["disabled", "weekly", "daily"]
+        },
+        "stalePlanDays": {
+          "type": "integer",
+          "minimum": 7,
+          "maximum": 365
+        },
         "checks": {
           "type": "object",
           "propertyNames": {
@@ -359,7 +643,9 @@
               "integration-template-drift"
             ]
           },
-          "additionalProperties": { "type": "boolean" }
+          "additionalProperties": {
+            "type": "boolean"
+          }
         },
         "projectAliases": {
           "type": "object",
@@ -371,7 +657,10 @@
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1 }
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         },
         "suppressions": {
@@ -399,7 +688,10 @@
                 "type": "string",
                 "pattern": "^decision-[0-9]{8}-[a-z0-9]+(?:-[a-z0-9]+)*$"
               },
-              "expires_at": { "type": "string", "format": "date" }
+              "expires_at": {
+                "type": "string",
+                "format": "date"
+              }
             }
           }
         }
@@ -416,8 +708,13 @@
         "additionalProperties": false,
         "required": ["adapter", "project"],
         "properties": {
-          "adapter": { "enum": ["prisma", "drizzle"] },
-          "project": { "type": "string", "minLength": 1 },
+          "adapter": {
+            "enum": ["prisma", "drizzle"]
+          },
+          "project": {
+            "type": "string",
+            "minLength": 1
+          },
           "schema": {
             "type": "string",
             "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
@@ -432,11 +729,16 @@
       "additionalProperties": false,
       "required": ["composition", "projects"],
       "properties": {
-        "composition": { "const": "native-multi-file" },
+        "composition": {
+          "const": "native-multi-file"
+        },
         "projects": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -444,15 +746,29 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "runner": { "enum": ["none", "springbar"] },
+        "runner": {
+          "enum": ["none", "springbar"]
+        },
         "requirements": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "postgres": { "type": "string", "minLength": 1 },
-            "redis": { "type": "string", "minLength": 1 },
-            "clickhouse": { "type": "string", "minLength": 1 },
-            "typesense": { "type": "string", "minLength": 1 }
+            "postgres": {
+              "type": "string",
+              "minLength": 1
+            },
+            "redis": {
+              "type": "string",
+              "minLength": 1
+            },
+            "clickhouse": {
+              "type": "string",
+              "minLength": 1
+            },
+            "typesense": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         }
       }
@@ -465,10 +781,18 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "development": { "$ref": "#/$defs/packageSourceProfile" },
-            "migration": { "$ref": "#/$defs/packageSourceProfile" },
-            "ci": { "$ref": "#/$defs/packageSourceProfile" },
-            "release": { "$ref": "#/$defs/packageSourceProfile" }
+            "development": {
+              "$ref": "#/$defs/packageSourceProfile"
+            },
+            "migration": {
+              "$ref": "#/$defs/packageSourceProfile"
+            },
+            "ci": {
+              "$ref": "#/$defs/packageSourceProfile"
+            },
+            "release": {
+              "$ref": "#/$defs/packageSourceProfile"
+            }
           }
         },
         "registries": {
@@ -482,7 +806,10 @@
             "pattern": "^https://"
           }
         },
-        "forbidLocalInCi": { "type": "boolean", "default": true }
+        "forbidLocalInCi": {
+          "type": "boolean",
+          "default": true
+        }
       }
     }
   }

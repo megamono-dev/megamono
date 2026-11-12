@@ -113,7 +113,7 @@ describe('database generator', () => {
       tree.read('libs/prisma/primary/prisma.config.ts', 'utf8') ?? '';
     expect(
       readJson(tree, 'libs/prisma/primary/package.json').devDependencies.dotenv,
-    ).toBe('16.4.7');
+    ).toBe('16.6.1');
     const root = mkdtempSync(join(tmpdir(), 'prisma-env-fixture-'));
     try {
       mkdirSync(join(root, 'libs/prisma/primary'), { recursive: true });
@@ -303,7 +303,7 @@ describe('database generator', () => {
     const tree = workspace();
     tree.write(
       'pnpm-workspace.yaml',
-      "packages:\n  - 'packages/*'\nallowBuilds:\n  '@prisma/engines@7.9.0 || 7.10.0': true\n  'prisma@7.10.0': true\n",
+      "packages:\n  - 'packages/*'\nallowBuilds:\n  '@prisma/engines@7.9.0 || 7.10.1': true\n  'prisma@7.10.1': true\n",
     );
     await databaseGenerator(tree, {
       name: 'primary',
@@ -312,7 +312,7 @@ describe('database generator', () => {
       interactive: false,
     });
     expect(tree.read('pnpm-workspace.yaml', 'utf8')).toContain(
-      "'prisma@7.10.0': true",
+      "'prisma@7.10.1': true",
     );
     expect(tree.read('pnpm-workspace.yaml', 'utf8')).not.toContain(
       '  prisma: true',
@@ -327,7 +327,7 @@ describe('database generator', () => {
     });
     tree.write(
       'pnpm-workspace.yaml',
-      "packages:\n  - 'packages/*'\nallowBuilds:\n  '@prisma/engines@7.10.0': true\n  'prisma@7.10.0': true\n",
+      "packages:\n  - 'packages/*'\nallowBuilds:\n  '@prisma/engines@7.10.1': true\n  'prisma@7.10.1': true\n",
     );
     const before = tree.listChanges();
     await expect(
@@ -342,7 +342,7 @@ describe('database generator', () => {
     tree.write(
       'pnpm-workspace.yaml',
       (tree.read('pnpm-workspace.yaml', 'utf8') ?? '').replaceAll(
-        '7.10.0',
+        '7.10.1',
         '6.19.3',
       ),
     );
@@ -635,7 +635,7 @@ describe('database generator', () => {
     ).toContain("schema: './src/schema'");
     expect(
       readJson(tree, 'libs/drizzle/analytics/package.json').dependencies,
-    ).toEqual({ 'drizzle-orm': '0.45.2' });
+    ).toEqual({ 'drizzle-orm': '0.45.4' });
     expect(
       readJson(tree, 'libs/drizzle/analytics/project.json').targets.validate
         .options.command,

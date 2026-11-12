@@ -1,4 +1,4 @@
-import manifest from '../package.json';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -13,6 +13,10 @@ import {
   selectPackages,
   type InteractivePrompt,
 } from './cli.js';
+
+const manifest = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+) as { readonly version: string };
 
 vi.mock('@inquirer/prompts', () => ({
   input: vi.fn(),
@@ -356,6 +360,20 @@ describe('CLI entrypoint', () => {
     }
   });
 
+  it('rejects creation options combined with --resume', async () => {
+    const error = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    try {
+      expect(
+        await main(['resume-example', '--resume', '--apps=web', '--dry-run']),
+      ).toBe(2);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining('(received --apps)'),
+      );
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('rejects conflicting Springbar runner flags before creation', async () => {
     const error = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
     try {
@@ -526,7 +544,7 @@ describe('CLI entrypoint', () => {
         ]),
       ).resolves.toBe(0);
       expect(output).toHaveBeenCalledWith(
-        expect.stringContaining('"pnpm" "dlx" "create-nx-workspace@23.1.1"'),
+        expect.stringContaining('"pnpm" "dlx" "create-nx-workspace@23.2.1"'),
       );
       expect(output).toHaveBeenCalledWith(
         expect.stringContaining('--router=app'),
