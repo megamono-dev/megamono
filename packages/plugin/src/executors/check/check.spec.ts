@@ -37,7 +37,10 @@ vi.mock('../../lib/workspace-dependency-health', () => ({
   })),
 }));
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 describe('public checker warning budgets', () => {
   it.each([
@@ -361,6 +364,7 @@ describe('public checker identity reports', () => {
 
 describe('package-source exclusions', () => {
   it('passes excluded project roots to package-source validation and rejects unknown names', async () => {
+    vi.stubEnv('CI', undefined);
     const { validatePackageSources } =
       await import('../../lib/package-sources.js');
     const spy = vi.mocked(validatePackageSources);
@@ -407,7 +411,57 @@ describe('package-source exclusions', () => {
     expect(await check({ excludeProjects: ['api'] }, context)).toEqual({
       success: false,
     });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('select --profile (or --ci) as well'),
+    );
   });
+
+  it.each([undefined, 'false', 'true'])(
+    'scopes project exclusions using the implicit profile only when CI=%s',
+    async (ci) => {
+      vi.stubEnv('CI', ci);
+      const { validatePackageSources } =
+        await import('../../lib/package-sources.js');
+      const spy = vi.mocked(validatePackageSources);
+      spy.mockClear();
+      vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+      vi.mocked(readMegamonoConfig).mockResolvedValue(
+        megamonoConfigSchema.parse(DEFAULT_MEGAMONO_CONFIG),
+      );
+      vi.mocked(analyzeWorkspaceStructure).mockResolvedValue({
+        diagnostics: [],
+        rawDiagnostics: [],
+        allowed: [],
+      });
+      const context = {
+        root: '/fixture',
+        projectGraph: {
+          nodes: {
+            api: { name: 'api', type: 'app', data: { root: 'apps/api' } },
+          },
+          dependencies: {},
+        },
+      } as unknown as ExecutorContext;
+      expect(await check({ excludeProjects: ['api'] }, context)).toEqual({
+        success: ci === 'true',
+      });
+      if (ci === 'true') {
+        expect(spy).toHaveBeenCalledExactlyOnceWith(
+          '/fixture',
+          expect.anything(),
+          {
+            profile: 'ci',
+            excludedProjects: [{ name: 'api', root: 'apps/api' }],
+          },
+        );
+      } else {
+        expect(spy).not.toHaveBeenCalled();
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.stringContaining('select --profile (or --ci) as well'),
+        );
+      }
+    },
+  );
 
   it('reports workspace dependency findings as non-failing warnings', async () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
