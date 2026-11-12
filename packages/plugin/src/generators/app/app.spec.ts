@@ -471,16 +471,16 @@ describe('app generator', () => {
     ).toBeUndefined();
     const app = readJson(tree, 'apps/mobile/package.json');
     expect(app.dependencies).toMatchObject({
-      expo: '57.0.31',
+      expo: '57.0.32',
       react: '19.2.3',
       'react-dom': '19.2.3',
       'react-native': '0.86.3',
     });
     expect(app.devDependencies['react-test-renderer']).toBe('19.2.3');
     expect(app.devDependencies['jest-expo']).toBe('~57.0.6');
-    expect(app.devDependencies['babel-preset-expo']).toBe('~57.0.16');
+    expect(app.devDependencies['babel-preset-expo']).toBe('~57.0.17');
     expect(app.devDependencies['@types/react']).toBe('~19.2.0');
-    expect(app.dependencies['expo-splash-screen']).toBe('~57.0.10');
+    expect(app.dependencies['expo-splash-screen']).toBe('~57.0.11');
     expect(
       readJson(tree, 'apps/mobile/app.json').expo.android.edgeToEdgeEnabled,
     ).toBeUndefined();
@@ -517,15 +517,15 @@ describe('app generator', () => {
     expect(root.devDependencies['@expo/cli']).toBeUndefined();
     const app = readJson(tree, 'apps/mobile/package.json');
     expect(app.dependencies).toMatchObject({
-      expo: '57.0.31',
+      expo: '57.0.32',
       react: '19.2.3',
       'react-native': '0.86.3',
-      'expo-splash-screen': '~57.0.10',
+      'expo-splash-screen': '~57.0.11',
     });
     expect(app.devDependencies).toMatchObject({
-      'babel-preset-expo': '~57.0.16',
+      'babel-preset-expo': '~57.0.17',
       '@types/react': '~19.2.0',
-      '@expo/cli': '^57.0.32',
+      '@expo/cli': '^57.0.33',
     });
   });
 

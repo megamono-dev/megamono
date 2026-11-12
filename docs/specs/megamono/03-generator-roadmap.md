@@ -123,7 +123,7 @@ V1 supports `web`, `site`, `api`, `worker`, `mobile`, `desktop`, `apple`, and `e
 Mobile generation reads SDK requirements from matching installed Expo metadata
 or verified public SDK snapshots; selection does not execute an initializer,
 install packages, or fetch metadata. The default SDK is pinned to the reviewed
-Expo 57.0.31 snapshot. Existing Root or coherent project-owned SDK declarations
+Expo 57.0.32 snapshot. Existing Root or coherent project-owned SDK declarations
 guide selection rather than silently upgrading callers. Nx supplies the maintained
 application scaffold. The new app owns SDK-compatible runtime, React singleton,
 and test/build tool declarations; existing Root dependencies and sibling web
@@ -140,7 +140,7 @@ unscoped policy or adds a registration with exact filenames for the new app.
 Different existing target policies require review instead of guessing scope
 matching. Doctor prerequisites retain configured target aliases and dependency
 export ordering. Packed regression lanes qualify SDK 54/Nx 23.3.1 and default
-SDK 57.0.31/emitted Nx 23.2.1 on Node 24.22.1/npm 11 with split web/mobile
+SDK 57.0.32/emitted Nx 23.2.1 using Node 24/npm 11 toolchains with split web/mobile
 React. They run Doctor, web/iOS/Android JavaScript exports and bundle isolation,
 TypeScript and the generated unit test. Other SDKs, older Nx behavior and native
 or cloud builds require separate qualification.

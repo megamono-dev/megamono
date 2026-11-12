@@ -19,7 +19,7 @@ describe('published Expo SDK metadata selection', () => {
       JSON.stringify(registry.snapshots[54].requirements),
     );
     expect(selectExpoSdk(tree, registry, undefined, names, []).version).toBe(
-      '57.0.31',
+      '57.0.32',
     );
   });
   it('selects the exact reviewed default and its real Native peer requirement', () => {
@@ -27,8 +27,8 @@ describe('published Expo SDK metadata selection', () => {
     const before = tree.listChanges();
     const sdk = selectExpoSdk(tree, registry, undefined, names);
     expect(sdk).toMatchObject({
-      version: '57.0.31',
-      declaration: '57.0.31',
+      version: '57.0.32',
+      declaration: '57.0.32',
       source: 'verified-snapshot',
       requirements: {
         react: '19.2.3',
@@ -36,7 +36,7 @@ describe('published Expo SDK metadata selection', () => {
         'react-native': '0.86.3',
         'react-native-svg': '15.15.4',
         '@types/react': '~19.2.0',
-        'babel-preset-expo': '~57.0.16',
+        'babel-preset-expo': '~57.0.17',
       },
     });
     expect(
@@ -65,6 +65,43 @@ describe('published Expo SDK metadata selection', () => {
       expect(sdk.requirements.react).toBe('19.1.0');
     },
   );
+
+  it('retains an explicitly authored previous patch when its metadata is installed', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const requirements = {
+      ...registry.snapshots[57].requirements,
+      '@expo/cli': '^57.0.32',
+      '@expo/metro-config': '~57.0.13',
+      '@expo/metro-runtime': '~57.0.17',
+      'babel-preset-expo': '~57.0.16',
+      'expo-splash-screen': '~57.0.10',
+    };
+    tree.write(
+      'node_modules/expo/package.json',
+      JSON.stringify({ name: 'expo', version: '57.0.31' }),
+    );
+    tree.write(
+      'node_modules/expo/bundledNativeModules.json',
+      JSON.stringify(requirements),
+    );
+    const before = tree.listChanges();
+    expect(selectExpoSdk(tree, registry, '57.0.31', names)).toMatchObject({
+      version: '57.0.31',
+      declaration: '57.0.31',
+      source: 'installed',
+      requirements,
+    });
+    expect(tree.listChanges()).toEqual(before);
+  });
+
+  it('requires installed metadata for an older exact patch instead of upgrading it', () => {
+    const tree = createTreeWithEmptyWorkspace();
+    const before = tree.listChanges();
+    expect(() => selectExpoSdk(tree, registry, '57.0.31', names)).toThrow(
+      'no matching installed metadata or verified snapshot',
+    );
+    expect(tree.listChanges()).toEqual(before);
+  });
 
   it.each(['53', '54', '55', '56', '57'])(
     'records reproducible public metadata provenance for SDK%s',
