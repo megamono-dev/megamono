@@ -12,8 +12,35 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { parse } from 'yaml';
 
 const runner = fileURLToPath(new URL('./qualify-release.mjs', import.meta.url));
+
+test('consumer runtime switches never execute the authoring pnpm cache CLI', () => {
+  const workflow = parse(
+    readFileSync(
+      new URL('../.github/workflows/nx-compatibility.yml', import.meta.url),
+      'utf8',
+    ),
+  );
+  for (const job of ['stable', 'portfolio']) {
+    const steps = workflow.jobs[job].steps;
+    const authoring = steps.find(
+      (step) => step.uses === 'actions/setup-node@v5',
+    );
+    assert.equal(authoring.with['node-version'], 24);
+    assert.equal(authoring.with.cache, 'pnpm');
+    const consumerIndex = steps.findIndex(
+      (step) => step.with?.['node-version'] === '${{ matrix.node }}',
+    );
+    assert(consumerIndex > 0);
+    assert.equal(steps[consumerIndex].with['package-manager-cache'], false);
+    for (const step of steps.slice(consumerIndex + 1)) {
+      if (step.run?.includes('pnpm exec'))
+        assert.match(step.if ?? '', /matrix\.node == 24/);
+    }
+  }
+});
 
 function qualify(t, refusedCommand, phase = 'checks') {
   const directory = mkdtempSync(join(tmpdir(), 'megamono-release-admission-'));

@@ -85,6 +85,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
+          # The authoring cache was restored on Node 24. Auto-detection here
+          # would execute pnpm 11 under the older consumer runtime.
+          package-manager-cache: false
       - name: Use the npm consumer CLI
         shell: bash
         run: npm install --global npm@11.21.1
@@ -135,6 +138,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
+          package-manager-cache: false
       - name: Use the npm consumer CLI
         shell: bash
         run: npm install --global npm@11.21.1
