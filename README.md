@@ -304,6 +304,15 @@ it is an inventory, not an audit exception or release approval. See the
 [tooling dependency audit](docs/audits/tooling-dependencies-20261103.md) for scope,
 remediation evidence, and remaining qualification work.
 
+`pnpm run tooling:test` prepares the immutable Magicast and minimatch-consumer
+archives recorded in the provenance files, verifies their SHA-512 integrity,
+and runs the repair tests against those original bytes. This preparation needs
+registry access on a cold runner; a pnpm install does not populate npm's cache.
+For an offline run, provide `MEGAMONO_MAGICAST_TARBALL` and
+`MEGAMONO_MINIMATCH_TARBALL_DIR` containing the recorded archives. Supplied
+archives receive the same integrity checks. Download failures or changed bytes
+fail the gate; no tests are skipped.
+
 These fixtures require macOS with Xcode, Rust/Cargo, and `git-filter-repo`, just
 like the release workflow. The release workflow synchronizes both scaffold
 compatibility registries when versions change.

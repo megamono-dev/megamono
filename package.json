@@ -112,7 +112,7 @@
         "executor": "nx:run-commands",
         "cache": false,
         "options": {
-          "command": "node --test tools/magicast-bundle.test.mjs tools/glob-tooling.test.mjs tools/minimatch-patch.test.mjs tools/minimatch-nx-tooling.test.mjs tools/minimatch-consumer-tooling.test.mjs tools/deepmerge-tooling-review.test.mjs tools/tooling-lock.test.mjs tools/tooling-dependency-inventory.test.mjs",
+          "command": "node tools/run-tooling-tests.mjs",
           "cwd": "."
         }
       },
