@@ -471,7 +471,7 @@ describe('app generator', () => {
     ).toBeUndefined();
     const app = readJson(tree, 'apps/mobile/package.json');
     expect(app.dependencies).toMatchObject({
-      expo: '57.0.32',
+      expo: '57.0.33',
       react: '19.2.3',
       'react-dom': '19.2.3',
       'react-native': '0.86.3',
@@ -517,7 +517,7 @@ describe('app generator', () => {
     expect(root.devDependencies['@expo/cli']).toBeUndefined();
     const app = readJson(tree, 'apps/mobile/package.json');
     expect(app.dependencies).toMatchObject({
-      expo: '57.0.32',
+      expo: '57.0.33',
       react: '19.2.3',
       'react-native': '0.86.3',
       'expo-splash-screen': '~57.0.11',
@@ -525,7 +525,7 @@ describe('app generator', () => {
     expect(app.devDependencies).toMatchObject({
       'babel-preset-expo': '~57.0.17',
       '@types/react': '~19.2.0',
-      '@expo/cli': '^57.0.33',
+      '@expo/cli': '^57.0.34',
     });
   });
 
