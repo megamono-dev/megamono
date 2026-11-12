@@ -154,7 +154,7 @@
   },
   "expoSdks": {
     "schemaVersion": 1,
-    "defaultVersion": "57.0.32",
+    "defaultVersion": "57.0.33",
     "snapshots": {
       "53": {
         "version": "53.0.27",
@@ -304,18 +304,18 @@
         }
       },
       "57": {
-        "version": "57.0.32",
+        "version": "57.0.33",
         "source": {
-          "metadata": "https://registry.npmjs.org/expo/57.0.32",
-          "tarball": "https://registry.npmjs.org/expo/-/expo-57.0.32.tgz",
-          "integrity": "sha512-1SuRh1bCZfj/nRCUlgySyQ40uJ7Z1geeG1uAjqceVT16S0Ou9yE4U1AMTDWBz3hLPRRvjCneAJkf20630rmjAQ==",
-          "tarballSha256": "79a4500d9ec25c79c2ffe9371f85a8c9ba46bb21f4e2e57283313b848deafdff",
-          "manifestSha256": "ef6496676d2e75bea7f915fd455e1e6bad86e85210e196178d3812f5818cbc74",
-          "bundledNativeModulesSha256": "36af7b2ab4abe287fc933001db076f397ea4294b6842b509b32534d9d49e3f4b"
+          "metadata": "https://registry.npmjs.org/expo/57.0.33",
+          "tarball": "https://registry.npmjs.org/expo/-/expo-57.0.33.tgz",
+          "integrity": "sha512-IbGSGrglkN55O1VhJT7CeCRchaFgPxUotC73jQ8/PB7LEob8r65dbDCV3aZeZUqIbVzslNHKcRjrrXdsNEp3WA==",
+          "tarballSha256": "47afe1901a1755f987af6a3498ad09d7567f33f89b96c26a767f234baa4cc51f",
+          "manifestSha256": "f500504a40f48ef3eeb66bb514a58f9289cd7e9554077f4e83efa52855d7fe3e",
+          "bundledNativeModulesSha256": "51fc5c19ce188ddc1261357e654f28e26177c87d209d75e324a5b386cbb70902"
         },
         "requirements": {
           "@babel/runtime": "^7.20.0",
-          "@expo/cli": "^57.0.33",
+          "@expo/cli": "^57.0.34",
           "@expo/metro": "~56.0.2",
           "@expo/metro-config": "~57.0.14",
           "@expo/metro-runtime": "~57.0.18",
@@ -333,7 +333,7 @@
           "react-native-svg": "15.15.4",
           "react-native-web": "~0.21.0"
         },
-        "requirementsSha256": "b94df0832679b2b9280a9f5a3912d4a8e9e9c89741aab975bca5f01ad017909a",
+        "requirementsSha256": "a5f3df6f141ed616ea4a92d85f8908bf8b4ca3367ee9fe492685c8ed4054900f",
         "reactNativePeerReact": {
           "range": "^19.2.3",
           "metadata": "https://registry.npmjs.org/react-native/0.86.3",

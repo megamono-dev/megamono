@@ -94,6 +94,10 @@ async function check(id, action) {
       durationMs: Date.now() - started,
     });
   } catch (error) {
+    console.error(`Default Expo check failed: ${id}`);
+    console.error(error.stack ?? error);
+    if (error.stdout) console.error(String(error.stdout));
+    if (error.stderr) console.error(String(error.stderr));
     await put(
       join(artifacts, `${id}.log`),
       `${error.stack}\n${error.stdout ?? ''}\n${error.stderr ?? ''}`,

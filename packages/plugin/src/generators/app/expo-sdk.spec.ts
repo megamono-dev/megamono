@@ -19,7 +19,7 @@ describe('published Expo SDK metadata selection', () => {
       JSON.stringify(registry.snapshots[54].requirements),
     );
     expect(selectExpoSdk(tree, registry, undefined, names, []).version).toBe(
-      '57.0.32',
+      '57.0.33',
     );
   });
   it('selects the exact reviewed default and its real Native peer requirement', () => {
@@ -27,8 +27,8 @@ describe('published Expo SDK metadata selection', () => {
     const before = tree.listChanges();
     const sdk = selectExpoSdk(tree, registry, undefined, names);
     expect(sdk).toMatchObject({
-      version: '57.0.32',
-      declaration: '57.0.32',
+      version: '57.0.33',
+      declaration: '57.0.33',
       source: 'verified-snapshot',
       requirements: {
         react: '19.2.3',
@@ -94,14 +94,41 @@ describe('published Expo SDK metadata selection', () => {
     expect(tree.listChanges()).toEqual(before);
   });
 
-  it('requires installed metadata for an older exact patch instead of upgrading it', () => {
+  it('retains authored SDK57.0.32 metadata when a newer default is available', () => {
     const tree = createTreeWithEmptyWorkspace();
-    const before = tree.listChanges();
-    expect(() => selectExpoSdk(tree, registry, '57.0.31', names)).toThrow(
-      'no matching installed metadata or verified snapshot',
+    const requirements = {
+      ...registry.snapshots[57].requirements,
+      '@expo/cli': '^57.0.33',
+    };
+    tree.write(
+      'node_modules/expo/package.json',
+      JSON.stringify({ name: 'expo', version: '57.0.32' }),
     );
+    tree.write(
+      'node_modules/expo/bundledNativeModules.json',
+      JSON.stringify(requirements),
+    );
+    const before = tree.listChanges();
+    expect(selectExpoSdk(tree, registry, '57.0.32', names)).toMatchObject({
+      version: '57.0.32',
+      declaration: '57.0.32',
+      source: 'installed',
+      requirements,
+    });
     expect(tree.listChanges()).toEqual(before);
   });
+
+  it.each(['57.0.31', '57.0.32'])(
+    'requires installed metadata for exact %s instead of upgrading it',
+    (version) => {
+      const tree = createTreeWithEmptyWorkspace();
+      const before = tree.listChanges();
+      expect(() => selectExpoSdk(tree, registry, version, names)).toThrow(
+        'no matching installed metadata or verified snapshot',
+      );
+      expect(tree.listChanges()).toEqual(before);
+    },
+  );
 
   it.each(['53', '54', '55', '56', '57'])(
     'records reproducible public metadata provenance for SDK%s',
