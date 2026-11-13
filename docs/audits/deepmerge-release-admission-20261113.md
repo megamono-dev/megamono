@@ -1,3 +1,23 @@
+---
+id: 'audit-deepmerge-release-admission-20261113'
+type: 'audit'
+status: 'current'
+visibility: 'internal'
+projects: ['megamono']
+topics: ['dependencies', 'release', 'testing']
+summary: 'Bounded deepmerge audit exception and release admission evidence'
+date: '2026-11-13'
+supersedes: null
+references:
+  [
+    'spec-megamono-0000',
+    'audit-release-qualification-20261104',
+    'audit-tooling-dependencies-20261103',
+  ]
+external_references: []
+standard: 'spec-megamono-0000'
+---
+
 # Deepmerge release admission review — November 13, 2026
 
 ## Decision and expiry
