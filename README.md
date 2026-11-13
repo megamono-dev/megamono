@@ -296,9 +296,15 @@ RELEASE_CHANNEL=next pnpm run release:verify-published
 
 Qualification first checks both installed patch sets, runs the tooling
 consumer fixtures, and executes `pnpm run security:audit` across all dependency
-classes at the low-severity threshold. An advisory or registry failure stops
-admission before builds or publication. The current low-severity deepmerge
-finding therefore remains a release blocker. `pnpm run tooling:review-minimatch`
+classes at the low-severity threshold. An unaccepted advisory or registry failure
+stops admission before builds or publication. The same audit also runs in CI.
+A [time-limited deepmerge exception](docs/audits/deepmerge-release-admission-20261113.md)
+accepts only the reviewed low finding for version 4.3.1 in three development
+configuration consumers, following rejection of CVE-2026-93753. The raw registry
+finding remains visible; changes to severity, version, consumer, production use,
+or availability of a patched version require review. The exception expires on
+December 13, 2026; it is not an upstream code fix or a clean registry audit.
+`pnpm run tooling:review-minimatch`
 prints actual installed consumer resolutions and bounded legacy API evidence;
 it is an inventory, not an audit exception or release approval. See the
 [tooling dependency audit](docs/audits/tooling-dependencies-20261103.md) for scope,

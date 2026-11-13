@@ -4,7 +4,7 @@
   "license": "MIT",
   "scripts": {
     "release:check": "node tools/check-release-policy.mjs && node tools/sync-release-pins.mjs --check",
-    "release:test": "node --test tools/release-policy.test.mjs tools/release-channel.test.mjs tools/sync-release-pins.test.mjs tools/publishing-setup.test.mjs tools/published-release.test.mjs tools/release-admission.test.mjs",
+    "release:test": "node --test tools/release-policy.test.mjs tools/release-channel.test.mjs tools/sync-release-pins.test.mjs tools/publishing-setup.test.mjs tools/published-release.test.mjs tools/release-admission.test.mjs tools/security-audit.test.mjs",
     "release:check-publishing": "node tools/check-publishing-setup.mjs",
     "release:qualify": "node tools/qualify-release.mjs",
     "release:verify-published": "node tools/check-published-release.mjs",
@@ -16,7 +16,7 @@
     "postinstall": "node tools/patch-magicast-bundle.mjs && node tools/patch-minimatch-consumers.mjs",
     "tooling:check": "nx run @megamono/workspace:tooling-check",
     "tooling:test": "nx run @megamono/workspace:tooling-test",
-    "security:audit": "pnpm audit --audit-level=low --registry=https://registry.npmjs.org",
+    "security:audit": "node tools/security-audit.mjs",
     "tooling:review-minimatch": "nx run @megamono/workspace:tooling-review-minimatch",
     "tooling:review-deepmerge": "nx run @megamono/workspace:tooling-review-deepmerge"
   },

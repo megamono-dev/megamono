@@ -1,0 +1,15 @@
+{
+  "advisory": "GHSA-gcqx-w48m-w2h4",
+  "package": "deepmerge",
+  "version": "4.3.1",
+  "severity": "low",
+  "consumers": {
+    "@rollup/plugin-node-resolve": "15.3.1",
+    "fork-ts-checker-webpack-plugin": "9.1.0",
+    "jest-config": "30.5.2"
+  },
+  "reviewedAt": "2026-11-13T00:00:00.000Z",
+  "expiresAt": "2026-12-13T00:00:00.000Z",
+  "decision": "docs/audits/deepmerge-release-admission-20261113.md",
+  "rationale": "CVE-2026-93753 was rejected by its assigning CNA on 2026-11-02. npm still returns the low GHSA without a patched release. Accept only the reviewed development-tooling finding until renewed review; this does not assert that all returned-object merge behavior is safe."
+}
