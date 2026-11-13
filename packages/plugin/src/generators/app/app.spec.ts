@@ -1047,7 +1047,7 @@ describe('app generator', () => {
     } satisfies Partial<AppGeneratorError>);
   });
 
-  it('records scope-stable ports and allocates named instances without renumbering', async () => {
+  it('records the scope-stable port for a generated application', async () => {
     const tree = workspace();
     await appGenerator(tree, {
       type: 'web',
@@ -1055,6 +1055,17 @@ describe('app generator', () => {
       interactive: false,
       yes: true,
     });
+    expect(readJson(tree, 'megamono.json').ports).toEqual({ web: 45451 });
+  });
+
+  it('allocates named instance ports without renumbering configured applications', async () => {
+    const tree = workspace();
+    // Start from the persisted ledger so each test generates only one complete
+    // framework app within its timeout, even on a cold release runner.
+    updateJson(tree, 'megamono.json', (config) => ({
+      ...config,
+      ports: { web: 45451 },
+    }));
     await appGenerator(tree, {
       type: 'web',
       name: 'admin',
@@ -1068,6 +1079,15 @@ describe('app generator', () => {
       web: 45451,
       admin: 45461,
     });
+  });
+
+  it('rejects an occupied port without mutating the workspace', async () => {
+    const tree = workspace();
+    updateJson(tree, 'megamono.json', (config) => ({
+      ...config,
+      ports: { web: 45451, admin: 45461 },
+    }));
+    const before = snapshot(tree);
     await expect(
       appGenerator(tree, {
         type: 'api',
@@ -1078,6 +1098,7 @@ describe('app generator', () => {
         yes: true,
       }),
     ).rejects.toMatchObject({ diagnosticCode: 'app-port-conflict' });
+    expect(snapshot(tree)).toBe(before);
   });
 
   it('requires initialization and explicit non-interactive choices', async () => {
