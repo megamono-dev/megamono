@@ -36,6 +36,7 @@ jobs:
       - run: pnpm exec nx run-many -t tooling-check tooling-test --projects=@megamono/workspace --output-style=static
       - run: pnpm run release:check
       - run: pnpm run release:test
+      - run: pnpm run security:audit
       - uses: nrwl/nx-set-shas@v5
       - run: pnpm exec nx run megamono:check --output-style=static
       - id: affected
