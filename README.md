@@ -249,6 +249,10 @@ The release workflow versions manifests without immediately committing or taggin
 synchronizes internal Megamono pins in both compatibility registries, rebuilds and
 checks exports, then commits and tags the coherent release. Do not publish a
 manually versioned package without also synchronizing its scaffold pins.
+An exact version already recorded for local review is supported: if the manifests
+and pins need no changes, the helper creates an empty release commit for the new
+annotated tags. Existing release tags and unrelated checkout changes still block
+the release.
 
 ### First publication and npm trust
 
